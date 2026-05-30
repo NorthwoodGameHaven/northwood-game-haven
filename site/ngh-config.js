@@ -18,7 +18,7 @@
    ===================================================================== */
 
 /* ---- LIVE SERVER MODE: uncomment the next line after deploying ---- */
-// window.NGH_API_BASE = "/.netlify/functions";
+window.NGH_API_BASE = "/.netlify/functions";
 
 /* ---- Shown on emails / the success screen ---- */
 window.NGH_ADMIN_EMAIL = "stash@northwoodgamehaven.com";
