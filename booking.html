@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book a Play Space — Northwood Game Haven</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600&family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --forest: #2d5a3d; --forest-light: #3d7a54;
+    --gold: #c9973a; --gold-light: #e8b84b;
+    --cream: #faf6ee; --teal-dark: #0f4a56;
+    --dark: #1a1a12; --text: #2a2a1a;
+    --holt:#3d7a54; --den:#7a5a10; --depths:#0f4a56;
+    /* calendar category colors */
+    --cal-pending: #d99a2b;      /* customer pending / on hold (amber) */
+    --cal-approved: #3d7a54;     /* customer approved (green) */
+    --cal-event: #1488a6;        /* public NGH event (teal/cyan) */
+    --cal-blackout: #9a2b2b;     /* blackout / closed (red) */
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--cream); color:var(--text); font-family:'Lato',sans-serif; line-height:1.6; }
+  a { color:var(--forest); }
+
+  /* ===== FLOATING CORNER NAV (Book left / Shop right) ===== */
+  .corner-nav { position:fixed; top:0; left:0; right:0; z-index:200; display:flex; justify-content:space-between; align-items:center; padding:8px 10px; pointer-events:none; }
+  .corner-nav a { pointer-events:auto; font-family:'Cinzel',serif; font-size:0.66rem; letter-spacing:0.08em; text-transform:uppercase; font-weight:700; text-decoration:none; padding:9px 15px; border-radius:50px; box-shadow:0 4px 16px rgba(0,0,0,0.18); transition:transform 0.18s; white-space:nowrap; }
+  .corner-nav a:hover { transform:translateY(-2px); }
+  .corner-book { background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); }
+  .corner-shop { background:linear-gradient(135deg,var(--forest),var(--forest-light)); color:#fff; }
+  @media(max-width:430px){ .corner-nav a{ font-size:0.6rem; padding:8px 11px; } }
+
+  .topbar { background:linear-gradient(90deg,var(--gold) 0%,var(--gold-light) 50%,var(--gold) 100%); text-align:center; padding:10px 20px; font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--dark); font-weight:700; margin-top:46px; }
+  .topbar a { color:var(--dark); }
+
+  header.bk { background:radial-gradient(ellipse at 50% 0%,#c8e8d080 0%,transparent 60%), linear-gradient(180deg,#e8f4ec 0%,#faf6ee 100%); padding:42px 20px 30px; text-align:center; }
+  header.bk .eyebrow { font-family:'Cinzel',serif; font-size:0.7rem; letter-spacing:0.32em; text-transform:uppercase; color:var(--gold); }
+  header.bk h1 { font-family:'Cinzel Decorative',serif; font-size:clamp(1.7rem,4.5vw,2.6rem); color:var(--forest); margin:8px 0; }
+  header.bk p { color:#4a4a35; max-width:680px; margin:0 auto; font-size:0.95rem; }
+
+  .wrap { max-width:920px; margin:0 auto; padding:30px 18px 80px; }
+
+  .card { background:#fff; border:1px solid #e0e8dc; border-radius:16px; padding:26px 24px; box-shadow:0 6px 24px rgba(45,90,61,0.07); margin-bottom:22px; }
+  .card h2 { font-family:'Cinzel',serif; font-size:1.05rem; color:var(--forest); margin-bottom:6px; letter-spacing:0.03em; }
+  .card .hint { font-size:0.82rem; color:#7a7a5a; margin-bottom:18px; }
+  .step-num { display:inline-flex; width:26px; height:26px; border-radius:50%; background:var(--forest); color:#fff; font-family:'Cinzel',serif; font-size:0.8rem; align-items:center; justify-content:center; margin-right:8px; }
+
+  label.fld { display:block; font-family:'Cinzel',serif; font-size:0.76rem; color:var(--forest); margin:14px 0 5px; letter-spacing:0.04em; }
+  .req:after { content:" *"; color:#b23; }
+  input[type=text], input[type=email], input[type=tel], input[type=date], input[type=time], input[type=number], select, textarea {
+    width:100%; border:1px solid #c8d8c0; border-radius:9px; padding:11px 13px; font-family:'Lato',sans-serif; font-size:0.92rem; color:var(--text); background:#fff;
+  }
+  textarea { resize:vertical; min-height:64px; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--forest); border-color:transparent; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media(max-width:560px){ .row { grid-template-columns:1fr; } }
+
+  .rooms { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:6px; }
+  @media(max-width:560px){ .rooms { grid-template-columns:1fr; } }
+  .room-pick { border:2px solid #dde4d4; border-radius:13px; padding:15px; cursor:pointer; transition:all 0.18s; background:#fff; position:relative; }
+  .room-pick:hover { border-color:var(--forest); }
+  .room-pick.sel { border-color:var(--forest); background:#f0f8f2; box-shadow:0 4px 16px rgba(45,90,61,0.14); }
+  .room-pick .rname { font-family:'Cinzel',serif; font-weight:600; color:var(--forest); font-size:0.95rem; }
+  .room-pick .rdesc { font-size:0.76rem; color:#6a6a50; margin-top:4px; }
+  .room-pick .rcheck { position:absolute; top:12px; right:12px; width:20px; height:20px; border-radius:50%; border:2px solid #c8d8c0; }
+  .room-pick.sel .rcheck { background:var(--forest); border-color:var(--forest); }
+  .room-pick.sel .rcheck:after { content:"✓"; color:#fff; font-size:0.7rem; display:flex; align-items:center; justify-content:center; height:100%; }
+
+  .addon { border:1px solid #e0e8dc; border-radius:11px; padding:13px 15px; margin-bottom:10px; background:#fcfdfb; }
+  .addon-head { display:flex; align-items:flex-start; gap:10px; cursor:pointer; }
+  .addon-head input { margin-top:3px; accent-color:var(--forest); width:18px; height:18px; flex-shrink:0; }
+  .addon-title { font-family:'Cinzel',serif; font-size:0.88rem; color:var(--forest); font-weight:600; }
+  .addon-meta { font-size:0.76rem; color:#7a7a5a; margin-top:2px; }
+  .addon-cost { font-family:'Cinzel',serif; font-size:0.8rem; color:var(--den); white-space:nowrap; margin-left:auto; }
+  .addon-cost.free { color:var(--forest-light); }
+  .addon-comment { display:none; margin-top:10px; }
+  .addon-comment.show { display:block; }
+  .addon-comment label { font-size:0.72rem; color:#7a7a5a; display:block; margin-bottom:4px; }
+  .addon-num { display:none; margin-top:10px; align-items:center; gap:8px; }
+  .addon-num.show { display:flex; }
+  .addon-num input { width:90px; }
+  .group-label { font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--gold); margin:16px 0 8px; }
+
+  .check-line { display:flex; align-items:flex-start; gap:9px; margin:10px 0; font-size:0.88rem; }
+  .check-line input { margin-top:3px; accent-color:var(--forest); width:17px; height:17px; flex-shrink:0; }
+
+  /* overnight suite block */
+  .suite-box { background:#f4f7f2; border:1px solid #cfe0d4; border-radius:13px; padding:16px 18px; margin-top:14px; }
+  .suite-box h3 { font-family:'Cinzel',serif; font-size:0.9rem; color:var(--forest); margin-bottom:6px; }
+  .suite-links { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0; }
+  .suite-links a { display:inline-flex; align-items:center; gap:6px; background:linear-gradient(135deg,var(--teal-dark),#1a6a7a); color:#fff; text-decoration:none; font-family:'Cinzel',serif; font-size:0.78rem; padding:10px 18px; border-radius:50px; }
+  .suite-links a:hover { opacity:0.92; }
+
+  .mil-box { background:#fbf6ea; border:1px solid #e6d3a8; border-radius:13px; padding:14px 16px; margin-top:14px; }
+  .mil-box .check-line { margin:0; }
+  .mil-note { font-size:0.74rem; color:#8a6a20; margin-top:8px; font-style:italic; }
+
+  /* COST SUMMARY */
+  .summary { position:sticky; bottom:0; }
+  .sum-row { display:flex; justify-content:space-between; padding:6px 0; font-size:0.9rem; border-bottom:1px dashed #e0e0d0; }
+  .sum-row.sub { color:#6a6a50; font-size:0.84rem; padding-left:14px; }
+  .sum-row.total { font-family:'Cinzel',serif; font-weight:600; color:var(--forest); font-size:1.05rem; border-bottom:none; border-top:2px solid var(--forest); margin-top:8px; padding-top:10px; }
+  .sum-row.deposit { color:var(--den); }
+  .sum-row.discount { color:var(--forest-light); }
+  .sum-note { font-size:0.76rem; color:#7a7a5a; margin-top:12px; line-height:1.6; }
+  .sum-note strong { color:var(--den); }
+
+  .btn { background:linear-gradient(135deg,var(--forest),var(--forest-light)); color:#fff; border:none; border-radius:50px; padding:15px 38px; font-family:'Cinzel',serif; font-size:0.9rem; letter-spacing:0.08em; cursor:pointer; transition:transform 0.2s,opacity 0.2s; }
+  .btn:hover { transform:translateY(-2px); }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+  .btn-gold { background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); }
+  .btn-ghost { background:transparent; border:1.5px solid var(--forest); color:var(--forest); }
+  .btn-danger { background:linear-gradient(135deg,#9a2b2b,#b23b3b); color:#fff; }
+  .btn-teal { background:linear-gradient(135deg,var(--teal-dark),#1a6a7a); color:#fff; }
+  .btn-sm { padding:9px 20px; font-size:0.78rem; }
+
+  .err { color:#b23; font-size:0.82rem; margin-top:8px; display:none; }
+  .err.show { display:block; }
+
+  .conflict-note { background:#fdeaea; border:1px solid #e3b3b3; border-radius:9px; padding:11px 14px; font-size:0.82rem; color:#8a2b2b; margin-top:10px; display:none; }
+  .conflict-note.show { display:block; }
+  .avail-note { background:#eef7f0; border:1px solid #c2e0cb; border-radius:9px; padding:11px 14px; font-size:0.82rem; color:var(--forest); margin-top:10px; }
+
+  /* SUCCESS */
+  #success { display:none; text-align:center; padding:30px 10px; }
+  #success .big { font-size:2.4rem; }
+
+  /* ADMIN */
+  .admin-gate { max-width:420px; margin:60px auto; text-align:center; }
+  #admin-panel { display:none; }
+  .tabbar { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .tab { padding:9px 18px; border-radius:50px; border:1.5px solid #d8e0d4; background:#fff; font-family:'Cinzel',serif; font-size:0.78rem; cursor:pointer; color:var(--forest); }
+  .tab.active { background:var(--forest); color:#fff; border-color:var(--forest); }
+  .req-card { border-left:5px solid #ccc; }
+  .req-card.pending { border-left-color:var(--cal-pending); }
+  .req-card.approved { border-left-color:var(--cal-approved); }
+  .req-card.rejected { border-left-color:#b23b3b; }
+  .req-card.hold { border-left-color:#d98c1f; }
+  .badge { display:inline-block; padding:3px 11px; border-radius:50px; font-size:0.68rem; font-family:'Cinzel',serif; letter-spacing:0.06em; text-transform:uppercase; }
+  .badge.pending { background:#fbf0d6; color:#8a6a10; }
+  .badge.approved { background:#e2f0e6; color:var(--forest); }
+  .badge.rejected { background:#f6e0e0; color:#9a2b2b; }
+  .badge.hold { background:#fbeed6; color:#9a6310; }
+  .badge.pay-due { background:#f6e0e0; color:#9a2b2b; }
+  .badge.pay-paid { background:#e2f0e6; color:var(--forest); }
+  .badge.mil-yes { background:#e2eef0; color:var(--teal-dark); }
+  .badge.mil-pending { background:#fbf0d6; color:#8a6a10; }
+  .badge.mil-no { background:#eee; color:#777; }
+  .kv { font-size:0.85rem; margin:3px 0; }
+  .kv b { color:var(--forest); font-family:'Cinzel',serif; font-weight:600; font-size:0.78rem; letter-spacing:0.03em; }
+  .admin-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .mini-input { width:100%; margin-top:8px; }
+  details.adv { margin-top:10px; }
+  details.adv summary { cursor:pointer; font-size:0.8rem; color:var(--forest); font-family:'Cinzel',serif; }
+
+  .email-preview { background:#f4f7f2; border:1px dashed #b8d0bf; border-radius:9px; padding:12px 14px; font-size:0.8rem; color:#3a4a35; margin-top:10px; white-space:pre-wrap; font-family:'Lato',sans-serif; }
+  .pill-link { display:inline-block; background:rgba(45,90,61,0.08); border:1px solid rgba(45,90,61,0.2); border-radius:50px; padding:6px 14px; font-size:0.78rem; color:var(--forest); text-decoration:none; margin:4px 6px 0 0; }
+  .footnote { text-align:center; font-size:0.78rem; color:#7a7a5a; padding:30px 16px; }
+  .mode-tag { display:inline-block; font-size:0.66rem; font-family:'Cinzel',serif; letter-spacing:0.06em; text-transform:uppercase; padding:3px 10px; border-radius:50px; }
+  .mode-tag.local { background:#fbeed6; color:#9a6310; }
+  .mode-tag.server { background:#e2f0e6; color:var(--forest); }
+
+  /* CALENDAR */
+  .cal-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .cal-views { display:flex; gap:6px; }
+  .cal-views .tab { padding:7px 14px; }
+  .cal-nav { display:flex; align-items:center; gap:10px; }
+  .cal-title { font-family:'Cinzel',serif; color:var(--forest); font-size:1rem; min-width:160px; text-align:center; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+  .cal-dow { font-family:'Cinzel',serif; font-size:0.66rem; letter-spacing:0.08em; text-transform:uppercase; color:#8a8a6a; text-align:center; padding:4px 0; }
+  .cal-cell { min-height:84px; border:1px solid #e8ece4; border-radius:8px; padding:4px; background:#fff; overflow:hidden; }
+  .cal-cell.other { background:#f6f7f4; opacity:0.6; }
+  .cal-cell.today { border-color:var(--gold); box-shadow:inset 0 0 0 1px var(--gold); }
+  .cal-daynum { font-size:0.72rem; color:#6a6a50; font-weight:700; margin-bottom:3px; }
+  .cal-ev { font-size:0.6rem; line-height:1.25; border-radius:4px; padding:2px 4px; margin-bottom:2px; cursor:pointer; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cal-ev.pending { background:var(--cal-pending); }
+  .cal-ev.approved { background:var(--cal-approved); }
+  .cal-ev.event { background:var(--cal-event); }
+  .cal-ev.blackout { background:var(--cal-blackout); }
+  .cal-ev.unpaid { outline:2px solid var(--gold-light); outline-offset:-2px; }
+  .cal-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:0.74rem; color:#6a6a50; margin:10px 0; }
+  .cal-legend span { display:inline-flex; align-items:center; gap:5px; }
+  .cal-dot { width:11px; height:11px; border-radius:3px; display:inline-block; }
+  /* week/day time grid */
+  .cal-week { display:grid; grid-template-columns:54px repeat(var(--wcols,7),1fr); gap:2px; }
+  .cal-week .whead { font-family:'Cinzel',serif; font-size:0.64rem; text-transform:uppercase; color:#8a8a6a; text-align:center; padding:4px 0; }
+  .cal-week .whour { font-size:0.62rem; color:#9a9a80; text-align:right; padding:2px 6px 0 0; }
+  .cal-week .wslot { min-height:26px; border-top:1px solid #eef0ec; position:relative; }
+  .wevent { position:absolute; left:1px; right:1px; border-radius:4px; color:#fff; font-size:0.58rem; padding:1px 3px; overflow:hidden; z-index:2; }
+  .recur-badge { display:inline-block; background:#7a5a10; color:#fff; font-family:'Cinzel',serif; font-size:0.58rem; letter-spacing:0.06em; text-transform:uppercase; padding:2px 8px; border-radius:50px; margin-left:6px; }
+  .req-card.rec-instance { box-shadow:inset 4px 0 0 #7a5a10; }
+  .instance-row { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding:8px 0; border-bottom:1px dashed #e8ece4; }
+  .instance-row:last-child { border-bottom:none; }
+  .ev-card { border-left:5px solid var(--cal-event); }
+</style>
+</head>
+<body>
+
+<!-- ===== FLOATING CORNER NAV ===== -->
+<div class="corner-nav">
+  <a class="corner-book" href="booking.html">🎲 Book Your Play Space</a>
+  <a class="corner-shop" href="https://northwoodgamehaven.company.site" target="_blank" rel="noopener">🛒 Shop Now</a>
+</div>
+
+<div class="topbar">🦦 Northwood Game Haven · 115 W Spring St, Chippewa Falls, WI · <a href="ngh.html">← Return to Northwood Game Haven</a></div>
+
+<!-- ========================= CUSTOMER BOOKING ========================= -->
+<div id="customer-view">
+<header class="bk">
+  <div class="eyebrow">Reserve Your Epic Gaming Space</div>
+  <h1>Book a Play Space</h1>
+  <p>Reserve The Holt, Stash's Den, or The Depths by the hour. Submit a request below — a Game Guru will review it and confirm by email. Payment is arranged after approval.</p>
+</header>
+
+<div class="wrap">
+
+  <!-- STEP 1: ROOMS -->
+  <div class="card">
+    <h2><span class="step-num">1</span>Choose Your Play Space(s)</h2>
+    <p class="hint">$10/hour for the first 4 hours, then $5/hour after. Select one or more rooms to use during the same time block.</p>
+    <div class="rooms" id="rooms"></div>
+    <div class="avail-note" style="margin-top:14px;">💡 Want all the privacy? Book all three rooms together. The Lodge &amp; The Adventurer's Rest (overnight suites) are booked separately — see below.</div>
+
+    <!-- OVERNIGHT SUITES (VRBO) -->
+    <div class="suite-box">
+      <h3>🛏 Overnight Gaming Suites</h3>
+      <p class="hint" style="margin-bottom:0;">The Lodge &amp; The Adventurer's Rest are our overnight suites, booked separately on VRBO. Reserve directly below, or check the box and a Game Guru will reach out to help.</p>
+      <div class="suite-links">
+        <a href="https://www.vrbo.com/5183022" target="_blank" rel="noopener">🌲 The Lodge — Book on VRBO ↗</a>
+        <a href="https://www.vrbo.com/5183156" target="_blank" rel="noopener">⚔ The Adventurer's Rest — Book on VRBO ↗</a>
+      </div>
+      <div class="check-line" style="margin:0;"><input type="checkbox" id="c-overnight"><label for="c-overnight">Have a Game Guru reach out to me about an overnight suite reservation. <em>Subject to availability.</em></label></div>
+    </div>
+  </div>
+
+  <!-- STEP 2: DATE & TIME -->
+  <div class="card">
+    <h2><span class="step-num">2</span>Pick Your Date &amp; Time</h2>
+    <p class="hint">Bookings run up to <strong>8 hours</strong> max. Slots already booked, reserved for an NGH event, or blacked out can't be selected.</p>
+    <div class="row">
+      <div>
+        <label class="fld req">Date</label>
+        <input type="date" id="bk-date" onchange="onDateTimeChange()">
+      </div>
+      <div>
+        <label class="fld req">Number of Hours</label>
+        <select id="bk-hours" onchange="onDateTimeChange()">
+          <option value="">Select…</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:4px;">
+      <div>
+        <label class="fld req">Start Time</label>
+        <input type="time" id="bk-start" step="1800" onchange="onDateTimeChange()">
+      </div>
+      <div>
+        <label class="fld">End Time</label>
+        <input type="text" id="bk-end" readonly placeholder="Auto-calculated">
+      </div>
+    </div>
+    <div class="conflict-note" id="conflict-note"></div>
+    <div class="avail-note" id="avail-note" style="display:none;"></div>
+
+    <!-- Recurring option -->
+    <div style="margin-top:16px;padding-top:14px;border-top:1px dashed #e0e8dc;">
+      <label class="check-line"><input type="checkbox" id="bk-recurring" onchange="toggleRecurringUI()"><label for="bk-recurring" style="font-family:'Cinzel',serif;color:var(--forest);font-size:0.85rem;">Make this a recurring booking (e.g. weekly game night)</label></label>
+      <div id="recurring-ui" style="display:none;margin-top:10px;">
+        <div class="row">
+          <div>
+            <label class="fld">Repeats</label>
+            <select id="bk-rec-freq" onchange="recalc()">
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Every 2 weeks</option>
+              <option value="monthly">Monthly (same date)</option>
+            </select>
+          </div>
+          <div>
+            <label class="fld">How many occurrences (incl. first)</label>
+            <input type="number" id="bk-rec-count" min="2" max="52" value="4" onchange="recalc()">
+          </div>
+        </div>
+        <p class="hint" style="margin-top:8px;margin-bottom:0;">Each occurrence is reviewed and approved individually. You'll only be charged for occurrences you confirm — pay for each by the day before it happens. We'll email you the schedule after review.</p>
+        <div class="avail-note" id="rec-preview" style="display:none;margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: ADD-ONS -->
+  <div class="card">
+    <h2><span class="step-num">3</span>Add-Ons &amp; Extras</h2>
+    <p class="hint">Some add-ons are <strong>complimentary</strong> — included with your room booking rate at no extra charge. Others carry an <strong>additional charge</strong>. Each is clearly labeled below. All are subject to availability; add a note to request specific titles or arrangements.</p>
+
+    <div class="group-label" style="color:var(--forest-light);">✓ Complimentary — Included With Your Room Rate</div>
+    <div id="free-addons"></div>
+
+    <div class="group-label" style="color:var(--den);">＄ Additional Charge</div>
+    <div id="paid-addons"></div>
+  </div>
+
+  <!-- STEP 4: DETAILS -->
+  <div class="card">
+    <h2><span class="step-num">4</span>Your Details</h2>
+    <div class="row">
+      <div><label class="fld req">Full Name</label><input type="text" id="c-name"></div>
+      <div><label class="fld req">Phone</label><input type="tel" id="c-phone"></div>
+    </div>
+    <label class="fld req">Email</label><input type="email" id="c-email">
+    <label class="fld req">Max Concurrent Guests in the Room(s)</label>
+    <input type="number" id="c-guests" min="1" placeholder="Most people in the space at one time (not total who pass through)">
+    <p class="hint" style="margin-top:5px;margin-bottom:0;">If people are coming &amp; going, enter the most that will be in the room(s) at the same time.</p>
+
+    <!-- MILITARY / FIRST RESPONDER -->
+    <div class="mil-box">
+      <div class="check-line"><input type="checkbox" id="c-military" onchange="recalc()"><label for="c-military"><strong>Active Military, Veteran, or First Responder — 15% off room rental.</strong></label></div>
+      <div class="mil-note">*Must show valid applicable ID at check-in or during in-person payment processing. The 15% discount is applied after a Game Guru verifies your ID.</div>
+    </div>
+
+    <div style="margin-top:18px;">
+      <div class="check-line"><input type="checkbox" id="c-guru-reach"><label for="c-guru-reach">I'd like a Game Guru to reach out about product procurement / promoting my event.</label></div>
+      <div class="check-line"><input type="checkbox" id="c-invoice"><label for="c-invoice">Please send me an invoice for electronic payment processing.</label></div>
+    </div>
+
+    <label class="fld">General Comments</label>
+    <textarea id="c-comments" placeholder="Anything else we should know? Occasion, setup requests, accessibility needs…"></textarea>
+  </div>
+
+  <!-- STEP 5: SUMMARY -->
+  <div class="card summary">
+    <h2><span class="step-num">5</span>Cost Summary</h2>
+    <div id="summary-body">
+      <p class="hint" style="margin-bottom:0;">Select rooms and a time to see your itemized estimate.</p>
+    </div>
+    <div class="err" id="form-err"></div>
+    <div style="margin-top:20px;text-align:center;">
+      <button class="btn btn-gold" id="submit-btn" onclick="submitBooking()">Submit Booking Request →</button>
+    </div>
+  </div>
+
+  <!-- SUCCESS -->
+  <div class="card" id="success">
+    <div class="big">🦦🎟️</div>
+    <h2 style="font-family:'Cinzel Decorative',serif;font-size:1.5rem;margin:12px 0;">Request Received!</h2>
+    <p style="max-width:560px;margin:0 auto 14px;">Thanks, <span id="succ-name"></span>! Your booking request has been submitted. A Game Guru will review it and email <span id="succ-email"></span> to confirm, ask any questions, or send payment details.</p>
+    <p class="hint" id="succ-ref"></p>
+    <div class="email-preview" id="succ-admin-note"></div>
+    <div style="margin-top:18px;">
+      <button class="btn btn-ghost btn-sm" onclick="location.reload()">Submit Another Request</button>
+    </div>
+  </div>
+
+  <p class="footnote">
+    By submitting, you agree to the
+    <a href="terms.html">Northwood Game Haven Terms &amp; Conditions</a>,
+    including the refundable damage/cleanliness deposit and house rules.<br>
+    Questions? <a href="mailto:stash@northwoodgamehaven.com">stash@northwoodgamehaven.com</a>
+    &nbsp;·&nbsp; <a href="#" onclick="openAdmin();return false;" style="color:#9a9a80;">Staff Login</a>
+  </p>
+  <div style="text-align:center;padding:0 20px 40px;">
+    <a href="ngh.html" style="display:inline-block;margin:0 8px 10px;background:linear-gradient(135deg,var(--forest),var(--forest-light));color:#fff;padding:12px 26px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.8rem;">← Return to Northwood Game Haven</a>
+    <a href="https://northwoodgamehaven.company.site" target="_blank" rel="noopener" style="display:inline-block;margin:0 8px 10px;background:rgba(45,90,61,0.08);border:1px solid rgba(45,90,61,0.2);color:var(--forest);padding:12px 22px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.78rem;">🛒 Shop Online</a>
+    <a href="board-game-library.html" style="display:inline-block;margin:0 8px 10px;background:rgba(45,90,61,0.08);border:1px solid rgba(45,90,61,0.2);color:var(--forest);padding:12px 22px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.78rem;">Board Game Library</a>
+    <a href="video-game-equipment.html" style="display:inline-block;margin:0 8px 10px;background:rgba(45,90,61,0.08);border:1px solid rgba(45,90,61,0.2);color:var(--forest);padding:12px 22px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.78rem;">Video Game Equipment</a>
+    <a href="terms.html" style="display:inline-block;margin:0 8px 10px;background:rgba(45,90,61,0.08);border:1px solid rgba(45,90,61,0.2);color:var(--forest);padding:12px 22px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.78rem;">Terms &amp; Conditions</a>
+  </div>
+</div>
+</div>
+
+<!-- ========================= ADMIN ========================= -->
+<div id="admin-view" style="display:none;">
+  <header class="bk">
+    <div class="eyebrow">Staff Only</div>
+    <h1>Booking Review Console</h1>
+  </header>
+  <div class="wrap">
+    <div class="admin-gate" id="admin-gate">
+      <div class="card">
+        <h2 style="justify-content:center;">🔒 Game Guru Access</h2>
+        <p class="hint">Enter the staff access code to review booking requests.</p>
+        <input type="password" id="admin-code" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAdmin()">
+        <div class="err" id="admin-err">Incorrect code. Try again.</div>
+        <div style="margin-top:16px;"><button class="btn" onclick="checkAdmin()">Unlock Console</button></div>
+        <p class="hint" style="margin-top:14px;">Demo code: <code>stash2026</code>. In production this is replaced by a real server login (see DEPLOY.md).</p>
+      </div>
+      <p style="text-align:center;"><a href="#" onclick="closeAdmin();return false;">← Back to booking form</a></p>
+    </div>
+
+    <div id="admin-panel">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+        <button class="btn btn-sm" id="view-list-btn" onclick="setAdminView('list')">📋 Request List</button>
+        <button class="btn btn-sm btn-ghost" id="view-cal-btn" onclick="setAdminView('calendar')">📅 Calendar</button>
+        <button class="btn btn-sm btn-ghost" id="view-events-btn" onclick="setAdminView('events')">🎉 Public Events</button>
+        <span id="mode-indicator"></span>
+      </div>
+
+      <!-- LIST VIEW -->
+      <div id="list-view-wrap">
+      <div class="tabbar" id="admin-tabs"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+        <button class="btn btn-ghost btn-sm" onclick="openBlackout()">🚫 Manage Blackout Dates</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export (JSON)</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeAdmin()">Log Out</button>
+      </div>
+      <div id="blackout-panel" style="display:none;"></div>
+      <div id="requests-list"></div>
+      </div>
+
+      <!-- CALENDAR VIEW -->
+      <div id="calendar-view-wrap" style="display:none;"></div>
+
+      <!-- EVENTS VIEW -->
+      <div id="events-view-wrap" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<script src="ngh-config.js"></script>
+<script>
+/* =================================================================
+   NORTHWOOD GAME HAVEN — BOOKING APPLICATION  (backend-ready)
+   -----------------------------------------------------------------
+   DATA LAYER:  All reads/writes go through the async `Store` object.
+     • If a server API base is configured (window.NGH_API_BASE, set in
+       ngh-config.js), Store talks to the Netlify Functions backend.
+     • Otherwise it falls back to localStorage so the page works as a
+       standalone demo with zero setup.
+   This makes the SAME file work both as a demo and in production —
+   see DEPLOY.md for exactly how to stand up the backend on Netlify.
+
+   The four calendar categories each have a distinct color:
+     • Customer PENDING / ON-HOLD ...... amber  (--cal-pending)
+     • Customer APPROVED ............... green  (--cal-approved)
+     • PUBLIC NGH EVENT (admin) ........ teal   (--cal-event)
+     • BLACKOUT / CLOSED ............... red    (--cal-blackout)
+   Approved-but-unpaid bookings get a gold outline; recurring items
+   are marked with a 🔁 glyph.
+   ================================================================= */
+
+/* ---- CONFIG (overridable via ngh-config.js) ---- */
+var API_BASE   = window.NGH_API_BASE || "";          // e.g. "/.netlify/functions" enables server mode
+var ADMIN_CODE = window.NGH_ADMIN_CODE || "stash2026"; // demo-only gate (server mode uses real login)
+var ADMIN_EMAIL= window.NGH_ADMIN_EMAIL || "stash@northwoodgamehaven.com";
+var REVIEW_URL = location.origin + location.pathname + "?admin=1";
+var VRBO = { lodge:"https://www.vrbo.com/5183022", rest:"https://www.vrbo.com/5183156" };
+
+var ROOMS = [
+  { id:"holt",   name:"The Holt",     desc:"Cozy, karaoke-ready lounge" },
+  { id:"den",    name:"Stash's Den",  desc:"Intimate, sound-dampened retreat" },
+  { id:"depths", name:"The Depths",   desc:"The legendary Table of Adventure" }
+];
+var DEPOSIT = { 1:250, 2:400, 3:600 };
+var KARAOKE_DEPOSIT_ADD = 100;
+var BYO_FOOD_FEE = 40;
+var GURU_HOURLY = 10;
+var MAX_HOURS = 8;
+var MIL_DISCOUNT = 0.15;   // 15% military / first-responder
+
+var FREE_ADDONS = [
+  { id:"console", title:"Video Game Console / Controller / Game Check-Out", meta:"NES through GameCube & beyond. Subject to availability.", link:"video-game-equipment.html", linkText:"Browse video game equipment list ↗", comment:"Which systems / games would you like set up?" },
+  { id:"boardgame", title:"Board / Card Game Check-Out", meta:"From our full library. Subject to availability.", link:"board-game-library.html", linkText:"Browse the board game library ↗", comment:"Any specific titles you want pulled & ready?" },
+  { id:"foodpreorder", title:"Food Pre-Order / Catering", meta:"In-house sodas & snacks or partner restaurants. Normal business hours only — you still pay for the food; gratuities not included. Subject to availability.", comment:"What would you like to pre-order? (items, quantities, timing)" },
+  { id:"karaoke", title:"Karaoke Equipment", meta:"Subject to availability. Adds $100 to your refundable deposit.", depositAdd:true, comment:"Any setup notes for karaoke?" },
+  { id:"rpg", title:"RPG Book / Miniatures / Accessories Library", meta:"Subject to availability.", comment:"Which systems, books, or minis do you need?" },
+  { id:"promo", title:"Social Media & Supplier Resources", meta:"Use our channels & suppliers to procure products for and promote your event. Must be coordinated through a certified Game Guru.", comment:"Tell us about the products/promotion you have in mind." }
+];
+var PAID_ADDONS = [
+  { id:"byofood", title:"Bring Your Own Food & Drink", meta:"Permitted during business hours with this add-on. $40 per reservation.", cost:"$40 / reservation", comment:"What are you planning to bring in?" },
+  { id:"guru", title:"Private Catered Game Guru", meta:"A Guru curates & teaches games during your event. $10/hr per Guru.", cost:"$10 / hr per Guru", perHour:true, qty:true, comment:"What kind of games or experience should your Guru focus on?" }
+];
+
+/* =================================================================
+   STORE — async data layer (server API  OR  localStorage fallback)
+   ================================================================= */
+var Store = {
+  apiMode: function(){ return !!API_BASE; },
+  _token: function(){ return sessionStorage.getItem("ngh_admin_token") || ""; },
+  _ls: function(k){ try { return JSON.parse(localStorage.getItem(k)||"[]"); } catch(e){ return []; } },
+  _save: function(k,v){ localStorage.setItem(k, JSON.stringify(v)); },
+
+  async _api(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({ "Content-Type":"application/json", "Authorization":"Bearer "+this._token() }, opts.headers||{});
+    var res = await fetch(API_BASE + path, opts);
+    if(res.status === 401){ throw new Error("unauthorized"); }
+    if(!res.ok){ throw new Error("API "+res.status); }
+    return res.status === 204 ? null : res.json();
+  },
+
+  /* ---- ADMIN AUTH ---- */
+  async login(code){
+    if(!this.apiMode()){ return code === ADMIN_CODE; }      // demo gate
+    var r = await this._api("/admin-login", { method:"POST", body:JSON.stringify({ code:code }) });
+    if(r && r.token){ sessionStorage.setItem("ngh_admin_token", r.token); return true; }
+    return false;
+  },
+  logout(){ sessionStorage.removeItem("ngh_admin_token"); },
+
+  /* ---- BOOKINGS ---- */
+  async bookings(){
+    if(!this.apiMode()) return this._ls("ngh_bookings");
+    return this._api("/bookings");
+  },
+  async addBookings(arr){    // bulk insert (handles recurrence in one go)
+    if(!this.apiMode()){ var l=this._ls("ngh_bookings"); l=l.concat(arr); this._save("ngh_bookings",l); return arr; }
+    return this._api("/bookings", { method:"POST", body:JSON.stringify({ bookings:arr }) });
+  },
+  async updateBooking(id, patch){
+    if(!this.apiMode()){ var l=this._ls("ngh_bookings"); for(var i=0;i<l.length;i++){ if(l[i].id===id){ for(var k in patch) l[i][k]=patch[k]; } } this._save("ngh_bookings",l); return; }
+    return this._api("/bookings/"+encodeURIComponent(id), { method:"PATCH", body:JSON.stringify(patch) });
+  },
+  async updateGroup(groupId, patch){   // patch every instance of a recurring series
+    if(!this.apiMode()){ var l=this._ls("ngh_bookings"); l.forEach(function(r){ if(r.groupId===groupId){ for(var k in patch) r[k]=patch[k]; } }); this._save("ngh_bookings",l); return; }
+    return this._api("/bookings/group/"+encodeURIComponent(groupId), { method:"PATCH", body:JSON.stringify(patch) });
+  },
+
+  /* ---- PUBLIC NGH EVENTS ---- */
+  async events(){
+    if(!this.apiMode()) return this._ls("ngh_events");
+    return this._api("/events");
+  },
+  async saveEvent(ev){
+    if(!this.apiMode()){ var l=this._ls("ngh_events"); if(ev.id){ var done=false; for(var i=0;i<l.length;i++){ if(l[i].id===ev.id){ l[i]=ev; done=true; } } if(!done) l.push(ev); } else { ev.id="EVT-"+genId(); l.push(ev); } this._save("ngh_events",l); return ev; }
+    if(ev.id) return this._api("/events/"+encodeURIComponent(ev.id), { method:"PUT", body:JSON.stringify(ev) });
+    return this._api("/events", { method:"POST", body:JSON.stringify(ev) });
+  },
+  async deleteEvent(id){
+    if(!this.apiMode()){ var l=this._ls("ngh_events").filter(function(e){return e.id!==id;}); this._save("ngh_events",l); return; }
+    return this._api("/events/"+encodeURIComponent(id), { method:"DELETE" });
+  },
+
+  /* ---- BLACKOUTS ---- */
+  async blackouts(){
+    if(!this.apiMode()) return this._ls("ngh_blackouts");
+    return this._api("/blackouts");
+  },
+  async saveBlackouts(l){
+    if(!this.apiMode()){ this._save("ngh_blackouts", l); return; }
+    return this._api("/blackouts", { method:"PUT", body:JSON.stringify({ blackouts:l }) });
+  },
+
+  /* ---- EMAIL ---- */
+  async sendEmail(to, subject, body){
+    if(!this.apiMode()){ return sendEmailLocal(to, subject, body); }
+    try { await this._api("/send-email", { method:"POST", body:JSON.stringify({ to:to, subject:subject, body:body }) }); } catch(e){ console.warn("email failed", e); }
+    return true;
+  }
+};
+
+/* In-memory caches so render/conflict logic can stay synchronous. */
+var cache = { bookings:[], events:[], blackouts:[] };
+async function refreshCache(){
+  var r = await Promise.all([ Store.bookings(), Store.events(), Store.blackouts() ]);
+  cache.bookings = r[0] || []; cache.events = r[1] || []; cache.blackouts = r[2] || [];
+}
+
+/* ---------- helpers ---------- */
+function $(id){ return document.getElementById(id); }
+function pad(n){ return (n<10?"0":"")+n; }
+function fmtMoney(n){ return "$"+(Math.round(n*100)/100).toFixed(2); }
+function fmtTime(mins){ var h=Math.floor(mins/60), m=mins%60, ap=h>=12?"PM":"AM", hh=h%12; if(hh===0)hh=12; return hh+":"+pad(m)+" "+ap; }
+function timeToMins(t){ if(!t) return null; var p=t.split(":"); return parseInt(p[0],10)*60+parseInt(p[1],10); }
+function genId(){ return "NGH-"+Date.now().toString(36).toUpperCase().slice(-6)+"-"+Math.floor(Math.random()*900+100); }
+function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function roomName(id){ for(var i=0;i<ROOMS.length;i++) if(ROOMS[i].id===id) return ROOMS[i].name; return id; }
+function roomList(req){ return (req.rooms||[]).map(roomName).join(", "); }
+
+/* ---------- state ---------- */
+var sel = { rooms:[], addons:{}, addonQty:{}, addonComment:{} };
+
+/* ---------- render rooms ---------- */
+function renderRooms(){
+  var html="";
+  ROOMS.forEach(function(r){
+    html += '<div class="room-pick" id="rp-'+r.id+'" onclick="toggleRoom(\''+r.id+'\')">'+
+            '<div class="rcheck"></div>'+
+            '<div class="rname">'+r.name+'</div>'+
+            '<div class="rdesc">'+r.desc+'</div></div>';
+  });
+  $("rooms").innerHTML=html;
+}
+function toggleRoom(id){
+  var i=sel.rooms.indexOf(id);
+  if(i>=0){ sel.rooms.splice(i,1); $("rp-"+id).classList.remove("sel"); }
+  else { sel.rooms.push(id); $("rp-"+id).classList.add("sel"); }
+  onDateTimeChange();
+}
+
+/* ---------- hours dropdown ---------- */
+function renderHours(){
+  var sel2=$("bk-hours");
+  for(var h=1; h<=MAX_HOURS; h++){
+    var o=document.createElement("option");
+    o.value=h; o.textContent=h+" hour"+(h>1?"s":"");
+    sel2.appendChild(o);
+  }
+  var t=new Date(); $("bk-date").min = t.getFullYear()+"-"+pad(t.getMonth()+1)+"-"+pad(t.getDate());
+}
+
+/* ---------- render add-ons ---------- */
+function renderAddons(){
+  var fh=""; FREE_ADDONS.forEach(function(a){ fh += addonHtml(a, true); }); $("free-addons").innerHTML=fh;
+  var ph=""; PAID_ADDONS.forEach(function(a){ ph += addonHtml(a, false); }); $("paid-addons").innerHTML=ph;
+}
+function addonHtml(a, free){
+  var cost = free ? '<span class="addon-cost free">'+(a.depositAdd?'Complimentary · +$100 deposit':'Complimentary')+'</span>'
+                  : '<span class="addon-cost">+ '+a.cost+'</span>';
+  var linkLine = a.link ? '<div class="addon-meta"><a href="'+a.link+'" target="_blank">'+a.linkText+'</a></div>' : '';
+  var qtyLine = a.qty ? '<div class="addon-num" id="num-'+a.id+'"><label style="font-size:0.78rem;color:#6a6a50;">How many Gurus?</label><input type="number" min="1" value="1" id="qty-'+a.id+'" onchange="recalc()"></div>' : '';
+  return '<div class="addon">'+
+    '<label class="addon-head">'+
+      '<input type="checkbox" id="ao-'+a.id+'" onchange="toggleAddon(\''+a.id+'\','+free+')">'+
+      '<span><span class="addon-title">'+a.title+'</span><div class="addon-meta">'+a.meta+'</div>'+linkLine+'</span>'+
+      cost+
+    '</label>'+
+    qtyLine+
+    '<div class="addon-comment" id="ac-'+a.id+'"><label>'+a.comment+'</label><textarea id="acmt-'+a.id+'" onchange="saveComment(\''+a.id+'\')" placeholder="Optional"></textarea></div>'+
+  '</div>';
+}
+function toggleAddon(id, free){
+  var on=$("ao-"+id).checked;
+  sel.addons[id]=on;
+  $("ac-"+id).classList.toggle("show", on);
+  var num=$("num-"+id); if(num) num.classList.toggle("show", on);
+  recalc();
+}
+function saveComment(id){ sel.addonComment[id]=$("acmt-"+id).value; }
+
+/* ---------- recurrence helpers ---------- */
+function addDays(dateStr, n){ var d=new Date(dateStr+"T12:00:00"); d.setDate(d.getDate()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function addMonths(dateStr, n){ var d=new Date(dateStr+"T12:00:00"); d.setMonth(d.getMonth()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function recurrenceDates(startDate, freq, count){
+  var dates=[startDate];
+  for(var i=1;i<count;i++){
+    if(freq==="weekly") dates.push(addDays(dates[i-1],7));
+    else if(freq==="biweekly") dates.push(addDays(dates[i-1],14));
+    else if(freq==="monthly") dates.push(addMonths(startDate,i));
+  }
+  return dates;
+}
+function freqLabel(f){ return f==="weekly"?"Weekly":f==="biweekly"?"Every 2 weeks":f==="monthly"?"Monthly":f; }
+function toggleRecurringUI(){ var on=$("bk-recurring").checked; $("recurring-ui").style.display = on ? "block" : "none"; recalc(); }
+function getRecurrence(){
+  if(!$("bk-recurring") || !$("bk-recurring").checked) return null;
+  var freq=$("bk-rec-freq").value;
+  var count=Math.max(2, Math.min(52, parseInt($("bk-rec-count").value,10)||2));
+  return { freq:freq, count:count };
+}
+function updateRecPreview(){
+  var prev=$("rec-preview"); if(!prev) return;
+  var rec=getRecurrence(), date=$("bk-date").value;
+  if(!rec || !date){ prev.style.display="none"; return; }
+  var dates=recurrenceDates(date, rec.freq, rec.count);
+  prev.style.display="block";
+  prev.innerHTML="🔁 "+freqLabel(rec.freq)+" · "+rec.count+" occurrences:<br>"+dates.map(function(d){return "• "+d;}).join("<br>");
+}
+
+/* ---------- date/time + conflict detection ---------- */
+function onDateTimeChange(){
+  var date=$("bk-date").value, hours=parseInt($("bk-hours").value,10), start=$("bk-start").value;
+  if(start && hours){
+    var sm=timeToMins(start); var em=sm+hours*60;
+    $("bk-end").value = em>=1440 ? fmtTime(em-1440)+" (next day)" : fmtTime(em);
+  } else { $("bk-end").value=""; }
+  checkConflicts();
+  recalc();
+}
+function overlaps(aS,aE,bS,bE){ return aS < bE && bS < aE; }
+function checkConflicts(){
+  var note=$("conflict-note"), avail=$("avail-note");
+  note.classList.remove("show"); avail.style.display="none";
+  var date=$("bk-date").value, hours=parseInt($("bk-hours").value,10), start=$("bk-start").value;
+  if(!date || !hours || !start || sel.rooms.length===0) return true;
+
+  var sm=timeToMins(start), em=sm+hours*60;
+  var endForCheck = Math.min(em, 1440);
+  var conflictRooms=[];
+
+  // existing bookings (approved or pending hold the slot)
+  cache.bookings.forEach(function(r){
+    if(r.status==="rejected") return;
+    if(r.date!==date) return;
+    var rs=timeToMins(r.start), re=Math.min(rs + r.hours*60, 1440);
+    (r.rooms||[]).forEach(function(room){
+      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,rs,re) && conflictRooms.indexOf(room)<0) conflictRooms.push(room);
+    });
+  });
+  // public NGH events block their rooms
+  expandedEvents().forEach(function(e){
+    if(e.date!==date) return;
+    var es = e.allDay ? 0 : timeToMins(e.start), ee = e.allDay ? 1440 : timeToMins(e.end);
+    var rooms = (e.rooms&&e.rooms.length) ? e.rooms : ROOMS.map(function(x){return x.id;});
+    rooms.forEach(function(room){
+      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,es,ee) && conflictRooms.indexOf(room)<0) conflictRooms.push(room);
+    });
+  });
+  // blackout windows
+  expandedBlackouts().forEach(function(b){
+    if(b.date!==date) return;
+    var bs = b.allDay ? 0 : timeToMins(b.start), be = b.allDay ? 1440 : timeToMins(b.end);
+    var rooms = (b.rooms&&b.rooms.length) ? b.rooms : ROOMS.map(function(x){return x.id;});
+    rooms.forEach(function(room){
+      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,bs,be) && conflictRooms.indexOf(room)<0) conflictRooms.push(room);
+    });
+  });
+
+  if(conflictRooms.length){
+    var names=conflictRooms.map(roomName).join(", ");
+    note.innerHTML="⚠ <strong>"+names+"</strong> "+(conflictRooms.length>1?"are":"is")+" already booked, reserved for an NGH event, or blacked out during that window. Please choose a different time or room.";
+    note.classList.add("show");
+    return false;
+  } else {
+    avail.style.display="block";
+    avail.innerHTML="✅ "+sel.rooms.map(roomName).join(", ")+" available "+fmtTime(sm)+"–"+ ($("bk-end").value||"") +" on "+date+".";
+    return true;
+  }
+}
+
+/* ---------- cost calculation ---------- */
+function calcRoomCost(hours){ var first=Math.min(hours,4), rest=Math.max(hours-4,0); return first*10 + rest*5; }
+function computeTotals(){
+  var hours=parseInt($("bk-hours").value,10)||0;
+  var nRooms=sel.rooms.length;
+  var lines=[], bookingTotal=0;
+
+  if(nRooms>0 && hours>0){
+    var per=calcRoomCost(hours);
+    sel.rooms.forEach(function(rid){ lines.push({ label:roomName(rid)+" — "+hours+"h", amt:per }); bookingTotal+=per; });
+  }
+  var addonTotal=0;
+  if(sel.addons["byofood"]){ lines.push({label:"Bring Your Own Food & Drink", amt:BYO_FOOD_FEE}); addonTotal+=BYO_FOOD_FEE; }
+  if(sel.addons["guru"]){
+    var q=parseInt(($("qty-guru")||{}).value,10)||1;
+    var gcost=GURU_HOURLY*hours*q;
+    lines.push({label:"Private Game Guru ×"+q+" — "+hours+"h", amt:gcost}); addonTotal+=gcost;
+  }
+  var deposit = nRooms>0 ? (DEPOSIT[Math.min(nRooms,3)]||0) : 0;
+  if(sel.addons["karaoke"] && nRooms>0) deposit += KARAOKE_DEPOSIT_ADD;
+
+  var subtotal = bookingTotal + addonTotal;
+  var military = $("c-military") && $("c-military").checked;
+  var discount = military ? Math.round(subtotal * MIL_DISCOUNT * 100)/100 : 0;
+  var grand = subtotal - discount;
+  return { lines:lines, subtotal:subtotal, addonTotal:addonTotal, deposit:deposit, discount:discount, military:military, grand:grand, hours:hours, nRooms:nRooms };
+}
+function recalc(){
+  var t=computeTotals();
+  var el=$("summary-body");
+  if(t.nRooms===0 || t.hours===0){ el.innerHTML='<p class="hint" style="margin-bottom:0;">Select rooms and a time to see your itemized estimate.</p>'; return; }
+  var h="";
+  t.lines.forEach(function(l){ h+='<div class="sum-row"><span>'+l.label+'</span><span>'+fmtMoney(l.amt)+'</span></div>'; });
+  h+='<div class="sum-row"><span>Subtotal</span><span>'+fmtMoney(t.subtotal)+'</span></div>';
+  if(t.military){ h+='<div class="sum-row discount"><span>Military / First Responder −15%*</span><span>−'+fmtMoney(t.discount)+'</span></div>'; }
+  h+='<div class="sum-row total"><span>Booking Subtotal</span><span>'+fmtMoney(t.grand)+'</span></div>';
+  h+='<div class="sum-row deposit"><span>Refundable Deposit (hold)</span><span>'+fmtMoney(t.deposit)+'</span></div>';
+  h+='<div class="sum-row total"><span>Total Due Before Booking*</span><span>'+fmtMoney(t.grand+t.deposit)+'</span></div>';
+  h+='<p class="sum-note">Totals do <strong>not</strong> include applicable taxes required by law.<br>';
+  if(t.military) h+='<strong>*</strong> The 15% military / first-responder discount is applied once a Game Guru verifies your valid ID at check-in or during in-person payment. If ID can\'t be verified, the standard rate applies.<br>';
+  h+='<strong>*</strong> The full total — including the refundable deposit hold — must be paid <strong>no later than the calendar day before</strong> your booking begins. Unpaid bookings are automatically canceled.<br>'+
+     'The deposit is fully refunded provided nothing is stolen or damaged and the room(s) are left reasonably cleaned, per our <a href="terms.html" target="_blank">Terms &amp; Conditions</a>.</p>';
+  var rec=getRecurrence();
+  if(rec){
+    h+='<div class="sum-row" style="border-top:2px solid var(--gold);margin-top:8px;padding-top:8px;color:var(--den);"><span>🔁 Recurring · '+freqLabel(rec.freq)+'</span><span>×'+rec.count+' occurrences</span></div>';
+    h+='<p class="sum-note">The amounts above are <strong>per occurrence</strong>. Each of the '+rec.count+' occurrences is approved and paid individually — you are only charged for occurrences you confirm.</p>';
+  }
+  el.innerHTML=h;
+  updateRecPreview();
+}
+
+/* ---------- submit ---------- */
+async function submitBooking(){
+  var err=$("form-err"); err.classList.remove("show");
+  var name=$("c-name").value.trim(), phone=$("c-phone").value.trim(),
+      email=$("c-email").value.trim(), guests=$("c-guests").value.trim(),
+      date=$("bk-date").value, hours=parseInt($("bk-hours").value,10), start=$("bk-start").value;
+
+  var problems=[];
+  if(sel.rooms.length===0) problems.push("choose at least one play space");
+  if(!date) problems.push("pick a date");
+  if(!hours) problems.push("choose number of hours");
+  if(!start) problems.push("choose a start time");
+  if(!name) problems.push("enter your name");
+  if(!phone) problems.push("enter your phone");
+  if(!email || email.indexOf("@")<0) problems.push("enter a valid email");
+  if(!guests) problems.push("enter max concurrent guests");
+  if(problems.length){ err.textContent="Please "+problems.join(", ")+"."; err.classList.add("show"); window.scrollTo({top:err.getBoundingClientRect().top+window.scrollY-120,behavior:"smooth"}); return; }
+
+  await refreshCache();
+  if(!$("bk-recurring").checked && !checkConflicts()){ err.textContent="That time conflicts with an existing booking or NGH event. Please adjust."; err.classList.add("show"); return; }
+
+  var t=computeTotals();
+  var addonsChosen=[];
+  FREE_ADDONS.concat(PAID_ADDONS).forEach(function(a){
+    if(sel.addons[a.id]){
+      var entry={ id:a.id, title:a.title, comment:($("acmt-"+a.id)?$("acmt-"+a.id).value:"") };
+      if(a.id==="guru") entry.qty=parseInt(($("qty-guru")||{}).value,10)||1;
+      addonsChosen.push(entry);
+    }
+  });
+
+  var rec=getRecurrence();
+  var groupId = rec ? ("GRP-"+genId()) : null;
+  var dates = rec ? recurrenceDates(date, rec.freq, rec.count) : [date];
+  var military = !!($("c-military") && $("c-military").checked);
+
+  var toAdd=[], firstReq=null;
+  dates.forEach(function(d, idx){
+    var req = {
+      id:genId(),
+      submitted:new Date().toISOString(),
+      status:"pending",                       // pending | approved | rejected | hold
+      payment:"due",                          // due | paid
+      milRequested:military,                  // did they ask for the discount?
+      milVerified: military ? "pending" : null, // pending | yes | no  (only if requested)
+      name:name, phone:phone, email:email, guests:guests,
+      rooms:sel.rooms.slice(), date:d, hours:hours, start:start,
+      endLabel:$("bk-end").value,
+      addons:addonsChosen,
+      guruReach:$("c-guru-reach").checked,
+      overnightInterest:$("c-overnight").checked,
+      wantsInvoice:$("c-invoice").checked,
+      comments:$("c-comments").value.trim(),
+      subtotal:t.subtotal, discount:t.discount, costBooking:t.grand, deposit:t.deposit, totalDue:t.grand+t.deposit,
+      adminQuestions:"", invoiceLink:"", invoiceFileName:"",
+      groupId:groupId, recIndex:rec?(idx+1):null, recTotal:rec?rec.count:null, recFreq:rec?rec.freq:null
+    };
+    toAdd.push(req);
+    if(idx===0) firstReq=req;
+  });
+
+  try { await Store.addBookings(toAdd); }
+  catch(e){ err.textContent="Sorry — we couldn't submit your request. Please try again or email us."; err.classList.add("show"); return; }
+  var req=firstReq;
+
+  var adminBody = buildAdminEmail(req) + (rec ? ("\n\n🔁 RECURRING REQUEST ("+freqLabel(rec.freq)+", "+rec.count+" occurrences):\n"+dates.map(function(d){return "   • "+d;}).join("\n")+"\n   Group: "+groupId+"\n   (Review & approve/pay each occurrence individually in the console.)") : "");
+  await Store.sendEmail(ADMIN_EMAIL, "New "+(rec?"RECURRING ":"")+"Booking Request "+req.id+" — "+name, adminBody);
+
+  $("succ-name").textContent=name;
+  $("succ-email").textContent=email;
+  $("succ-ref").innerHTML="Your reference number: <strong>"+req.id+"</strong>";
+  $("succ-admin-note").textContent="📧 A notification was sent to "+ADMIN_EMAIL+" with a direct link to review this request.\n\n"+adminBody;
+  document.querySelectorAll("#customer-view .card").forEach(function(c){ if(c.id!=="success") c.style.display="none"; });
+  $("success").style.display="block";
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+/* ---------- local email stub (demo mode only) ---------- */
+function sendEmailLocal(to, subject, body){
+  console.log("---- EMAIL (demo) ----\nTo: "+to+"\nSubject: "+subject+"\n\n"+body+"\n----------------------");
+  return true;
+}
+function addonSummary(req){
+  if(!req.addons || !req.addons.length) return "None";
+  return req.addons.map(function(a){ var s="• "+a.title + (a.qty?(" ×"+a.qty):""); if(a.comment) s+="\n    Note: "+a.comment; return s; }).join("\n");
+}
+function buildAdminEmail(req){
+  return "A new booking request has been submitted.\n\n"+
+  "REVIEW / APPROVE HERE: "+REVIEW_URL+"\n(Open the Staff Login on the booking page, then find request "+req.id+".)\n\n"+
+  "Ref: "+req.id+"\nName: "+req.name+"\nPhone: "+req.phone+"\nEmail: "+req.email+"\n"+
+  "Rooms: "+roomList(req)+"\nDate: "+req.date+"\nTime: "+fmtTime(timeToMins(req.start))+" – "+req.endLabel+" ("+req.hours+"h)\n"+
+  "Max concurrent guests: "+req.guests+"\n\n"+
+  "Add-ons:\n"+addonSummary(req)+"\n\n"+
+  "Military / First Responder discount requested: "+(req.milRequested?"YES — verify ID before applying":"no")+"\n"+
+  "Wants Guru to reach out re: procurement: "+(req.guruReach?"YES":"no")+"\n"+
+  "Interested in overnight suite: "+(req.overnightInterest?"YES — contact separately":"no")+"\n"+
+  "Requests an invoice: "+(req.wantsInvoice?"YES":"no")+"\n"+
+  "Comments: "+(req.comments||"—")+"\n\n"+
+  "Subtotal: "+fmtMoney(req.subtotal||req.costBooking)+(req.discount?("\nMil/FR discount: -"+fmtMoney(req.discount)):"")+"\n"+
+  "Booking subtotal: "+fmtMoney(req.costBooking)+"\nRefundable deposit: "+fmtMoney(req.deposit)+"\nTOTAL DUE (excl. tax): "+fmtMoney(req.totalDue)+"\n"+
+  "Payment status: "+req.payment.toUpperCase()+"\n";
+}
+
+/* ===================================================================
+   ADMIN CONSOLE
+   =================================================================== */
+function openAdmin(){ $("customer-view").style.display="none"; $("admin-view").style.display="block"; window.scrollTo(0,0); }
+function closeAdmin(){ Store.logout(); $("admin-view").style.display="none"; $("customer-view").style.display="block"; $("admin-panel").style.display="none"; $("admin-gate").style.display="block"; }
+async function checkAdmin(){
+  var ok=false;
+  try { ok = await Store.login($("admin-code").value); } catch(e){ ok=false; }
+  if(ok){
+    $("admin-err").classList.remove("show");
+    $("admin-gate").style.display="none"; $("admin-panel").style.display="block";
+    var mi=$("mode-indicator");
+    mi.innerHTML = Store.apiMode() ? '<span class="mode-tag server">● Live server</span>' : '<span class="mode-tag local">● Demo (this browser only)</span>';
+    await refreshCache();
+    await autoCancelUnpaid();
+    setAdminView('list');
+  } else { $("admin-err").classList.add("show"); }
+}
+
+var adminFilter="pending";
+function renderAdminTabs(){
+  var counts={all:0,pending:0,approved:0,hold:0,rejected:0};
+  cache.bookings.forEach(function(r){ counts.all++; counts[r.status]=(counts[r.status]||0)+1; });
+  var tabs=[["pending","Pending"],["hold","On Hold"],["approved","Approved"],["rejected","Rejected"],["all","All"]];
+  var h=""; tabs.forEach(function(t){ h+='<div class="tab'+(adminFilter===t[0]?" active":"")+'" onclick="renderAdmin(\''+t[0]+'\')">'+t[1]+' ('+(counts[t[0]]||0)+')</div>'; });
+  $("admin-tabs").innerHTML=h;
+}
+function renderAdmin(filter){
+  adminFilter=filter; renderAdminTabs();
+  var list=cache.bookings.slice().reverse();
+  if(filter!=="all") list=list.filter(function(r){ return r.status===filter; });
+  var el=$("requests-list");
+  if(!list.length){ el.innerHTML='<div class="card"><p class="hint" style="margin:0;">No '+filter+' requests.</p></div>'; return; }
+  el.innerHTML=list.map(reqCardHtml).join("");
+}
+function getReq(id){ for(var i=0;i<cache.bookings.length;i++) if(cache.bookings[i].id===id) return cache.bookings[i]; return null; }
+function dayBefore(dateStr){ var d=new Date(dateStr+"T12:00:00"); d.setDate(d.getDate()-1); return d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}); }
+
+function milBadge(r){
+  if(!r.milRequested) return "";
+  if(r.milVerified==="yes") return '<span class="badge mil-yes">★ Mil/FR Verified</span>';
+  if(r.milVerified==="no")  return '<span class="badge mil-no">Mil/FR Not Verified</span>';
+  return '<span class="badge mil-pending">★ Mil/FR — Verify ID</span>';
+}
+
+function reqCardHtml(r){
+  var when=fmtTime(timeToMins(r.start))+" – "+r.endLabel;
+  var payBadge = r.status==="approved" ? '<span class="badge '+(r.payment==="paid"?"pay-paid":"pay-due")+'">'+(r.payment==="paid"?"Paid":"Payment Due")+'</span>' : '';
+  var addons = (r.addons&&r.addons.length) ? r.addons.map(function(a){ return "<div class='kv'>• "+esc(a.title)+(a.qty?(" ×"+a.qty):"")+(a.comment?(" — <i>"+esc(a.comment)+"</i>"):"")+"</div>"; }).join("") : "<div class='kv'>—</div>";
+
+  var actions="";
+  if(r.status==="pending" || r.status==="hold"){
+    actions+='<button class="btn btn-sm" onclick="approve(\''+r.id+'\')">✅ Approve</button>';
+    actions+='<button class="btn btn-sm btn-danger" onclick="reject(\''+r.id+'\')">✕ Reject</button>';
+    actions+='<button class="btn btn-sm btn-ghost" onclick="holdToggle(\''+r.id+'\')">❓ On Hold (ask questions)</button>';
+  } else if(r.status==="approved"){
+    actions+='<button class="btn btn-sm '+(r.payment==="paid"?"btn-ghost":"")+'" onclick="togglePaid(\''+r.id+'\')">'+(r.payment==="paid"?"Mark Payment Due":"💵 Mark as Paid")+'</button>';
+    actions+='<button class="btn btn-sm btn-danger" onclick="reject(\''+r.id+'\')">Cancel / Reject</button>';
+  } else if(r.status==="rejected"){
+    actions+='<button class="btn btn-sm btn-ghost" onclick="approve(\''+r.id+'\')">Re-approve</button>';
+  }
+
+  // MILITARY / FIRST RESPONDER verification controls (only when requested)
+  var milBox="";
+  if(r.milRequested){
+    var grpBtn = r.groupId ? '<button class="btn btn-sm btn-ghost" onclick="setMilGroup(\''+r.groupId+'\',\'yes\')">★ Verify ALL in series</button>' : '';
+    milBox='<div style="margin-top:12px;padding:11px 13px;background:#f4f7f8;border:1px solid #cfe0e4;border-radius:10px;">'+
+      '<div class="kv" style="margin-bottom:6px;"><b>Military / First Responder</b> — discount of '+fmtMoney(r.discount||0)+' '+(r.milVerified==="yes"?"is applied":"is pending ID verification")+'.</div>'+
+      '<div class="admin-actions" style="margin-top:6px;">'+
+        (r.milVerified!=="yes"?'<button class="btn btn-sm btn-teal" onclick="setMil(\''+r.id+'\',\'yes\')">★ Mark ID Verified</button>':'')+
+        (r.milVerified!=="no"?'<button class="btn btn-sm btn-ghost" onclick="setMil(\''+r.id+'\',\'no\')">Couldn\'t verify — remove discount</button>':'')+
+        grpBtn+
+      '</div></div>';
+  }
+
+  var holdBox='<div id="holdbox-'+r.id+'" style="display:'+(r.status==="hold"?"block":"none")+';margin-top:12px;">'+
+    '<label class="fld">Questions for the requester (sent in their email)</label>'+
+    '<textarea class="mini-input" id="hq-'+r.id+'" placeholder="e.g. Can you confirm final guest count? Which console titles?">'+esc(r.adminQuestions||"")+'</textarea>'+
+    '<div style="margin-top:8px;"><button class="btn btn-sm" onclick="sendHold(\''+r.id+'\')">📧 Put On Hold & Email Questions</button></div>'+
+  '</div>';
+
+  var apprBox = '<details class="adv" id="apprdet-'+r.id+'"'+(r.status==="approved"?" open":"")+'><summary>Invoice / payment options</summary>'+
+    '<label class="fld">Invoice link / URL (optional)</label>'+
+    '<input type="text" class="mini-input" id="invlink-'+r.id+'" placeholder="https://invoice.stripe.com/…" value="'+esc(r.invoiceLink||"")+'">'+
+    '<label class="fld">Attach invoice PDF (optional)</label>'+
+    '<input type="file" class="mini-input" id="invfile-'+r.id+'" accept="application/pdf" onchange="noteFile(\''+r.id+'\')">'+
+    '<div class="kv" id="invfilename-'+r.id+'">'+(r.invoiceFileName?("Attached: "+esc(r.invoiceFileName)):"")+'</div>'+
+    '<div style="margin-top:8px;"><button class="btn btn-sm btn-ghost" onclick="resendApproval(\''+r.id+'\')">📧 (Re)send Approval Email w/ Invoice</button></div>'+
+  '</details>';
+
+  var recBadge = r.groupId ? ('<span class="recur-badge">🔁 '+freqLabel(r.recFreq)+' · '+r.recIndex+'/'+r.recTotal+'</span>') : '';
+  return '<div class="card req-card '+r.status+(r.groupId?' rec-instance':'')+'">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+
+      '<div><span class="badge '+r.status+'">'+r.status+'</span> '+payBadge+' '+milBadge(r)+' '+recBadge+'</div>'+
+      '<div class="kv" style="color:#9a9a80;">'+r.id+'</div>'+
+    '</div>'+
+    '<h2 style="margin-top:10px;">'+esc(r.name)+' · '+roomList(r)+'</h2>'+
+    (r.groupId?'<div class="kv"><b>Recurring group</b> '+r.groupId+' — occurrence '+r.recIndex+' of '+r.recTotal+' <a href="#" onclick="showGroup(\''+r.groupId+'\');return false;">view all in group</a></div>':'')+
+    '<div class="kv"><b>When</b> '+r.date+' · '+when+' ('+r.hours+'h)</div>'+
+    '<div class="kv"><b>Contact</b> '+esc(r.phone)+' · '+esc(r.email)+'</div>'+
+    '<div class="kv"><b>Max guests</b> '+esc(r.guests)+'</div>'+
+    '<div class="kv"><b>Add-ons</b></div>'+addons+
+    '<div class="kv"><b>Guru procurement?</b> '+(r.guruReach?"YES":"no")+' · <b>Overnight?</b> '+(r.overnightInterest?"YES":"no")+' · <b>Wants invoice?</b> '+(r.wantsInvoice?"YES":"no")+'</div>'+
+    (r.comments?'<div class="kv"><b>Comments</b> '+esc(r.comments)+'</div>':'')+
+    '<div class="kv" style="margin-top:8px;"><b>Subtotal</b> '+fmtMoney(r.subtotal||r.costBooking)+(r.discount?(' · <b>Mil/FR −</b> '+fmtMoney(r.discount)):'')+' · <b>Booking</b> '+fmtMoney(r.costBooking)+' · <b>Deposit</b> '+fmtMoney(r.deposit)+' · <b>Total due (excl. tax)</b> '+fmtMoney(r.totalDue)+'</div>'+
+    (r.adminQuestions && r.status==="hold" ? '<div class="email-preview">On-hold questions sent:\n'+esc(r.adminQuestions)+'</div>' : '')+
+    milBox+
+    '<div class="admin-actions">'+actions+'</div>'+
+    holdBox+
+    apprBox+
+  '</div>';
+}
+
+async function approve(id){ await Store.updateBooking(id,{status:"approved"}); await refreshCache(); await resendApproval(id, true); renderAdmin(adminFilter); }
+async function resendApproval(id, silent){
+  var r=getReq(id); if(!r) return;
+  var link = $("invlink-"+id) ? $("invlink-"+id).value.trim() : (r.invoiceLink||"");
+  var fileName = r.invoiceFileName||"";
+  var fileInput=$("invfile-"+id);
+  if(fileInput && fileInput.files && fileInput.files[0]) fileName=fileInput.files[0].name;
+  await Store.updateBooking(id,{invoiceLink:link, invoiceFileName:fileName, status:"approved"});
+  await refreshCache();
+  var body=buildApprovalEmail(getReq(id));
+  await Store.sendEmail(r.email, "Your Northwood Game Haven booking "+id+" is APPROVED ✅", body);
+  if(!silent){ alert("Approval email sent to "+r.email+".\n\n"+body); }
+  renderAdmin(adminFilter);
+}
+function buildApprovalEmail(r){
+  var invoiceLine="";
+  if(r.wantsInvoice || r.invoiceLink || r.invoiceFileName){
+    invoiceLine="\nINVOICE:\n";
+    if(r.invoiceLink) invoiceLine+="  Pay online: "+r.invoiceLink+"\n";
+    if(r.invoiceFileName) invoiceLine+="  Attached: "+r.invoiceFileName+" (PDF)\n";
+    if(!r.invoiceLink && !r.invoiceFileName) invoiceLine+="  An invoice will follow shortly.\n";
+  }
+  var milLine = r.milRequested ? ("\nMilitary / First Responder discount: "+(r.milVerified==="yes"?("APPLIED (-"+fmtMoney(r.discount)+"). Thank you for your service!"):(r.milVerified==="no"?"could not be verified — standard rate applies.":"pending — please bring valid ID to check-in to receive your 15% off."))+"\n") : "";
+  return "Hi "+r.name+",\n\nGreat news — your booking request is APPROVED! Here are the details:\n\n"+
+  "Ref: "+r.id+"\nRooms: "+roomList(r)+"\nDate: "+r.date+"\nTime: "+fmtTime(timeToMins(r.start))+" – "+r.endLabel+" ("+r.hours+"h)\n\n"+
+  "Booking subtotal: "+fmtMoney(r.costBooking)+"\nRefundable deposit (hold): "+fmtMoney(r.deposit)+"\nTOTAL DUE: "+fmtMoney(r.totalDue)+" (plus applicable taxes)\n"+
+  milLine+invoiceLine+"\n"+
+  "PAYMENT TERMS:\n• Payment in full — including the refundable deposit hold — is due no later than the calendar day BEFORE your booking ("+dayBefore(r.date)+").\n"+
+  "• If not paid by then, the booking is automatically canceled.\n• Pay by cash, card, or check in person; by card over the phone; or via the invoice link above.\n\n"+
+  "The deposit is refunded in full as long as nothing is damaged/stolen and the room(s) are left reasonably cleaned, per our Terms & Conditions.\n\n"+
+  "Questions? Just reply to this email or call us.\n\n— The Northwood Game Haven Crew 🦦";
+}
+async function reject(id){
+  var r=getReq(id); if(!r) return;
+  if(!confirm("Reject/cancel this booking for "+r.name+"?")) return;
+  await Store.updateBooking(id,{status:"rejected"});
+  await Store.sendEmail(r.email, "Update on your Northwood Game Haven booking "+r.id,
+    "Hi "+r.name+",\n\nThank you for your interest in Northwood Game Haven. Unfortunately we're unable to confirm your booking request ("+r.id+") for "+r.date+".\n\nThis may be due to availability or a scheduling conflict. Please feel free to submit a new request for a different time — we'd love to host you.\n\n— The Northwood Game Haven Crew 🦦");
+  await refreshCache(); renderAdmin(adminFilter);
+}
+function holdToggle(id){ var box=$("holdbox-"+id); box.style.display = box.style.display==="none" ? "block" : "none"; }
+async function sendHold(id){
+  var r=getReq(id); if(!r) return;
+  var q=$("hq-"+id).value.trim();
+  if(!q){ alert("Please type your questions for the requester first."); return; }
+  await Store.updateBooking(id,{status:"hold", adminQuestions:q});
+  await Store.sendEmail(r.email, "A quick question about your Northwood Game Haven booking "+r.id,
+    "Hi "+r.name+",\n\nThanks for your booking request ("+r.id+") for "+roomList(r)+" on "+r.date+". Before we can confirm, we have a few questions:\n\n"+q+"\n\nJust reply to this email with your answers and we'll get you booked. Thanks!\n\n— The Northwood Game Haven Crew 🦦");
+  alert("On-hold email sent to "+r.email+".");
+  await refreshCache(); renderAdmin(adminFilter);
+}
+async function togglePaid(id){ var r=getReq(id); if(!r) return; await Store.updateBooking(id,{payment: r.payment==="paid"?"due":"paid"}); await refreshCache(); renderAdmin(adminFilter); }
+
+/* Military verification — recompute total when status changes */
+async function setMil(id, val){
+  var r=getReq(id); if(!r) return;
+  var patch=recomputeMil(r, val);
+  await Store.updateBooking(id, patch);
+  await refreshCache(); renderAdmin(adminFilter);
+}
+async function setMilGroup(groupId, val){
+  if(!confirm("Mark Military/First-Responder status '"+(val==="yes"?"Verified":"Not verified")+"' for EVERY occurrence in this recurring series?")) return;
+  // recompute each instance individually (totals differ only if rooms/hours differ; they match here, but be safe)
+  var instances=cache.bookings.filter(function(b){ return b.groupId===groupId && b.milRequested; });
+  for(var i=0;i<instances.length;i++){ await Store.updateBooking(instances[i].id, recomputeMil(instances[i], val)); }
+  await refreshCache(); renderAdmin(adminFilter);
+  alert("Updated "+instances.length+" occurrence(s). Note: each occurrence is still paid for separately.");
+}
+function recomputeMil(r, val){
+  var subtotal = (r.subtotal!=null) ? r.subtotal : r.costBooking;
+  if(val==="yes"){
+    var disc = Math.round(subtotal*MIL_DISCOUNT*100)/100;
+    return { milVerified:"yes", discount:disc, costBooking:subtotal-disc, totalDue:(subtotal-disc)+r.deposit };
+  } else { // no -> remove discount
+    return { milVerified:"no", discount:0, costBooking:subtotal, totalDue:subtotal+r.deposit };
+  }
+}
+
+function noteFile(id){ var fi=$("invfile-"+id); if(fi && fi.files && fi.files[0]) $("invfilename-"+id).textContent="Selected: "+fi.files[0].name+" (will attach on send)"; }
+
+async function autoCancelUnpaid(){
+  var now=new Date(), changed=false;
+  for(var i=0;i<cache.bookings.length;i++){
+    var r=cache.bookings[i];
+    if(r.status==="approved" && r.payment!=="paid"){
+      var deadline=new Date(r.date+"T00:00:00"); deadline.setDate(deadline.getDate()-1); deadline.setHours(23,59,59);
+      if(now>deadline){
+        await Store.updateBooking(r.id, {status:"rejected", autoCanceled:true});
+        var recNote = r.groupId ? (" This was occurrence "+r.recIndex+" of "+r.recTotal+" in your recurring series; your other approved occurrences are NOT affected.") : "";
+        await Store.sendEmail(r.email,"Your Northwood Game Haven booking "+r.id+" was canceled (unpaid)",
+          "Hi "+r.name+",\n\nYour booking "+r.id+" for "+r.date+" was automatically canceled because payment (including the deposit hold) wasn't received by the day before the booking."+recNote+" Please submit a new request if you'd still like to come in.\n\n— NGH 🦦");
+        changed=true;
+      }
+    }
+  }
+  if(changed) await refreshCache();
+}
+
+/* ---------- admin view switching ---------- */
+var adminView="list";
+function setAdminView(v){
+  adminView=v;
+  $("list-view-wrap").style.display = v==="list" ? "block" : "none";
+  $("calendar-view-wrap").style.display = v==="calendar" ? "block" : "none";
+  $("events-view-wrap").style.display = v==="events" ? "block" : "none";
+  $("view-list-btn").className = "btn btn-sm"+(v==="list"?"":" btn-ghost");
+  $("view-cal-btn").className = "btn btn-sm"+(v==="calendar"?"":" btn-ghost");
+  $("view-events-btn").className = "btn btn-sm"+(v==="events"?"":" btn-ghost");
+  if(v==="calendar") renderCalendar();
+  else if(v==="events") renderEventsAdmin();
+  else renderAdmin(adminFilter);
+}
+function showGroup(groupId){
+  setAdminView('list'); adminFilter="all"; renderAdminTabs();
+  var list=cache.bookings.filter(function(r){ return r.groupId===groupId; }).sort(function(a,b){ return a.recIndex-b.recIndex; });
+  var el=$("requests-list");
+  el.innerHTML='<div class="card"><h2>🔁 Recurring Group '+esc(groupId)+'</h2>'+
+    '<p class="hint">Approve, reject, and mark paid for each occurrence independently — each occurrence is paid for separately. Military/First-Responder verification can be applied to all occurrences at once. Auto-cancel only affects the specific unpaid occurrence, never the others.</p></div>'+
+    list.map(reqCardHtml).join("");
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+/* ===================================================================
+   PUBLIC NGH EVENTS  (admin-created, individual or recurring)
+   =================================================================== */
+function expandedEvents(){
+  var out=[];
+  cache.events.forEach(function(e){
+    if(e.recurrence){
+      recurrenceDates(e.date, e.recurrence.freq, e.recurrence.count).forEach(function(d,i){ var c=Object.assign({},e); c.date=d; c._recI=i+1; out.push(c); });
+    } else { out.push(Object.assign({},e)); }
+  });
+  return out;
+}
+var editingEventId=null;
+function renderEventsAdmin(){
+  var wrap=$("events-view-wrap");
+  var roomChecks=ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="ev-room" value="'+r.id+'">'+r.name+'</label>'; }).join("");
+  var evs=cache.events.slice();
+  var list = evs.length ? evs.map(function(e){
+    var rooms=(e.rooms&&e.rooms.length)?e.rooms.map(roomName).join(", "):"all rooms";
+    var time=e.allDay?"All day":(fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end)));
+    var rec=e.recurrence?(' <span class="recur-badge">🔁 '+freqLabel(e.recurrence.freq)+' ×'+e.recurrence.count+'</span>'):'';
+    return '<div class="card ev-card">'+
+      '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center;">'+
+        '<h2 style="margin:0;">🎉 '+esc(e.title||"Public NGH Event")+rec+'</h2>'+
+        '<div class="kv" style="color:#9a9a80;">'+e.id+'</div></div>'+
+      '<div class="kv"><b>When</b> '+e.date+' · '+time+'</div>'+
+      '<div class="kv"><b>Rooms held</b> '+rooms+'</div>'+
+      (e.notes?'<div class="kv"><b>Notes</b> '+esc(e.notes)+'</div>':'')+
+      '<div class="admin-actions"><button class="btn btn-sm btn-ghost" onclick="editEvent(\''+e.id+'\')">✎ Edit</button>'+
+      '<button class="btn btn-sm btn-danger" onclick="deleteEvent(\''+e.id+'\')">Delete</button></div>'+
+    '</div>';
+  }).join("") : '<div class="card"><p class="hint" style="margin:0;">No public events yet.</p></div>';
+
+  wrap.innerHTML =
+    '<div class="card"><h2 id="ev-form-title">🎉 Create a Public NGH Event</h2>'+
+    '<p class="hint">Public events (tournaments, launch nights, demo days) appear on the booking calendar in teal and hold the selected rooms so customers can\'t double-book them. Make it recurring for a weekly series.</p>'+
+    '<div class="row"><div><label class="fld req">Event title</label><input type="text" id="ev-title" placeholder="e.g. Friday Night Magic"></div>'+
+    '<div><label class="fld req">Date</label><input type="date" id="ev-date"></div></div>'+
+    '<label class="check-line" style="margin-top:10px;"><input type="checkbox" id="ev-allday" onchange="$(\'ev-times\').style.display=this.checked?\'none\':\'grid\'">All day</label>'+
+    '<div class="row" id="ev-times"><div><label class="fld">Start</label><input type="time" id="ev-start" step="1800"></div>'+
+    '<div><label class="fld">End</label><input type="time" id="ev-end" step="1800"></div></div>'+
+    '<label class="fld">Rooms held (none = all rooms)</label><div>'+roomChecks+'</div>'+
+    '<label class="fld">Notes (optional)</label><textarea id="ev-notes" placeholder="Public-facing details, entry fee, format…"></textarea>'+
+    '<label class="check-line" style="margin-top:12px;"><input type="checkbox" id="ev-recurring" onchange="$(\'ev-rec-ui\').style.display=this.checked?\'grid\':\'none\'">Recurring event</label>'+
+    '<div class="row" id="ev-rec-ui" style="display:none;"><div><label class="fld">Repeats</label><select id="ev-rec-freq"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option></select></div>'+
+    '<div><label class="fld">Occurrences</label><input type="number" id="ev-rec-count" min="2" max="52" value="8"></div></div>'+
+    '<div style="margin-top:14px;"><button class="btn btn-sm" id="ev-save-btn" onclick="saveEvent()">Save Event</button> <button class="btn btn-sm btn-ghost" onclick="resetEventForm()" id="ev-cancel-btn" style="display:none;">Cancel edit</button></div>'+
+    '</div>'+
+    '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;">Current Public Events</h2>'+list;
+}
+function resetEventForm(){ editingEventId=null; $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
+  $("ev-title").value=""; $("ev-date").value=""; $("ev-allday").checked=false; $("ev-times").style.display="grid"; $("ev-start").value=""; $("ev-end").value=""; $("ev-notes").value="";
+  document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=false; }); $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none";
+}
+function editEvent(id){
+  var e=cache.events.filter(function(x){return x.id===id;})[0]; if(!e) return;
+  editingEventId=id; $("ev-form-title").textContent="✎ Edit Public NGH Event"; $("ev-save-btn").textContent="Update Event"; $("ev-cancel-btn").style.display="inline-block";
+  $("ev-title").value=e.title||""; $("ev-date").value=e.date||""; $("ev-allday").checked=!!e.allDay; $("ev-times").style.display=e.allDay?"none":"grid";
+  $("ev-start").value=e.start||""; $("ev-end").value=e.end||""; $("ev-notes").value=e.notes||"";
+  document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=(e.rooms||[]).indexOf(c.value)>=0; });
+  if(e.recurrence){ $("ev-recurring").checked=true; $("ev-rec-ui").style.display="grid"; $("ev-rec-freq").value=e.recurrence.freq; $("ev-rec-count").value=e.recurrence.count; }
+  else { $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none"; }
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+async function saveEvent(){
+  var title=$("ev-title").value.trim(), date=$("ev-date").value, allDay=$("ev-allday").checked, start=$("ev-start").value, end=$("ev-end").value, notes=$("ev-notes").value.trim();
+  if(!title){ alert("Give the event a title."); return; }
+  if(!date){ alert("Pick a date."); return; }
+  if(!allDay && (!start||!end)){ alert("Set start & end times or choose All day."); return; }
+  var rooms=[]; document.querySelectorAll(".ev-room:checked").forEach(function(c){ rooms.push(c.value); });
+  var ev={ id:editingEventId||undefined, title:title, date:date, allDay:allDay, start:start, end:end, rooms:rooms, notes:notes, public:true };
+  if($("ev-recurring").checked){ ev.recurrence={ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }; if(!editingEventId) ev.groupId="EVGRP-"+genId(); }
+  await Store.saveEvent(ev);
+  await refreshCache(); resetEventForm(); renderEventsAdmin();
+}
+async function deleteEvent(id){ if(!confirm("Delete this public event?")) return; await Store.deleteEvent(id); await refreshCache(); renderEventsAdmin(); }
+
+/* ===================================================================
+   BLACKOUTS
+   =================================================================== */
+function expandedBlackouts(){
+  var out=[];
+  cache.blackouts.forEach(function(b, idx){
+    if(b.recurrence){ recurrenceDates(b.date, b.recurrence.freq, b.recurrence.count).forEach(function(d,i){ var c=Object.assign({},b); c.date=d; c._idx=idx; c._recI=i+1; out.push(c); }); }
+    else { var c=Object.assign({},b); c._idx=idx; out.push(c); }
+  });
+  return out;
+}
+function openBlackout(){ var p=$("blackout-panel"); if(p.style.display==="block"){ p.style.display="none"; return; } p.style.display="block"; renderBlackout(); }
+function renderBlackout(){
+  var bos=cache.blackouts;
+  var roomChecks=ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="bo-room" value="'+r.id+'">'+r.name+'</label>'; }).join("");
+  var list = bos.length ? bos.map(function(b,i){
+    var rooms=(b.rooms&&b.rooms.length)?b.rooms.map(roomName).join(", "):"ALL rooms";
+    var time=b.allDay?"All day":(fmtTime(timeToMins(b.start))+" – "+fmtTime(timeToMins(b.end)));
+    var recTxt=b.recurrence?(' <span class="recur-badge">🔁 '+freqLabel(b.recurrence.freq)+' ×'+b.recurrence.count+'</span>'):'';
+    return '<div class="kv" style="padding:6px 0;border-bottom:1px dashed #e0e0d0;">🚫 <b>'+b.date+'</b> · '+time+' · '+rooms+(b.label?(" · "+esc(b.label)):"")+recTxt+' <a href="#" onclick="delBlackout('+i+');return false;" style="color:#b23;margin-left:8px;">remove</a></div>';
+  }).join("") : '<p class="hint">No blackout windows yet.</p>';
+
+  $("blackout-panel").innerHTML =
+    '<div class="card"><h2>🚫 Blackout Dates / Closures</h2>'+
+    '<p class="hint">Block dates/times so customers can\'t book them (maintenance, private buyouts, holidays). Blackouts appear in red on the calendar. For public-facing programmed events, use the <b>Public Events</b> tab instead.</p>'+
+    '<div class="row"><div><label class="fld">Date</label><input type="date" id="bo-date"></div>'+
+    '<div><label class="fld">Label (optional)</label><input type="text" id="bo-label" placeholder="e.g. Deep clean / Private buyout"></div></div>'+
+    '<label class="check-line" style="margin-top:10px;"><input type="checkbox" id="bo-allday" onchange="$(\'bo-times\').style.display=this.checked?\'none\':\'grid\'">All day</label>'+
+    '<div class="row" id="bo-times"><div><label class="fld">Start</label><input type="time" id="bo-start" step="1800"></div>'+
+    '<div><label class="fld">End</label><input type="time" id="bo-end" step="1800"></div></div>'+
+    '<label class="fld">Rooms affected (none = all rooms)</label><div>'+roomChecks+'</div>'+
+    '<label class="check-line" style="margin-top:12px;"><input type="checkbox" id="bo-recurring" onchange="$(\'bo-rec-ui\').style.display=this.checked?\'grid\':\'none\'">Recurring blackout</label>'+
+    '<div class="row" id="bo-rec-ui" style="display:none;"><div><label class="fld">Repeats</label><select id="bo-rec-freq"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option></select></div>'+
+    '<div><label class="fld">Occurrences</label><input type="number" id="bo-rec-count" min="2" max="52" value="4"></div></div>'+
+    '<div style="margin-top:14px;"><button class="btn btn-sm" onclick="addBlackout()">Add Blackout</button></div>'+
+    '<hr style="margin:18px 0;border:none;border-top:1px solid #eee;"><h2 style="font-size:0.9rem;">Current Blackouts</h2>'+list+'</div>';
+}
+async function addBlackout(){
+  var date=$("bo-date").value, allDay=$("bo-allday").checked, start=$("bo-start").value, end=$("bo-end").value, label=$("bo-label").value.trim();
+  if(!date){ alert("Pick a date."); return; }
+  if(!allDay && (!start||!end)){ alert("Set start & end times or choose All day."); return; }
+  var rooms=[]; document.querySelectorAll(".bo-room:checked").forEach(function(c){ rooms.push(c.value); });
+  var entry={date:date, allDay:allDay, start:start, end:end, rooms:rooms, label:label};
+  if($("bo-recurring") && $("bo-recurring").checked){ entry.recurrence={ freq:$("bo-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("bo-rec-count").value,10)||2)) }; entry.groupId="BOGRP-"+genId(); }
+  var bos=cache.blackouts.slice(); bos.push(entry);
+  await Store.saveBlackouts(bos); await refreshCache(); renderBlackout();
+}
+async function delBlackout(i){ var bos=cache.blackouts.slice(); bos.splice(i,1); await Store.saveBlackouts(bos); await refreshCache(); renderBlackout(); }
+
+function exportData(){
+  var data={ bookings:cache.bookings, events:cache.events, blackouts:cache.blackouts };
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="ngh-bookings-export.json"; a.click();
+}
+
+/* ===================================================================
+   CALENDAR  (month / week / day)
+   =================================================================== */
+var calMode="month", calRef=new Date();
+function setCalMode(m){ calMode=m; renderCalendar(); }
+function calShift(dir){ if(calMode==="month") calRef.setMonth(calRef.getMonth()+dir); else if(calMode==="week") calRef.setDate(calRef.getDate()+dir*7); else calRef.setDate(calRef.getDate()+dir); renderCalendar(); }
+function calToday(){ calRef=new Date(); renderCalendar(); }
+function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function weekStart(d){ var s=new Date(d); s.setDate(s.getDate()-s.getDay()); s.setHours(0,0,0,0); return s; }
+
+function eventsForDate(dateStr){
+  var evs=[];
+  cache.bookings.forEach(function(r){
+    if(r.status==="rejected") return;
+    if(r.date===dateStr) evs.push({cat:"booking", status:r.status, payment:r.payment, rec:!!r.groupId, start:r.start, hours:r.hours, label:r.name+" · "+roomList(r), id:r.id, groupId:r.groupId});
+  });
+  expandedEvents().forEach(function(e){
+    if(e.date===dateStr) evs.push({cat:"event", rec:!!e.recurrence, start:e.allDay?null:e.start, end:e.allDay?null:e.end, allDay:e.allDay, label:(e.title||"NGH Event")+(e.rooms&&e.rooms.length?(" ("+e.rooms.map(roomName).join(", ")+")"):" (all rooms)"), id:e.id, isEvent:true});
+  });
+  expandedBlackouts().forEach(function(b){
+    if(b.date===dateStr) evs.push({cat:"blackout", rec:!!b.recurrence, start:b.allDay?null:b.start, end:b.allDay?null:b.end, allDay:b.allDay, label:(b.label||"Blackout")+(b.rooms&&b.rooms.length?(" ("+b.rooms.map(roomName).join(", ")+")"):" (all rooms)")});
+  });
+  return evs;
+}
+function evClass(e){
+  if(e.cat==="blackout") return "blackout";
+  if(e.cat==="event") return "event";
+  // booking
+  return (e.status==="approved") ? "approved" : "pending"; // pending & hold share amber
+}
+function evChip(e){
+  var cls="cal-ev "+evClass(e);
+  if(e.cat==="booking" && e.status==="approved" && e.payment!=="paid") cls+=" unpaid";
+  var t = e.allDay ? "All day" : (e.start?fmtTime(timeToMins(e.start)):"");
+  var click = (e.cat==="booking") ? (' onclick="jumpToReq(\''+e.id+'\')"') : (e.isEvent?(' onclick="setAdminView(\'events\')"'):'');
+  return '<div class="'+cls+'"'+click+' title="'+esc(e.label)+'">'+(e.rec?'🔁 ':'')+(t?(t+' '):'')+esc(e.label)+'</div>';
+}
+function jumpToReq(id){ setAdminView('list'); var r=getReq(id); if(r&&r.groupId) showGroup(r.groupId); else { adminFilter="all"; renderAdmin("all"); } }
+
+function renderCalendar(){
+  var wrap=$("calendar-view-wrap"), title="";
+  if(calMode==="month") title=calRef.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  else if(calMode==="week"){ var ws=weekStart(calRef), we=new Date(ws); we.setDate(we.getDate()+6); title=ws.toLocaleDateString(undefined,{month:'short',day:'numeric'})+" – "+we.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+  else title=calRef.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+
+  var html='<div class="cal-toolbar">'+
+    '<div class="cal-views">'+
+      '<div class="tab'+(calMode==="month"?" active":"")+'" onclick="setCalMode(\'month\')">Month</div>'+
+      '<div class="tab'+(calMode==="week"?" active":"")+'" onclick="setCalMode(\'week\')">Week</div>'+
+      '<div class="tab'+(calMode==="day"?" active":"")+'" onclick="setCalMode(\'day\')">Day</div>'+
+    '</div>'+
+    '<div class="cal-nav">'+
+      '<button class="btn btn-sm btn-ghost" onclick="calShift(-1)">‹</button>'+
+      '<span class="cal-title">'+title+'</span>'+
+      '<button class="btn btn-sm btn-ghost" onclick="calShift(1)">›</button>'+
+      '<button class="btn btn-sm btn-ghost" onclick="calToday()">Today</button>'+
+    '</div></div>'+
+    '<div class="cal-legend">'+
+      '<span><span class="cal-dot" style="background:var(--cal-pending)"></span> Pending / On hold</span>'+
+      '<span><span class="cal-dot" style="background:var(--cal-approved)"></span> Approved booking</span>'+
+      '<span><span class="cal-dot" style="background:var(--cal-event)"></span> Public NGH event</span>'+
+      '<span><span class="cal-dot" style="background:var(--cal-blackout)"></span> Blackout / closed</span>'+
+      '<span><span class="cal-dot" style="background:#fff;outline:2px solid var(--gold-light)"></span> Approved · unpaid</span>'+
+      '<span>🔁 recurring</span>'+
+    '</div>';
+  html += (calMode==="month") ? monthHTML() : weekDayHTML(calMode==="day");
+  wrap.innerHTML=html;
+}
+function monthHTML(){
+  var first=new Date(calRef.getFullYear(), calRef.getMonth(), 1), start=new Date(first); start.setDate(1-first.getDay());
+  var todayStr=ymd(new Date()), h='<div class="cal-grid">';
+  ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(function(d){ h+='<div class="cal-dow">'+d+'</div>'; });
+  for(var i=0;i<42;i++){
+    var d=new Date(start); d.setDate(start.getDate()+i);
+    var ds=ymd(d), other=d.getMonth()!==calRef.getMonth(), evs=eventsForDate(ds);
+    h+='<div class="cal-cell'+(other?" other":"")+(ds===todayStr?" today":"")+'">'+
+       '<div class="cal-daynum">'+d.getDate()+'</div>'+
+       evs.slice(0,4).map(evChip).join("")+
+       (evs.length>4?('<div style="font-size:0.58rem;color:#8a8a6a;">+'+(evs.length-4)+' more</div>'):'')+
+       '</div>';
+  }
+  return h+'</div>';
+}
+function weekDayHTML(isDay){
+  var days=[];
+  if(isDay){ days=[new Date(calRef)]; } else { var ws=weekStart(calRef); for(var i=0;i<7;i++){ var d=new Date(ws); d.setDate(ws.getDate()+i); days.push(d); } }
+  var todayStr=ymd(new Date()), h='<div class="cal-week" style="--wcols:'+days.length+'">';
+  h+='<div class="whead"></div>';
+  days.forEach(function(d){ h+='<div class="whead"'+(ymd(d)===todayStr?' style="color:var(--gold)"':'')+'>'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
+  for(var hr=8; hr<=23; hr++){
+    h+='<div class="whour">'+fmtTime(hr*60)+'</div>';
+    days.forEach(function(d){
+      var ds=ymd(d);
+      var slotEvents=eventsForDate(ds).filter(function(e){ if(e.allDay) return hr===8; if(!e.start) return false; return Math.floor(timeToMins(e.start)/60)===hr; });
+      h+='<div class="wslot">'+slotEvents.map(function(e){
+        var bg = e.cat==="blackout"?"var(--cal-blackout)":(e.cat==="event"?"var(--cal-event)":(e.status==="approved"?"var(--cal-approved)":"var(--cal-pending)"));
+        var ht = e.allDay?"100%":((e.hours||1)*26-2)+"px";
+        var click = (e.cat==="booking")?(' onclick="jumpToReq(\''+e.id+'\')"'):'';
+        return '<div class="wevent" style="background:'+bg+';height:'+ht+';"'+click+'>'+(e.rec?'🔁':'')+esc(e.label)+'</div>';
+      }).join("")+'</div>';
+    });
+  }
+  return h+'</div>';
+}
+
+/* ---------- init ---------- */
+(async function init(){
+  renderRooms(); renderHours(); renderAddons();
+  try { await refreshCache(); } catch(e){ /* offline/demo */ }
+  checkConflicts();
+  if(location.search.indexOf("admin=1")>=0) openAdmin();
+})();
+</script>
+</body>
+</html>

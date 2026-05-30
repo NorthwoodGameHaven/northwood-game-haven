@@ -1,0 +1,62 @@
+# ============================================================
+#  Northwood Game Haven — Netlify configuration
+# ============================================================
+
+[build]
+  publish = "site"                 # the folder containing your HTML
+  functions = "netlify/functions"  # serverless functions
+
+[functions]
+  node_bundler = "esbuild"
+
+# Pretty API paths -> functions, so the front end can call /api/...
+# (booking.html uses /.netlify/functions directly, which also works;
+#  these redirects just add nicer aliases and route sub-paths.)
+[[redirects]]
+  from = "/api/admin-login"
+  to   = "/.netlify/functions/admin-login"
+  status = 200
+
+[[redirects]]
+  from = "/api/bookings/*"
+  to   = "/.netlify/functions/bookings/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/bookings"
+  to   = "/.netlify/functions/bookings"
+  status = 200
+
+[[redirects]]
+  from = "/api/events/*"
+  to   = "/.netlify/functions/events/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/events"
+  to   = "/.netlify/functions/events"
+  status = 200
+
+[[redirects]]
+  from = "/api/blackouts"
+  to   = "/.netlify/functions/blackouts"
+  status = 200
+
+[[redirects]]
+  from = "/api/send-email"
+  to   = "/.netlify/functions/send-email"
+  status = 200
+
+# The booking app calls the functions with sub-paths like
+# /.netlify/functions/bookings/NGH-XXXX — Netlify routes these to the
+# bookings function automatically, but this rule makes it explicit.
+[[redirects]]
+  from = "/.netlify/functions/bookings/*"
+  to   = "/.netlify/functions/bookings/:splat"
+  status = 200
+[[redirects]]
+  from = "/.netlify/functions/events/*"
+  to   = "/.netlify/functions/events/:splat"
+  status = 200
+
+# Nightly auto-cancel of unpaid approved bookings.
+[functions."auto-cancel"]
+  schedule = "@daily"
