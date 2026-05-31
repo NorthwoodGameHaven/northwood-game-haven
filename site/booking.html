@@ -1534,6 +1534,15 @@ function renderEventsAdmin(){
     '</div>'+
     '<div style="margin-top:10px;"><button class="btn btn-sm" id="bulk-go" onclick="bulkImport()">⚡ Create All Events</button> <span id="bulk-status" class="hint"></span></div>'+
     '</div>'+
+    '<div class="card" style="border-left:4px solid var(--den);"><h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:0 0 6px;">📣 Share to Social Media</h2>'+
+    '<p class="hint" style="margin:0 0 10px;">Download a calendar image to post on Facebook/Instagram, or grab direct share links for each event. Anyone who clicks an event link sees a rich preview and lands straight on that event\u2019s page, ready to register.</p>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">'+
+      '<button class="btn btn-sm" onclick="downloadCalImage(\'month\')">🖼️ Download this month (PNG)</button>'+
+      '<button class="btn btn-sm btn-ghost" onclick="downloadCalImage(\'week\')">🖼️ This week</button>'+
+      '<button class="btn btn-sm btn-ghost" onclick="copyAllEventLinks()">🔗 Copy all event links</button>'+
+    '</div>'+
+    '<div id="share-links" style="font-size:0.78rem;"></div>'+
+    '</div>'+
     '<div class="card"><h2 id="ev-form-title">🎉 Create a Public NGH Event</h2>'+
     '<p class="hint">Public events (tournaments, launch nights, demo days) appear on the booking calendar in teal, hold the selected rooms, and publish to the Event Calendar on the main site for customers to view. Make it recurring for a weekly series.</p>'+
     '<div class="row"><div><label class="fld req">Event title</label><input type="text" id="ev-title" placeholder="e.g. Friday Night Magic"></div>'+
@@ -2041,6 +2050,107 @@ async function bulkImport(){
   var msg="Created "+made+" event"+(made!==1?"s":"")+(recurring?(" (recurring "+weeks+" weeks each)"):"")+".";
   if(failed.length) msg+="\n\nSkipped "+failed.length+":\n"+failed.join("\n");
   alert(msg);
+}
+
+/* ---- Social sharing: calendar image + event links ---- */
+var SITE_ORIGIN = (function(){ try { return (window.NGH_SITE_URL || location.origin).replace(/\/$/,""); } catch(e){ return "https://gamehaven.guru"; } })();
+function eventShareUrl(id, ds){ return SITE_ORIGIN+"/event/"+encodeURIComponent(id)+(ds?("?date="+encodeURIComponent(ds)):""); }
+function copyAllEventLinks(){
+  var wrap=$("share-links"); if(!wrap) return;
+  // expand recurrence to upcoming occurrences (next 60 days)
+  var today=new Date(); today.setHours(0,0,0,0);
+  var horizon=new Date(today); horizon.setDate(horizon.getDate()+60);
+  var rows=[];
+  (cache.events||[]).forEach(function(e){
+    var dates = e.recurrence ? recurrenceDates(e.date,e.recurrence.freq,e.recurrence.count) : [e.date];
+    dates.forEach(function(d){
+      var dt=new Date(d+"T12:00:00");
+      if(dt>=today && dt<=horizon){ rows.push({id:e.id, date:d, title:e.title, dt:dt}); }
+    });
+  });
+  rows.sort(function(a,b){ return a.dt-b.dt; });
+  if(!rows.length){ wrap.innerHTML='<p class="hint">No upcoming events in the next 60 days.</p>'; return; }
+  var txt=rows.map(function(r){ return r.date+" — "+r.title+": "+eventShareUrl(r.id, r.date); }).join("\n");
+  var h='<div style="margin-top:6px;border:1px solid #e0e8dc;border-radius:8px;padding:10px;background:#fcfdfb;max-height:240px;overflow:auto;">';
+  rows.forEach(function(r){
+    var u=eventShareUrl(r.id, r.date);
+    h+='<div style="padding:4px 0;border-bottom:1px dashed #eef0ec;"><b>'+esc(r.date)+'</b> · '+esc(r.title)+'<br><a href="'+u+'" target="_blank" style="color:var(--den);font-size:0.74rem;word-break:break-all;">'+u+'</a></div>';
+  });
+  h+='</div><button class="btn btn-sm btn-ghost" style="margin-top:8px;" onclick="(function(){navigator.clipboard.writeText('+JSON.stringify(txt)+').then(function(){alert(\'All '+rows.length+' event links copied!\');});})()">📋 Copy all to clipboard</button>';
+  wrap.innerHTML=h;
+}
+function downloadCalImage(mode){
+  // Render an attractive calendar image to a canvas and download as PNG.
+  var ref = calRef || new Date();
+  var W=1200, H=(mode==="week"?700:1000);
+  var cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+  var ctx=cv.getContext("2d");
+  // background
+  ctx.fillStyle="#f4f1e8"; ctx.fillRect(0,0,W,H);
+  // header band
+  ctx.fillStyle="#2d5a3d"; ctx.fillRect(0,0,W,110);
+  ctx.fillStyle="#f1e9d2"; ctx.font="bold 40px Georgia"; ctx.textAlign="center";
+  ctx.fillText("Northwood Game Haven", W/2, 50);
+  ctx.fillStyle="#c79a3b"; ctx.font="22px Georgia";
+  var title = mode==="week"
+    ? ("Week of "+weekStart(ref).toLocaleDateString(undefined,{month:'long',day:'numeric'}))
+    : ref.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  ctx.fillText(title+"  ·  Events & Tournaments", W/2, 86);
+
+  var days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var gridTop=150, gridLeft=20, gridW=W-40;
+  var colW=gridW/7;
+  ctx.font="bold 18px Georgia"; ctx.fillStyle="#2d5a3d"; ctx.textAlign="center";
+  days.forEach(function(d,i){ ctx.fillText(d, gridLeft+colW*i+colW/2, gridTop-8); });
+
+  function eventsOn(ds){
+    var out=[];
+    (cache.events||[]).forEach(function(e){
+      var dts = e.recurrence ? recurrenceDates(e.date,e.recurrence.freq,e.recurrence.count) : [e.date];
+      if(dts.indexOf(ds)>=0) out.push(e);
+    });
+    return out;
+  }
+  function drawCell(x,y,w,h,dnum,ds,inMonth){
+    ctx.fillStyle = inMonth ? "#ffffff" : "#efece2";
+    ctx.fillRect(x,y,w-4,h-4);
+    ctx.strokeStyle="#d8e0d4"; ctx.strokeRect(x,y,w-4,h-4);
+    ctx.fillStyle = inMonth ? "#3a4a35" : "#a8a890"; ctx.font="bold 16px Georgia"; ctx.textAlign="left";
+    ctx.fillText(String(dnum), x+8, y+22);
+    var evs=eventsOn(ds), ey=y+40;
+    ctx.font="12px Georgia";
+    evs.slice(0,5).forEach(function(e){
+      ctx.fillStyle="#1a6a7a"; ctx.fillRect(x+6,ey-11,w-16,16);
+      ctx.fillStyle="#ffffff";
+      var lbl=(e.allDay?"":(fmtTime(timeToMins(e.start))+" "))+e.title;
+      if(lbl.length>26) lbl=lbl.slice(0,25)+"…";
+      ctx.fillText(lbl, x+9, ey+1); ey+=20;
+    });
+    if(evs.length>5){ ctx.fillStyle="#8a8a6a"; ctx.fillText("+"+(evs.length-5)+" more", x+9, ey+1); }
+  }
+
+  if(mode==="week"){
+    var ws=weekStart(ref), rowH=480;
+    for(var i=0;i<7;i++){ var d=new Date(ws); d.setDate(ws.getDate()+i); drawCell(gridLeft+colW*i, gridTop, colW, rowH, d.getDate(), ymd(d), true); }
+  } else {
+    var first=new Date(ref.getFullYear(),ref.getMonth(),1), start=new Date(first); start.setDate(1-first.getDay());
+    var rowH=(H-gridTop-20)/6;
+    for(var k=0;k<42;k++){
+      var dd=new Date(start); dd.setDate(start.getDate()+k);
+      var col=k%7, row=Math.floor(k/7);
+      drawCell(gridLeft+colW*col, gridTop+row*rowH, colW, rowH, dd.getDate(), ymd(dd), dd.getMonth()===ref.getMonth());
+    }
+  }
+  // footer
+  ctx.fillStyle="#2d5a3d"; ctx.font="18px Georgia"; ctx.textAlign="center";
+  ctx.fillText("gamehaven.guru  ·  115 W Spring St, Chippewa Falls, WI", W/2, H-14);
+
+  cv.toBlob(function(blob){
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="NGH-"+(mode==="week"?"week":"month")+"-"+ymd(ref)+".png";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }, "image/png");
 }
 
 function renderCalendar(){

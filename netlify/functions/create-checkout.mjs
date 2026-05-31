@@ -8,6 +8,7 @@
 //   { kind:"registration", id:<registrationId> }
 import { sql, ensureSchema, json, bad, preflight } from './_shared/db.mjs';
 import { createCheckoutSession } from './_shared/stripe.mjs';
+import { loyaltyDiscountForEmail } from './_shared/lightspeed.mjs';
 
 function siteBase(req) {
   // Prefer an explicit configured base; fall back to the request origin.
@@ -51,8 +52,17 @@ const _handler = async (req) => {
     let amount, label;
     if (part === 'fee') {
       // booking fee after discount (taxes handled in person/where applicable)
-      amount = Math.round((b.costBooking != null ? b.costBooking : 0) * 100);
-      label = 'Booking fee — ' + (b.id || '');
+      let fee = (b.costBooking != null ? b.costBooking : 0);
+      // Apply loyalty group discount (server-side authority) to the FEE only,
+      // never the refundable deposit.
+      const ld = await loyaltyDiscountForEmail(b.email);
+      let label2 = 'Booking fee — ' + (b.id || '');
+      if (ld.percent > 0) {
+        fee = Math.round(fee * (1 - ld.percent / 100) * 100) / 100;
+        label2 = 'Booking fee (' + ld.percent + '% ' + (ld.groupName || 'loyalty') + ' discount) — ' + (b.id || '');
+      }
+      amount = Math.round(fee * 100);
+      label = label2;
       if (b.feePaid) return bad('fee already paid', 400);
     } else {
       // Prefer the stored deposit (which reflects any admin waiver/reduction);
@@ -81,11 +91,18 @@ const _handler = async (req) => {
     const r = rows[0].data;
     if (r.status === 'canceled') return bad('registration is canceled', 400);
     if (r.feePaid) return bad('already paid', 400);
-    const amount = Math.round((Number(r.cost) || 0) * 100);
+    let cost = (Number(r.cost) || 0);
+    let regLabel = 'Event registration — ' + (r.eventTitle || r.eventId);
+    const ld = await loyaltyDiscountForEmail(r.email);
+    if (ld.percent > 0) {
+      cost = Math.round(cost * (1 - ld.percent / 100) * 100) / 100;
+      regLabel = 'Event registration (' + ld.percent + '% ' + (ld.groupName || 'loyalty') + ' discount) — ' + (r.eventTitle || r.eventId);
+    }
+    const amount = Math.round(cost * 100);
     if (!amount || amount < 50) return bad('this registration is free', 400);
 
     const session = await createCheckoutSession({
-      items: [{ name: 'Event registration — ' + (r.eventTitle || r.eventId), amountCents: amount, qty: 1 }],
+      items: [{ name: regLabel, amountCents: amount, qty: 1 }],
       successUrl: base + '/?reg_paid=1',
       cancelUrl: base + '/?reg_canceled=1',
       customerEmail: r.email,

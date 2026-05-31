@@ -58,6 +58,17 @@
   from = "/api/create-checkout"
   to   = "/.netlify/functions/create-checkout"
   status = 200
+
+# Per-event share links with rich previews (crawlers get OG tags; humans redirect)
+[[redirects]]
+  from = "/event/*"
+  to   = "/.netlify/functions/event-share/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/api/loyalty-check"
+  to   = "/.netlify/functions/loyalty-check"
+  status = 200
 [[redirects]]
   from = "/api/stripe-webhook"
   to   = "/.netlify/functions/stripe-webhook"
