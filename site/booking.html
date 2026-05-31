@@ -1371,6 +1371,34 @@ function adminGcalUrl(e){
   return "https://www.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(e.title||"NGH Event")+"&dates="+dates+"&details="+encodeURIComponent(details)+"&location="+encodeURIComponent("Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI");
 }
 var editingEventId = null;   // id of the event currently being edited (null = creating new)
+// Generate a simple colored SVG banner (data URL) for an event — no external images.
+function eventBanner(title, kind){
+  var palettes={
+    mtg:["#5b2333","#9a3b4e"], pokemon:["#c9971f","#e8b84b"], gundam:["#1c4e80","#3a78b8"],
+    onepiece:["#b03a2e","#e05a48"], boardgame:["#2d5a3d","#3a7350"], rpg:["#4a2f6a","#6e4a9e"],
+    open:["#0f4a56","#1a6a7a"], default:["#2d5a3d","#3a7350"]
+  };
+  var p=palettes[kind]||palettes.default;
+  var t=(title||"NGH Event").slice(0,40);
+  var svg='<svg xmlns="http://www.w3.org/2000/svg" width="600" height="240" viewBox="0 0 600 240">'+
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="'+p[0]+'"/><stop offset="1" stop-color="'+p[1]+'"/></linearGradient></defs>'+
+    '<rect width="600" height="240" fill="url(#g)"/>'+
+    '<text x="300" y="115" font-family="Georgia,serif" font-size="30" font-weight="bold" fill="#ffffff" text-anchor="middle">'+esc(t)+'</text>'+
+    '<text x="300" y="155" font-family="Georgia,serif" font-size="16" fill="#ffffffcc" text-anchor="middle" letter-spacing="3">NORTHWOOD GAME HAVEN</text>'+
+    '<text x="300" y="195" font-family="Georgia,serif" font-size="40" fill="#ffffff44" text-anchor="middle">🦦</text>'+
+    '</svg>';
+  return 'data:image/svg+xml,'+encodeURIComponent(svg);
+}
+function guessKind(title){
+  var t=(title||"").toLowerCase();
+  if(t.indexOf("one piece")>=0) return "onepiece";
+  if(t.indexOf("gundam")>=0||t.indexOf("pokemon")>=0||t.indexOf("pokémon")>=0) return "gundam";
+  if(t.indexOf("rpg")>=0) return "rpg";
+  if(t.indexOf("board")>=0) return "boardgame";
+  if(t.indexOf("mtg")>=0||t.indexOf("magic")>=0||t.indexOf("commander")>=0) return "mtg";
+  if(t.indexOf("open")>=0) return "open";
+  return "default";
+}
 function renderEventsAdmin(){
   var wrap=$("events-view-wrap");
   var roomChecks=ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="ev-room" value="'+r.id+'">'+r.name+'</label>'; }).join("");
@@ -1406,6 +1434,16 @@ function renderEventsAdmin(){
   }).join("") : '<div class="card"><p class="hint" style="margin:0;">No public events yet.</p></div>';
 
   wrap.innerHTML =
+    '<div class="card" style="border-left:4px solid var(--gold);"><h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:0 0 6px;">⚡ Quick Bulk Import</h2>'+
+    '<p class="hint" style="margin:0 0 10px;">Create many events at once. One per line: <code>Day | Title | Start | End</code> — e.g. <code>Friday | Friday Night Magic | 7:00 PM | 10:00 PM</code>. Each becomes a <b>weekly recurring</b> event starting from the next matching weekday, with an auto-generated colored banner. Use the button to prefill NGH\'s standard weekly schedule.</p>'+
+    '<textarea id="bulk-text" style="min-height:150px;font-family:monospace;font-size:0.8rem;" placeholder="Sunday | Open Day and Quarterly Events | 12:00 PM | 8:00 PM"></textarea>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">'+
+    '<button class="btn btn-sm btn-ghost" onclick="bulkPrefillNGH()">📋 Prefill NGH weekly schedule</button>'+
+    '<label class="check-line" style="margin:0;"><input type="checkbox" id="bulk-recurring" checked> Make each recurring weekly</label>'+
+    '<input type="number" id="bulk-weeks" value="12" min="1" max="52" style="width:70px;" title="How many weeks"> weeks</label>'+
+    '</div>'+
+    '<div style="margin-top:10px;"><button class="btn btn-sm" id="bulk-go" onclick="bulkImport()">⚡ Create All Events</button> <span id="bulk-status" class="hint"></span></div>'+
+    '</div>'+
     '<div class="card"><h2 id="ev-form-title">🎉 Create a Public NGH Event</h2>'+
     '<p class="hint">Public events (tournaments, launch nights, demo days) appear on the booking calendar in teal, hold the selected rooms, and publish to the Event Calendar on the main site for customers to view. Make it recurring for a weekly series.</p>'+
     '<div class="row"><div><label class="fld req">Event title</label><input type="text" id="ev-title" placeholder="e.g. Friday Night Magic"></div>'+
@@ -1847,6 +1885,67 @@ function evChip(e){
 function jumpToReq(id){ setAdminView('list'); var r=getReq(id); if(r&&r.groupId) showGroup(r.groupId); else { adminFilter="all"; renderAdmin("all"); } }
 function jumpToEvent(id){ setAdminView('events'); setTimeout(function(){ editEvent(id); }, 60); }
 function newEventQuick(){ setAdminView('events'); setTimeout(function(){ resetEventForm(); window.scrollTo({top:0,behavior:"smooth"}); var t=$("ev-title"); if(t) t.focus(); }, 60); }
+
+/* ---- Bulk import of public events ---- */
+function bulkPrefillNGH(){
+  var lines=[
+    "Sunday | Open Day and Quarterly Events | 12:00 PM | 8:00 PM",
+    "Monday | Gundam and Pokémon Free Play | 5:00 PM | 9:00 PM",
+    "Tuesday | Modern MTG and Open Play | 5:00 PM | 9:00 PM",
+    "Wednesday | Board Game Night and MTG Commander Night | 5:00 PM | 9:00 PM",
+    "Thursday | One Piece Night | 5:00 PM | 9:00 PM",
+    "Friday | Friday Night Magic and Board Game Night | 7:00 PM | 10:00 PM",
+    "Saturday | RPG Day and Open Play | 10:00 AM | 10:00 PM"
+  ];
+  if($("bulk-text")) $("bulk-text").value=lines.join("\n");
+}
+var _WDAYS={sunday:0,monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6,sun:0,mon:1,tue:2,wed:3,thu:4,fri:5,sat:6};
+function nextDateForWeekday(wd){
+  var today=new Date(); today.setHours(12,0,0,0);
+  var cur=today.getDay();
+  var add=(wd-cur+7)%7; // 0 = today; keep today if it matches
+  var d=new Date(today); d.setDate(today.getDate()+add);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+}
+function parseClock(s){
+  // "7:00 PM" / "7 PM" / "19:00" -> "HH:MM"
+  s=(s||"").trim(); if(!s) return "";
+  var m=s.match(/^(\d{1,2}):?(\d{2})?\s*([AaPp][Mm])?$/);
+  if(!m) return "";
+  var h=parseInt(m[1],10), min=m[2]?parseInt(m[2],10):0, ap=(m[3]||"").toUpperCase();
+  if(ap==="PM" && h<12) h+=12;
+  if(ap==="AM" && h===12) h=0;
+  return pad(h)+":"+pad(min);
+}
+async function bulkImport(){
+  var txt=($("bulk-text")?$("bulk-text").value:"").trim();
+  if(!txt){ alert("Paste at least one event line, or click 'Prefill NGH weekly schedule'."); return; }
+  var recurring=$("bulk-recurring")?$("bulk-recurring").checked:true;
+  var weeks=Math.max(1,Math.min(52,parseInt($("bulk-weeks")?$("bulk-weeks").value:"12",10)||12));
+  var lines=txt.split("\n").map(function(l){return l.trim();}).filter(Boolean);
+  var btn=$("bulk-go"), status=$("bulk-status");
+  if(btn){ btn.disabled=true; btn.textContent="Creating…"; }
+  var made=0, failed=[];
+  for(var i=0;i<lines.length;i++){
+    var parts=lines[i].split("|").map(function(p){return p.trim();});
+    if(parts.length<4){ failed.push(lines[i]+" (need 4 fields)"); continue; }
+    var dayName=parts[0].toLowerCase(), title=parts[1], start=parseClock(parts[2]), end=parseClock(parts[3]);
+    if(!(dayName in _WDAYS)){ failed.push(lines[i]+" (bad weekday)"); continue; }
+    if(!title||!start||!end){ failed.push(lines[i]+" (missing title/time)"); continue; }
+    var date=nextDateForWeekday(_WDAYS[dayName]);
+    var ev={ title:title, date:date, allDay:false, start:start, end:end, rooms:[],
+      notes:"", photo:eventBanner(title, guessKind(title)), fbLink:"",
+      tournament:null, prizes:null, adminNotes:"", public:true, registration:{enabled:false} };
+    if(recurring){ ev.recurrence={ freq:"weekly", count:weeks }; ev.groupId="EVGRP-"+genId(); }
+    try { await Store.saveEvent(ev); made++; if(status) status.textContent="Created "+made+"/"+lines.length+"…"; }
+    catch(e){ failed.push(title+" ("+(e.message||"save failed")+")"); }
+  }
+  if(btn){ btn.disabled=false; btn.textContent="⚡ Create All Events"; }
+  await refreshCache(); renderEventsAdmin();
+  var msg="Created "+made+" event"+(made!==1?"s":"")+(recurring?(" (recurring "+weeks+" weeks each)"):"")+".";
+  if(failed.length) msg+="\n\nSkipped "+failed.length+":\n"+failed.join("\n");
+  alert(msg);
+}
 
 function renderCalendar(){
   var wrap=$("calendar-view-wrap"), title="";
