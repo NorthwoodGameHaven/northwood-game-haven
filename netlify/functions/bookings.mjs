@@ -24,11 +24,37 @@ const _handler = async (req) => {
   // path after the function name
   const parts = url.pathname.replace(/^.*\/bookings/, '').split('/').filter(Boolean);
 
-  // ---- GET: list (admin) ----
+  // ---- GET: list ----
+  // Admin (authenticated) gets full records. Public callers get a SAFE subset
+  // — only what's needed to show availability (date, time, rooms, status) with
+  // no names, emails, phones, or notes. This lets the customer page check for
+  // conflicts without exposing anyone's private details.
+  //
+  // Special case: GET /bookings?mine=<email> returns FULL detail for ONLY the
+  // bookings matching that exact email (case-insensitive). This powers the
+  // customer "see my own bookings" lookup without exposing anyone else's.
   if (req.method === 'GET') {
-    if (!requireAdmin(req)) return bad('unauthorized', 401);
     const rows = await sql`SELECT data FROM bookings ORDER BY created_at ASC`;
-    return json(rows.map(r => r.data));
+    if (requireAdmin(req)) {
+      return json(rows.map(r => r.data));
+    }
+    const mine = (url.searchParams.get('mine') || '').trim().toLowerCase();
+    const active = rows.filter(r => r.data && r.data.status !== 'rejected');
+    const publicRows = active.map(r => {
+      const d = r.data;
+      const isMine = mine && d.email && d.email.trim().toLowerCase() === mine;
+      if (isMine) {
+        // their own booking — full detail
+        return Object.assign({}, d, { mine: true });
+      }
+      // someone else's — anonymized busy block
+      return {
+        id: d.id, status: d.status, date: d.date, start: d.start,
+        hours: d.hours, rooms: d.rooms, groupId: d.groupId ? true : false,
+        endLabel: d.endLabel, name: 'Reserved', mine: false
+      };
+    });
+    return json(publicRows);
   }
 
   // ---- POST: bulk create (public) ----

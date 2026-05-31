@@ -97,7 +97,44 @@
   .mil-note { font-size:0.74rem; color:#8a6a20; margin-top:8px; font-style:italic; }
 
   /* COST SUMMARY */
-  .summary { position:sticky; bottom:0; }
+  /* Cost summary is a normal in-flow card (no sticky overlay that covers the form). */
+  .summary { position:static; }
+
+  /* Collapsible section headers (Check Availability + Cost Summary) */
+  .avail-toggle { display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; }
+  .avail-chevron { font-size:1.1rem; color:var(--forest); transition:transform 0.2s; }
+  .avail-chevron.open { transform:rotate(180deg); }
+  .summary-peek { font-family:'Cinzel',serif; font-size:0.82rem; color:var(--den); font-weight:400; margin-left:8px; }
+  .mine-box { background:#f4f7f2; border:1px solid #cfe0d4; border-radius:11px; padding:13px 15px; margin:12px 0 16px; }
+
+  /* CUSTOMER CALENDAR */
+  .cc-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .cc-views { display:flex; gap:6px; }
+  .cc-tab { padding:7px 14px; border-radius:50px; border:1.5px solid #d8e0d4; background:#fff; font-family:'Cinzel',serif; font-size:0.74rem; cursor:pointer; color:var(--forest); }
+  .cc-tab.active { background:var(--forest); color:#fff; border-color:var(--forest); }
+  .cc-nav { display:flex; align-items:center; gap:8px; }
+  .cc-title { font-family:'Cinzel',serif; color:var(--forest); font-size:0.95rem; min-width:150px; text-align:center; }
+  .cc-legend { display:flex; gap:12px; flex-wrap:wrap; font-size:0.72rem; color:#6a6a50; margin:8px 0 12px; }
+  .cc-legend span { display:inline-flex; align-items:center; gap:5px; }
+  .cc-dot { width:11px; height:11px; border-radius:3px; display:inline-block; }
+  .cc-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+  .cc-dow { font-family:'Cinzel',serif; font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase; color:#8a8a6a; text-align:center; padding:3px 0; }
+  .cc-cell { min-height:74px; border:1px solid #e8ece4; border-radius:7px; padding:3px; background:#fff; overflow:hidden; }
+  .cc-cell.other { background:#f6f7f4; opacity:0.55; }
+  .cc-cell.today { border-color:var(--gold); box-shadow:inset 0 0 0 1px var(--gold); }
+  .cc-daynum { font-size:0.68rem; color:#6a6a50; font-weight:700; margin-bottom:2px; }
+  .cc-ev { font-size:0.57rem; line-height:1.2; border-radius:3px; padding:1px 4px; margin-bottom:2px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cc-ev.reserved { background:#9a9a80; }
+  .cc-ev.mine { background:var(--cal-approved); }
+  .cc-ev.mine-pending { background:var(--cal-pending); }
+  .cc-ev.event { background:var(--cal-event); }
+  .cc-ev.blackout { background:var(--cal-blackout); }
+  .cc-week { display:grid; grid-template-columns:48px repeat(var(--ccc,7),1fr); gap:2px; }
+  .cc-week .cch { font-family:'Cinzel',serif; font-size:0.6rem; text-transform:uppercase; color:#8a8a6a; text-align:center; padding:3px 0; }
+  .cc-week .cchour { font-size:0.58rem; color:#9a9a80; text-align:right; padding:2px 5px 0 0; }
+  .cc-week .ccslot { min-height:24px; border-top:1px solid #eef0ec; position:relative; }
+  .ccslot .cc-ev { position:relative; margin:1px; }
+  .cc-empty { font-size:0.78rem; color:#8a8a6a; text-align:center; padding:18px; }
   .sum-row { display:flex; justify-content:space-between; padding:6px 0; font-size:0.9rem; border-bottom:1px dashed #e0e0d0; }
   .sum-row.sub { color:#6a6a50; font-size:0.84rem; padding-left:14px; }
   .sum-row.total { font-family:'Cinzel',serif; font-weight:600; color:var(--forest); font-size:1.05rem; border-bottom:none; border-top:2px solid var(--forest); margin-top:8px; padding-top:10px; }
@@ -234,6 +271,26 @@
     </div>
   </div>
 
+  <!-- CHECK AVAILABILITY (collapsible) -->
+  <div class="card">
+    <div class="avail-toggle" onclick="toggleAvail()">
+      <h2 style="margin:0;"><span class="step-num">📅</span>Check Availability</h2>
+      <span class="avail-chevron" id="avail-chevron">▾</span>
+    </div>
+    <div id="avail-panel" style="display:none;margin-top:16px;">
+      <p class="hint">See what's already booked, blacked out, or scheduled as a Northwood Game Haven event — so you can spot open gaps before you request a time. Other guests' bookings show only as <strong>“Reserved”</strong>; public NGH events show full details.</p>
+      <div class="mine-box">
+        <label class="fld" style="margin-top:0;">See your own bookings in detail</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input type="email" id="mine-email" placeholder="Enter the email you booked with" style="flex:1;min-width:200px;">
+          <button class="btn btn-sm btn-ghost" onclick="loadMine()">Show my bookings</button>
+        </div>
+        <p class="hint" id="mine-status" style="margin:8px 0 0;"></p>
+      </div>
+      <div id="cust-cal"></div>
+    </div>
+  </div>
+
   <!-- STEP 2: DATE & TIME -->
   <div class="card">
     <h2><span class="step-num">2</span>Pick Your Date &amp; Time</h2>
@@ -328,13 +385,18 @@
 
   <!-- STEP 5: SUMMARY -->
   <div class="card summary">
-    <h2><span class="step-num">5</span>Cost Summary</h2>
-    <div id="summary-body">
-      <p class="hint" style="margin-bottom:0;">Select rooms and a time to see your itemized estimate.</p>
+    <div class="avail-toggle" onclick="toggleSummary()">
+      <h2 style="margin:0;"><span class="step-num">5</span>Cost Summary <span id="summary-total-peek" class="summary-peek"></span></h2>
+      <span class="avail-chevron" id="summary-chevron">▾</span>
     </div>
-    <div class="err" id="form-err"></div>
-    <div style="margin-top:20px;text-align:center;">
-      <button class="btn btn-gold" id="submit-btn" onclick="submitBooking()">Submit Booking Request →</button>
+    <div id="summary-collapse" style="margin-top:14px;">
+      <div id="summary-body">
+        <p class="hint" style="margin-bottom:0;">Select rooms and a time to see your itemized estimate.</p>
+      </div>
+      <div class="err" id="form-err"></div>
+      <div style="margin-top:20px;text-align:center;">
+        <button class="btn btn-gold" id="submit-btn" onclick="submitBooking()">Submit Booking Request →</button>
+      </div>
     </div>
   </div>
 
@@ -501,6 +563,10 @@ var Store = {
     if(!this.apiMode()) return this._ls("ngh_bookings");
     return this._api("/bookings");
   },
+  async bookingsMine(email){   // public list, but full detail for rows matching this email
+    if(!this.apiMode()){ return this._ls("ngh_bookings"); }
+    return this._api("/bookings?mine="+encodeURIComponent(email||""));
+  },
   async addBookings(arr){    // bulk insert (handles recurrence in one go)
     if(!this.apiMode()){ var l=this._ls("ngh_bookings"); l=l.concat(arr); this._save("ngh_bookings",l); return arr; }
     return this._api("/bookings", { method:"POST", body:JSON.stringify({ bookings:arr }) });
@@ -550,8 +616,12 @@ var Store = {
 /* In-memory caches so render/conflict logic can stay synchronous. */
 var cache = { bookings:[], events:[], blackouts:[] };
 async function refreshCache(){
-  var r = await Promise.all([ Store.bookings(), Store.events(), Store.blackouts() ]);
-  cache.bookings = r[0] || []; cache.events = r[1] || []; cache.blackouts = r[2] || [];
+  // Each source is fetched independently; a failure on one (e.g. a transient
+  // network blip) must never abort the whole flow or block a submission.
+  var results = await Promise.allSettled([ Store.bookings(), Store.events(), Store.blackouts() ]);
+  cache.bookings = results[0].status==="fulfilled" ? (results[0].value||[]) : cache.bookings;
+  cache.events   = results[1].status==="fulfilled" ? (results[1].value||[]) : cache.events;
+  cache.blackouts= results[2].status==="fulfilled" ? (results[2].value||[]) : cache.blackouts;
 }
 
 /* ---------- helpers ---------- */
@@ -746,7 +816,13 @@ function computeTotals(){
 function recalc(){
   var t=computeTotals();
   var el=$("summary-body");
-  if(t.nRooms===0 || t.hours===0){ el.innerHTML='<p class="hint" style="margin-bottom:0;">Select rooms and a time to see your itemized estimate.</p>'; return; }
+  var peek=$("summary-total-peek");
+  if(t.nRooms===0 || t.hours===0){
+    el.innerHTML='<p class="hint" style="margin-bottom:0;">Select rooms and a time to see your itemized estimate.</p>';
+    if(peek) peek.textContent="";
+    return;
+  }
+  if(peek) peek.textContent="· "+fmtMoney(t.grand+t.deposit)+" due";
   var h="";
   t.lines.forEach(function(l){ h+='<div class="sum-row"><span>'+l.label+'</span><span>'+fmtMoney(l.amt)+'</span></div>'; });
   h+='<div class="sum-row"><span>Subtotal</span><span>'+fmtMoney(t.subtotal)+'</span></div>';
@@ -831,6 +907,10 @@ async function submitBooking(){
   try { await Store.addBookings(toAdd); }
   catch(e){ err.textContent="Sorry — we couldn't submit your request. Please try again or email us."; err.classList.add("show"); return; }
   var req=firstReq;
+
+  // Remember on THIS device which booking IDs + email belong to this guest,
+  // so the availability calendar can show them in full detail later.
+  rememberMine(email, toAdd.map(function(b){ return b.id; }));
 
   var adminBody = buildAdminEmail(req) + (rec ? ("\n\n🔁 RECURRING REQUEST ("+freqLabel(rec.freq)+", "+rec.count+" occurrences):\n"+dates.map(function(d){return "   • "+d;}).join("\n")+"\n   Group: "+groupId+"\n   (Review & approve/pay each occurrence individually in the console.)") : "");
   await Store.sendEmail(ADMIN_EMAIL, "New "+(rec?"RECURRING ":"")+"Booking Request "+req.id+" — "+name, adminBody);
@@ -1341,6 +1421,178 @@ function weekDayHTML(isDay){
   }
   return h+'</div>';
 }
+
+/* ===================================================================
+   CUSTOMER-FACING AVAILABILITY CALENDAR
+   Shows blackouts, public NGH events (with detail), and bookings.
+   Other guests' bookings appear only as "Reserved"; the guest's own
+   (matched by device memory or an email lookup) show in full detail.
+   =================================================================== */
+var custCalData = { bookings:[], events:[], blackouts:[] };
+var custMode="month", custRef=new Date();
+
+/* device memory of this guest's own bookings */
+function myStore(){ try { return JSON.parse(localStorage.getItem("ngh_mybookings")||'{"ids":[],"emails":[]}'); } catch(e){ return {ids:[],emails:[]}; } }
+function rememberMine(email, ids){
+  var m=myStore();
+  if(email){ var e=email.trim().toLowerCase(); if(m.emails.indexOf(e)<0) m.emails.push(e); }
+  (ids||[]).forEach(function(id){ if(m.ids.indexOf(id)<0) m.ids.push(id); });
+  localStorage.setItem("ngh_mybookings", JSON.stringify(m));
+}
+function isMineLocal(b){
+  var m=myStore();
+  if(b.mine===true) return true;                       // server flagged it (email lookup)
+  if(b.id && m.ids.indexOf(b.id)>=0) return true;       // booked on this device
+  if(b.email && m.emails.indexOf(b.email.trim().toLowerCase())>=0) return true;
+  return false;
+}
+
+function toggleAvail(){
+  var p=$("avail-panel"), c=$("avail-chevron");
+  var open = p.style.display==="none";
+  p.style.display = open ? "block" : "none";
+  c.classList.toggle("open", open);
+  if(open) loadCustCal();
+}
+function toggleSummary(){
+  var p=$("summary-collapse"), c=$("summary-chevron");
+  var open = p.style.display==="none";
+  p.style.display = open ? "block" : "none";
+  c.classList.toggle("open", open);
+}
+
+async function loadCustCal(emailOverride){
+  // pull availability (anonymized) + optionally full detail for an email
+  var email = emailOverride!=null ? emailOverride : "";
+  try {
+    var bk = email ? await Store.bookingsMine(email) : await Store.bookings();
+    custCalData.bookings = bk || [];
+  } catch(e){ custCalData.bookings = []; }
+  try { custCalData.events = await Store.events() || []; } catch(e){ custCalData.events=[]; }
+  try { custCalData.blackouts = await Store.blackouts() || []; } catch(e){ custCalData.blackouts=[]; }
+  renderCustCal();
+}
+async function loadMine(){
+  var email=$("mine-email").value.trim();
+  if(!email || email.indexOf("@")<0){ $("mine-status").textContent="Enter the email you booked with."; return; }
+  rememberMine(email, []);   // remember the email on this device too
+  $("mine-status").textContent="Showing your bookings for "+email+".";
+  await loadCustCal(email);
+}
+
+function custEventsForDate(ds){
+  var evs=[];
+  custCalData.bookings.forEach(function(b){
+    if(b.status==="rejected") return;
+    if(b.date!==ds) return;
+    var mine=isMineLocal(b);
+    evs.push({
+      cat:"booking", mine:mine, status:b.status,
+      start:b.start, hours:b.hours,
+      label: mine ? ((b.name&&b.name!=="Reserved"?b.name:"Your booking")+" · "+(b.rooms||[]).map(roomName).join(", ")) : "Reserved",
+      detail: mine ? b : null
+    });
+  });
+  expandedEventsC().forEach(function(e){
+    if(e.date!==ds) return;
+    evs.push({ cat:"event", allDay:e.allDay, start:e.start, end:e.end,
+      label:(e.title||"NGH Event")+(e.rooms&&e.rooms.length?(" ("+e.rooms.map(roomName).join(", ")+")"):""), detail:e });
+  });
+  expandedBlackoutsC().forEach(function(b){
+    if(b.date!==ds) return;
+    evs.push({ cat:"blackout", allDay:b.allDay, start:b.start, end:b.end,
+      label:(b.label||"Closed")+(b.rooms&&b.rooms.length?(" ("+b.rooms.map(roomName).join(", ")+")"):"") });
+  });
+  return evs;
+}
+function expandedEventsC(){
+  var out=[]; custCalData.events.forEach(function(e){
+    if(e.recurrence){ recurrenceDates(e.date,e.recurrence.freq,e.recurrence.count).forEach(function(d){ var c=Object.assign({},e); c.date=d; out.push(c); }); }
+    else out.push(Object.assign({},e));
+  }); return out;
+}
+function expandedBlackoutsC(){
+  var out=[]; custCalData.blackouts.forEach(function(b){
+    if(b.recurrence){ recurrenceDates(b.date,b.recurrence.freq,b.recurrence.count).forEach(function(d){ var c=Object.assign({},b); c.date=d; out.push(c); }); }
+    else out.push(Object.assign({},b));
+  }); return out;
+}
+
+function setCustMode(m){ custMode=m; renderCustCal(); }
+function custShift(dir){ if(custMode==="month") custRef.setMonth(custRef.getMonth()+dir); else if(custMode==="week") custRef.setDate(custRef.getDate()+dir*7); else custRef.setDate(custRef.getDate()+dir); renderCustCal(); }
+function custToday(){ custRef=new Date(); renderCustCal(); }
+
+function renderCustCal(){
+  var wrap=$("cust-cal"), title="";
+  if(custMode==="month") title=custRef.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  else if(custMode==="week"){ var ws=weekStart(custRef), we=new Date(ws); we.setDate(we.getDate()+6); title=ws.toLocaleDateString(undefined,{month:'short',day:'numeric'})+" – "+we.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+  else title=custRef.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
+
+  var h='<div class="cc-toolbar">'+
+    '<div class="cc-views">'+
+      '<div class="cc-tab'+(custMode==="month"?" active":"")+'" onclick="setCustMode(\'month\')">Month</div>'+
+      '<div class="cc-tab'+(custMode==="week"?" active":"")+'" onclick="setCustMode(\'week\')">Week</div>'+
+      '<div class="cc-tab'+(custMode==="day"?" active":"")+'" onclick="setCustMode(\'day\')">Day</div>'+
+    '</div>'+
+    '<div class="cc-nav">'+
+      '<button class="btn btn-sm btn-ghost" onclick="custShift(-1)">‹</button>'+
+      '<span class="cc-title">'+title+'</span>'+
+      '<button class="btn btn-sm btn-ghost" onclick="custShift(1)">›</button>'+
+      '<button class="btn btn-sm btn-ghost" onclick="custToday()">Today</button>'+
+    '</div></div>'+
+    '<div class="cc-legend">'+
+      '<span><span class="cc-dot" style="background:#9a9a80"></span> Reserved (other guests)</span>'+
+      '<span><span class="cc-dot" style="background:var(--cal-approved)"></span> Your approved booking</span>'+
+      '<span><span class="cc-dot" style="background:var(--cal-pending)"></span> Your pending booking</span>'+
+      '<span><span class="cc-dot" style="background:var(--cal-event)"></span> NGH event</span>'+
+      '<span><span class="cc-dot" style="background:var(--cal-blackout)"></span> Closed / blackout</span>'+
+    '</div>';
+  h += (custMode==="month") ? custMonthHTML() : custWeekDayHTML(custMode==="day");
+  wrap.innerHTML=h;
+}
+function ccEvClass(e){
+  if(e.cat==="blackout") return "blackout";
+  if(e.cat==="event") return "event";
+  if(e.mine) return e.status==="approved" ? "mine" : "mine-pending";
+  return "reserved";
+}
+function ccChip(e){
+  var cls="cc-ev "+ccEvClass(e);
+  var t = e.allDay ? "All day" : (e.start?fmtTime(timeToMins(e.start)):"");
+  return '<div class="'+cls+'" title="'+esc(e.label)+'">'+(t?(t+' '):'')+esc(e.label)+'</div>';
+}
+function custMonthHTML(){
+  var first=new Date(custRef.getFullYear(), custRef.getMonth(),1), start=new Date(first); start.setDate(1-first.getDay());
+  var todayStr=ymd(new Date()), h='<div class="cc-grid">';
+  ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(function(d){ h+='<div class="cc-dow">'+d+'</div>'; });
+  for(var i=0;i<42;i++){
+    var d=new Date(start); d.setDate(start.getDate()+i);
+    var ds=ymd(d), other=d.getMonth()!==custRef.getMonth(), evs=custEventsForDate(ds);
+    h+='<div class="cc-cell'+(other?" other":"")+(ds===todayStr?" today":"")+'">'+
+       '<div class="cc-daynum">'+d.getDate()+'</div>'+
+       evs.slice(0,4).map(ccChip).join("")+
+       (evs.length>4?('<div style="font-size:0.55rem;color:#8a8a6a;">+'+(evs.length-4)+' more</div>'):'')+
+       '</div>';
+  }
+  return h+'</div>';
+}
+function custWeekDayHTML(isDay){
+  var days=[];
+  if(isDay){ days=[new Date(custRef)]; } else { var ws=weekStart(custRef); for(var i=0;i<7;i++){ var d=new Date(ws); d.setDate(ws.getDate()+i); days.push(d); } }
+  var todayStr=ymd(new Date()), h='<div class="cc-week" style="--ccc:'+days.length+'">';
+  h+='<div class="cch"></div>';
+  days.forEach(function(d){ h+='<div class="cch"'+(ymd(d)===todayStr?' style="color:var(--gold)"':'')+'>'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
+  for(var hr=8; hr<=23; hr++){
+    h+='<div class="cchour">'+fmtTime(hr*60)+'</div>';
+    days.forEach(function(d){
+      var ds=ymd(d);
+      var slot=custEventsForDate(ds).filter(function(e){ if(e.allDay) return hr===8; if(!e.start) return false; return Math.floor(timeToMins(e.start)/60)===hr; });
+      h+='<div class="ccslot">'+slot.map(ccChip).join("")+'</div>';
+    });
+  }
+  return h+'</div>';
+}
+
 
 /* ---------- init ---------- */
 (async function init(){
