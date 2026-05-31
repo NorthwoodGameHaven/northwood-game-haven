@@ -7,6 +7,7 @@
 //   PATCH /registrations/:id {fields}                  -> ADMIN: approve/unapprove/cancel
 //   DELETE /registrations/:id                           -> customer self-cancel (by token) or admin
 import { sql, ensureSchema, json, bad, noContent, preflight, requireAdmin } from './_shared/db.mjs';
+import { refundPaymentIntent } from './_shared/stripe.mjs';
 
 function newId() { return 'REG-' + Date.now().toString(36).toUpperCase().slice(-6) + '-' + Math.floor(Math.random() * 900 + 100); }
 
@@ -111,6 +112,11 @@ const _handler = async (req) => {
     const rows = await sql`SELECT data FROM registrations WHERE id = ${id}`;
     if (!rows.length) return bad('not found', 404);
     const reg = Object.assign({}, rows[0].data, fields, { id });
+    // If this PATCH cancels a PAID registration, auto-refund via Stripe.
+    if (fields.status === 'canceled' && rows[0].data.status !== 'canceled' && reg.feePaid && reg.paymentPI && !reg.refunded) {
+      try { await refundPaymentIntent(reg.paymentPI); reg.refunded = true; reg.refundedAt = new Date().toISOString(); }
+      catch (e) { console.error('[registrations] refund failed', e); reg.refundError = String(e && e.message || e); }
+    }
     await sql`UPDATE registrations SET data = ${JSON.stringify(reg)}::jsonb WHERE id = ${id}`;
     return json(reg);
   }
@@ -123,6 +129,11 @@ const _handler = async (req) => {
     const reg = rows[0].data;
     const isAdmin = requireAdmin(req);
     if (!isAdmin && reg.cancelToken !== token) return bad('unauthorized', 401);
+    // Auto-refund a paid registration on cancel.
+    if (reg.feePaid && reg.paymentPI && !reg.refunded) {
+      try { await refundPaymentIntent(reg.paymentPI); reg.refunded = true; reg.refundedAt = new Date().toISOString(); }
+      catch (e) { console.error('[registrations] refund failed', e); reg.refundError = String(e && e.message || e); }
+    }
     reg.status = 'canceled';
     reg.canceledAt = new Date().toISOString();
     await sql`UPDATE registrations SET data = ${JSON.stringify(reg)}::jsonb WHERE id = ${id}`;

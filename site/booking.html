@@ -1051,6 +1051,8 @@ function reqCardHtml(r){
   } else if(r.status==="approved"){
     actions+='<button class="btn btn-sm '+(feeIsPaid(r)?"btn-ghost":"")+'" onclick="toggleFeePaid(\''+r.id+'\')">'+(feeIsPaid(r)?"↩ Fee: mark unpaid":"💵 Mark Fee Paid")+'</button>';
     actions+='<button class="btn btn-sm '+(depIsPaid(r)?"btn-ghost":"")+'" onclick="toggleDepositPaid(\''+r.id+'\')">'+(depIsPaid(r)?"↩ Deposit: mark unpaid":"🛡️ Mark Deposit Paid")+'</button>';
+    if(!feeIsPaid(r)) actions+='<button class="btn btn-sm btn-ghost" onclick="genPayLink(\''+r.id+'\',\'fee\')">🔗 Fee pay-link</button>';
+    if(!depIsPaid(r)) actions+='<button class="btn btn-sm btn-ghost" onclick="genPayLink(\''+r.id+'\',\'deposit\')">🔗 Deposit pay-link</button>';
     actions+='<button class="btn btn-sm btn-danger" onclick="reject(\''+r.id+'\')">Cancel / Reject</button>';
   } else if(r.status==="rejected"){
     actions+='<button class="btn btn-sm btn-ghost" onclick="approve(\''+r.id+'\')">Re-approve</button>';
@@ -1159,6 +1161,17 @@ async function sendHold(id){
   await refreshCache(); renderAdmin(adminFilter);
 }
 async function togglePaid(id){ var r=getReq(id); if(!r) return; await Store.updateBooking(id,{payment: r.payment==="paid"?"due":"paid"}); await refreshCache(); renderAdmin(adminFilter); }
+// Generate a Stripe Checkout link for a booking fee or deposit and copy it.
+async function genPayLink(id, part){
+  try {
+    var res = await fetch(API_BASE + "/create-checkout", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ kind:"booking", id:id, part:part }) });
+    if(!res.ok){ var er=await res.json().catch(function(){return{};}); alert("Couldn't create payment link: "+(er.error||res.status)); return; }
+    var data = await res.json();
+    // copy to clipboard + open
+    try { await navigator.clipboard.writeText(data.url); } catch(e){}
+    window.prompt("Payment link for the "+part+" (copied to clipboard — paste into an email/text to the customer):", data.url);
+  } catch(e){ alert("Couldn't create payment link: "+e.message); }
+}
 // Split-payment helpers (back-compat: legacy payment:"paid" counts as both paid)
 function feeIsPaid(r){ return r.feePaid===true || r.payment==="paid"; }
 function depIsPaid(r){ return r.depositPaid===true || r.payment==="paid"; }
@@ -1505,7 +1518,21 @@ async function saveEvent(){
     }
   }
 }
-async function deleteEvent(id){ if(!confirm("Delete this public event?")) return; await Store.deleteEvent(id); await refreshCache(); renderEventsAdmin(); }
+async function deleteEvent(id){
+  var e=cache.events.filter(function(x){return x.id===id;})[0];
+  var title=e?(e.title||"this event"):"this event";
+  var warn="Delete \""+title+"\"?\n\nThis permanently removes the event from the booking calendar and the public Event Calendar. This cannot be undone.";
+  // If registration is enabled, check for active registrants and warn explicitly.
+  if(e && e.registration && e.registration.enabled){
+    try {
+      var regs=await Store.registrations();
+      var active=(regs||[]).filter(function(r){ return r.eventId===id && r.status!=="canceled"; });
+      if(active.length){ warn="⚠️ \""+title+"\" has "+active.length+" active registrant"+(active.length>1?"s":"")+".\n\nDeleting it will remove the event and those people will NOT be automatically notified. Consider emailing them first.\n\nDelete anyway? This cannot be undone."; }
+    } catch(_){}
+  }
+  if(!confirm(warn)) return;
+  await Store.deleteEvent(id); await refreshCache(); renderEventsAdmin();
+}
 
 var _regCache = null;
 async function viewRegistrants(eventId){

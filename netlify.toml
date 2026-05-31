@@ -54,6 +54,15 @@
   to   = "/.netlify/functions/registrations"
   status = 200
 
+[[redirects]]
+  from = "/api/create-checkout"
+  to   = "/.netlify/functions/create-checkout"
+  status = 200
+[[redirects]]
+  from = "/api/stripe-webhook"
+  to   = "/.netlify/functions/stripe-webhook"
+  status = 200
+
 # The booking app calls the functions with sub-paths like
 # /.netlify/functions/bookings/NGH-XXXX — Netlify routes these to the
 # bookings function automatically, but this rule makes it explicit.
