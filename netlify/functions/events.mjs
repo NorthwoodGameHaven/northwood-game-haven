@@ -9,6 +9,14 @@ import { sql, ensureSchema, json, bad, noContent, preflight, requireAdmin } from
 function newId() { return 'EVT-' + Date.now().toString(36).toUpperCase().slice(-6) + '-' + Math.floor(Math.random() * 900 + 100); }
 
 export default async (req) => {
+  try { return await _handler(req); }
+  catch (e) {
+    console.error('[events] error', e);
+    return bad('Server error: ' + (e && e.message ? e.message : String(e)), 500);
+  }
+};
+
+const _handler = async (req) => {
   if (req.method === 'OPTIONS') return preflight();
   await ensureSchema();
 

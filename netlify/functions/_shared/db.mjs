@@ -3,36 +3,52 @@
 import { neon } from '@netlify/neon';
 import crypto from 'node:crypto';
 
-// @netlify/neon automatically reads the NETLIFY_DATABASE_URL env var that the
-// Neon extension provisions for you. No manual connection string needed.
-export const sql = neon();
+// @netlify/neon reads NETLIFY_DATABASE_URL automatically, but we pass it
+// explicitly too so the connection is unambiguous regardless of how the
+// variable was provisioned (extension vs. manually set).
+export const sql = neon(process.env.NETLIFY_DATABASE_URL);
 
-// ---- one-time schema bootstrap (safe to call on every cold start) ----
-let _ready = null;
-export function ensureSchema() {
-  if (_ready) return _ready;
-  _ready = (async () => {
-    await sql`CREATE TABLE IF NOT EXISTS bookings (
-      id            TEXT PRIMARY KEY,
-      data          JSONB NOT NULL,
-      status        TEXT,
-      group_id      TEXT,
-      date          DATE,
-      created_at    TIMESTAMPTZ DEFAULT now()
-    )`;
-    await sql`CREATE TABLE IF NOT EXISTS events (
-      id            TEXT PRIMARY KEY,
-      data          JSONB NOT NULL,
-      created_at    TIMESTAMPTZ DEFAULT now()
-    )`;
-    await sql`CREATE TABLE IF NOT EXISTS blackouts (
-      id            INTEGER PRIMARY KEY DEFAULT 1,
-      data          JSONB NOT NULL DEFAULT '[]'::jsonb
-    )`;
-    await sql`INSERT INTO blackouts (id, data) VALUES (1, '[]'::jsonb)
-              ON CONFLICT (id) DO NOTHING`;
-  })();
-  return _ready;
+// ---- schema bootstrap ----
+// Each statement runs independently. We do NOT cache a rejected promise:
+// if bootstrap fails, the next request retries instead of being poisoned
+// forever by a one-time/transient error.
+//
+// IMPORTANT: `CREATE TABLE IF NOT EXISTS` is NOT safe under concurrency in
+// Postgres — when several serverless functions cold-start at the same instant
+// and all try to create the same table, the loser of the race throws a
+// duplicate-key error on an internal catalog (codes 23505 / 42P07 / 42710).
+// Those errors are harmless (the table now exists), so we swallow them.
+let _schemaReady = false;
+function isAlreadyExists(e) {
+  const c = e && e.code;
+  return c === '23505' || c === '42P07' || c === '42710';
+}
+async function createIfMissing(stmt) {
+  try { await stmt; }
+  catch (e) { if (!isAlreadyExists(e)) throw e; }
+}
+export async function ensureSchema() {
+  if (_schemaReady) return;
+  await createIfMissing(sql`CREATE TABLE IF NOT EXISTS bookings (
+    id            TEXT PRIMARY KEY,
+    data          JSONB NOT NULL,
+    status        TEXT,
+    group_id      TEXT,
+    date          DATE,
+    created_at    TIMESTAMPTZ DEFAULT now()
+  )`);
+  await createIfMissing(sql`CREATE TABLE IF NOT EXISTS events (
+    id            TEXT PRIMARY KEY,
+    data          JSONB NOT NULL,
+    created_at    TIMESTAMPTZ DEFAULT now()
+  )`);
+  await createIfMissing(sql`CREATE TABLE IF NOT EXISTS blackouts (
+    id            INTEGER PRIMARY KEY DEFAULT 1,
+    data          JSONB NOT NULL DEFAULT '[]'::jsonb
+  )`);
+  await createIfMissing(sql`INSERT INTO blackouts (id, data) VALUES (1, '[]'::jsonb)
+            ON CONFLICT (id) DO NOTHING`);
+  _schemaReady = true;
 }
 
 // ---- responses ----

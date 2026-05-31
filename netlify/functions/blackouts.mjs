@@ -4,6 +4,14 @@
 import { sql, ensureSchema, json, bad, preflight, requireAdmin } from './_shared/db.mjs';
 
 export default async (req) => {
+  try { return await _handler(req); }
+  catch (e) {
+    console.error('[blackouts] error', e);
+    return bad('Server error: ' + (e && e.message ? e.message : String(e)), 500);
+  }
+};
+
+const _handler = async (req) => {
   if (req.method === 'OPTIONS') return preflight();
   await ensureSchema();
 
