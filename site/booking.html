@@ -1298,6 +1298,7 @@ function adminGcalUrl(e){
   var details=(e.notes||"")+(e.fbLink?("\n\nFacebook: "+e.fbLink):"");
   return "https://www.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(e.title||"NGH Event")+"&dates="+dates+"&details="+encodeURIComponent(details)+"&location="+encodeURIComponent("Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI");
 }
+var editingEventId = null;   // id of the event currently being edited (null = creating new)
 function renderEventsAdmin(){
   var wrap=$("events-view-wrap");
   var roomChecks=ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="ev-room" value="'+r.id+'">'+r.name+'</label>'; }).join("");
