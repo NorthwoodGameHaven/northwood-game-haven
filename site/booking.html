@@ -1422,6 +1422,12 @@ function calToday(){ calRef=new Date(); renderCalendar(); }
 function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 function weekStart(d){ var s=new Date(d); s.setDate(s.getDate()-s.getDay()); s.setHours(0,0,0,0); return s; }
 
+function durHours(start, end){
+  if(!start || !end) return 1;
+  var s=timeToMins(start), e=timeToMins(end);
+  if(e<=s) e+=1440;          // crosses midnight
+  return Math.max(0.5, (e-s)/60);
+}
 function eventsForDate(dateStr){
   var evs=[];
   cache.bookings.forEach(function(r){
@@ -1429,10 +1435,10 @@ function eventsForDate(dateStr){
     if(r.date===dateStr) evs.push({cat:"booking", status:r.status, payment:r.payment, rec:!!r.groupId, start:r.start, hours:r.hours, label:r.name+" · "+roomList(r), id:r.id, groupId:r.groupId});
   });
   expandedEvents().forEach(function(e){
-    if(e.date===dateStr) evs.push({cat:"event", rec:!!e.recurrence, start:e.allDay?null:e.start, end:e.allDay?null:e.end, allDay:e.allDay, label:(e.title||"NGH Event")+(e.rooms&&e.rooms.length?(" ("+e.rooms.map(roomName).join(", ")+")"):" (all rooms)"), id:e.id, isEvent:true});
+    if(e.date===dateStr) evs.push({cat:"event", rec:!!e.recurrence, start:e.allDay?null:e.start, end:e.allDay?null:e.end, allDay:e.allDay, hours:e.allDay?null:durHours(e.start,e.end), label:(e.title||"NGH Event")+(e.rooms&&e.rooms.length?(" ("+e.rooms.map(roomName).join(", ")+")"):" (all rooms)"), id:e.id, isEvent:true});
   });
   expandedBlackouts().forEach(function(b){
-    if(b.date===dateStr) evs.push({cat:"blackout", rec:!!b.recurrence, start:b.allDay?null:b.start, end:b.allDay?null:b.end, allDay:b.allDay, label:(b.label||"Blackout")+(b.rooms&&b.rooms.length?(" ("+b.rooms.map(roomName).join(", ")+")"):" (all rooms)")});
+    if(b.date===dateStr) evs.push({cat:"blackout", rec:!!b.recurrence, start:b.allDay?null:b.start, end:b.allDay?null:b.end, allDay:b.allDay, hours:b.allDay?null:durHours(b.start,b.end), label:(b.label||"Blackout")+(b.rooms&&b.rooms.length?(" ("+b.rooms.map(roomName).join(", ")+")"):" (all rooms)")});
   });
   return evs;
 }
@@ -1446,10 +1452,11 @@ function evChip(e){
   var cls="cal-ev "+evClass(e);
   if(e.cat==="booking" && e.status==="approved" && e.payment!=="paid") cls+=" unpaid";
   var t = e.allDay ? "All day" : (e.start?fmtTime(timeToMins(e.start)):"");
-  var click = (e.cat==="booking") ? (' onclick="jumpToReq(\''+e.id+'\')"') : (e.isEvent?(' onclick="setAdminView(\'events\')"'):'');
+  var click = (e.cat==="booking") ? (' onclick="jumpToReq(\''+e.id+'\')"') : (e.isEvent?(' onclick="jumpToEvent(\''+e.id+'\')"'):'');
   return '<div class="'+cls+'"'+click+' title="'+esc(e.label)+'">'+(e.rec?'🔁 ':'')+(t?(t+' '):'')+esc(e.label)+'</div>';
 }
 function jumpToReq(id){ setAdminView('list'); var r=getReq(id); if(r&&r.groupId) showGroup(r.groupId); else { adminFilter="all"; renderAdmin("all"); } }
+function jumpToEvent(id){ setAdminView('events'); setTimeout(function(){ editEvent(id); }, 60); }
 
 function renderCalendar(){
   var wrap=$("calendar-view-wrap"), title="";
@@ -1509,7 +1516,7 @@ function weekDayHTML(isDay){
       h+='<div class="wslot">'+slotEvents.map(function(e){
         var bg = e.cat==="blackout"?"var(--cal-blackout)":(e.cat==="event"?"var(--cal-event)":(e.status==="approved"?"var(--cal-approved)":"var(--cal-pending)"));
         var ht = e.allDay?"100%":((e.hours||1)*26-2)+"px";
-        var click = (e.cat==="booking")?(' onclick="jumpToReq(\''+e.id+'\')"'):'';
+        var click = (e.cat==="booking")?(' onclick="jumpToReq(\''+e.id+'\')"'):(e.isEvent?(' onclick="jumpToEvent(\''+e.id+'\')"'):'');
         return '<div class="wevent" style="background:'+bg+';height:'+ht+';"'+click+'>'+(e.rec?'🔁':'')+esc(e.label)+'</div>';
       }).join("")+'</div>';
     });
