@@ -43,7 +43,7 @@ export default async (req) => {
         const rows = await sql`SELECT data FROM registrations WHERE id = ${md.registrationId}`;
         if (rows.length) {
           const r = rows[0].data;
-          r.feePaid = true; r.paymentPI = paymentIntent;
+          r.feePaid = true; r.paymentPI = paymentIntent; r.checkoutSessionId = s.id || r.checkoutSessionId;
           await sql`UPDATE registrations SET data = ${JSON.stringify(r)}::jsonb WHERE id = ${r.id}`;
           console.log('[stripe-webhook] registration', r.id, 'marked paid');
         }

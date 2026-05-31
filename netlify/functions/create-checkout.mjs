@@ -45,7 +45,7 @@ const _handler = async (req) => {
     const rows = await sql`SELECT data FROM bookings WHERE id = ${p.id}`;
     if (!rows.length) return bad('booking not found', 404);
     const b = rows[0].data;
-    if (b.status !== 'approved') return bad('booking is not approved for payment yet', 400);
+    if (b.status === 'rejected' || b.status === 'canceled') return bad('this booking is no longer active', 400);
 
     const part = p.part === 'deposit' ? 'deposit' : 'fee';
     let amount, label;

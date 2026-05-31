@@ -119,7 +119,8 @@
   .cc-dot { width:11px; height:11px; border-radius:3px; display:inline-block; }
   .cc-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
   .cc-dow { font-family:'Cinzel',serif; font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase; color:#8a8a6a; text-align:center; padding:3px 0; }
-  .cc-cell { min-height:74px; border:1px solid #e8ece4; border-radius:7px; padding:3px; background:#fff; overflow:hidden; }
+  .cc-cell { min-height:74px; border:1px solid #e8ece4; border-radius:7px; padding:3px; background:#fff; overflow:hidden; position:relative; max-width:100%; }
+  .cc-cell .cc-ev { max-width:100%; box-sizing:border-box; position:static !important; }
   .cc-cell.other { background:#f6f7f4; opacity:0.55; }
   .cc-cell.today { border-color:var(--gold); box-shadow:inset 0 0 0 1px var(--gold); }
   .cc-daynum { font-size:0.68rem; color:#6a6a50; font-weight:700; margin-bottom:2px; }
@@ -427,6 +428,7 @@
     <p style="max-width:560px;margin:0 auto 14px;">Thanks, <span id="succ-name"></span>! Your booking request has been submitted. A Game Guru will review it and email <span id="succ-email"></span> within <strong>1 business day</strong> to confirm your reservation and answer any questions.</p>
     <p class="hint" id="succ-ref"></p>
     <div class="success-info" id="succ-customer-note"></div>
+    <div id="succ-paynow"></div>
     <div style="margin-top:18px;">
       <button class="btn btn-ghost btn-sm" onclick="location.reload()">Submit Another Request</button>
     </div>
@@ -637,9 +639,10 @@ var Store = {
   },
 
   /* ---- EMAIL ---- */
-  async sendEmail(to, subject, body){
+  async sendEmail(to, subject, body, extra){
+    extra = extra || {};
     if(!this.apiMode()){ return sendEmailLocal(to, subject, body); }
-    try { await this._api("/send-email", { method:"POST", body:JSON.stringify({ to:to, subject:subject, body:body }) }); } catch(e){ console.warn("email failed", e); }
+    try { await this._api("/send-email", { method:"POST", body:JSON.stringify({ to:to, subject:subject, body:body, heading:extra.heading||"", buttons:extra.buttons||[] }) }); } catch(e){ console.warn("email failed", e); }
     return true;
   }
 };
@@ -1017,9 +1020,30 @@ async function submitBooking(){
     (req.milRequested?"• Bring your valid military / first-responder ID to check-in to receive your 15% discount.<br>":"")+
     "• Questions? Reply to your confirmation email or contact us any time.";
   $("succ-customer-note").innerHTML=payNote;
+  // Pay-now option (preferred) — only for single (non-recurring) bookings.
+  var payWrap=$("succ-paynow");
+  if(payWrap){
+    if(!rec){
+      payWrap.innerHTML=
+        '<div style="margin:16px auto 0;max-width:480px;text-align:center;">'+
+        '<button class="btn btn-gold" style="font-size:1rem;padding:14px 30px;" onclick="payBookingNow(\''+req.id+'\',this)">💳 Pay Now to Lock In Your Booking</button>'+
+        '<div style="margin-top:8px;font-size:0.78rem;color:#8a8a6a;">Secure checkout — cards, Apple Pay &amp; Google Pay. '+
+        '<a href="#" onclick="this.parentNode.parentNode.querySelector(\'.payinstore\').style.display=\'block\';this.style.display=\'none\';return false;" style="color:#b9b9a0;text-decoration:underline;font-size:0.74rem;">Prefer to pay in store?</a></div>'+
+        '<div class="payinstore" style="display:none;margin-top:6px;font-size:0.74rem;color:#9a9a80;">You may also pay in person — but no later than the calendar day before your booking, or it will be automatically canceled.</div>'+
+        '</div>';
+    } else { payWrap.innerHTML=""; }
+  }
   document.querySelectorAll("#customer-view .card").forEach(function(c){ if(c.id!=="success") c.style.display="none"; });
   $("success").style.display="block";
   window.scrollTo({top:0,behavior:"smooth"});
+}
+async function payBookingNow(id, btn){
+  if(btn){ btn.disabled=true; btn.textContent="Opening secure checkout…"; }
+  try {
+    var res=await fetch(API_BASE+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"booking",id:id,part:"fee"})});
+    if(!res.ok){ var er=await res.json().catch(function(){return{};}); throw new Error(er.error||"checkout error"); }
+    var data=await res.json(); window.location.href=data.url;
+  } catch(e){ if(btn){ btn.disabled=false; btn.textContent="💳 Pay Now to Lock In Your Booking"; } alert("Couldn't open checkout: "+e.message); }
 }
 
 /* ---------- local email stub (demo mode only) ---------- */
@@ -1177,9 +1201,23 @@ async function resendApproval(id, silent){
   if(fileInput && fileInput.files && fileInput.files[0]) fileName=fileInput.files[0].name;
   await Store.updateBooking(id,{invoiceLink:link, invoiceFileName:fileName, status:"approved"});
   await refreshCache();
-  var body=buildApprovalEmail(getReq(id));
-  await Store.sendEmail(r.email, "Your Northwood Game Haven booking "+id+" is APPROVED ✅", body);
-  if(!silent){ alert("Approval email sent to "+r.email+".\n\n"+body); }
+  r=getReq(id);
+  var body=buildApprovalEmail(r);
+  // Generate Stripe pay-now buttons for any unpaid fee / deposit.
+  var buttons=[];
+  try {
+    if(!feeIsPaid(r)){
+      var f=await fetch(API_BASE+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"booking",id:id,part:"fee"})});
+      if(f.ok){ var fd=await f.json(); buttons.push({label:"Pay Booking Fee Now", url:fd.url, primary:true}); }
+    }
+    if(!depIsPaid(r)){
+      var d=await fetch(API_BASE+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"booking",id:id,part:"deposit"})});
+      if(d.ok){ var dd=await d.json(); buttons.push({label:"Pay Refundable Deposit Now", url:dd.url, primary:false}); }
+    }
+  } catch(e){ console.warn("pay-link generation failed", e); }
+  await Store.sendEmail(r.email, "Your Northwood Game Haven booking "+id+" is APPROVED ✅", body,
+    { heading:"Your booking is approved! 🎉", buttons:buttons });
+  if(!silent){ alert("Approval email sent to "+r.email+(buttons.length?" with "+buttons.length+" pay button(s).":".")); }
   renderAdmin(adminFilter);
 }
 function buildApprovalEmail(r){
@@ -1660,9 +1698,9 @@ function renderRegistrants(eventId){
         (r.wantsInvoice?'<div style="color:#9a6310;font-size:0.74rem;">📧 invoice requested</div>':'')+
         (!canceled?('<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">'+
           '<button class="btn btn-sm btn-ghost" onclick="toggleRegApproval(\''+r.id+'\','+(unappr?'true':'false')+',\''+eventId+'\')">'+(unappr?'✓ Approve':'✕ Mark unapproved')+'</button>'+
-          (r.cost>0?('<button class="btn btn-sm btn-ghost" onclick="toggleRegPaid(\''+r.id+'\','+(r.feePaid?'false':'true')+',\''+eventId+'\')">'+(r.feePaid?'↩ Mark unpaid':'💵 Mark paid')+'</button>'):'')+
-          '<button class="btn btn-sm btn-danger" onclick="adminCancelReg(\''+r.id+'\',\''+eventId+'\')">Cancel</button>'+
-        '</div>'):'')+
+          '<button class="btn btn-sm btn-danger" onclick="removeAndRefund(\''+r.id+'\',\''+eventId+'\','+(r.feePaid?'true':'false')+')">'+(r.feePaid?'🗑️ Remove & refund':'🗑️ Remove')+'</button>'+
+        '</div>'):
+        (r.refunded?'<div style="color:#2e7d32;font-size:0.72rem;margin-top:3px;">✓ refunded</div>':''))+
         '</div>';
     });
     h+='</div>';
@@ -1674,14 +1712,20 @@ async function toggleRegApproval(id, approve, eventId){
   await Store.updateRegistration(id, { status: approve?"approved":"unapproved" });
   await viewRegistrants(eventId);
 }
-async function toggleRegPaid(id, paid, eventId){
-  await Store.updateRegistration(id, { feePaid: !!paid });
-  await viewRegistrants(eventId);
-}
-async function adminCancelReg(id, eventId){
-  if(!confirm("Cancel this registration?")) return;
-  await Store.updateRegistration(id, { status:"canceled", canceledAt:new Date().toISOString() });
-  await viewRegistrants(eventId);
+async function removeAndRefund(id, eventId, wasPaid){
+  var msg = wasPaid
+    ? "Remove this registrant and REFUND their payment?\n\nThe refund is issued automatically through Stripe and cannot be undone."
+    : "Remove this registrant?\n\nThey had no online payment, so nothing will be refunded.";
+  if(!confirm(msg)) return;
+  try {
+    var r = await Store.updateRegistration(id, { status:"canceled", canceledAt:new Date().toISOString() });
+    await viewRegistrants(eventId);
+    if(wasPaid){
+      if(r && r.refunded) alert("Registrant removed and payment refunded ✓");
+      else if(r && r.refundError) alert("Registrant removed, but the refund FAILED: "+r.refundError+"\n\nPlease issue the refund manually in your Stripe dashboard.");
+      else alert("Registrant removed. (No online payment was found to refund.)");
+    }
+  } catch(e){ alert("Couldn't remove registrant: "+(e.message||e)); }
 }
 
 /* ===================================================================
@@ -2170,6 +2214,9 @@ function ccChip(e, spanHeight, topOffset){
     // absolute overlay so the chip spans its full duration over the hour rows
     style=' style="position:absolute;left:1px;right:1px;top:'+(topOffset||0)+'px;height:'+spanHeight+';z-index:3;"';
     cls+=" cc-ev-span";
+  } else {
+    // month chip: force-contain so it can never stretch beyond its day cell
+    style=' style="position:static;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"';
   }
   return '<div class="'+cls+'"'+style+ccHover(e)+' title="'+esc(e.label)+'">'+(t?(t+' '):'')+esc(e.label)+'</div>';
 }

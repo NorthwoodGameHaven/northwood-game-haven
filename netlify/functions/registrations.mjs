@@ -8,20 +8,15 @@
 //   DELETE /registrations/:id                           -> customer self-cancel (by token) or admin
 import { sql, ensureSchema, json, bad, noContent, preflight, requireAdmin } from './_shared/db.mjs';
 import { refundPaymentIntent } from './_shared/stripe.mjs';
+import { sendBrandedMail } from './_shared/email.mjs';
 
 function newId() { return 'REG-' + Date.now().toString(36).toUpperCase().slice(-6) + '-' + Math.floor(Math.random() * 900 + 100); }
 
 // Server-side email (no guest auth restriction — runs with server privileges).
-async function sendMail(to, subject, text) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.MAIL_FROM || 'Northwood Game Haven <bookings@northwoodgamehaven.com>';
-  if (!apiKey) { console.log('[registrations] email (simulated):', to, subject); return; }
+async function sendMail(to, subject, text, opts) {
+  opts = opts || {};
   try {
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, text })
-    });
+    await sendBrandedMail(to, subject, { heading: opts.heading || '', bodyText: text, buttons: opts.buttons || [] });
   } catch (e) { console.error('[registrations] email failed', e); }
 }
 function fmtT(t){ if(!t) return ''; const p=String(t).split(':'); let h=+p[0], m=p[1], ap=h>=12?'PM':'AM', hh=h%12; if(hh===0)hh=12; return hh+':'+m+' '+ap; }
@@ -118,6 +113,7 @@ const _handler = async (req) => {
         for (const a of approved) {
           const aCost = Number(a.cost) || 0;
           let payLine;
+          let payBtns = [];
           if (aCost > 0 && !a.feePaid) {
             // create a Checkout link for this registrant
             let link = base + '/?pay_reg=' + encodeURIComponent(a.id);
@@ -130,14 +126,16 @@ const _handler = async (req) => {
               });
               link = session.url;
             } catch (e) { console.error('[registrations] paylink for fire-email failed', e); }
-            payLine = 'Your registration fee is $' + aCost.toFixed(2) + '. Pay online here:\n' + link + '\n\nOr pay in person — but no later than 1 hour before the event begins. Unpaid spots may be released.';
+            payLine = 'Your registration fee is $' + aCost.toFixed(2) + '. Pay online now using the button below — or pay in person no later than 1 hour before the event begins. Unpaid spots may be released.';
+            payBtns = [{ label: 'Pay $' + aCost.toFixed(2) + ' Now', url: link, primary: true }];
           } else if (aCost > 0 && a.feePaid) {
             payLine = 'Your payment is already complete. Thanks!';
           } else {
             payLine = 'This event is free — just show up and play!';
           }
           await sendMail(a.email, '✅ Confirmed: ' + (ev.title || 'NGH Event') + ' is happening!',
-            'Hi ' + a.name + ',\n\nGood news — ' + (ev.title || 'NGH Event') + ' on ' + when + ' has reached the minimum number of players and is confirmed to happen!\n\n' + payLine + '\n\nSee you at Northwood Game Haven!\n— NGH');
+            'Hi ' + a.name + ',\n\nGood news — ' + (ev.title || 'NGH Event') + ' on ' + when + ' has reached the minimum number of players and is confirmed to happen!\n\n' + payLine + '\n\nSee you at Northwood Game Haven!\n— NGH',
+            { heading: 'Your event is confirmed! 🎉', buttons: payBtns });
         }
         console.log('[registrations] fire-notification sent to', approved.length, 'registrants for', reg.eventId, reg.occDate || '');
       }
@@ -151,11 +149,11 @@ const _handler = async (req) => {
     let fields; try { fields = await req.json(); } catch { return bad('Invalid JSON'); }
     const rows = await sql`SELECT data FROM registrations WHERE id = ${id}`;
     if (!rows.length) return bad('not found', 404);
-    const reg = Object.assign({}, rows[0].data, fields, { id });
-    // If this PATCH cancels a PAID registration, auto-refund via Stripe.
-    if (fields.status === 'canceled' && rows[0].data.status !== 'canceled' && reg.feePaid && reg.paymentPI && !reg.refunded) {
-      try { await refundPaymentIntent(reg.paymentPI); reg.refunded = true; reg.refundedAt = new Date().toISOString(); }
-      catch (e) { console.error('[registrations] refund failed', e); reg.refundError = String(e && e.message || e); }
+    const prev = rows[0].data;
+    const reg = Object.assign({}, prev, fields, { id });
+    // If this PATCH cancels the registration, auto-refund any payment that was made.
+    if (fields.status === 'canceled' && prev.status !== 'canceled') {
+      await maybeRefund(reg);
     }
     await sql`UPDATE registrations SET data = ${JSON.stringify(reg)}::jsonb WHERE id = ${id}`;
     return json(reg);
@@ -169,11 +167,7 @@ const _handler = async (req) => {
     const reg = rows[0].data;
     const isAdmin = requireAdmin(req);
     if (!isAdmin && reg.cancelToken !== token) return bad('unauthorized', 401);
-    // Auto-refund a paid registration on cancel.
-    if (reg.feePaid && reg.paymentPI && !reg.refunded) {
-      try { await refundPaymentIntent(reg.paymentPI); reg.refunded = true; reg.refundedAt = new Date().toISOString(); }
-      catch (e) { console.error('[registrations] refund failed', e); reg.refundError = String(e && e.message || e); }
-    }
+    if (reg.status !== 'canceled') await maybeRefund(reg);
     reg.status = 'canceled';
     reg.canceledAt = new Date().toISOString();
     await sql`UPDATE registrations SET data = ${JSON.stringify(reg)}::jsonb WHERE id = ${id}`;
@@ -182,3 +176,27 @@ const _handler = async (req) => {
 
   return bad('Method not allowed', 405);
 };
+
+// Refund a registration's payment if one was made and not already refunded.
+// Resilient: refunds whenever we have a payment intent OR can recover one,
+// regardless of the current feePaid flag (so "mark unpaid" can't block it).
+async function maybeRefund(reg) {
+  if (reg.refunded) return;
+  let pi = reg.paymentPI || reg.feePI || null;
+  if (!pi && reg.checkoutSessionId) {
+    try {
+      const { retrieveSession } = await import('./_shared/stripe.mjs');
+      const sess = await retrieveSession(reg.checkoutSessionId);
+      pi = sess && sess.payment_intent;
+    } catch (e) { console.error('[registrations] session lookup failed', e); }
+  }
+  if (!pi) return; // nothing was actually paid online
+  try {
+    await refundPaymentIntent(pi);
+    reg.refunded = true; reg.refundedAt = new Date().toISOString(); reg.feePaid = false;
+    console.log('[registrations] refunded', reg.id, pi);
+  } catch (e) {
+    console.error('[registrations] refund failed', e);
+    reg.refundError = String(e && e.message || e);
+  }
+}
