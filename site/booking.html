@@ -1339,7 +1339,7 @@ function renderEventsAdmin(){
     '<div><label class="fld req">Date</label><input type="date" id="ev-date"></div></div>'+
     '<label class="check-line" style="margin-top:10px;"><input type="checkbox" id="ev-allday" onchange="$(\'ev-times\').style.display=this.checked?\'none\':\'grid\'">All day</label>'+
     '<div class="row" id="ev-times"><div><label class="fld">Start time</label><input type="time" id="ev-start" step="900"></div>'+
-    '<div><label class="fld">End time</label><input type="time" id="ev-end" step="900"></div></div>'+
+    '<div><label class="fld">End time</label><input type="time" id="ev-end" step="900" onchange="if($(\'ev-est-end\')&&!$(\'ev-est-end\').value)$(\'ev-est-end\').value=this.value;"></div></div>'+
     '<label class="fld">Rooms held (none = all rooms)</label><div>'+roomChecks+'</div>'+
 
     // ---- Photo + Facebook ----
@@ -1398,9 +1398,26 @@ function evPhotoPreview(){
 }
 function evPhotoUpload(){
   var f=$("ev-photo-file").files[0]; if(!f) return;
-  if(f.size > 1500000){ alert("Please choose an image under ~1.5 MB, or paste a photo URL instead."); $("ev-photo-file").value=""; return; }
+  if(!/^image\//.test(f.type)){ alert("Please choose an image file."); $("ev-photo-file").value=""; return; }
+  if(f.size > 12000000){ alert("That image is very large (over 12 MB). Please choose a smaller one or paste a photo URL."); $("ev-photo-file").value=""; return; }
+  // Downscale + re-encode so the stored photo stays small (avoids DB-size failures).
   var rd=new FileReader();
-  rd.onload=function(){ evPhotoData=rd.result; $("ev-photo-url").value=""; evPhotoPreview(); };
+  rd.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var maxDim=1000, w=img.width, h=img.height;
+      if(w>maxDim || h>maxDim){ if(w>=h){ h=Math.round(h*maxDim/w); w=maxDim; } else { w=Math.round(w*maxDim/h); h=maxDim; } }
+      var cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      try { evPhotoData=cv.toDataURL("image/jpeg",0.8); }
+      catch(e){ evPhotoData=rd.result; }
+      // If still big, step quality down
+      if(evPhotoData.length>180000){ try { evPhotoData=cv.toDataURL("image/jpeg",0.6); } catch(e){} }
+      $("ev-photo-url").value=""; evPhotoPreview();
+    };
+    img.onerror=function(){ alert("Couldn't read that image. Try a different file or paste a URL."); $("ev-photo-file").value=""; };
+    img.src=rd.result;
+  };
   rd.readAsDataURL(f);
 }
 function resetEventForm(){ editingEventId=null; evPhotoData=null;
@@ -1472,8 +1489,20 @@ async function saveEvent(){
       payWhen:($("ev-reg-paywhen")?$("ev-reg-paywhen").value:"onfire")
     };
   } else { ev.registration={enabled:false}; }
-  await Store.saveEvent(ev);
-  await refreshCache(); resetEventForm(); renderEventsAdmin();
+  var saveBtn=$("ev-save-btn"); var orig=saveBtn?saveBtn.textContent:"";
+  if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent="Saving…"; }
+  try {
+    await Store.saveEvent(ev);
+    await refreshCache(); resetEventForm(); renderEventsAdmin();
+  } catch(err){
+    if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent=orig; }
+    var msg = (err && err.message) ? err.message : "Could not save the event.";
+    if(/413|payload|too large|entity/i.test(msg) || (ev.photo && ev.photo.length>200000)){
+      alert("Couldn't save — the uploaded photo is too large for the database. Please use a smaller image or paste a photo URL instead.");
+    } else {
+      alert("Couldn't save the event: "+msg);
+    }
+  }
 }
 async function deleteEvent(id){ if(!confirm("Delete this public event?")) return; await Store.deleteEvent(id); await refreshCache(); renderEventsAdmin(); }
 
@@ -1787,7 +1816,7 @@ function weekDayHTML(isDay){
   var todayStr=ymd(new Date()), h='<div class="cal-week" style="--wcols:'+days.length+'">';
   h+='<div class="whead"></div>';
   days.forEach(function(d){ var dds=ymd(d); h+='<div class="whead whead-link"'+(dds===todayStr?' style="color:var(--gold)"':'')+' title="View this day" onclick="calGoto(\''+dds+'\',\'day\')">'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
-  for(var hr=8; hr<=23; hr++){
+  for(var hr=0; hr<=23; hr++){
     h+='<div class="whour">'+fmtTime(hr*60)+'</div>';
     days.forEach(function(d){
       var ds=ymd(d);
@@ -1981,7 +2010,7 @@ function custWeekDayHTML(isDay){
   h+='<div class="cch"></div>';
   days.forEach(function(d){ var dds=ymd(d); h+='<div class="cch cch-link"'+(dds===todayStr?' style="color:var(--gold)"':'')+' title="View this day" onclick="custGoto(\''+dds+'\',\'day\')">'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
   var ROW=24; // px per hour, matches .cc-week .ccslot min-height
-  for(var hr=8; hr<=23; hr++){
+  for(var hr=0; hr<=23; hr++){
     h+='<div class="cchour">'+fmtTime(hr*60)+'</div>';
     days.forEach(function(d){
       var ds=ymd(d);
