@@ -48,6 +48,13 @@ export async function ensureSchema() {
   )`);
   await createIfMissing(sql`INSERT INTO blackouts (id, data) VALUES (1, '[]'::jsonb)
             ON CONFLICT (id) DO NOTHING`);
+  await createIfMissing(sql`CREATE TABLE IF NOT EXISTS registrations (
+    id            TEXT PRIMARY KEY,
+    event_id      TEXT,
+    occ_date      DATE,
+    data          JSONB NOT NULL,
+    created_at    TIMESTAMPTZ DEFAULT now()
+  )`);
   _schemaReady = true;
 }
 

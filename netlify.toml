@@ -21,7 +21,6 @@
   from = "/api/bookings/*"
   to   = "/.netlify/functions/bookings/:splat"
   status = 200
-
 [[redirects]]
   from = "/api/bookings"
   to   = "/.netlify/functions/bookings"
@@ -31,7 +30,6 @@
   from = "/api/events/*"
   to   = "/.netlify/functions/events/:splat"
   status = 200
-
 [[redirects]]
   from = "/api/events"
   to   = "/.netlify/functions/events"
@@ -45,6 +43,31 @@
 [[redirects]]
   from = "/api/send-email"
   to   = "/.netlify/functions/send-email"
+  status = 200
+
+[[redirects]]
+  from = "/api/registrations/*"
+  to   = "/.netlify/functions/registrations/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/registrations"
+  to   = "/.netlify/functions/registrations"
+  status = 200
+
+# The booking app calls the functions with sub-paths like
+# /.netlify/functions/bookings/NGH-XXXX — Netlify routes these to the
+# bookings function automatically, but this rule makes it explicit.
+[[redirects]]
+  from = "/.netlify/functions/bookings/*"
+  to   = "/.netlify/functions/bookings/:splat"
+  status = 200
+[[redirects]]
+  from = "/.netlify/functions/events/*"
+  to   = "/.netlify/functions/events/:splat"
+  status = 200
+[[redirects]]
+  from = "/.netlify/functions/registrations/*"
+  to   = "/.netlify/functions/registrations/:splat"
   status = 200
 
 # Nightly auto-cancel of unpaid approved bookings.

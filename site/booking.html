@@ -531,8 +531,8 @@ var ROOMS = [
   { id:"den",    name:"Stash's Den",  desc:"Intimate, sound-dampened retreat" },
   { id:"depths", name:"The Depths",   desc:"The legendary Table of Adventure" }
 ];
-var DEPOSIT = { 1:250, 2:400, 3:600 };
-var KARAOKE_DEPOSIT_ADD = 100;
+var DEPOSIT = { 1:40, 2:80, 3:100 };
+var KARAOKE_DEPOSIT_ADD = 25;
 var BYO_FOOD_FEE = 40;
 var GURU_HOURLY = 10;
 var MAX_HOURS = 8;
@@ -542,7 +542,7 @@ var FREE_ADDONS = [
   { id:"console", title:"Video Game Console / Controller / Game Check-Out", meta:"NES through GameCube & beyond. Subject to availability.", link:"video-game-equipment.html", linkText:"Browse video game equipment list ↗", comment:"Which systems / games would you like set up?" },
   { id:"boardgame", title:"Board / Card Game Check-Out", meta:"From our full library. Subject to availability.", link:"board-game-library.html", linkText:"Browse the board game library ↗", comment:"Any specific titles you want pulled & ready?" },
   { id:"foodpreorder", title:"Food Pre-Order / Catering", meta:"In-house sodas & snacks or partner restaurants. Normal business hours only — you still pay for the food; gratuities not included. Subject to availability.", comment:"What would you like to pre-order? (items, quantities, timing)" },
-  { id:"karaoke", title:"Karaoke Equipment", meta:"Subject to availability. Adds $100 to your refundable deposit.", depositAdd:true, comment:"Any setup notes for karaoke?" },
+  { id:"karaoke", title:"Karaoke Equipment", meta:"Subject to availability. Adds $25 to your refundable deposit.", depositAdd:true, comment:"Any setup notes for karaoke?" },
   { id:"rpg", title:"RPG Book / Miniatures / Accessories Library", meta:"Subject to availability.", comment:"Which systems, books, or minis do you need?" },
   { id:"promo", title:"Social Media & Supplier Resources", meta:"Use our channels & suppliers to procure products for and promote your event. Must be coordinated through a certified Game Guru.", comment:"Tell us about the products/promotion you have in mind." }
 ];
@@ -613,6 +613,16 @@ var Store = {
   async deleteEvent(id){
     if(!this.apiMode()){ var l=this._ls("ngh_events").filter(function(e){return e.id!==id;}); this._save("ngh_events",l); return; }
     return this._api("/events/"+encodeURIComponent(id), { method:"DELETE" });
+  },
+
+  /* ---- REGISTRATIONS (admin) ---- */
+  async registrations(){
+    if(!this.apiMode()) return [];
+    return this._api("/registrations");   // admin token → full list
+  },
+  async updateRegistration(id, fields){
+    if(!this.apiMode()) return;
+    return this._api("/registrations/"+encodeURIComponent(id), { method:"PATCH", body:JSON.stringify(fields) });
   },
 
   /* ---- BLACKOUTS ---- */
@@ -693,7 +703,7 @@ function renderAddons(){
   var ph=""; PAID_ADDONS.forEach(function(a){ ph += addonHtml(a, false); }); $("paid-addons").innerHTML=ph;
 }
 function addonHtml(a, free){
-  var cost = free ? '<span class="addon-cost free">'+(a.depositAdd?'Complimentary · +$100 deposit':'Complimentary')+'</span>'
+  var cost = free ? '<span class="addon-cost free">'+(a.depositAdd?'Complimentary · +$25 deposit':'Complimentary')+'</span>'
                   : '<span class="addon-cost">+ '+a.cost+'</span>';
   var linkLine = a.link ? '<div class="addon-meta"><a href="'+a.link+'" target="_blank">'+a.linkText+'</a></div>' : '';
   var qtyLine = a.qty ? '<div class="addon-num" id="num-'+a.id+'"><label style="font-size:0.78rem;color:#6a6a50;">How many Gurus?</label><input type="number" min="1" value="1" id="qty-'+a.id+'" onchange="recalc()"></div>' : '';
@@ -852,7 +862,7 @@ function recalc(){
   h+='<div class="sum-row total"><span>Total Due Before Booking*</span><span>'+fmtMoney(t.grand+t.deposit)+'</span></div>';
   h+='<p class="sum-note">Totals do <strong>not</strong> include applicable taxes required by law.<br>';
   if(t.military) h+='<strong>*</strong> The 15% military / first-responder discount is applied once a Game Guru verifies your valid ID at check-in or during in-person payment. If ID can\'t be verified, the standard rate applies.<br>';
-  h+='<strong>*</strong> The full total — including the refundable deposit hold — must be paid <strong>no later than the calendar day before</strong> your booking begins. Unpaid bookings are automatically canceled.<br>'+
+  h+='<strong>*</strong> You may pay the <strong>booking fee</strong> (plus tax) anytime after approval to lock in your reservation. The <strong>refundable deposit</strong> can be paid later — but both the fee and deposit must be paid <strong>no later than the end of the day before</strong> your booking begins, or the reservation is automatically canceled.<br>'+
      'The deposit is fully refunded provided nothing is stolen or damaged and the room(s) are left reasonably cleaned, per our <a href="terms.html" target="_blank">Terms &amp; Conditions</a>.</p>';
   var rec=getRecurrence();
   if(rec){
@@ -905,7 +915,9 @@ async function submitBooking(){
       id:genId(),
       submitted:new Date().toISOString(),
       status:"pending",                       // pending | approved | rejected | hold
-      payment:"due",                          // due | paid
+      payment:"due",                          // legacy single-flag (kept for back-compat)
+      feePaid:false,                          // booking fee paid?
+      depositPaid:false,                      // refundable deposit paid?
       milRequested:military,                  // did they ask for the discount?
       milVerified: military ? "pending" : null, // pending | yes | no  (only if requested)
       name:name, phone:phone, email:email, guests:guests,
@@ -1024,7 +1036,11 @@ function milBadge(r){
 
 function reqCardHtml(r){
   var when=fmtTime(timeToMins(r.start))+" – "+r.endLabel;
-  var payBadge = r.status==="approved" ? '<span class="badge '+(r.payment==="paid"?"pay-paid":"pay-due")+'">'+(r.payment==="paid"?"Paid":"Payment Due")+'</span>' : '';
+  var payBadge = "";
+  if(r.status==="approved"){
+    payBadge = '<span class="badge '+(feeIsPaid(r)?"pay-paid":"pay-due")+'">Fee: '+(feeIsPaid(r)?"Paid":"Due")+'</span>'+
+               '<span class="badge '+(depIsPaid(r)?"pay-paid":"pay-due")+'">Deposit: '+(depIsPaid(r)?"Paid":"Due")+'</span>';
+  }
   var addons = (r.addons&&r.addons.length) ? r.addons.map(function(a){ return "<div class='kv'>• "+esc(a.title)+(a.qty?(" ×"+a.qty):"")+(a.comment?(" — <i>"+esc(a.comment)+"</i>"):"")+"</div>"; }).join("") : "<div class='kv'>—</div>";
 
   var actions="";
@@ -1033,7 +1049,8 @@ function reqCardHtml(r){
     actions+='<button class="btn btn-sm btn-danger" onclick="reject(\''+r.id+'\')">✕ Reject</button>';
     actions+='<button class="btn btn-sm btn-ghost" onclick="holdToggle(\''+r.id+'\')">❓ On Hold (ask questions)</button>';
   } else if(r.status==="approved"){
-    actions+='<button class="btn btn-sm '+(r.payment==="paid"?"btn-ghost":"")+'" onclick="togglePaid(\''+r.id+'\')">'+(r.payment==="paid"?"Mark Payment Due":"💵 Mark as Paid")+'</button>';
+    actions+='<button class="btn btn-sm '+(feeIsPaid(r)?"btn-ghost":"")+'" onclick="toggleFeePaid(\''+r.id+'\')">'+(feeIsPaid(r)?"↩ Fee: mark unpaid":"💵 Mark Fee Paid")+'</button>';
+    actions+='<button class="btn btn-sm '+(depIsPaid(r)?"btn-ghost":"")+'" onclick="toggleDepositPaid(\''+r.id+'\')">'+(depIsPaid(r)?"↩ Deposit: mark unpaid":"🛡️ Mark Deposit Paid")+'</button>';
     actions+='<button class="btn btn-sm btn-danger" onclick="reject(\''+r.id+'\')">Cancel / Reject</button>';
   } else if(r.status==="rejected"){
     actions+='<button class="btn btn-sm btn-ghost" onclick="approve(\''+r.id+'\')">Re-approve</button>';
@@ -1142,6 +1159,12 @@ async function sendHold(id){
   await refreshCache(); renderAdmin(adminFilter);
 }
 async function togglePaid(id){ var r=getReq(id); if(!r) return; await Store.updateBooking(id,{payment: r.payment==="paid"?"due":"paid"}); await refreshCache(); renderAdmin(adminFilter); }
+// Split-payment helpers (back-compat: legacy payment:"paid" counts as both paid)
+function feeIsPaid(r){ return r.feePaid===true || r.payment==="paid"; }
+function depIsPaid(r){ return r.depositPaid===true || r.payment==="paid"; }
+function fullyPaid(r){ return feeIsPaid(r) && depIsPaid(r); }
+async function toggleFeePaid(id){ var r=getReq(id); if(!r) return; var np=!feeIsPaid(r); await Store.updateBooking(id,{feePaid:np, payment:(np&&depIsPaid(r))?"paid":"due"}); await refreshCache(); renderAdmin(adminFilter); }
+async function toggleDepositPaid(id){ var r=getReq(id); if(!r) return; var np=!depIsPaid(r); await Store.updateBooking(id,{depositPaid:np, payment:(np&&feeIsPaid(r))?"paid":"due"}); await refreshCache(); renderAdmin(adminFilter); }
 
 /* Military verification — recompute total when status changes */
 async function setMil(id, val){
@@ -1174,7 +1197,7 @@ async function autoCancelUnpaid(){
   var now=new Date(), changed=false;
   for(var i=0;i<cache.bookings.length;i++){
     var r=cache.bookings[i];
-    if(r.status==="approved" && r.payment!=="paid"){
+    if(r.status==="approved" && !fullyPaid(r)){
       var deadline=new Date(r.date+"T00:00:00"); deadline.setDate(deadline.getDate()-1); deadline.setHours(23,59,59);
       if(now>deadline){
         await Store.updateBooking(r.id, {status:"rejected", autoCanceled:true});
@@ -1300,6 +1323,8 @@ function renderEventsAdmin(){
       (p.placement?'<div class="kv"><b>Placement prizes</b> '+esc(p.placement)+'</div>':'')+
       (p.participation?'<div class="kv"><b>Participation prizes</b> '+esc(p.participation)+'</div>':'')+
       (e.adminNotes?'<div class="kv" style="color:#9a6310;"><b>Admin notes</b> '+esc(e.adminNotes)+'</div>':'')+
+      ((e.registration&&e.registration.enabled)?('<div class="kv" style="margin-top:6px;"><b>🎟️ Registration</b> '+(e.registration.cost>0?("$"+Number(e.registration.cost).toFixed(2)):"Free")+(e.registration.min?(" · min "+e.registration.min):"")+(e.registration.max?(" · max "+e.registration.max):"")+'</div>'+
+        '<div id="regwrap-'+e.id+'"><button class="btn btn-sm btn-ghost" onclick="viewRegistrants(\''+e.id+'\')">👥 View registrants</button></div>'):'')+
       '<div class="admin-actions"><button class="btn btn-sm btn-ghost" onclick="editEvent(\''+e.id+'\')">✎ Edit</button>'+
       '<button class="btn btn-sm btn-ghost" onclick="exportEvent(\''+e.id+'\')">📥 Export (.ics)</button>'+
       '<a class="btn btn-sm btn-ghost" href="'+adminGcalUrl(e)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">📅 Add to Google</a>'+
@@ -1345,10 +1370,21 @@ function renderEventsAdmin(){
     '<label class="fld">Internal admin notes (not shown to customers)</label><textarea id="ev-admin-notes" placeholder="Private logistics, staffing, supplier notes…"></textarea>'+
 
     // ---- Recurrence ----
+    // ---- Registration ----
+    '<div class="ev-section"><div class="ev-section-label">🎟️ Registration</div>'+
+    '<label class="check-line"><input type="checkbox" id="ev-reg-enabled" onchange="$(\'ev-reg-ui\').style.display=this.checked?\'block\':\'none\'">Allow customers to register for this event</label>'+
+    '<div id="ev-reg-ui" style="display:none;margin-top:10px;">'+
+    '<div class="row"><div><label class="fld">Min registrants to "fire"</label><input type="number" id="ev-reg-min" min="0" placeholder="e.g. 4 (0 = always on)"></div>'+
+    '<div><label class="fld">Max registrants (cap)</label><input type="number" id="ev-reg-max" min="0" placeholder="e.g. 16 (blank = no cap)"></div></div>'+
+    '<div class="row"><div><label class="fld">Registration cost ($ per person)</label><input type="number" id="ev-reg-cost" min="0" step="0.01" placeholder="0 = free"></div>'+
+    '<div><label class="fld">Payment timing</label><select id="ev-reg-paywhen"><option value="onfire">Pay once event is confirmed to fire</option><option value="now">Pay at registration (hold a spot)</option></select></div></div>'+
+    '<p class="hint" style="margin-top:4px;">Customers register on the public Event Calendar. Registrations default to <strong>approved</strong>; you can mark any as unapproved (those don\'t count toward min/max). You\'ll see all registrant details in the admin event card. Confirmation emails go to the registrant and stash@northwoodgamehaven.com.</p>'+
+    '</div></div>'+
+
     '<label class="check-line" style="margin-top:12px;"><input type="checkbox" id="ev-recurring" onchange="$(\'ev-rec-ui\').style.display=this.checked?\'grid\':\'none\'">Recurring event</label>'+
     '<div class="row" id="ev-rec-ui" style="display:none;"><div><label class="fld">Repeats</label><select id="ev-rec-freq"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option></select></div>'+
     '<div><label class="fld">Occurrences</label><input type="number" id="ev-rec-count" min="2" max="52" value="8"></div></div>'+
-    '<p class="hint" style="margin-top:6px;">Registration (capacity, cost, sign-ups) is configured in the next phase. This step defines the event itself.</p>'+
+    '<p class="hint" style="margin-top:6px;">For recurring events, each occurrence takes registrations independently.</p>'+
     '<div style="margin-top:14px;"><button class="btn btn-sm" id="ev-save-btn" onclick="saveEvent()">Save Event</button> <button class="btn btn-sm btn-ghost" onclick="resetEventForm()" id="ev-cancel-btn" style="display:none;">Cancel edit</button></div>'+
     '</div>'+
     '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">Current Public Events <button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></h2>'+list;
@@ -1375,6 +1411,7 @@ function resetEventForm(){ editingEventId=null; evPhotoData=null;
   if($("ev-photo-preview")) $("ev-photo-preview").innerHTML="";
   $("ev-allday").checked=false; $("ev-times").style.display="grid";
   document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=false; }); $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none";
+  if($("ev-reg-enabled")){ $("ev-reg-enabled").checked=false; $("ev-reg-ui").style.display="none"; ["ev-reg-min","ev-reg-max","ev-reg-cost"].forEach(function(id){ if($(id))$(id).value=""; }); if($("ev-reg-paywhen")) $("ev-reg-paywhen").value="onfire"; }
 }
 function editEvent(id){
   var e=cache.events.filter(function(x){return x.id===id;})[0]; if(!e) return;
@@ -1395,6 +1432,12 @@ function editEvent(id){
   document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=(e.rooms||[]).indexOf(c.value)>=0; });
   if(e.recurrence){ $("ev-recurring").checked=true; $("ev-rec-ui").style.display="grid"; $("ev-rec-freq").value=e.recurrence.freq; $("ev-rec-count").value=e.recurrence.count; }
   else { $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none"; }
+  var reg=e.registration||{};
+  if($("ev-reg-enabled")){
+    $("ev-reg-enabled").checked=!!reg.enabled; $("ev-reg-ui").style.display=reg.enabled?"block":"none";
+    $("ev-reg-min").value=reg.min||""; $("ev-reg-max").value=reg.max||""; $("ev-reg-cost").value=(reg.cost!=null?reg.cost:""); 
+    if($("ev-reg-paywhen")) $("ev-reg-paywhen").value=reg.payWhen||"onfire";
+  }
   window.scrollTo({top:0,behavior:"smooth"});
 }
 async function saveEvent(){
@@ -1420,10 +1463,72 @@ async function saveEvent(){
     public:true
   };
   if($("ev-recurring").checked){ ev.recurrence={ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }; if(!editingEventId) ev.groupId="EVGRP-"+genId(); }
+  if($("ev-reg-enabled") && $("ev-reg-enabled").checked){
+    ev.registration={
+      enabled:true,
+      min:parseInt($("ev-reg-min").value,10)||0,
+      max:parseInt($("ev-reg-max").value,10)||0,
+      cost:parseFloat($("ev-reg-cost").value)||0,
+      payWhen:($("ev-reg-paywhen")?$("ev-reg-paywhen").value:"onfire")
+    };
+  } else { ev.registration={enabled:false}; }
   await Store.saveEvent(ev);
   await refreshCache(); resetEventForm(); renderEventsAdmin();
 }
 async function deleteEvent(id){ if(!confirm("Delete this public event?")) return; await Store.deleteEvent(id); await refreshCache(); renderEventsAdmin(); }
+
+var _regCache = null;
+async function viewRegistrants(eventId){
+  var wrap=$("regwrap-"+eventId);
+  if(wrap) wrap.innerHTML='<p class="hint" style="margin:6px 0;">Loading registrants…</p>';
+  try { _regCache = await Store.registrations() || []; } catch(e){ if(wrap) wrap.innerHTML='<p class="hint" style="color:#9a3b2e;">Could not load registrants.</p>'; return; }
+  renderRegistrants(eventId);
+}
+function renderRegistrants(eventId){
+  var wrap=$("regwrap-"+eventId); if(!wrap) return;
+  var regs=(_regCache||[]).filter(function(r){ return r.eventId===eventId; });
+  if(!regs.length){ wrap.innerHTML='<div class="kv" style="margin-top:6px;color:#6a6a50;">No registrations yet. <button class="btn btn-sm btn-ghost" onclick="viewRegistrants(\''+eventId+'\')">↻ Refresh</button></div>'; return; }
+  // group by occurrence date
+  var byDate={}; regs.forEach(function(r){ var d=r.occDate||"(no date)"; (byDate[d]=byDate[d]||[]).push(r); });
+  var h='<div style="margin-top:8px;border:1px solid #e0e8dc;border-radius:10px;padding:10px 12px;background:#fcfdfb;">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;"><b style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:0.82rem;">👥 Registrants</b><button class="btn btn-sm btn-ghost" onclick="viewRegistrants(\''+eventId+'\')">↻ Refresh</button></div>';
+  Object.keys(byDate).sort().forEach(function(d){
+    var list=byDate[d];
+    var active=list.filter(function(r){ return r.status!=="canceled" && r.status!=="unapproved"; });
+    h+='<div style="margin-top:8px;"><div style="font-size:0.76rem;color:#8a8a6a;font-weight:700;margin-bottom:4px;">'+esc(d)+' — '+active.length+' confirmed / '+list.filter(function(r){return r.status!=="canceled";}).length+' total</div>';
+    list.forEach(function(r){
+      var canceled=r.status==="canceled", unappr=r.status==="unapproved";
+      var tag = canceled?'<span style="color:#9a3b2e;">canceled</span>':(unappr?'<span style="color:#9a6310;">unapproved</span>':'<span style="color:#2e7d32;">confirmed</span>');
+      h+='<div style="border-top:1px solid #eef0ec;padding:6px 0;font-size:0.8rem;'+(canceled?'opacity:0.55;':'')+'">'+
+        '<div><b>'+esc(r.name)+'</b> · '+tag+(r.cost>0?(' · $'+Number(r.cost).toFixed(2)+(r.feePaid?' <span style="color:#2e7d32;">paid</span>':' <span style="color:#9a6310;">due</span>')):' · free')+'</div>'+
+        '<div style="color:#6a6a50;">'+esc(r.email)+(r.phone?(' · '+esc(r.phone)):'')+'</div>'+
+        (r.comments?('<div style="color:#6a6a50;font-style:italic;">"'+esc(r.comments)+'"</div>'):'')+
+        (r.wantsInvoice?'<div style="color:#9a6310;font-size:0.74rem;">📧 invoice requested</div>':'')+
+        (!canceled?('<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">'+
+          '<button class="btn btn-sm btn-ghost" onclick="toggleRegApproval(\''+r.id+'\','+(unappr?'true':'false')+',\''+eventId+'\')">'+(unappr?'✓ Approve':'✕ Mark unapproved')+'</button>'+
+          (r.cost>0?('<button class="btn btn-sm btn-ghost" onclick="toggleRegPaid(\''+r.id+'\','+(r.feePaid?'false':'true')+',\''+eventId+'\')">'+(r.feePaid?'↩ Mark unpaid':'💵 Mark paid')+'</button>'):'')+
+          '<button class="btn btn-sm btn-danger" onclick="adminCancelReg(\''+r.id+'\',\''+eventId+'\')">Cancel</button>'+
+        '</div>'):'')+
+        '</div>';
+    });
+    h+='</div>';
+  });
+  h+='</div>';
+  wrap.innerHTML=h;
+}
+async function toggleRegApproval(id, approve, eventId){
+  await Store.updateRegistration(id, { status: approve?"approved":"unapproved" });
+  await viewRegistrants(eventId);
+}
+async function toggleRegPaid(id, paid, eventId){
+  await Store.updateRegistration(id, { feePaid: !!paid });
+  await viewRegistrants(eventId);
+}
+async function adminCancelReg(id, eventId){
+  if(!confirm("Cancel this registration?")) return;
+  await Store.updateRegistration(id, { status:"canceled", canceledAt:new Date().toISOString() });
+  await viewRegistrants(eventId);
+}
 
 /* ===================================================================
    BLACKOUTS
@@ -1568,7 +1673,8 @@ function bookingHoverHTML(b, fullDetail){
   var h='<div style="font-family:\'Cinzel\',serif;color:var(--forest);font-weight:700;font-size:0.9rem;">'+esc(b.name||"Booking")+'</div>';
   h+=_row("When", when);
   if(b.rooms&&b.rooms.length) h+=_row("Room(s)", b.rooms.map(roomName).join(", "));
-  h+=_row("Status", statusLabel+(b.payment?(" · "+(b.payment==="paid"?"Paid":"Payment due")):""));
+  var payStr = b.status==="approved" ? ("Fee "+(feeIsPaid(b)?"✓":"due")+" · Deposit "+(depIsPaid(b)?"✓":"due")) : "";
+  h+=_row("Status", statusLabel+(payStr?(" · "+payStr):""));
   if(b.guests) h+=_row("Max guests", b.guests);
   if(b.phone) h+=_row("Phone", b.phone);
   if(b.email) h+=_row("Email", b.email);
@@ -1617,7 +1723,7 @@ function evClass(e){
 }
 function evChip(e){
   var cls="cal-ev "+evClass(e);
-  if(e.cat==="booking" && e.status==="approved" && e.payment!=="paid") cls+=" unpaid";
+  if(e.cat==="booking" && e.status==="approved" && !fullyPaid(e._src||e)) cls+=" unpaid";
   var t = e.allDay ? "All day" : (e.start?fmtTime(timeToMins(e.start)):"");
   var click = (e.cat==="booking") ? (' onclick="jumpToReq(\''+e.id+'\')"') : (e.isEvent?(' onclick="jumpToEvent(\''+e.id+'\')"'):'');
   return '<div class="'+cls+'"'+click+evHover(e)+' title="'+esc(e.label)+'">'+(e.rec?'🔁 ':'')+(t?(t+' '):'')+esc(e.label)+'</div>';
