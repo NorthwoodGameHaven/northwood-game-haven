@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Board Game Library — Northwood Game Haven</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600&family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{ --forest:#2d5a3d;--forest-light:#3d7a54;--gold:#c9973a;--gold-light:#e8b84b;--cream:#faf6ee;--teal-dark:#0f4a56;--dark:#1a1a12;--text:#2a2a1a; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--cream);color:var(--text);font-family:'Lato',sans-serif;line-height:1.6;}
+  .topbar{background:linear-gradient(90deg,var(--gold),var(--gold-light),var(--gold));text-align:center;padding:10px 20px;font-family:'Cinzel',serif;font-size:0.72rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--dark);font-weight:700;}
+  .topbar a{color:var(--dark);}
+  header.pg{background:radial-gradient(ellipse at 50% 0%,#c8e8d080 0%,transparent 60%),linear-gradient(180deg,#e8f4ec,#faf6ee);padding:44px 20px 28px;text-align:center;}
+  header.pg .eyebrow{font-family:'Cinzel',serif;font-size:0.7rem;letter-spacing:0.32em;text-transform:uppercase;color:var(--gold);}
+  header.pg h1{font-family:'Cinzel Decorative',serif;font-size:clamp(1.7rem,4.5vw,2.6rem);color:var(--forest);margin:8px 0;}
+  header.pg p{color:#4a4a35;max-width:700px;margin:0 auto;font-size:0.95rem;}
+  .backlink{display:inline-block;margin-top:8px;font-family:'Cinzel',serif;font-size:0.8rem;color:var(--forest);text-decoration:none;}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 18px 70px;}
+  .availbar{background:#eef7f0;border:1px solid #c2e0cb;border-radius:11px;padding:13px 16px;font-size:0.86rem;color:var(--forest);margin-bottom:22px;text-align:center;}
+  .search{width:100%;max-width:420px;display:block;margin:0 auto 26px;border:1px solid #c8d8c0;border-radius:50px;padding:12px 18px;font-family:'Lato',sans-serif;font-size:0.92rem;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;}
+  .cat{background:#fff;border:1px solid #e0e8dc;border-radius:15px;padding:20px 22px;box-shadow:0 6px 22px rgba(45,90,61,0.07);}
+  .cat h2{font-family:'Cinzel',serif;font-size:1rem;color:var(--forest);display:flex;align-items:center;gap:9px;margin-bottom:12px;}
+  .cat ul{list-style:none;}
+  .cat li{font-size:0.88rem;padding:5px 0 5px 18px;position:relative;border-bottom:1px dashed #eee;}
+  .cat li:before{content:"🎲";position:absolute;left:0;font-size:0.7rem;top:7px;}
+  .cat li:last-child{border-bottom:none;}
+  .legend{font-size:0.82rem;color:#7a7a5a;margin-top:26px;text-align:center;line-height:1.7;}
+  footer{background:var(--dark);color:rgba(255,255,255,0.6);text-align:center;padding:30px 24px;font-size:0.82rem;margin-top:40px;}
+  footer a{color:var(--gold-light);text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="topbar">🦦 Northwood Game Haven · Board Game Library · <a href="ngh.html">← Return to Northwood Game Haven</a> · <a href="booking.html">Return to Booking</a></div>
+<header class="pg">
+  <div class="eyebrow">Included Free With Any Room Rental</div>
+  <h1>Board Game Library</h1>
+  <p>Hundreds of titles, free to play with any reservation — from quick party games to deep strategy epics. Our Game Gurus will teach you anything in the collection. This list reflects our current shelves and grows constantly.</p>
+  <a class="backlink" href="booking.html">← Back to booking</a>
+</header>
+
+<div class="wrap">
+  <div class="availbar">All titles are <strong>subject to availability</strong> and our library is always expanding. Want a specific game pulled and ready? Note it in the board-game checkout add-on when you book.</div>
+  <input class="search" id="bsearch" placeholder="🔎 Search a game…" oninput="filterB()">
+
+  <div class="grid" id="bgrid">
+
+    <div class="cat">
+      <h2>🎉 Party &amp; Social</h2>
+      <ul>
+        <li>Taboo</li><li>Mastermind</li><li>Clue</li><li>Clue AVP</li>
+        <li>Sequence</li><li>Sequence Dice</li><li>Sorry!</li><li>Uno Party!</li>
+        <li>Frankie Frenzy</li><li>Connect 4</li><li>Jenga</li><li>Battleship</li>
+        <li>Upwords</li><li>Scattergories</li><li>The Game of Life</li><li>Monopoly</li>
+        <li>Beyond Balderdash</li><li>HedBanz</li><li>Wits &amp; Wagers</li><li>Bezzerwizzer</li>
+        <li>Telestrations</li><li>Telestrations 6-Player</li><li>Telestrations 12-Player Party Pack</li>
+        <li>Concept</li><li>When I Dream</li><li>Wavelength</li>
+      </ul>
+    </div>
+
+    <div class="cat">
+      <h2>🃏 Card &amp; Quick Play</h2>
+      <ul>
+        <li>Codenames</li><li>Codenames Duet</li><li>Codenames Pictures</li>
+        <li>Caution Signs</li><li>Unstable Unicorns</li><li>Exploding Kittens</li>
+        <li>Skull</li><li>Silver Bullet</li><li>Taco Cat Goat Cheese Pizza</li>
+        <li>Sea Salt &amp; Paper</li><li>Munchkin</li><li>Tiny Epic</li>
+        <li>Two by Two</li><li>Uno</li>
+      </ul>
+    </div>
+
+    <div class="cat">
+      <h2>🧠 Strategy — Light &amp; Medium</h2>
+      <ul>
+        <li>Ticket to Ride</li><li>Ticket to Ride: The Card Game</li>
+        <li>Quacks (All-In Edition)</li><li>Pictomania</li><li>Stella</li>
+        <li>Dixit</li><li>Challengers!</li><li>7 Wonders Architects</li>
+        <li>Carcassonne</li><li>My First Carcassonne</li><li>Azul</li>
+        <li>Blokus</li><li>Takenoko</li><li>Patchwork</li><li>Kingdom Builder</li>
+        <li>Catan</li><li>Whistle Stop</li><li>Whistle Mountain</li>
+        <li>Roll &amp; Write titles</li><li>Labyrinth</li><li>Isle of Cats</li>
+      </ul>
+    </div>
+
+    <div class="cat">
+      <h2>⚔️ Strategy — Heavy &amp; Epic</h2>
+      <ul>
+        <li>Twilight Imperium</li><li>Brass: Birmingham</li><li>Brass: Lancashire</li>
+        <li>Agricola</li><li>Lost Ruins of Arnak</li><li>Euphoria</li>
+        <li>Puerto Rico</li><li>Ultimate Railroads</li><li>Russian Railroads</li>
+        <li>Spellbook</li><li>Ankh: Gods of Egypt</li><li>Founders of the Desert</li>
+        <li>Costa Rica</li><li>Planet Unknown</li>
+      </ul>
+    </div>
+
+    <div class="cat">
+      <h2>🤝 Cooperative &amp; Adventure</h2>
+      <ul>
+        <li>Andor</li><li>FairyTale Inn</li><li>Dead of Winter</li>
+        <li>Betrayal at House on the Hill</li><li>Villainous</li>
+        <li>Small World</li><li>Wingspan</li><li>Mariposas</li>
+        <li>Floriculture</li><li>Pirates!</li><li>Galaxy</li>
+      </ul>
+    </div>
+
+    <div class="cat">
+      <h2>♟️ Classics &amp; 2-Player</h2>
+      <ul>
+        <li>Patchwork</li><li>Santorini</li><li>Queen's necklace / 2-player duels</li>
+        <li>Chess, Checkers &amp; classic sets (ask a Guru)</li>
+        <li>Cribbage &amp; traditional card games</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <p class="legend">🦦 This is a living list pulled straight from our shelves — new games arrive all the time. If you don't see a favorite, ask a Game Guru or request it in the board-game checkout add-on when you <a href="booking.html">book a play space</a>.</p>
+</div>
+
+<div style="text-align:center;padding:30px 20px 0;">
+  <a href="ngh.html" class="backlink" style="display:inline-block;margin:0 8px 10px;background:linear-gradient(135deg,var(--forest),var(--forest-light));color:#fff;padding:12px 26px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.8rem;">← Return to Northwood Game Haven</a>
+  <a href="booking.html" class="backlink" style="display:inline-block;margin:0 8px 10px;background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--dark);padding:12px 26px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.8rem;">Return to Booking →</a>
+</div>
+<footer>
+  <div style="font-family:'Cinzel Decorative',serif;color:var(--gold-light);font-size:1.05rem;margin-bottom:6px;">Northwood Game Haven</div>
+  115 W Spring St · Chippewa Falls, WI 54729<br>
+  <a href="ngh.html">Home</a> · <a href="booking.html">Book a Space</a> · <a href="video-game-equipment.html">Video Game Equipment</a> · <a href="terms.html">Terms</a>
+</footer>
+
+<script>
+function filterB(){
+  var q=document.getElementById('bsearch').value.toLowerCase();
+  document.querySelectorAll('#bgrid .cat').forEach(function(c){
+    // show category if its name or any li matches; also hide non-matching li
+    var anyVisible=false;
+    c.querySelectorAll('li').forEach(function(li){
+      var m=li.textContent.toLowerCase().indexOf(q)>=0;
+      li.style.display=m?'':'none'; if(m)anyVisible=true;
+    });
+    var head=c.querySelector('h2').textContent.toLowerCase().indexOf(q)>=0;
+    c.style.display=(anyVisible||head||q==='')?'':'none';
+    if(head&&!anyVisible){ c.querySelectorAll('li').forEach(function(li){li.style.display='';}); }
+  });
+}
+</script>
+</body>
+</html>

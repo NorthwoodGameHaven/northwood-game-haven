@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Game Equipment — Northwood Game Haven</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600&family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{ --forest:#2d5a3d;--forest-light:#3d7a54;--gold:#c9973a;--gold-light:#e8b84b;--cream:#faf6ee;--teal-dark:#0f4a56;--dark:#1a1a12;--text:#2a2a1a; }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--cream);color:var(--text);font-family:'Lato',sans-serif;line-height:1.6;}
+  .topbar{background:linear-gradient(90deg,var(--gold),var(--gold-light),var(--gold));text-align:center;padding:10px 20px;font-family:'Cinzel',serif;font-size:0.72rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--dark);font-weight:700;}
+  .topbar a{color:var(--dark);}
+  header.pg{background:radial-gradient(ellipse at 50% 0%,#c8e8d080 0%,transparent 60%),linear-gradient(180deg,#e8f4ec,#faf6ee);padding:44px 20px 28px;text-align:center;}
+  header.pg .eyebrow{font-family:'Cinzel',serif;font-size:0.7rem;letter-spacing:0.32em;text-transform:uppercase;color:var(--gold);}
+  header.pg h1{font-family:'Cinzel Decorative',serif;font-size:clamp(1.7rem,4.5vw,2.6rem);color:var(--forest);margin:8px 0;}
+  header.pg p{color:#4a4a35;max-width:680px;margin:0 auto;font-size:0.95rem;}
+  .wrap{max-width:1000px;margin:0 auto;padding:28px 18px 70px;}
+  .availbar{background:#eef7f0;border:1px solid #c2e0cb;border-radius:11px;padding:13px 16px;font-size:0.86rem;color:var(--forest);margin-bottom:24px;text-align:center;}
+  .availbar strong{color:var(--den,#7a5a10);}
+  .search{width:100%;max-width:420px;display:block;margin:0 auto 26px;border:1px solid #c8d8c0;border-radius:50px;padding:12px 18px;font-family:'Lato',sans-serif;font-size:0.92rem;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;}
+  .console{background:#fff;border:1px solid #e0e8dc;border-radius:15px;padding:20px 22px;box-shadow:0 6px 22px rgba(45,90,61,0.07);}
+  .console h2{font-family:'Cinzel',serif;font-size:1.05rem;color:var(--forest);display:flex;align-items:center;gap:9px;margin-bottom:4px;}
+  .console .sys{font-size:0.74rem;color:#8a8a6a;margin-bottom:12px;letter-spacing:0.03em;}
+  .console ul{list-style:none;}
+  .console li{font-size:0.88rem;padding:5px 0 5px 18px;position:relative;border-bottom:1px dashed #eee;}
+  .console li:before{content:"🎮";position:absolute;left:0;font-size:0.7rem;top:7px;}
+  .console li:last-child{border-bottom:none;}
+  .legend{font-size:0.82rem;color:#7a7a5a;margin-top:26px;text-align:center;line-height:1.7;}
+  .backlink{display:inline-block;margin-top:8px;font-family:'Cinzel',serif;font-size:0.8rem;color:var(--forest);text-decoration:none;}
+  footer{background:var(--dark);color:rgba(255,255,255,0.6);text-align:center;padding:30px 24px;font-size:0.82rem;margin-top:40px;}
+  footer a{color:var(--gold-light);text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="topbar">🦦 Northwood Game Haven · Video Game Equipment · <a href="ngh.html">← Return to Northwood Game Haven</a> · <a href="booking.html">Return to Booking</a></div>
+<header class="pg">
+  <div class="eyebrow">Included Free With Any Room Rental</div>
+  <h1>Video Game Equipment Library</h1>
+  <p>A rotating collection of classic consoles, controllers, and games — free to check out with any play-space reservation. Add the console checkout add-on when you book.</p>
+  <a class="backlink" href="booking.html">← Back to booking</a>
+</header>
+
+<div class="wrap">
+  <div class="availbar">All consoles, controllers, and titles are <strong>subject to availability</strong> and rotate over time. Ask your Game Guru what's ready to play during your visit.</div>
+  <input class="search" id="vsearch" placeholder="🔎 Search a console or game…" oninput="filterV()">
+
+  <div class="grid" id="vgrid">
+
+    <div class="console" data-sys="super nintendo snes">
+      <h2>🟪 Super Nintendo</h2>
+      <div class="sys">SNES · console + 2 controllers</div>
+      <ul><li>Console with two controllers &amp; classic title bundle</li></ul>
+    </div>
+
+    <div class="console" data-sys="sega genesis cd 32x">
+      <h2>🔵 Sega Genesis / CD / 32X</h2>
+      <div class="sys">Genesis Model 2 · Sega CD · 32X combo</div>
+      <ul>
+        <li>Batman Returns</li>
+        <li>Sonic CD</li>
+        <li>Dracula Unleashed</li>
+        <li>The Amazing Spider-Man vs. The Kingpin</li>
+        <li>Doom (32X)</li>
+        <li>Star Wars Arcade (32X)</li>
+        <li>Corpse Killer (Sega CD)</li>
+        <li>Lunar (Sega CD)</li>
+        <li>ToeJam &amp; Earl in Panic on Funkotron (Genesis)</li>
+      </ul>
+    </div>
+
+    <div class="console" data-sys="sega saturn">
+      <h2>🪐 Sega Saturn</h2>
+      <div class="sys">Saturn · console + controllers</div>
+      <ul>
+        <li>Crusader: No Remorse</li>
+        <li>Solar Eclipse</li>
+        <li>D</li>
+        <li>The Legend of Oasis</li>
+        <li>Mr. Bones</li>
+        <li>Panzer Dragoon II Zwei</li>
+        <li>Virtua Cop</li>
+        <li>Shining Wisdom</li>
+        <li>Shining the Holy Ark</li>
+        <li>Fighting Vipers</li>
+        <li>NBA Jam T.E.</li>
+        <li>Virtua Fighter 2</li>
+        <li>Virtua Fighter</li>
+        <li>NiGHTS into Dreams</li>
+        <li>Virtual On</li>
+        <li>Tomb Raider</li>
+      </ul>
+    </div>
+
+    <div class="console" data-sys="sega dreamcast">
+      <h2>🌀 Sega Dreamcast</h2>
+      <div class="sys">Dreamcast · console + 4 controllers</div>
+      <ul>
+        <li>Sega Smash Pack Volume 1</li>
+        <li>Soulcalibur</li>
+        <li>Legacy of Kain: Soul Reaver</li>
+        <li>The House of the Dead 2</li>
+        <li>Sega Bass Fishing</li>
+        <li>Nightmare Creatures II</li>
+        <li>Shenmue</li>
+        <li>Hydro Thunder</li>
+        <li>4 Wheel Thunder</li>
+        <li>Virtua Tennis</li>
+        <li>Worms Armageddon</li>
+        <li>Worms World Party</li>
+        <li>Toy Commander</li>
+        <li>Ready 2 Rumble Boxing</li>
+        <li>Ready 2 Rumble Boxing: Round 2</li>
+        <li>Star Wars Episode I Racer</li>
+        <li>Tomb Raider: The Last Revelation</li>
+        <li>Tomb Raider Chronicles</li>
+        <li>Tom Clancy's Rainbow Six</li>
+        <li>Star Wars Demolition</li>
+        <li>NFL 2K1</li>
+        <li>NBA 2K</li>
+        <li>Web Browser 2.0</li>
+      </ul>
+    </div>
+
+    <div class="console" data-sys="nintendo gamecube gcn">
+      <h2>🟣 Nintendo GameCube</h2>
+      <div class="sys">GameCube · console + silver &amp; purple controllers</div>
+      <ul>
+        <li>The Legend of Zelda: Ocarina of Time</li>
+        <li>The Legend of Zelda: The Wind Waker</li>
+        <li>Mario Kart: Double Dash!!</li>
+        <li>Super Mario Strikers</li>
+        <li>Super Mario Sunshine</li>
+        <li>Mario Superstar Baseball</li>
+        <li>Super Smash Bros. Melee</li>
+        <li>F-Zero GX</li>
+        <li>Sonic Mega Collection</li>
+        <li>Mario Power Tennis</li>
+        <li>Mario Party 4</li>
+        <li>Mario Party 5</li>
+        <li>Mario Party 6</li>
+        <li>Mario Party 7</li>
+        <li>Star Fox Adventures</li>
+        <li>Star Fox: Assault</li>
+        <li>Sonic Adventure DX: Director's Cut</li>
+        <li>Sonic Heroes</li>
+        <li>Sonic Riders</li>
+        <li>Sonic Adventure 2: Battle</li>
+        <li>Sonic Gems Collection</li>
+        <li>Shadow the Hedgehog</li>
+        <li>SSX Tricky</li>
+        <li>Kirby Air Ride</li>
+        <li>Super Monkey Ball</li>
+        <li>Super Monkey Ball 2</li>
+        <li>Tony Hawk's Pro Skater 3</li>
+        <li>Tony Hawk's Pro Skater 4</li>
+        <li>Tony Hawk's American Wasteland</li>
+        <li>Tony Hawk's Underground</li>
+        <li>Tony Hawk's Underground 2</li>
+        <li>WarioWorld</li>
+        <li>NFL Blitz 2003</li>
+        <li>Madden NFL 07</li>
+        <li>Spider-Man</li>
+        <li>Monsters, Inc. Scream Arena</li>
+        <li>Die Hard: Vendetta</li>
+        <li>Disney/Pixar Cars</li>
+        <li>Knockout Kings 2003</li>
+        <li>Animal Crossing</li>
+        <li>The SpongeBob SquarePants Movie</li>
+        <li>X-Men Legends</li>
+        <li>Pac-Man World 2</li>
+        <li>Finding Nemo</li>
+        <li>Donkey Konga</li>
+        <li>Crash Tag Team Racing</li>
+        <li>Pikmin 2</li>
+        <li>Dance Dance Revolution: Mario Mix</li>
+        <li>Scooby-Doo! Night of 100 Frights</li>
+        <li>Meet the Robinsons</li>
+      </ul>
+    </div>
+
+    <div class="console" data-sys="nintendo wii">
+      <h2>⚪ Nintendo Wii</h2>
+      <div class="sys">Wii · console + remotes &amp; classic controller</div>
+      <ul>
+        <li>Mario Party 8</li>
+        <li>Donkey Kong Country Returns</li>
+        <li>Super Mario Galaxy</li>
+        <li>Super Mario Galaxy 2</li>
+        <li>Crash: Mind Over Mutant</li>
+        <li>Super Paper Mario</li>
+        <li>Kirby's Epic Yarn</li>
+        <li>Wii Sports</li>
+        <li>New Super Mario Bros. Wii</li>
+      </ul>
+    </div>
+
+    <div class="console" data-sys="nintendo wii u">
+      <h2>🎮 Nintendo Wii U</h2>
+      <div class="sys">Wii U · 32GB console + Pro controller</div>
+      <ul>
+        <li>Super Mario Maker</li>
+        <li>Super Smash Bros. for Wii U</li>
+        <li>NES Remix Pack</li>
+        <li>Yoshi's Woolly World</li>
+        <li>Donkey Kong Country: Tropical Freeze</li>
+        <li>Pokkén Tournament</li>
+        <li>Mario Party 10</li>
+        <li>Nintendo Land</li>
+        <li>New Super Mario Bros. U + New Super Luigi U</li>
+        <li>Super Mario 3D World</li>
+        <li>Captain Toad: Treasure Tracker</li>
+      </ul>
+    </div>
+
+    <div class="console" data-sys="sony playstation ps1 psx">
+      <h2>⬛ Sony PlayStation</h2>
+      <div class="sys">PS1 · classic titles</div>
+      <ul>
+        <li>Final Fantasy VIII</li>
+        <li>Dead or Alive</li>
+        <li>Gran Turismo 2</li>
+        <li>Crash Bandicoot 2: Cortex Strikes Back</li>
+        <li>Dragon Ball GT: Final Bout</li>
+        <li>Tony Hawk's Pro Skater 4</li>
+      </ul>
+    </div>
+
+    <div class="console" data-sys="sony playstation 2 ps2">
+      <h2>⬛ Sony PlayStation 2</h2>
+      <div class="sys">PS2 · console + controllers</div>
+      <ul>
+        <li>Mortal Kombat: Shaolin Monks</li>
+        <li>Kingdom Hearts II</li>
+        <li>Tom Clancy's Ghost Recon 2</li>
+        <li>Rapala Pro Fishing</li>
+        <li>Tekken Tag Tournament</li>
+        <li>Tekken 4</li>
+        <li>Call of Duty 3</li>
+        <li>Cabela's Deer Hunt 2005</li>
+        <li>Cabela's Dangerous Hunts</li>
+        <li>Cabela's Dangerous Hunts 2</li>
+        <li>Hot Shots Golf Fore!</li>
+        <li>Ace Combat Zero: The Belkan War</li>
+        <li>Ace Combat 04: Shattered Skies</li>
+        <li>Namco Museum</li>
+        <li>Spider-Man 3</li>
+        <li>Suzuki TT Superbikes</li>
+        <li>High Rollers Casino</li>
+        <li>Conflict Zone</li>
+        <li>Motocross Mania 3</li>
+        <li>GUN</li>
+        <li>Gran Turismo 3: A-Spec</li>
+        <li>Harry Potter</li>
+        <li>Madden NFL 06</li>
+        <li>Madden NFL 08</li>
+        <li>SSX</li>
+        <li>NBA Live 2005</li>
+        <li>NBA Street Vol. 2</li>
+        <li>Sly Cooper and the Thievius Raccoonus</li>
+        <li>Jet X2O</li>
+        <li>Gallop Racer 2003: A New Breed</li>
+        <li>Summer Heat Beach Volleyball</li>
+        <li>Disney's Treasure Planet</li>
+        <li>NYR: The Reckoning</li>
+      </ul>
+    </div>
+
+    <div class="console" data-sys="xbox 360">
+      <h2>🟢 Xbox 360</h2>
+      <div class="sys">Xbox 360 (Halo 4 edition) · console + games</div>
+      <ul>
+        <li>Halo 3</li>
+        <li>Halo 3: ODST</li>
+        <li>Halo: Reach</li>
+        <li>Halo Wars</li>
+        <li>BioShock Infinite</li>
+        <li>Mass Effect</li>
+        <li>Red Dead Redemption</li>
+        <li>Assassin's Creed III</li>
+        <li>Fallout: New Vegas</li>
+        <li>Resident Evil 5</li>
+        <li>Resident Evil 6</li>
+        <li>Call of Duty: Black Ops II</li>
+        <li>Mafia II</li>
+        <li>Just Cause</li>
+        <li>DiRT</li>
+        <li>Gears of War: Judgment</li>
+        <li>Dead Island</li>
+        <li>Darksiders II</li>
+        <li>Saints Row</li>
+        <li>Too Human</li>
+        <li>Defiance</li>
+        <li>Transformers: The Game</li>
+        <li>Crackdown 2</li>
+        <li>Tom Clancy's Ghost Recon: Future Soldier</li>
+        <li>The Wheelman</li>
+        <li>Need for Speed: Most Wanted</li>
+        <li>Need for Speed: The Run</li>
+        <li>Need for Speed: Undercover</li>
+        <li>Skylanders Giants</li>
+        <li>Condemned: Criminal Origins</li>
+        <li>Split/Second</li>
+        <li>SBK X: Superbike World Championship</li>
+        <li>Test Drive Unlimited</li>
+        <li>The Bourne Conspiracy</li>
+        <li>Tony Hawk's Project 8</li>
+        <li>Monster Jam</li>
+        <li>Quantum of Solace</li>
+        <li>007: GoldenEye</li>
+        <li>Dance Central</li>
+        <li>Steel Battalion: Heavy Armor</li>
+        <li>UFC 2009 Undisputed</li>
+        <li>Fight Night Round 3</li>
+        <li>Fighters Uncaged</li>
+        <li>Game Party: In Motion</li>
+        <li>Minute to Win It</li>
+        <li>Twister Mania</li>
+        <li>WWE SmackDown vs. Raw 2007 — 2010</li>
+        <li>Madden NFL (06–12)</li>
+        <li>NBA 2K series</li>
+        <li>NBA Live 06 / 07 / 08 / 09</li>
+        <li>NHL 07 / 09 / 10 / 2K6</li>
+        <li>MLB 2K series</li>
+        <li>Major League Baseball 2K6</li>
+        <li>FIFA Soccer 07 / 08</li>
+        <li>NCAA Football 09</li>
+        <li>NCAA Basketball 09</li>
+        <li>NCAA March Madness</li>
+        <li>Tiger Woods PGA Tour (06–10)</li>
+        <li>Sega Superstars Tennis</li>
+        <li>Battlestations: Midway</li>
+        <li>Red Faction</li>
+        <li>MotionSports</li>
+        <li>Brunswick Pro Bowling</li>
+        <li>World Series of Poker 2008</li>
+        <li>World Championship Poker</li>
+        <li>Ski-Doo / Snowmobile Challenge</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <p class="legend">🦦 Don't see something you remember from last visit? Our library rotates — ask a Game Guru, or note your request in the console checkout add-on when you <a href="booking.html">book a play space</a>.</p>
+</div>
+
+<div style="text-align:center;padding:30px 20px 0;">
+  <a href="ngh.html" class="backlink" style="display:inline-block;margin:0 8px 10px;background:linear-gradient(135deg,var(--forest),var(--forest-light));color:#fff;padding:12px 26px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.8rem;">← Return to Northwood Game Haven</a>
+  <a href="booking.html" class="backlink" style="display:inline-block;margin:0 8px 10px;background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--dark);padding:12px 26px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.8rem;">Return to Booking →</a>
+</div>
+<footer>
+  <div style="font-family:'Cinzel Decorative',serif;color:var(--gold-light);font-size:1.05rem;margin-bottom:6px;">Northwood Game Haven</div>
+  115 W Spring St · Chippewa Falls, WI 54729<br>
+  <a href="ngh.html">Home</a> · <a href="booking.html">Book a Space</a> · <a href="board-game-library.html">Board Game Library</a> · <a href="terms.html">Terms</a>
+</footer>
+
+<script>
+function filterV(){
+  var q=document.getElementById('vsearch').value.toLowerCase();
+  document.querySelectorAll('#vgrid .console').forEach(function(c){
+    var sys=(c.getAttribute('data-sys')||'')+' '+c.textContent.toLowerCase();
+    c.style.display = sys.indexOf(q)>=0 ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>
