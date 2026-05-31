@@ -135,6 +135,10 @@
   .cc-week .ccslot { min-height:24px; border-top:1px solid #eef0ec; position:relative; }
   .ccslot .cc-ev { position:relative; margin:1px; }
   .cc-empty { font-size:0.78rem; color:#8a8a6a; text-align:center; padding:18px; }
+  .success-info { background:#f4f7f2; border:1px solid #cfe0d4; border-radius:11px; padding:16px 18px; font-size:0.86rem; color:#3a4a35; line-height:1.85; max-width:600px; margin:6px auto 0; text-align:left; }
+  .success-info strong { color:var(--forest); }
+  .ev-section { border:1px solid #e0e8dc; border-radius:11px; padding:12px 14px; margin-top:14px; background:#fcfdfb; }
+  .ev-section-label { font-family:'Cinzel',serif; font-size:0.74rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--gold); margin-bottom:4px; }
   .sum-row { display:flex; justify-content:space-between; padding:6px 0; font-size:0.9rem; border-bottom:1px dashed #e0e0d0; }
   .sum-row.sub { color:#6a6a50; font-size:0.84rem; padding-left:14px; }
   .sum-row.total { font-family:'Cinzel',serif; font-weight:600; color:var(--forest); font-size:1.05rem; border-bottom:none; border-top:2px solid var(--forest); margin-top:8px; padding-top:10px; }
@@ -404,9 +408,9 @@
   <div class="card" id="success">
     <div class="big">🦦🎟️</div>
     <h2 style="font-family:'Cinzel Decorative',serif;font-size:1.5rem;margin:12px 0;">Request Received!</h2>
-    <p style="max-width:560px;margin:0 auto 14px;">Thanks, <span id="succ-name"></span>! Your booking request has been submitted. A Game Guru will review it and email <span id="succ-email"></span> to confirm, ask any questions, or send payment details.</p>
+    <p style="max-width:560px;margin:0 auto 14px;">Thanks, <span id="succ-name"></span>! Your booking request has been submitted. A Game Guru will review it and email <span id="succ-email"></span> within <strong>1 business day</strong> to confirm your reservation and answer any questions.</p>
     <p class="hint" id="succ-ref"></p>
-    <div class="email-preview" id="succ-admin-note"></div>
+    <div class="success-info" id="succ-customer-note"></div>
     <div style="margin-top:18px;">
       <button class="btn btn-ghost btn-sm" onclick="location.reload()">Submit Another Request</button>
     </div>
@@ -918,7 +922,14 @@ async function submitBooking(){
   $("succ-name").textContent=name;
   $("succ-email").textContent=email;
   $("succ-ref").innerHTML="Your reference number: <strong>"+req.id+"</strong>";
-  $("succ-admin-note").textContent="📧 A notification was sent to "+ADMIN_EMAIL+" with a direct link to review this request.\n\n"+adminBody;
+  var payNote =
+    "<strong>What happens next</strong><br>"+
+    "• A Game Guru will review your request and email you within 1 business day to confirm.<br>"+
+    "• Once confirmed, your total"+(req.deposit?" (including the refundable deposit hold)":"")+" is due <strong>no later than the calendar day before</strong> your booking. Unpaid bookings are automatically canceled.<br>"+
+    "• Pay in person by cash, card, or check; by card over the phone; or"+(req.wantsInvoice?" via the invoice we'll email you":" request an emailed invoice")+".<br>"+
+    (req.milRequested?"• Bring your valid military / first-responder ID to check-in to receive your 15% discount.<br>":"")+
+    "• Questions? Reply to your confirmation email or contact us any time.";
+  $("succ-customer-note").innerHTML=payNote;
   document.querySelectorAll("#customer-view .card").forEach(function(c){ if(c.id!=="success") c.style.display="none"; });
   $("success").style.display="block";
   window.scrollTo({top:0,behavior:"smooth"});
@@ -1206,13 +1217,23 @@ function renderEventsAdmin(){
     var rooms=(e.rooms&&e.rooms.length)?e.rooms.map(roomName).join(", "):"all rooms";
     var time=e.allDay?"All day":(fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end)));
     var rec=e.recurrence?(' <span class="recur-badge">🔁 '+freqLabel(e.recurrence.freq)+' ×'+e.recurrence.count+'</span>'):'';
+    var t=e.tournament||{}, p=e.prizes||{};
+    var ttypeLabel={swiss:"Swiss",single:"Single elim",double:"Double elim",roundrobin:"Round robin",other:"Other"}[t.type]||"";
     return '<div class="card ev-card">'+
       '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center;">'+
         '<h2 style="margin:0;">🎉 '+esc(e.title||"Public NGH Event")+rec+'</h2>'+
         '<div class="kv" style="color:#9a9a80;">'+e.id+'</div></div>'+
+      (e.photo?'<img src="'+esc(e.photo)+'" alt="" style="max-width:160px;max-height:100px;border-radius:8px;margin:8px 0;border:1px solid #d8e0d4;">':'')+
       '<div class="kv"><b>When</b> '+e.date+' · '+time+'</div>'+
       '<div class="kv"><b>Rooms held</b> '+rooms+'</div>'+
-      (e.notes?'<div class="kv"><b>Notes</b> '+esc(e.notes)+'</div>':'')+
+      (e.fbLink?'<div class="kv"><b>Facebook</b> <a href="'+esc(e.fbLink)+'" target="_blank" rel="noopener">event page ↗</a></div>':'')+
+      (e.notes?'<div class="kv"><b>Description</b> '+esc(e.notes)+'</div>':'')+
+      (ttypeLabel?'<div class="kv"><b>Tournament</b> '+ttypeLabel+(t.rounds?(" · "+t.rounds+" rounds"):"")+(t.winsPerRound?(" · best-of/"+t.winsPerRound):"")+(t.estEnd?(" · est. end "+fmtTime(timeToMins(t.estEnd))):"")+'</div>':'')+
+      (t.arrival?'<div class="kv"><b>Arrival</b> '+fmtTime(timeToMins(t.arrival))+'</div>':'')+
+      (t.restrictions?'<div class="kv"><b>Restrictions</b> '+esc(t.restrictions)+'</div>':'')+
+      (p.placement?'<div class="kv"><b>Placement prizes</b> '+esc(p.placement)+'</div>':'')+
+      (p.participation?'<div class="kv"><b>Participation prizes</b> '+esc(p.participation)+'</div>':'')+
+      (e.adminNotes?'<div class="kv" style="color:#9a6310;"><b>Admin notes</b> '+esc(e.adminNotes)+'</div>':'')+
       '<div class="admin-actions"><button class="btn btn-sm btn-ghost" onclick="editEvent(\''+e.id+'\')">✎ Edit</button>'+
       '<button class="btn btn-sm btn-danger" onclick="deleteEvent(\''+e.id+'\')">Delete</button></div>'+
     '</div>';
@@ -1220,30 +1241,89 @@ function renderEventsAdmin(){
 
   wrap.innerHTML =
     '<div class="card"><h2 id="ev-form-title">🎉 Create a Public NGH Event</h2>'+
-    '<p class="hint">Public events (tournaments, launch nights, demo days) appear on the booking calendar in teal and hold the selected rooms so customers can\'t double-book them. Make it recurring for a weekly series.</p>'+
+    '<p class="hint">Public events (tournaments, launch nights, demo days) appear on the booking calendar in teal, hold the selected rooms, and publish to the Event Calendar on the main site for customers to view. Make it recurring for a weekly series.</p>'+
     '<div class="row"><div><label class="fld req">Event title</label><input type="text" id="ev-title" placeholder="e.g. Friday Night Magic"></div>'+
     '<div><label class="fld req">Date</label><input type="date" id="ev-date"></div></div>'+
     '<label class="check-line" style="margin-top:10px;"><input type="checkbox" id="ev-allday" onchange="$(\'ev-times\').style.display=this.checked?\'none\':\'grid\'">All day</label>'+
-    '<div class="row" id="ev-times"><div><label class="fld">Start</label><input type="time" id="ev-start" step="1800"></div>'+
-    '<div><label class="fld">End</label><input type="time" id="ev-end" step="1800"></div></div>'+
+    '<div class="row" id="ev-times"><div><label class="fld">Start time</label><input type="time" id="ev-start" step="900"></div>'+
+    '<div><label class="fld">End time</label><input type="time" id="ev-end" step="900"></div></div>'+
     '<label class="fld">Rooms held (none = all rooms)</label><div>'+roomChecks+'</div>'+
-    '<label class="fld">Notes (optional)</label><textarea id="ev-notes" placeholder="Public-facing details, entry fee, format…"></textarea>'+
+
+    // ---- Photo + Facebook ----
+    '<div class="ev-section"><div class="ev-section-label">📷 Photo &amp; Links</div>'+
+    '<label class="fld">Photo URL (paste a link)</label><input type="text" id="ev-photo-url" placeholder="https://… (from your shop, Facebook, Imgur, etc.)" onchange="evPhotoPreview()">'+
+    '<label class="fld">…or upload an image</label><input type="file" id="ev-photo-file" accept="image/*" onchange="evPhotoUpload()">'+
+    '<div id="ev-photo-preview" style="margin-top:8px;"></div>'+
+    '<label class="fld">Facebook event link (optional)</label><input type="text" id="ev-fb" placeholder="https://www.facebook.com/events/…"></div>'+
+
+    // ---- Description ----
+    '<label class="fld">Public description</label><textarea id="ev-notes" placeholder="What is this event? Who is it for? Format, theme, etc."></textarea>'+
+
+    // ---- Tournament details ----
+    '<div class="ev-section"><div class="ev-section-label">🏆 Tournament Details (optional)</div>'+
+    '<div class="row"><div><label class="fld">Tournament type</label><select id="ev-ttype"><option value="">— none / casual —</option><option value="swiss">Swiss</option><option value="single">Single elimination</option><option value="double">Double elimination</option><option value="roundrobin">Round robin</option><option value="other">Other</option></select></div>'+
+    '<div><label class="fld">Number of rounds</label><input type="number" id="ev-rounds" min="1" placeholder="e.g. 4"></div></div>'+
+    '<div class="row"><div><label class="fld">Wins required per round</label><input type="number" id="ev-wins" min="1" placeholder="e.g. 2 (best of 3)"></div>'+
+    '<div><label class="fld">Estimated end time</label><input type="time" id="ev-est-end" step="900"></div></div>'+
+    '<div class="row"><div><label class="fld">Requested arrival time</label><input type="time" id="ev-arrival" step="900"></div>'+
+    '<div><label class="fld">Event restrictions (optional)</label><input type="text" id="ev-restrictions" placeholder="e.g. ages 13+, Standard format only"></div></div></div>'+
+
+    // ---- Prizes ----
+    '<div class="ev-section"><div class="ev-section-label">🥇 Prizes (optional)</div>'+
+    '<label class="fld">Placement prizes</label><textarea id="ev-prizes-place" placeholder="e.g. 1st: $50 store credit · 2nd: booster box · 3rd: 3 packs"></textarea>'+
+    '<label class="fld">Participation prizes</label><textarea id="ev-prizes-part" placeholder="e.g. All participants receive 1 promo pack · First 16 registrants get a playmat"></textarea></div>'+
+
+    // ---- Admin-only notes ----
+    '<label class="fld">Internal admin notes (not shown to customers)</label><textarea id="ev-admin-notes" placeholder="Private logistics, staffing, supplier notes…"></textarea>'+
+
+    // ---- Recurrence ----
     '<label class="check-line" style="margin-top:12px;"><input type="checkbox" id="ev-recurring" onchange="$(\'ev-rec-ui\').style.display=this.checked?\'grid\':\'none\'">Recurring event</label>'+
     '<div class="row" id="ev-rec-ui" style="display:none;"><div><label class="fld">Repeats</label><select id="ev-rec-freq"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option></select></div>'+
     '<div><label class="fld">Occurrences</label><input type="number" id="ev-rec-count" min="2" max="52" value="8"></div></div>'+
+    '<p class="hint" style="margin-top:6px;">Registration (capacity, cost, sign-ups) is configured in the next phase. This step defines the event itself.</p>'+
     '<div style="margin-top:14px;"><button class="btn btn-sm" id="ev-save-btn" onclick="saveEvent()">Save Event</button> <button class="btn btn-sm btn-ghost" onclick="resetEventForm()" id="ev-cancel-btn" style="display:none;">Cancel edit</button></div>'+
     '</div>'+
     '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;">Current Public Events</h2>'+list;
 }
-function resetEventForm(){ editingEventId=null; $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
-  $("ev-title").value=""; $("ev-date").value=""; $("ev-allday").checked=false; $("ev-times").style.display="grid"; $("ev-start").value=""; $("ev-end").value=""; $("ev-notes").value="";
+var evPhotoData = null;  // holds an uploaded image as a data URL until saved
+function evPhotoPreview(){
+  var url=$("ev-photo-url").value.trim();
+  var box=$("ev-photo-preview");
+  var src = url || evPhotoData;
+  box.innerHTML = src ? '<img src="'+esc(src)+'" alt="preview" style="max-width:180px;max-height:120px;border-radius:8px;border:1px solid #d8e0d4;">' : '';
+}
+function evPhotoUpload(){
+  var f=$("ev-photo-file").files[0]; if(!f) return;
+  if(f.size > 1500000){ alert("Please choose an image under ~1.5 MB, or paste a photo URL instead."); $("ev-photo-file").value=""; return; }
+  var rd=new FileReader();
+  rd.onload=function(){ evPhotoData=rd.result; $("ev-photo-url").value=""; evPhotoPreview(); };
+  rd.readAsDataURL(f);
+}
+function resetEventForm(){ editingEventId=null; evPhotoData=null;
+  $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
+  ["ev-title","ev-date","ev-start","ev-end","ev-notes","ev-photo-url","ev-fb","ev-rounds","ev-wins","ev-est-end","ev-arrival","ev-restrictions","ev-prizes-place","ev-prizes-part","ev-admin-notes"].forEach(function(id){ if($(id)) $(id).value=""; });
+  if($("ev-ttype")) $("ev-ttype").value="";
+  if($("ev-photo-file")) $("ev-photo-file").value="";
+  if($("ev-photo-preview")) $("ev-photo-preview").innerHTML="";
+  $("ev-allday").checked=false; $("ev-times").style.display="grid";
   document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=false; }); $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none";
 }
 function editEvent(id){
   var e=cache.events.filter(function(x){return x.id===id;})[0]; if(!e) return;
-  editingEventId=id; $("ev-form-title").textContent="✎ Edit Public NGH Event"; $("ev-save-btn").textContent="Update Event"; $("ev-cancel-btn").style.display="inline-block";
+  editingEventId=id; evPhotoData=null;
+  $("ev-form-title").textContent="✎ Edit Public NGH Event"; $("ev-save-btn").textContent="Update Event"; $("ev-cancel-btn").style.display="inline-block";
   $("ev-title").value=e.title||""; $("ev-date").value=e.date||""; $("ev-allday").checked=!!e.allDay; $("ev-times").style.display=e.allDay?"none":"grid";
   $("ev-start").value=e.start||""; $("ev-end").value=e.end||""; $("ev-notes").value=e.notes||"";
+  $("ev-fb").value=e.fbLink||"";
+  // photo: if it's a data URL keep it in evPhotoData; if a normal URL show in the url box
+  if(e.photo && e.photo.indexOf("data:")===0){ evPhotoData=e.photo; $("ev-photo-url").value=""; }
+  else { $("ev-photo-url").value=e.photo||""; }
+  evPhotoPreview();
+  var t=e.tournament||{};
+  $("ev-ttype").value=t.type||""; $("ev-rounds").value=t.rounds||""; $("ev-wins").value=t.winsPerRound||""; $("ev-est-end").value=t.estEnd||""; $("ev-arrival").value=t.arrival||""; $("ev-restrictions").value=t.restrictions||"";
+  var p=e.prizes||{};
+  $("ev-prizes-place").value=p.placement||""; $("ev-prizes-part").value=p.participation||"";
+  $("ev-admin-notes").value=e.adminNotes||"";
   document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=(e.rooms||[]).indexOf(c.value)>=0; });
   if(e.recurrence){ $("ev-recurring").checked=true; $("ev-rec-ui").style.display="grid"; $("ev-rec-freq").value=e.recurrence.freq; $("ev-rec-count").value=e.recurrence.count; }
   else { $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none"; }
@@ -1255,7 +1335,22 @@ async function saveEvent(){
   if(!date){ alert("Pick a date."); return; }
   if(!allDay && (!start||!end)){ alert("Set start & end times or choose All day."); return; }
   var rooms=[]; document.querySelectorAll(".ev-room:checked").forEach(function(c){ rooms.push(c.value); });
-  var ev={ id:editingEventId||undefined, title:title, date:date, allDay:allDay, start:start, end:end, rooms:rooms, notes:notes, public:true };
+  var photo = $("ev-photo-url").value.trim() || evPhotoData || "";
+  var tournament = {
+    type:$("ev-ttype").value, rounds:$("ev-rounds").value, winsPerRound:$("ev-wins").value,
+    estEnd:$("ev-est-end").value, arrival:$("ev-arrival").value, restrictions:$("ev-restrictions").value.trim()
+  };
+  var hasTourney = tournament.type || tournament.rounds || tournament.estEnd || tournament.arrival || tournament.restrictions;
+  var prizes = { placement:$("ev-prizes-place").value.trim(), participation:$("ev-prizes-part").value.trim() };
+  var hasPrizes = prizes.placement || prizes.participation;
+  var ev={
+    id:editingEventId||undefined, title:title, date:date, allDay:allDay, start:start, end:end, rooms:rooms,
+    notes:notes, photo:photo, fbLink:$("ev-fb").value.trim(),
+    tournament: hasTourney ? tournament : null,
+    prizes: hasPrizes ? prizes : null,
+    adminNotes:$("ev-admin-notes").value.trim(),
+    public:true
+  };
   if($("ev-recurring").checked){ ev.recurrence={ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }; if(!editingEventId) ev.groupId="EVGRP-"+genId(); }
   await Store.saveEvent(ev);
   await refreshCache(); resetEventForm(); renderEventsAdmin();
