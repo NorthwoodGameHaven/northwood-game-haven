@@ -55,9 +55,13 @@ const _handler = async (req) => {
       label = 'Booking fee — ' + (b.id || '');
       if (b.feePaid) return bad('fee already paid', 400);
     } else {
-      amount = Math.round(bookingDeposit(b) * 100);
+      // Prefer the stored deposit (which reflects any admin waiver/reduction);
+      // fall back to the computed schedule for older records.
+      const dep = (b.deposit != null) ? b.deposit : bookingDeposit(b);
+      amount = Math.round(dep * 100);
       label = 'Refundable deposit — ' + (b.id || '');
       if (b.depositPaid) return bad('deposit already paid', 400);
+      if (dep === 0) return bad('deposit has been waived — nothing to pay', 400);
     }
     if (!amount || amount < 50) return bad('nothing to pay for this item', 400);
 

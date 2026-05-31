@@ -397,7 +397,7 @@
 
     <div style="margin-top:18px;">
       <div class="check-line"><input type="checkbox" id="c-guru-reach"><label for="c-guru-reach">I'd like a Game Guru to reach out about product procurement / promoting my event.</label></div>
-      <div class="check-line"><input type="checkbox" id="c-invoice"><label for="c-invoice">Please send me an invoice for electronic payment processing.</label></div>
+      <p class="hint" style="margin:8px 2px 0;">💳 Once a Game Guru approves your request, we'll email you secure online payment links for your booking fee and refundable deposit (card, Apple Pay, or Google Pay). You can also pay in person at the shop. Payment is due by the end of the day before your reservation.</p>
     </div>
 
     <label class="fld">General Comments</label>
@@ -988,7 +988,7 @@ async function submitBooking(){
       addons:addonsChosen,
       guruReach:$("c-guru-reach").checked,
       overnightInterest:$("c-overnight").checked,
-      wantsInvoice:$("c-invoice").checked,
+      wantsInvoice:false,
       comments:$("c-comments").value.trim(),
       subtotal:t.subtotal, discount:t.discount, costBooking:t.grand, deposit:t.deposit, totalDue:t.grand+t.deposit,
       adminQuestions:"", invoiceLink:"", invoiceFileName:"",
@@ -1015,8 +1015,8 @@ async function submitBooking(){
   var payNote =
     "<strong>What happens next</strong><br>"+
     "• A Game Guru will review your request and email you within 1 business day to confirm.<br>"+
-    "• Once confirmed, your total"+(req.deposit?" (including the refundable deposit hold)":"")+" is due <strong>no later than the calendar day before</strong> your booking. Unpaid bookings are automatically canceled.<br>"+
-    "• Pay in person by cash, card, or check; by card over the phone; or"+(req.wantsInvoice?" via the invoice we'll email you":" request an emailed invoice")+".<br>"+
+    "• Once confirmed, we'll email you secure online payment links for your booking fee"+(req.deposit?" and refundable deposit":"")+" (card, Apple Pay, or Google Pay). You can also pay in person at the shop.<br>"+
+    "• Your total"+(req.deposit?" (including the refundable deposit hold)":"")+" is due <strong>no later than the calendar day before</strong> your booking. Unpaid bookings are automatically canceled.<br>"+
     (req.milRequested?"• Bring your valid military / first-responder ID to check-in to receive your 15% discount.<br>":"")+
     "• Questions? Reply to your confirmation email or contact us any time.";
   $("succ-customer-note").innerHTML=payNote;
@@ -1181,11 +1181,12 @@ function reqCardHtml(r){
     '<div class="kv"><b>Contact</b> '+esc(r.phone)+' · '+esc(r.email)+'</div>'+
     '<div class="kv"><b>Max guests</b> '+esc(r.guests)+'</div>'+
     '<div class="kv"><b>Add-ons</b></div>'+addons+
-    '<div class="kv"><b>Guru procurement?</b> '+(r.guruReach?"YES":"no")+' · <b>Overnight?</b> '+(r.overnightInterest?"YES":"no")+' · <b>Wants invoice?</b> '+(r.wantsInvoice?"YES":"no")+'</div>'+
+    '<div class="kv"><b>Guru procurement?</b> '+(r.guruReach?"YES":"no")+' · <b>Overnight?</b> '+(r.overnightInterest?"YES":"no")+'</div>'+
     (r.comments?'<div class="kv"><b>Comments</b> '+esc(r.comments)+'</div>':'')+
     '<div class="kv" style="margin-top:8px;"><b>Subtotal</b> '+fmtMoney(r.subtotal||r.costBooking)+(r.discount?(' · <b>Mil/FR −</b> '+fmtMoney(r.discount)):'')+' · <b>Booking</b> '+fmtMoney(r.costBooking)+' · <b>Deposit</b> '+fmtMoney(r.deposit)+' · <b>Total due (excl. tax)</b> '+fmtMoney(r.totalDue)+'</div>'+
     (r.adminQuestions && r.status==="hold" ? '<div class="email-preview">On-hold questions sent:\n'+esc(r.adminQuestions)+'</div>' : '')+
     milBox+
+    ((r.status==="pending"||r.status==="hold"||r.status==="approved")?depositAdjustBox(r):"")+
     '<div class="admin-actions">'+actions+'</div>'+
     holdBox+
     apprBox+
@@ -1229,12 +1230,16 @@ function buildApprovalEmail(r){
     if(!r.invoiceLink && !r.invoiceFileName) invoiceLine+="  An invoice will follow shortly.\n";
   }
   var milLine = r.milRequested ? ("\nMilitary / First Responder discount: "+(r.milVerified==="yes"?("APPLIED (-"+fmtMoney(r.discount)+"). Thank you for your service!"):(r.milVerified==="no"?"could not be verified — standard rate applies.":"pending — please bring valid ID to check-in to receive your 15% off."))+"\n") : "";
+  var depBase = (r.depositBase!=null)?r.depositBase:r.deposit;
+  var depLine = (r.depositAdjusted && r.deposit<depBase)
+    ? ("\n🎉 DEPOSIT DISCOUNT: As a valued guest, your refundable deposit has been "+(r.deposit===0?"WAIVED in full":("reduced to "+fmtMoney(r.deposit)+" (from the standard "+fmtMoney(depBase)+")"))+". Enjoy!\n")
+    : "";
   return "Hi "+r.name+",\n\nGreat news — your booking request is APPROVED! Here are the details:\n\n"+
   "Ref: "+r.id+"\nRooms: "+roomList(r)+"\nDate: "+r.date+"\nTime: "+fmtTime(timeToMins(r.start))+" – "+r.endLabel+" ("+r.hours+"h)\n\n"+
   "Booking subtotal: "+fmtMoney(r.costBooking)+"\nRefundable deposit (hold): "+fmtMoney(r.deposit)+"\nTOTAL DUE: "+fmtMoney(r.totalDue)+" (plus applicable taxes)\n"+
-  milLine+invoiceLine+"\n"+
-  "PAYMENT TERMS:\n• Payment in full — including the refundable deposit hold — is due no later than the calendar day BEFORE your booking ("+dayBefore(r.date)+").\n"+
-  "• If not paid by then, the booking is automatically canceled.\n• Pay by cash, card, or check in person; by card over the phone; or via the invoice link above.\n\n"+
+  milLine+depLine+invoiceLine+"\n"+
+  "PAYMENT:\n• Use the secure payment buttons below to pay your booking fee and refundable deposit online (card, Apple Pay, or Google Pay).\n• Payment in full — including the deposit hold — is due no later than the calendar day BEFORE your booking ("+dayBefore(r.date)+").\n"+
+  "• If not paid by then, the booking is automatically canceled.\n• Prefer to pay in person? You can pay by cash, card, or check at the shop — but no later than the end of the day before your reservation.\n\n"+
   "The deposit is refunded in full as long as nothing is damaged/stolen and the room(s) are left reasonably cleaned, per our Terms & Conditions.\n\n"+
   "Questions? Just reply to this email or call us.\n\n— The Northwood Game Haven Crew 🦦";
 }
@@ -1269,6 +1274,53 @@ async function genPayLink(id, part){
     window.prompt("Payment link for the "+part+" (copied to clipboard — paste into an email/text to the customer):", data.url);
   } catch(e){ alert("Couldn't create payment link: "+e.message); }
 }
+/* Admin deposit waiver / reduction. The original computed deposit is kept in
+   depositBase; r.deposit holds the effective (possibly reduced) amount used for
+   totals, pay links, and emails. depositWaivedNote flags that a discount applied. */
+function depositBaseOf(r){ return (r.depositBase!=null) ? r.depositBase : r.deposit; }
+async function adjustDeposit(id, mode){
+  var r=getReq(id); if(!r) return;
+  var base=depositBaseOf(r);
+  var newDep;
+  if(mode==="reduce"){
+    var amt=parseFloat($("dep-reduce-"+id).value);
+    if(isNaN(amt)||amt<0){ alert("Enter a dollar amount to reduce the deposit by."); return; }
+    newDep=Math.max(0, Math.round((base-amt)*100)/100);
+  } else if(mode==="set"){
+    var v=parseFloat($("dep-set-"+id).value);
+    if(isNaN(v)||v<0){ alert("Enter the new deposit amount."); return; }
+    newDep=Math.round(v*100)/100;
+  } else if(mode==="waive"){
+    newDep=0;
+  } else if(mode==="reset"){
+    newDep=base;
+  }
+  var patch={ depositBase:base, deposit:newDep, totalDue:(r.costBooking||0)+newDep };
+  patch.depositAdjusted = (newDep!==base);
+  patch.depositAdjustedBy = (newDep!==base) ? (Store._adminLabel?Store._adminLabel():"staff") : null;
+  await Store.updateBooking(id, patch);
+  await refreshCache(); renderAdmin(adminFilter);
+}
+function depositAdjustBox(r){
+  var base=depositBaseOf(r);
+  var adjusted = (r.deposit!==base);
+  return '<details class="adv" id="depdet-'+r.id+'"'+(adjusted?' open':'')+'>'+
+    '<summary>Deposit adjustment '+(adjusted?('· <span style="color:#2e7d32;">reduced to '+fmtMoney(r.deposit)+(base?(" from "+fmtMoney(base)):"")+'</span>'):'(staff only)')+'</summary>'+
+    '<div style="padding:8px 0;font-size:0.82rem;color:#6a6a50;">Standard deposit for this booking is <b>'+fmtMoney(base)+'</b>. You can reduce or waive it for trusted/regular guests. This is never shown publicly; the customer only sees that a discount was applied.</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+
+      '<span>Reduce by $<input type="number" id="dep-reduce-'+r.id+'" min="0" step="5" style="width:80px;"></span>'+
+      '<button class="btn btn-sm btn-ghost" onclick="adjustDeposit(\''+r.id+'\',\'reduce\')">Apply reduction</button>'+
+      '<span style="color:#b9c4b2;">|</span>'+
+      '<span>Set to $<input type="number" id="dep-set-'+r.id+'" min="0" step="5" style="width:80px;" placeholder="'+r.deposit+'"></span>'+
+      '<button class="btn btn-sm btn-ghost" onclick="adjustDeposit(\''+r.id+'\',\'set\')">Set amount</button>'+
+    '</div>'+
+    '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<button class="btn btn-sm btn-ghost" onclick="adjustDeposit(\''+r.id+'\',\'waive\')">Waive entirely ($0)</button>'+
+      (adjusted?'<button class="btn btn-sm btn-ghost" onclick="adjustDeposit(\''+r.id+'\',\'reset\')">↩ Reset to standard</button>':'')+
+    '</div>'+
+  '</details>';
+}
+
 // Split-payment helpers (back-compat: legacy payment:"paid" counts as both paid)
 function feeIsPaid(r){ return r.feePaid===true || r.payment==="paid"; }
 function depIsPaid(r){ return r.depositPaid===true || r.payment==="paid"; }
