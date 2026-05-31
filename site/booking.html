@@ -140,7 +140,8 @@
   .cc-week .cch { font-family:'Cinzel',serif; font-size:0.6rem; text-transform:uppercase; color:#8a8a6a; text-align:center; padding:3px 0; }
   .cc-week .cchour { font-size:0.58rem; color:#9a9a80; text-align:right; padding:2px 5px 0 0; }
   .cc-week .ccslot { min-height:24px; border-top:1px solid #eef0ec; position:relative; }
-  .ccslot .cc-ev { position:relative; margin:1px; }
+  .ccslot .cc-ev { position:relative; margin:1px; white-space:normal; z-index:2; }
+  .ccslot .cc-ev.cc-ev-span { margin:0; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.15); }
   .cc-empty { font-size:0.78rem; color:#8a8a6a; text-align:center; padding:18px; }
   .success-info { background:#f4f7f2; border:1px solid #cfe0d4; border-radius:11px; padding:16px 18px; font-size:0.86rem; color:#3a4a35; line-height:1.85; max-width:600px; margin:6px auto 0; text-align:left; }
   .success-info strong { color:var(--forest); }
@@ -1490,6 +1491,97 @@ function calToday(){ calRef=new Date(); renderCalendar(); }
 function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 function weekStart(d){ var s=new Date(d); s.setDate(s.getDate()-s.getDay()); s.setHours(0,0,0,0); return s; }
 
+/* ===================================================================
+   HOVER SUMMARY CARDS (shared by admin + customer calendars)
+   A single floating card shows summary details while the mouse is
+   over a calendar item the viewer is permitted to see in detail.
+   =================================================================== */
+var _hoverReg = {};      // id -> html
+var _hoverSeq = 0;
+function _hoverEl(){
+  var el=document.getElementById("cal-hovercard");
+  if(!el){
+    el=document.createElement("div");
+    el.id="cal-hovercard";
+    el.style.cssText="position:fixed;z-index:9999;max-width:280px;background:#fff;border:1px solid #d8e0d4;border-radius:11px;box-shadow:0 10px 34px rgba(26,26,18,0.22);padding:12px 14px;font-size:0.8rem;color:#3a4a35;line-height:1.5;pointer-events:none;display:none;";
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function hoverShow(id, ev){
+  var html=_hoverReg[id]; if(!html) return;
+  var el=_hoverEl(); el.innerHTML=html; el.style.display="block";
+  hoverMove(ev);
+}
+function hoverMove(ev){
+  var el=_hoverEl(); if(el.style.display==="none") return;
+  var pad=14, w=el.offsetWidth, h=el.offsetHeight;
+  var x=ev.clientX+pad, y=ev.clientY+pad;
+  if(x+w>window.innerWidth-8) x=ev.clientX-w-pad;
+  if(y+h>window.innerHeight-8) y=ev.clientY-h-pad;
+  if(x<8)x=8; if(y<8)y=8;
+  el.style.left=x+"px"; el.style.top=y+"px";
+}
+function hoverHide(){ var el=document.getElementById("cal-hovercard"); if(el) el.style.display="none"; }
+function _hoverWire(html){
+  if(!html) return "";
+  var id="hv"+(++_hoverSeq); _hoverReg[id]=html;
+  return ' onmouseenter="hoverShow(\''+id+'\',event)" onmousemove="hoverMove(event)" onmouseleave="hoverHide()"';
+}
+function _row(label, val){ return val ? '<div style="margin-top:3px;"><span style="color:#8a8a6a;">'+label+':</span> '+esc(String(val))+'</div>' : ''; }
+
+// Registration summary string (min/max/current). Phase B will populate
+// real registrant counts; until then we show capacity if configured.
+function regSummary(e){
+  if(!e || !e.registration || !e.registration.enabled) return "";
+  var r=e.registration;
+  var cur = (typeof e._regCount==="number") ? e._regCount : (e.registrations ? e.registrations.length : 0);
+  var parts=[];
+  parts.push(cur+" registered");
+  if(r.min) parts.push("min "+r.min+" to fire");
+  if(r.max) parts.push("max "+r.max);
+  return parts.join(" · ");
+}
+
+// ---- builders return HTML for the hover card (or "" = no card) ----
+function eventHoverHTML(e, ds){
+  var when=(ds||e.date)+(e.allDay?" · All day":(" · "+fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end))));
+  var h='<div style="font-family:\'Cinzel\',serif;color:var(--forest);font-weight:700;font-size:0.9rem;">🎉 '+esc(e.title||"NGH Event")+'</div>';
+  h+=_row("When", when);
+  if(e.rooms&&e.rooms.length) h+=_row("Rooms", e.rooms.map(roomName).join(", "));
+  var rs=regSummary(e); if(rs) h+=_row("Registration", rs);
+  if(e.tournament&&e.tournament.type){ var tl={swiss:"Swiss",single:"Single elim",double:"Double elim",roundrobin:"Round robin",other:"Tournament"}[e.tournament.type]; h+=_row("Format", tl+(e.tournament.rounds?(" · "+e.tournament.rounds+" rounds"):"")); }
+  if(e.notes) h+='<div style="margin-top:5px;color:#5a6a50;font-size:0.76rem;">'+esc(e.notes.slice(0,120))+(e.notes.length>120?"…":"")+'</div>';
+  return h;
+}
+// fullDetail=true → viewer may see name/contact; false → minimal "Reserved"
+function bookingHoverHTML(b, fullDetail){
+  var when=b.date+(b.start?(" · "+fmtTime(timeToMins(b.start))+(b.hours?(" – "+fmtTime(timeToMins(b.start)+b.hours*60)):"")):"");
+  if(!fullDetail){
+    var h0='<div style="font-family:\'Cinzel\',serif;color:#8a8a6a;font-weight:700;font-size:0.9rem;">Reserved</div>';
+    h0+=_row("When", when);
+    if(b.rooms&&b.rooms.length) h0+=_row("Room(s)", b.rooms.map(roomName).join(", "));
+    h0+='<div style="margin-top:5px;color:#8a8a6a;font-size:0.74rem;">Details are private to the guest who booked.</div>';
+    return h0;
+  }
+  var statusLabel={pending:"Pending review",hold:"On hold",approved:"Approved",rejected:"Rejected"}[b.status]||b.status;
+  var h='<div style="font-family:\'Cinzel\',serif;color:var(--forest);font-weight:700;font-size:0.9rem;">'+esc(b.name||"Booking")+'</div>';
+  h+=_row("When", when);
+  if(b.rooms&&b.rooms.length) h+=_row("Room(s)", b.rooms.map(roomName).join(", "));
+  h+=_row("Status", statusLabel+(b.payment?(" · "+(b.payment==="paid"?"Paid":"Payment due")):""));
+  if(b.guests) h+=_row("Max guests", b.guests);
+  if(b.phone) h+=_row("Phone", b.phone);
+  if(b.email) h+=_row("Email", b.email);
+  return h;
+}
+function blackoutHoverHTML(b){
+  var when=b.date+(b.allDay?" · All day":(b.start?(" · "+fmtTime(timeToMins(b.start))+(b.end?(" – "+fmtTime(timeToMins(b.end))):"")):""));
+  var h='<div style="font-family:\'Cinzel\',serif;color:var(--cal-blackout);font-weight:700;font-size:0.9rem;">🚫 '+esc(b.label||"Closed")+'</div>';
+  h+=_row("When", when);
+  if(b.rooms&&b.rooms.length) h+=_row("Room(s)", b.rooms.map(roomName).join(", "));
+  return h;
+}
+
 function durHours(start, end){
   if(!start || !end) return 1;
   var s=timeToMins(start), e=timeToMins(end);
@@ -1500,15 +1592,22 @@ function eventsForDate(dateStr){
   var evs=[];
   cache.bookings.forEach(function(r){
     if(r.status==="rejected") return;
-    if(r.date===dateStr) evs.push({cat:"booking", status:r.status, payment:r.payment, rec:!!r.groupId, start:r.start, hours:r.hours, label:r.name+" · "+roomList(r), id:r.id, groupId:r.groupId});
+    if(r.date===dateStr) evs.push({cat:"booking", status:r.status, payment:r.payment, rec:!!r.groupId, start:r.start, hours:r.hours, label:r.name+" · "+roomList(r), id:r.id, groupId:r.groupId, _src:r});
   });
   expandedEvents().forEach(function(e){
-    if(e.date===dateStr) evs.push({cat:"event", rec:!!e.recurrence, start:e.allDay?null:e.start, end:e.allDay?null:e.end, allDay:e.allDay, hours:e.allDay?null:durHours(e.start,e.end), label:(e.title||"NGH Event")+(e.rooms&&e.rooms.length?(" ("+e.rooms.map(roomName).join(", ")+")"):" (all rooms)"), id:e.id, isEvent:true});
+    if(e.date===dateStr) evs.push({cat:"event", rec:!!e.recurrence, start:e.allDay?null:e.start, end:e.allDay?null:e.end, allDay:e.allDay, hours:e.allDay?null:durHours(e.start,e.end), label:(e.title||"NGH Event")+(e.rooms&&e.rooms.length?(" ("+e.rooms.map(roomName).join(", ")+")"):" (all rooms)"), id:e.id, isEvent:true, _src:e, _ds:dateStr});
   });
   expandedBlackouts().forEach(function(b){
-    if(b.date===dateStr) evs.push({cat:"blackout", rec:!!b.recurrence, start:b.allDay?null:b.start, end:b.allDay?null:b.end, allDay:b.allDay, hours:b.allDay?null:durHours(b.start,b.end), label:(b.label||"Blackout")+(b.rooms&&b.rooms.length?(" ("+b.rooms.map(roomName).join(", ")+")"):" (all rooms)")});
+    if(b.date===dateStr) evs.push({cat:"blackout", rec:!!b.recurrence, start:b.allDay?null:b.start, end:b.allDay?null:b.end, allDay:b.allDay, hours:b.allDay?null:durHours(b.start,b.end), label:(b.label||"Blackout")+(b.rooms&&b.rooms.length?(" ("+b.rooms.map(roomName).join(", ")+")"):" (all rooms)"), _src:b});
   });
   return evs;
+}
+// Admin sees full detail for everything.
+function evHover(e){
+  if(e.cat==="event") return _hoverWire(eventHoverHTML(e._src, e._ds));
+  if(e.cat==="blackout") return _hoverWire(blackoutHoverHTML(e._src));
+  if(e.cat==="booking") return _hoverWire(bookingHoverHTML(e._src, true));
+  return "";
 }
 function evClass(e){
   if(e.cat==="blackout") return "blackout";
@@ -1521,7 +1620,7 @@ function evChip(e){
   if(e.cat==="booking" && e.status==="approved" && e.payment!=="paid") cls+=" unpaid";
   var t = e.allDay ? "All day" : (e.start?fmtTime(timeToMins(e.start)):"");
   var click = (e.cat==="booking") ? (' onclick="jumpToReq(\''+e.id+'\')"') : (e.isEvent?(' onclick="jumpToEvent(\''+e.id+'\')"'):'');
-  return '<div class="'+cls+'"'+click+' title="'+esc(e.label)+'">'+(e.rec?'🔁 ':'')+(t?(t+' '):'')+esc(e.label)+'</div>';
+  return '<div class="'+cls+'"'+click+evHover(e)+' title="'+esc(e.label)+'">'+(e.rec?'🔁 ':'')+(t?(t+' '):'')+esc(e.label)+'</div>';
 }
 function jumpToReq(id){ setAdminView('list'); var r=getReq(id); if(r&&r.groupId) showGroup(r.groupId); else { adminFilter="all"; renderAdmin("all"); } }
 function jumpToEvent(id){ setAdminView('events'); setTimeout(function(){ editEvent(id); }, 60); }
@@ -1591,7 +1690,7 @@ function weekDayHTML(isDay){
         var bg = e.cat==="blackout"?"var(--cal-blackout)":(e.cat==="event"?"var(--cal-event)":(e.status==="approved"?"var(--cal-approved)":"var(--cal-pending)"));
         var ht = e.allDay?"100%":((e.hours||1)*26-2)+"px";
         var click = (e.cat==="booking")?(' onclick="jumpToReq(\''+e.id+'\')"'):(e.isEvent?(' onclick="jumpToEvent(\''+e.id+'\')"'):'');
-        return '<div class="wevent" style="background:'+bg+';height:'+ht+';"'+click+'>'+(e.rec?'🔁':'')+esc(e.label)+'</div>';
+        return '<div class="wevent" style="background:'+bg+';height:'+ht+';"'+click+evHover(e)+'>'+(e.rec?'🔁':'')+esc(e.label)+'</div>';
       }).join("")+'</div>';
     });
   }
@@ -1671,13 +1770,13 @@ function custEventsForDate(ds){
   });
   expandedEventsC().forEach(function(e){
     if(e.date!==ds) return;
-    evs.push({ cat:"event", allDay:e.allDay, start:e.start, end:e.end,
-      label:(e.title||"NGH Event")+(e.rooms&&e.rooms.length?(" ("+e.rooms.map(roomName).join(", ")+")"):""), detail:e });
+    evs.push({ cat:"event", allDay:e.allDay, start:e.start, end:e.end, hours:e.allDay?null:durHours(e.start,e.end),
+      label:(e.title||"NGH Event")+(e.rooms&&e.rooms.length?(" ("+e.rooms.map(roomName).join(", ")+")"):""), detail:e, _ds:ds });
   });
   expandedBlackoutsC().forEach(function(b){
     if(b.date!==ds) return;
-    evs.push({ cat:"blackout", allDay:b.allDay, start:b.start, end:b.end,
-      label:(b.label||"Closed")+(b.rooms&&b.rooms.length?(" ("+b.rooms.map(roomName).join(", ")+")"):"") });
+    evs.push({ cat:"blackout", allDay:b.allDay, start:b.start, end:b.end, hours:b.allDay?null:durHours(b.start,b.end),
+      label:(b.label||"Closed")+(b.rooms&&b.rooms.length?(" ("+b.rooms.map(roomName).join(", ")+")"):""), detail:b });
   });
   return evs;
 }
@@ -1733,10 +1832,24 @@ function ccEvClass(e){
   if(e.mine) return e.status==="approved" ? "mine" : "mine-pending";
   return "reserved";
 }
-function ccChip(e){
+// Customer-side hover card. Public events: full summary. Own bookings: full.
+// Other guests' bookings: minimal "Reserved" card (no private detail).
+function ccHover(e){
+  if(e.cat==="event") return _hoverWire(eventHoverHTML(e.detail||e._src||{}, e._ds));
+  if(e.cat==="blackout") return _hoverWire(blackoutHoverHTML(e.detail||e._src||{}));
+  if(e.cat==="booking") return _hoverWire(bookingHoverHTML(e.detail||{date:e.date,start:e.start,hours:e.hours,rooms:(e.detail&&e.detail.rooms)||[]}, !!e.mine));
+  return "";
+}
+function ccChip(e, spanHeight, topOffset){
   var cls="cc-ev "+ccEvClass(e);
   var t = e.allDay ? "All day" : (e.start?fmtTime(timeToMins(e.start)):"");
-  return '<div class="'+cls+'" title="'+esc(e.label)+'">'+(t?(t+' '):'')+esc(e.label)+'</div>';
+  var style="";
+  if(spanHeight){
+    // absolute overlay so the chip spans its full duration over the hour rows
+    style=' style="position:absolute;left:1px;right:1px;top:'+(topOffset||0)+'px;height:'+spanHeight+';z-index:3;"';
+    cls+=" cc-ev-span";
+  }
+  return '<div class="'+cls+'"'+style+ccHover(e)+' title="'+esc(e.label)+'">'+(t?(t+' '):'')+esc(e.label)+'</div>';
 }
 function custMonthHTML(){
   var first=new Date(custRef.getFullYear(), custRef.getMonth(),1), start=new Date(first); start.setDate(1-first.getDay());
@@ -1761,12 +1874,20 @@ function custWeekDayHTML(isDay){
   var todayStr=ymd(new Date()), h='<div class="cc-week" style="--ccc:'+days.length+'">';
   h+='<div class="cch"></div>';
   days.forEach(function(d){ var dds=ymd(d); h+='<div class="cch cch-link"'+(dds===todayStr?' style="color:var(--gold)"':'')+' title="View this day" onclick="custGoto(\''+dds+'\',\'day\')">'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
+  var ROW=24; // px per hour, matches .cc-week .ccslot min-height
   for(var hr=8; hr<=23; hr++){
     h+='<div class="cchour">'+fmtTime(hr*60)+'</div>';
     days.forEach(function(d){
       var ds=ymd(d);
+      // events whose START falls in this hour; positioned absolutely so they span their full duration
       var slot=custEventsForDate(ds).filter(function(e){ if(e.allDay) return hr===8; if(!e.start) return false; return Math.floor(timeToMins(e.start)/60)===hr; });
-      h+='<div class="ccslot">'+slot.map(ccChip).join("")+'</div>';
+      var inner=slot.map(function(e){
+        if(e.allDay) return ccChip(e);
+        var startMin=timeToMins(e.start), offset=(startMin-hr*60)/60*ROW;          // px from top of this hour cell
+        var height=Math.max(ROW-2, (e.hours||1)*ROW-2);
+        return ccChip(e, height+"px", offset);
+      }).join("");
+      h+='<div class="ccslot">'+inner+'</div>';
     });
   }
   return h+'</div>';
