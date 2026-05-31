@@ -330,7 +330,7 @@
     <div class="row" style="margin-top:4px;">
       <div>
         <label class="fld req">Start Time</label>
-        <input type="time" id="bk-start" step="1800" onchange="onDateTimeChange()">
+        <span id="bk-start-wrap"></span>
       </div>
       <div>
         <label class="fld">End Time</label>
@@ -473,6 +473,7 @@
         <button class="btn btn-sm" id="view-list-btn" onclick="setAdminView('list')">📋 Request List</button>
         <button class="btn btn-sm btn-ghost" id="view-cal-btn" onclick="setAdminView('calendar')">📅 Calendar</button>
         <button class="btn btn-sm btn-ghost" id="view-events-btn" onclick="setAdminView('events')">🎉 Public Events</button>
+        <button class="btn btn-sm btn-ghost" onclick="newEventQuick()" style="border-color:var(--gold);color:var(--gold);">➕ New Event</button>
         <span id="mode-indicator"></span>
       </div>
 
@@ -660,6 +661,64 @@ function pad(n){ return (n<10?"0":"")+n; }
 function fmtMoney(n){ return "$"+(Math.round(n*100)/100).toFixed(2); }
 function fmtTime(mins){ var h=Math.floor(mins/60), m=mins%60, ap=h>=12?"PM":"AM", hh=h%12; if(hh===0)hh=12; return hh+":"+pad(m)+" "+ap; }
 function timeToMins(t){ if(!t) return null; var p=t.split(":"); return parseInt(p[0],10)*60+parseInt(p[1],10); }
+
+/* ---- Friendly 15-minute time dropdown (OpenTable-style) ----
+   Builds a <select> whose OPTION VALUES are canonical "HH:MM" (24h) so any
+   existing code that reads element.value keeps working unchanged. Labels are
+   friendly 12-hour text. An "Other (exact time)" choice reveals a native
+   time input for odd times. */
+function timeSelectHTML(id, onchange, stepMin){
+  stepMin = stepMin || 15;
+  var oc = onchange ? (' onchange="onTimeSelect(\''+id+'\');'+onchange+'"') : (' onchange="onTimeSelect(\''+id+'\')"');
+  var h = '<select id="'+id+'" class="time-select"'+oc+'>';
+  h += '<option value="">— select —</option>';
+  for(var m=0; m<1440; m+=stepMin){
+    var hh=pad(Math.floor(m/60)), mm=pad(m%60), val=hh+":"+mm;
+    h += '<option value="'+val+'">'+fmtTime(m)+'</option>';
+  }
+  h += '<option value="__other__">Other (exact time)…</option>';
+  h += '</select>';
+  // hidden manual input revealed when "Other" is chosen; mirrors value back
+  h += '<input type="time" id="'+id+'__manual" class="time-manual" style="display:none;margin-top:6px;" onchange="onTimeManual(\''+id+'\')">';
+  return h;
+}
+function onTimeSelect(id){
+  var sel=$(id), man=$(id+"__manual");
+  if(!sel || !man) return;
+  if(sel.value==="__other__"){ man.style.display="block"; man.focus(); }
+  else { man.style.display="none"; }
+}
+function onTimeManual(id){
+  // When a manual time is entered, inject/select it as a real option so
+  // element.value returns the canonical HH:MM just like a normal pick.
+  var sel=$(id), man=$(id+"__manual");
+  if(!sel || !man || !man.value) return;
+  var val=man.value;
+  var existing=null;
+  for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===val){ existing=sel.options[i]; break; } }
+  if(!existing){
+    var opt=document.createElement("option");
+    opt.value=val; opt.text=fmtTime(timeToMins(val))+" (custom)";
+    sel.insertBefore(opt, sel.options[sel.options.length-1]); // before "Other"
+    existing=opt;
+  }
+  sel.value=val;
+}
+// Programmatically set a time-select to a HH:MM value (used when editing records)
+function setTimeSelect(id, val){
+  var sel=$(id), man=$(id+"__manual");
+  if(!sel) return;
+  if(!val){ sel.value=""; if(man){man.style.display="none";man.value="";} return; }
+  var found=false;
+  for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===val){ found=true; break; } }
+  if(!found){
+    var opt=document.createElement("option");
+    opt.value=val; opt.text=fmtTime(timeToMins(val))+" (custom)";
+    sel.insertBefore(opt, sel.options[sel.options.length-1]);
+  }
+  sel.value=val;
+  if(man){ man.style.display="none"; }
+}
 function genId(){ return "NGH-"+Date.now().toString(36).toUpperCase().slice(-6)+"-"+Math.floor(Math.random()*900+100); }
 function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function roomName(id){ for(var i=0;i<ROOMS.length;i++) if(ROOMS[i].id===id) return ROOMS[i].name; return id; }
@@ -1352,8 +1411,8 @@ function renderEventsAdmin(){
     '<div class="row"><div><label class="fld req">Event title</label><input type="text" id="ev-title" placeholder="e.g. Friday Night Magic"></div>'+
     '<div><label class="fld req">Date</label><input type="date" id="ev-date"></div></div>'+
     '<label class="check-line" style="margin-top:10px;"><input type="checkbox" id="ev-allday" onchange="$(\'ev-times\').style.display=this.checked?\'none\':\'grid\'">All day</label>'+
-    '<div class="row" id="ev-times"><div><label class="fld">Start time</label><input type="time" id="ev-start" step="900"></div>'+
-    '<div><label class="fld">End time</label><input type="time" id="ev-end" step="900" onchange="if($(\'ev-est-end\')&&!$(\'ev-est-end\').value)$(\'ev-est-end\').value=this.value;"></div></div>'+
+    '<div class="row" id="ev-times"><div><label class="fld">Start time</label>'+timeSelectHTML("ev-start","",15)+'</div>'+
+    '<div><label class="fld">End time</label>'+timeSelectHTML("ev-end","if($(\'ev-est-end\')&&!$(\'ev-est-end\').value)setTimeSelect(\'ev-est-end\',$(\'ev-end\').value);",15)+'</div></div>'+
     '<label class="fld">Rooms held (none = all rooms)</label><div>'+roomChecks+'</div>'+
 
     // ---- Photo + Facebook ----
@@ -1371,8 +1430,8 @@ function renderEventsAdmin(){
     '<div class="row"><div><label class="fld">Tournament type</label><select id="ev-ttype"><option value="">— none / casual —</option><option value="swiss">Swiss</option><option value="single">Single elimination</option><option value="double">Double elimination</option><option value="roundrobin">Round robin</option><option value="other">Other</option></select></div>'+
     '<div><label class="fld">Number of rounds</label><input type="number" id="ev-rounds" min="1" placeholder="e.g. 4"></div></div>'+
     '<div class="row"><div><label class="fld">Wins required per round</label><input type="number" id="ev-wins" min="1" placeholder="e.g. 2 (best of 3)"></div>'+
-    '<div><label class="fld">Estimated end time</label><input type="time" id="ev-est-end" step="900"></div></div>'+
-    '<div class="row"><div><label class="fld">Requested arrival time</label><input type="time" id="ev-arrival" step="900"></div>'+
+    '<div><label class="fld">Estimated end time</label>'+timeSelectHTML("ev-est-end","",15)+'</div></div>'+
+    '<div class="row"><div><label class="fld">Requested arrival time</label>'+timeSelectHTML("ev-arrival","",15)+'</div>'+
     '<div><label class="fld">Event restrictions (optional)</label><input type="text" id="ev-restrictions" placeholder="e.g. ages 13+, Standard format only"></div></div></div>'+
 
     // ---- Prizes ----
@@ -1449,14 +1508,14 @@ function editEvent(id){
   editingEventId=id; evPhotoData=null;
   $("ev-form-title").textContent="✎ Edit Public NGH Event"; $("ev-save-btn").textContent="Update Event"; $("ev-cancel-btn").style.display="inline-block";
   $("ev-title").value=e.title||""; $("ev-date").value=e.date||""; $("ev-allday").checked=!!e.allDay; $("ev-times").style.display=e.allDay?"none":"grid";
-  $("ev-start").value=e.start||""; $("ev-end").value=e.end||""; $("ev-notes").value=e.notes||"";
+  setTimeSelect("ev-start", e.start||""); setTimeSelect("ev-end", e.end||""); $("ev-notes").value=e.notes||"";
   $("ev-fb").value=e.fbLink||"";
   // photo: if it's a data URL keep it in evPhotoData; if a normal URL show in the url box
   if(e.photo && e.photo.indexOf("data:")===0){ evPhotoData=e.photo; $("ev-photo-url").value=""; }
   else { $("ev-photo-url").value=e.photo||""; }
   evPhotoPreview();
   var t=e.tournament||{};
-  $("ev-ttype").value=t.type||""; $("ev-rounds").value=t.rounds||""; $("ev-wins").value=t.winsPerRound||""; $("ev-est-end").value=t.estEnd||""; $("ev-arrival").value=t.arrival||""; $("ev-restrictions").value=t.restrictions||"";
+  $("ev-ttype").value=t.type||""; $("ev-rounds").value=t.rounds||""; $("ev-wins").value=t.winsPerRound||""; setTimeSelect("ev-est-end", t.estEnd||""); setTimeSelect("ev-arrival", t.arrival||""); $("ev-restrictions").value=t.restrictions||"";
   var p=e.prizes||{};
   $("ev-prizes-place").value=p.placement||""; $("ev-prizes-part").value=p.participation||"";
   $("ev-admin-notes").value=e.adminNotes||"";
@@ -1615,8 +1674,8 @@ function renderBlackout(){
     '<div class="row"><div><label class="fld">Date</label><input type="date" id="bo-date"></div>'+
     '<div><label class="fld">Label (optional)</label><input type="text" id="bo-label" placeholder="e.g. Deep clean / Private buyout"></div></div>'+
     '<label class="check-line" style="margin-top:10px;"><input type="checkbox" id="bo-allday" onchange="$(\'bo-times\').style.display=this.checked?\'none\':\'grid\'">All day</label>'+
-    '<div class="row" id="bo-times"><div><label class="fld">Start</label><input type="time" id="bo-start" step="1800"></div>'+
-    '<div><label class="fld">End</label><input type="time" id="bo-end" step="1800"></div></div>'+
+    '<div class="row" id="bo-times"><div><label class="fld">Start</label>'+timeSelectHTML("bo-start","",15)+'</div>'+
+    '<div><label class="fld">End</label>'+timeSelectHTML("bo-end","",15)+'</div></div>'+
     '<label class="fld">Rooms affected (none = all rooms)</label><div>'+roomChecks+'</div>'+
     '<label class="check-line" style="margin-top:12px;"><input type="checkbox" id="bo-recurring" onchange="$(\'bo-rec-ui\').style.display=this.checked?\'grid\':\'none\'">Recurring blackout</label>'+
     '<div class="row" id="bo-rec-ui" style="display:none;"><div><label class="fld">Repeats</label><select id="bo-rec-freq"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option></select></div>'+
@@ -1787,6 +1846,7 @@ function evChip(e){
 }
 function jumpToReq(id){ setAdminView('list'); var r=getReq(id); if(r&&r.groupId) showGroup(r.groupId); else { adminFilter="all"; renderAdmin("all"); } }
 function jumpToEvent(id){ setAdminView('events'); setTimeout(function(){ editEvent(id); }, 60); }
+function newEventQuick(){ setAdminView('events'); setTimeout(function(){ resetEventForm(); window.scrollTo({top:0,behavior:"smooth"}); var t=$("ev-title"); if(t) t.focus(); }, 60); }
 
 function renderCalendar(){
   var wrap=$("calendar-view-wrap"), title="";
@@ -2060,6 +2120,7 @@ function custWeekDayHTML(isDay){
 /* ---------- init ---------- */
 (async function init(){
   renderRooms(); renderHours(); renderAddons();
+  if($("bk-start-wrap")) $("bk-start-wrap").innerHTML = timeSelectHTML("bk-start", "onDateTimeChange()", 15);
   try { await refreshCache(); } catch(e){ /* offline/demo */ }
   checkConflicts();
   if(location.search.indexOf("admin=1")>=0) openAdmin();

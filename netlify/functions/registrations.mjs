@@ -103,6 +103,46 @@ const _handler = async (req) => {
     await sendMail(adminEmail, 'New registration: ' + (ev.title || 'NGH Event'),
       'New event registration\n\nEvent: ' + (ev.title || 'NGH Event') + '\nWhen: ' + when + '\nName: ' + reg.name + '\nEmail: ' + reg.email + '\nPhone: ' + (reg.phone || '—') + '\nComments: ' + (reg.comments || '—') + '\nInvoice requested: ' + (reg.wantsInvoice ? 'YES' : 'no') + '\n' + costLine);
 
+    // ---- Auto "event confirmed to fire" notification ----
+    // If this registration just brought the approved count UP TO the minimum,
+    // notify every approved registrant for this occurrence that the event is on.
+    // Only for pay-when-fired (payWhen !== 'now'); pay-now registrants already paid.
+    const minToFire = r.min || 0;
+    if (minToFire > 0) {
+      const allRows = await sql`SELECT data FROM registrations WHERE event_id = ${reg.eventId}`;
+      let approved = allRows.map(x => x.data).filter(d => d.status !== 'canceled' && d.status !== 'unapproved');
+      if (reg.occDate) approved = approved.filter(d => d.occDate === reg.occDate);
+      // fire exactly once: when count first equals the minimum
+      if (approved.length === minToFire) {
+        const base = (process.env.SITE_URL || 'https://gamehaven.guru').replace(/\/$/, '');
+        for (const a of approved) {
+          const aCost = Number(a.cost) || 0;
+          let payLine;
+          if (aCost > 0 && !a.feePaid) {
+            // create a Checkout link for this registrant
+            let link = base + '/?pay_reg=' + encodeURIComponent(a.id);
+            try {
+              const { createCheckoutSession } = await import('./_shared/stripe.mjs');
+              const session = await createCheckoutSession({
+                items: [{ name: 'Event registration — ' + (ev.title || ev.id), amountCents: Math.round(aCost * 100), qty: 1 }],
+                successUrl: base + '/?reg_paid=1', cancelUrl: base + '/?reg_canceled=1',
+                customerEmail: a.email, metadata: { kind: 'registration', registrationId: a.id }
+              });
+              link = session.url;
+            } catch (e) { console.error('[registrations] paylink for fire-email failed', e); }
+            payLine = 'Your registration fee is $' + aCost.toFixed(2) + '. Pay online here:\n' + link + '\n\nOr pay in person — but no later than 1 hour before the event begins. Unpaid spots may be released.';
+          } else if (aCost > 0 && a.feePaid) {
+            payLine = 'Your payment is already complete. Thanks!';
+          } else {
+            payLine = 'This event is free — just show up and play!';
+          }
+          await sendMail(a.email, '✅ Confirmed: ' + (ev.title || 'NGH Event') + ' is happening!',
+            'Hi ' + a.name + ',\n\nGood news — ' + (ev.title || 'NGH Event') + ' on ' + when + ' has reached the minimum number of players and is confirmed to happen!\n\n' + payLine + '\n\nSee you at Northwood Game Haven!\n— NGH');
+        }
+        console.log('[registrations] fire-notification sent to', approved.length, 'registrants for', reg.eventId, reg.occDate || '');
+      }
+    }
+
     return json(reg, 201);
   }
 
