@@ -123,6 +123,13 @@
   .cc-cell.other { background:#f6f7f4; opacity:0.55; }
   .cc-cell.today { border-color:var(--gold); box-shadow:inset 0 0 0 1px var(--gold); }
   .cc-daynum { font-size:0.68rem; color:#6a6a50; font-weight:700; margin-bottom:2px; }
+  .cc-grid-wk { grid-template-columns:22px repeat(7,1fr); }
+  .cc-wkcol { display:flex; align-items:center; justify-content:center; color:#b9c4b2; font-weight:700; cursor:pointer; border-radius:5px; user-select:none; font-size:0.8rem; }
+  .cc-wkcol:hover { background:#eef3ec; color:var(--forest); }
+  .cc-daynum-link { cursor:pointer; display:inline-block; padding:1px 5px; border-radius:4px; }
+  .cc-daynum-link:hover { background:var(--forest); color:#fff; }
+  .cch-link { cursor:pointer; border-radius:5px; }
+  .cch-link:hover { background:#eef3ec; color:var(--forest); }
   .cc-ev { font-size:0.57rem; line-height:1.2; border-radius:3px; padding:1px 4px; margin-bottom:2px; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .cc-ev.reserved { background:#9a9a80; }
   .cc-ev.mine { background:var(--cal-approved); }
@@ -214,6 +221,14 @@
   .cal-cell.other { background:#f6f7f4; opacity:0.6; }
   .cal-cell.today { border-color:var(--gold); box-shadow:inset 0 0 0 1px var(--gold); }
   .cal-daynum { font-size:0.72rem; color:#6a6a50; font-weight:700; margin-bottom:3px; }
+  /* drill-down: clickable day numbers + week-jump column */
+  .cal-grid-wk { grid-template-columns:26px repeat(7,1fr); }
+  .cal-wkcol { display:flex; align-items:center; justify-content:center; color:#b9c4b2; font-weight:700; cursor:pointer; border-radius:6px; user-select:none; }
+  .cal-wkcol:hover { background:#eef3ec; color:var(--forest); }
+  .cal-daynum-link { cursor:pointer; display:inline-block; padding:1px 6px; border-radius:5px; }
+  .cal-daynum-link:hover { background:var(--forest); color:#fff; }
+  .whead-link { cursor:pointer; border-radius:6px; }
+  .whead-link:hover { background:#eef3ec; color:var(--forest); }
   .cal-ev { font-size:0.6rem; line-height:1.25; border-radius:4px; padding:2px 4px; margin-bottom:2px; cursor:pointer; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .cal-ev.pending { background:var(--cal-pending); }
   .cal-ev.approved { background:var(--cal-approved); }
@@ -1208,7 +1223,57 @@ function expandedEvents(){
   });
   return out;
 }
-var editingEventId=null;
+
+/* ---- ICS export (admin: one event or all events) ---- */
+function icsPad2(n){ return (n<10?"0":"")+n; }
+function icsUTC(d){ return d.getUTCFullYear()+icsPad2(d.getUTCMonth()+1)+icsPad2(d.getUTCDate())+"T"+icsPad2(d.getUTCHours())+icsPad2(d.getUTCMinutes())+icsPad2(d.getUTCSeconds())+"Z"; }
+function icsEscape(s){ return (s||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n"); }
+function eventVEVENT(e, ds){
+  var date = ds || e.date;
+  var uid = (e.id||"ngh")+"-"+date+"@gamehaven.guru";
+  var lines = ["BEGIN:VEVENT","UID:"+uid,"DTSTAMP:"+icsUTC(new Date())];
+  if(e.allDay){
+    var next=new Date(date+"T00:00:00"); next.setDate(next.getDate()+1);
+    lines.push("DTSTART;VALUE=DATE:"+date.replace(/-/g,""));
+    lines.push("DTEND;VALUE=DATE:"+ymd(next).replace(/-/g,""));
+  } else {
+    var s=new Date(date+"T"+(e.start||"12:00")+":00");
+    var en=new Date(date+"T"+(e.end||e.start||"12:00")+":00");
+    if(en<=s) en=new Date(s.getTime()+2*3600000);
+    lines.push("DTSTART:"+icsUTC(s)); lines.push("DTEND:"+icsUTC(en));
+  }
+  var desc=(e.notes||"")+(e.fbLink?("\n\nFacebook: "+e.fbLink):"");
+  lines.push("SUMMARY:"+icsEscape(e.title||"NGH Event"));
+  lines.push("DESCRIPTION:"+icsEscape(desc));
+  lines.push("LOCATION:"+icsEscape("Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI"));
+  lines.push("END:VEVENT");
+  return lines.join("\r\n");
+}
+function downloadICS(filename, vevents){
+  var ics=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Northwood Game Haven//Events//EN","CALSCALE:GREGORIAN"].concat(vevents).concat(["END:VCALENDAR"]).join("\r\n");
+  var blob=new Blob([ics],{type:"text/calendar"});
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+}
+function exportEvent(id){
+  var e=cache.events.filter(function(x){return x.id===id;})[0]; if(!e) return;
+  // include all recurrence occurrences of this one event
+  var vevents = (e.recurrence ? recurrenceDates(e.date,e.recurrence.freq,e.recurrence.count) : [e.date]).map(function(d){ return eventVEVENT(e,d); });
+  downloadICS((e.title||"event").replace(/[^a-z0-9]+/gi,"-").toLowerCase()+".ics", vevents);
+}
+function exportAllEvents(){
+  var all=expandedEvents();
+  if(!all.length){ alert("No events to export yet."); return; }
+  var vevents=all.map(function(e){ return eventVEVENT(e, e.date); });
+  downloadICS("northwood-game-haven-events.ics", vevents);
+}
+function adminGcalUrl(e){
+  function g(d){ return d.getUTCFullYear()+icsPad2(d.getUTCMonth()+1)+icsPad2(d.getUTCDate())+"T"+icsPad2(d.getUTCHours())+icsPad2(d.getUTCMinutes())+"00Z"; }
+  var dates;
+  if(e.allDay){ var nx=new Date(e.date+"T00:00:00"); nx.setDate(nx.getDate()+1); dates=e.date.replace(/-/g,"")+"/"+ymd(nx).replace(/-/g,""); }
+  else { var s=new Date(e.date+"T"+(e.start||"12:00")+":00"); var en=new Date(e.date+"T"+(e.end||e.start||"12:00")+":00"); if(en<=s) en=new Date(s.getTime()+2*3600000); dates=g(s)+"/"+g(en); }
+  var details=(e.notes||"")+(e.fbLink?("\n\nFacebook: "+e.fbLink):"");
+  return "https://www.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(e.title||"NGH Event")+"&dates="+dates+"&details="+encodeURIComponent(details)+"&location="+encodeURIComponent("Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI");
+}
 function renderEventsAdmin(){
   var wrap=$("events-view-wrap");
   var roomChecks=ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="ev-room" value="'+r.id+'">'+r.name+'</label>'; }).join("");
@@ -1235,6 +1300,8 @@ function renderEventsAdmin(){
       (p.participation?'<div class="kv"><b>Participation prizes</b> '+esc(p.participation)+'</div>':'')+
       (e.adminNotes?'<div class="kv" style="color:#9a6310;"><b>Admin notes</b> '+esc(e.adminNotes)+'</div>':'')+
       '<div class="admin-actions"><button class="btn btn-sm btn-ghost" onclick="editEvent(\''+e.id+'\')">✎ Edit</button>'+
+      '<button class="btn btn-sm btn-ghost" onclick="exportEvent(\''+e.id+'\')">📥 Export (.ics)</button>'+
+      '<a class="btn btn-sm btn-ghost" href="'+adminGcalUrl(e)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">📅 Add to Google</a>'+
       '<button class="btn btn-sm btn-danger" onclick="deleteEvent(\''+e.id+'\')">Delete</button></div>'+
     '</div>';
   }).join("") : '<div class="card"><p class="hint" style="margin:0;">No public events yet.</p></div>';
@@ -1283,7 +1350,7 @@ function renderEventsAdmin(){
     '<p class="hint" style="margin-top:6px;">Registration (capacity, cost, sign-ups) is configured in the next phase. This step defines the event itself.</p>'+
     '<div style="margin-top:14px;"><button class="btn btn-sm" id="ev-save-btn" onclick="saveEvent()">Save Event</button> <button class="btn btn-sm btn-ghost" onclick="resetEventForm()" id="ev-cancel-btn" style="display:none;">Cancel edit</button></div>'+
     '</div>'+
-    '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;">Current Public Events</h2>'+list;
+    '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">Current Public Events <button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></h2>'+list;
 }
 var evPhotoData = null;  // holds an uploaded image as a data URL until saved
 function evPhotoPreview(){
@@ -1417,6 +1484,7 @@ function exportData(){
    =================================================================== */
 var calMode="month", calRef=new Date();
 function setCalMode(m){ calMode=m; renderCalendar(); }
+function calGoto(dateStr, mode){ calRef=new Date(dateStr+"T12:00:00"); calMode=mode; renderCalendar(); }
 function calShift(dir){ if(calMode==="month") calRef.setMonth(calRef.getMonth()+dir); else if(calMode==="week") calRef.setDate(calRef.getDate()+dir*7); else calRef.setDate(calRef.getDate()+dir); renderCalendar(); }
 function calToday(){ calRef=new Date(); renderCalendar(); }
 function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
@@ -1489,13 +1557,19 @@ function renderCalendar(){
 }
 function monthHTML(){
   var first=new Date(calRef.getFullYear(), calRef.getMonth(), 1), start=new Date(first); start.setDate(1-first.getDay());
-  var todayStr=ymd(new Date()), h='<div class="cal-grid">';
+  var todayStr=ymd(new Date());
+  // Header row: blank week-col + 7 day-of-week labels
+  var h='<div class="cal-grid cal-grid-wk">';
+  h+='<div class="cal-wkcol cal-dow" title="Jump to week"></div>';
   ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(function(d){ h+='<div class="cal-dow">'+d+'</div>'; });
   for(var i=0;i<42;i++){
     var d=new Date(start); d.setDate(start.getDate()+i);
     var ds=ymd(d), other=d.getMonth()!==calRef.getMonth(), evs=eventsForDate(ds);
+    if(i%7===0){ // start of a week row — clickable week-jump cell
+      h+='<div class="cal-wkcol" title="View this week" onclick="calGoto(\''+ds+'\',\'week\')">›</div>';
+    }
     h+='<div class="cal-cell'+(other?" other":"")+(ds===todayStr?" today":"")+'">'+
-       '<div class="cal-daynum">'+d.getDate()+'</div>'+
+       '<div class="cal-daynum cal-daynum-link" title="View this day" onclick="calGoto(\''+ds+'\',\'day\')">'+d.getDate()+'</div>'+
        evs.slice(0,4).map(evChip).join("")+
        (evs.length>4?('<div style="font-size:0.58rem;color:#8a8a6a;">+'+(evs.length-4)+' more</div>'):'')+
        '</div>';
@@ -1507,7 +1581,7 @@ function weekDayHTML(isDay){
   if(isDay){ days=[new Date(calRef)]; } else { var ws=weekStart(calRef); for(var i=0;i<7;i++){ var d=new Date(ws); d.setDate(ws.getDate()+i); days.push(d); } }
   var todayStr=ymd(new Date()), h='<div class="cal-week" style="--wcols:'+days.length+'">';
   h+='<div class="whead"></div>';
-  days.forEach(function(d){ h+='<div class="whead"'+(ymd(d)===todayStr?' style="color:var(--gold)"':'')+'>'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
+  days.forEach(function(d){ var dds=ymd(d); h+='<div class="whead whead-link"'+(dds===todayStr?' style="color:var(--gold)"':'')+' title="View this day" onclick="calGoto(\''+dds+'\',\'day\')">'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
   for(var hr=8; hr<=23; hr++){
     h+='<div class="whour">'+fmtTime(hr*60)+'</div>';
     days.forEach(function(d){
@@ -1621,6 +1695,7 @@ function expandedBlackoutsC(){
 }
 
 function setCustMode(m){ custMode=m; renderCustCal(); }
+function custGoto(dateStr, mode){ custRef=new Date(dateStr+"T12:00:00"); custMode=mode; renderCustCal(); }
 function custShift(dir){ if(custMode==="month") custRef.setMonth(custRef.getMonth()+dir); else if(custMode==="week") custRef.setDate(custRef.getDate()+dir*7); else custRef.setDate(custRef.getDate()+dir); renderCustCal(); }
 function custToday(){ custRef=new Date(); renderCustCal(); }
 
@@ -1665,13 +1740,15 @@ function ccChip(e){
 }
 function custMonthHTML(){
   var first=new Date(custRef.getFullYear(), custRef.getMonth(),1), start=new Date(first); start.setDate(1-first.getDay());
-  var todayStr=ymd(new Date()), h='<div class="cc-grid">';
+  var todayStr=ymd(new Date()), h='<div class="cc-grid cc-grid-wk">';
+  h+='<div class="cc-wkcol cc-dow"></div>';
   ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(function(d){ h+='<div class="cc-dow">'+d+'</div>'; });
   for(var i=0;i<42;i++){
     var d=new Date(start); d.setDate(start.getDate()+i);
     var ds=ymd(d), other=d.getMonth()!==custRef.getMonth(), evs=custEventsForDate(ds);
+    if(i%7===0){ h+='<div class="cc-wkcol" title="View this week" onclick="custGoto(\''+ds+'\',\'week\')">›</div>'; }
     h+='<div class="cc-cell'+(other?" other":"")+(ds===todayStr?" today":"")+'">'+
-       '<div class="cc-daynum">'+d.getDate()+'</div>'+
+       '<div class="cc-daynum cc-daynum-link" title="View this day" onclick="custGoto(\''+ds+'\',\'day\')">'+d.getDate()+'</div>'+
        evs.slice(0,4).map(ccChip).join("")+
        (evs.length>4?('<div style="font-size:0.55rem;color:#8a8a6a;">+'+(evs.length-4)+' more</div>'):'')+
        '</div>';
@@ -1683,7 +1760,7 @@ function custWeekDayHTML(isDay){
   if(isDay){ days=[new Date(custRef)]; } else { var ws=weekStart(custRef); for(var i=0;i<7;i++){ var d=new Date(ws); d.setDate(ws.getDate()+i); days.push(d); } }
   var todayStr=ymd(new Date()), h='<div class="cc-week" style="--ccc:'+days.length+'">';
   h+='<div class="cch"></div>';
-  days.forEach(function(d){ h+='<div class="cch"'+(ymd(d)===todayStr?' style="color:var(--gold)"':'')+'>'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
+  days.forEach(function(d){ var dds=ymd(d); h+='<div class="cch cch-link"'+(dds===todayStr?' style="color:var(--gold)"':'')+' title="View this day" onclick="custGoto(\''+dds+'\',\'day\')">'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
   for(var hr=8; hr<=23; hr++){
     h+='<div class="cchour">'+fmtTime(hr*60)+'</div>';
     days.forEach(function(d){
