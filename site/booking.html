@@ -485,6 +485,7 @@
       <div class="tabbar" id="admin-tabs"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
         <button class="btn btn-ghost btn-sm" onclick="openBlackout()">🚫 Manage Blackout Dates</button>
+        <button class="btn btn-ghost btn-sm" onclick="listSeamLocks()">🔑 List Door Locks (Seam)</button>
         <button class="btn btn-ghost btn-sm" onclick="exportData()">⬇ Export (JSON)</button>
         <button class="btn btn-ghost btn-sm" onclick="closeAdmin()">Log Out</button>
       </div>
@@ -1284,6 +1285,51 @@ async function genPayLink(id, part){
     window.prompt("Payment link for the "+part+" (copied to clipboard — paste into an email/text to the customer):", data.url);
   } catch(e){ alert("Couldn't create payment link: "+e.message); }
 }
+// List Seam locks + build a suggested SEAM_DOORS mapping for the admin.
+async function listSeamLocks(){
+  try {
+    var res = await fetch(API_BASE + "/seam-devices", { headers:{ "Authorization":"Bearer "+Store._token() } });
+    if(!res.ok){ var er=await res.json().catch(function(){return{};}); alert("Couldn't list locks: "+(er.error||res.status)); return; }
+    var data = await res.json();
+    if(data.configured===false){ alert("Seam isn't connected yet.\n\nAdd your SEAM_API_KEY in Netlify, redeploy, then try again."); return; }
+    var devs = data.devices||[];
+    if(!devs.length){ alert("No locks found in your Seam workspace."); return; }
+    // Try to auto-match names to NGH room keys
+    function guessKey(name){
+      var n=(name||"").toLowerCase();
+      if(n.indexOf("front")>=0||n.indexOf("lobby")>=0) return "front";
+      if(n.indexOf("holt")>=0) return "holt";
+      if(n.indexOf("den")>=0) return "den";
+      if(n.indexOf("basement")>=0||n.indexOf("depths")>=0) return "depths";
+      if(n.indexOf("lodge")>=0) return "lodge";
+      if(n.indexOf("fireside")>=0||n.indexOf("adventurer")>=0||n.indexOf("rest")>=0) return "rest";
+      return null;
+    }
+    var map={};
+    var lines=devs.map(function(d){
+      var k=guessKey(d.name);
+      if(k && !map[k]) map[k]=d.device_id;
+      return d.name+(d.online===false?" (OFFLINE)":"")+"\n    id: "+d.device_id+(k?("   → suggested key: \""+k+"\""):"   → (not a bookable room — skip)");
+    });
+    var suggested = JSON.stringify(map);
+    var w=window.open("", "_blank", "width=640,height=720");
+    if(w){
+      w.document.write('<html><head><title>Seam Locks</title><style>body{font-family:system-ui,sans-serif;padding:24px;color:#2d3a28;line-height:1.5;}h2{font-family:Georgia,serif;color:#2d5a3d;}code,pre{background:#f1f4ee;padding:2px 6px;border-radius:5px;}pre{padding:12px;white-space:pre-wrap;word-break:break-all;}button{background:#2d5a3d;color:#fff;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:0.9rem;}</style></head><body>');
+      w.document.write('<h2>🔑 Your Seam Locks ('+devs.length+')</h2>');
+      w.document.write('<p>Below is each lock and its <b>device_id</b>. Copy the suggested <code>SEAM_DOORS</code> value at the bottom into Netlify (Environment variables), then redeploy.</p>');
+      w.document.write('<pre>'+devs.map(function(d){var k=guessKey(d.name);return (d.name||"(unnamed)")+(d.online===false?"  [OFFLINE]":"")+"\n  device_id: "+d.device_id+(k?("\n  → SEAM_DOORS key: \""+k+"\""):"\n  → (skip — not a bookable room)");}).join("\n\n")+'</pre>');
+      w.document.write('<h3>Suggested SEAM_DOORS value (paste into Netlify):</h3>');
+      w.document.write('<pre id="map">'+suggested+'</pre>');
+      w.document.write('<button onclick="navigator.clipboard.writeText(document.getElementById(\'map\').textContent).then(function(){alert(\'Copied!\');})">📋 Copy SEAM_DOORS</button>');
+      w.document.write('<p style="margin-top:16px;color:#8a8a6a;font-size:0.85rem;">Double-check the auto-matched keys are correct before saving. Keys used by bookings: front, holt, den, depths (VRBOs: lodge, rest).</p>');
+      w.document.write('</body></html>');
+      w.document.close();
+    } else {
+      alert("Suggested SEAM_DOORS:\n\n"+suggested+"\n\n(Allow popups to see the full list with names.)");
+    }
+  } catch(e){ alert("Couldn't list locks: "+(e.message||e)); }
+}
+
 // Issue (or revoke) a time-bound door access code (via Seam) for a booking.
 async function issueDoorCode(id){
   var r=getReq(id); if(!r) return;

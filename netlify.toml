@@ -69,6 +69,16 @@
   from = "/api/loyalty-check"
   to   = "/.netlify/functions/loyalty-check"
   status = 200
+
+[[redirects]]
+  from = "/api/door-code"
+  to   = "/.netlify/functions/door-code"
+  status = 200
+
+[[redirects]]
+  from = "/api/seam-devices"
+  to   = "/.netlify/functions/seam-devices"
+  status = 200
 [[redirects]]
   from = "/api/stripe-webhook"
   to   = "/.netlify/functions/stripe-webhook"
