@@ -806,6 +806,14 @@ function recurrenceDates(startDate, freq, count){
   }
   return dates;
 }
+// Occurrence dates for a public EVENT, honoring its exceptions[] (dates to skip
+// because that occurrence was split out / edited individually).
+function eventDates(e){
+  if(!e) return [];
+  var dates = e.recurrence ? recurrenceDates(e.date, e.recurrence.freq, e.recurrence.count) : [e.date];
+  if(e.exceptions && e.exceptions.length){ dates = dates.filter(function(d){ return e.exceptions.indexOf(d)<0; }); }
+  return dates;
+}
 function freqLabel(f){ return f==="weekly"?"Weekly":f==="biweekly"?"Every 2 weeks":f==="monthly"?"Monthly":f; }
 function toggleRecurringUI(){ var on=$("bk-recurring").checked; $("recurring-ui").style.display = on ? "block" : "none"; recalc(); }
 function getRecurrence(){
@@ -1498,7 +1506,7 @@ function expandedEvents(){
   var out=[];
   cache.events.forEach(function(e){
     if(e.recurrence){
-      recurrenceDates(e.date, e.recurrence.freq, e.recurrence.count).forEach(function(d,i){ var c=Object.assign({},e); c.date=d; c._recI=i+1; out.push(c); });
+      eventDates(e).forEach(function(d,i){ var c=Object.assign({},e); c.date=d; c._recI=i+1; out.push(c); });
     } else { out.push(Object.assign({},e)); }
   });
   return out;
@@ -1537,7 +1545,7 @@ function downloadICS(filename, vevents){
 function exportEvent(id){
   var e=cache.events.filter(function(x){return x.id===id;})[0]; if(!e) return;
   // include all recurrence occurrences of this one event
-  var vevents = (e.recurrence ? recurrenceDates(e.date,e.recurrence.freq,e.recurrence.count) : [e.date]).map(function(d){ return eventVEVENT(e,d); });
+  var vevents = eventDates(e).map(function(d){ return eventVEVENT(e,d); });
   downloadICS((e.title||"event").replace(/[^a-z0-9]+/gi,"-").toLowerCase()+".ics", vevents);
 }
 function exportAllEvents(){
@@ -1611,6 +1619,7 @@ function renderEventsAdmin(){
       ((e.registration&&e.registration.enabled)?('<div class="kv" style="margin-top:6px;"><b>🎟️ Registration</b> '+(e.registration.cost>0?("$"+Number(e.registration.cost).toFixed(2)):"Free")+(e.registration.min?(" · min "+e.registration.min):"")+(e.registration.max?(" · max "+e.registration.max):"")+'</div>'+
         '<div id="regwrap-'+e.id+'"><button class="btn btn-sm btn-ghost" onclick="viewRegistrants(\''+e.id+'\')">👥 View registrants</button></div>'):'')+
       '<div class="admin-actions"><button class="btn btn-sm btn-ghost" onclick="editEvent(\''+e.id+'\')">✎ Edit</button>'+
+      '<button class="btn btn-sm btn-ghost" onclick="duplicateEvent(\''+e.id+'\')">⧉ Duplicate</button>'+
       '<button class="btn btn-sm btn-ghost" onclick="exportEvent(\''+e.id+'\')">📥 Export (.ics)</button>'+
       '<a class="btn btn-sm btn-ghost" href="'+adminGcalUrl(e)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">📅 Add to Google</a>'+
       '<button class="btn btn-sm btn-danger" onclick="deleteEvent(\''+e.id+'\')">Delete</button></div>'+
@@ -1648,10 +1657,14 @@ function renderEventsAdmin(){
 
     // ---- Photo + Facebook ----
     '<div class="ev-section"><div class="ev-section-label">📷 Photo &amp; Links</div>'+
-    '<label class="fld">Photo URL (paste a link)</label><input type="text" id="ev-photo-url" placeholder="https://… (from your shop, Facebook, Imgur, etc.)" onchange="evPhotoPreview()">'+
+    '<label class="fld">Facebook event link (optional)</label><input type="text" id="ev-fb" placeholder="https://www.facebook.com/events/…" onchange="onFbLinkChange()">'+
+    '<div id="ev-fb-help" style="display:none;margin:6px 0 4px;padding:9px 11px;background:#eef4fb;border:1px solid #cfe0f2;border-radius:9px;font-size:0.78rem;color:#34506b;line-height:1.55;">'+
+      '<b>Tip — use the Facebook event\u2019s image here too:</b> open your FB event, right-click its cover image → <i>Copy image address</i>, then paste it into the Photo URL box below. '+
+      '<button type="button" class="btn btn-sm btn-ghost" style="margin-top:6px;" onclick="openFbForImage()">↗ Open this FB event to copy its image</button>'+
+    '</div>'+
+    '<label class="fld">Photo URL (paste a link)</label><input type="text" id="ev-photo-url" placeholder="https://… (paste the Facebook cover image, or from your shop, Imgur, etc.)" onchange="evPhotoPreview()">'+
     '<label class="fld">…or upload an image</label><input type="file" id="ev-photo-file" accept="image/*" onchange="evPhotoUpload()">'+
-    '<div id="ev-photo-preview" style="margin-top:8px;"></div>'+
-    '<label class="fld">Facebook event link (optional)</label><input type="text" id="ev-fb" placeholder="https://www.facebook.com/events/…"></div>'+
+    '<div id="ev-photo-preview" style="margin-top:8px;"></div></div>'+
 
     // ---- Description ----
     '<label class="fld">Public description</label><textarea id="ev-notes" placeholder="What is this event? Who is it for? Format, theme, etc."></textarea>'+
@@ -1694,11 +1707,23 @@ function renderEventsAdmin(){
     '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">Current Public Events <button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></h2>'+list;
 }
 var evPhotoData = null;  // holds an uploaded image as a data URL until saved
+// Show the "grab the FB image" tip whenever a Facebook link is present, and
+// reveal it live as the admin types/pastes a link.
+function onFbLinkChange(){
+  var fb=$("ev-fb"), help=$("ev-fb-help");
+  if(!fb||!help) return;
+  help.style.display = fb.value.trim() ? "block" : "none";
+}
+function openFbForImage(){
+  var fb=$("ev-fb")?$("ev-fb").value.trim():"";
+  if(!fb){ alert("Paste the Facebook event link first."); return; }
+  window.open(fb, "_blank", "noopener");
+}
 function evPhotoPreview(){
   var url=$("ev-photo-url").value.trim();
   var box=$("ev-photo-preview");
   var src = url || evPhotoData;
-  box.innerHTML = src ? '<img src="'+esc(src)+'" alt="preview" style="max-width:180px;max-height:120px;border-radius:8px;border:1px solid #d8e0d4;">' : '';
+  box.innerHTML = src ? '<img src="'+esc(src)+'" alt="preview" style="max-width:180px;max-height:120px;border-radius:8px;border:1px solid #d8e0d4;" onerror="this.style.display=\'none\';">' : '';
 }
 function evPhotoUpload(){
   var f=$("ev-photo-file").files[0]; if(!f) return;
@@ -1737,16 +1762,37 @@ function resetEventForm(){ editingEventId=null; evPhotoData=null;
 function editEvent(id){
   var e=cache.events.filter(function(x){return x.id===id;})[0]; if(!e) return;
   editingEventId=id; evPhotoData=null;
+  _fillEventForm(e, false);
   $("ev-form-title").textContent="✎ Edit Public NGH Event"; $("ev-save-btn").textContent="Update Event"; $("ev-cancel-btn").style.display="inline-block";
-  $("ev-title").value=e.title||""; $("ev-date").value=e.date||""; $("ev-allday").checked=!!e.allDay; $("ev-times").style.display=e.allDay?"none":"grid";
-  setTimeSelect("ev-start", e.start||""); setTimeSelect("ev-end", e.end||""); $("ev-notes").value=e.notes||"";
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+// Duplicate: pre-fill everything EXCEPT date/time (which must be re-entered for the new occurrence).
+function duplicateEvent(id){
+  var e=cache.events.filter(function(x){return x.id===id;})[0]; if(!e) return;
+  editingEventId=null; evPhotoData=null;        // brand-new event
+  _fillEventForm(e, true);                        // blankDateTime = true
+  $("ev-form-title").textContent="⧉ Duplicate Event — set a new date & time"; $("ev-save-btn").textContent="Create Duplicate"; $("ev-cancel-btn").style.display="inline-block";
+  window.scrollTo({top:0,behavior:"smooth"});
+  setTimeout(function(){ var d=$("ev-date"); if(d) d.focus(); }, 80);
+}
+// Shared form-population used by both edit and duplicate.
+function _fillEventForm(e, blankDateTime){
+  $("ev-title").value=e.title||"";
+  $("ev-date").value = blankDateTime ? "" : (e.date||"");
+  $("ev-allday").checked=!!e.allDay; $("ev-times").style.display=e.allDay?"none":"grid";
+  if(blankDateTime){ setTimeSelect("ev-start",""); setTimeSelect("ev-end",""); }
+  else { setTimeSelect("ev-start", e.start||""); setTimeSelect("ev-end", e.end||""); }
+  $("ev-notes").value=e.notes||"";
   $("ev-fb").value=e.fbLink||"";
-  // photo: if it's a data URL keep it in evPhotoData; if a normal URL show in the url box
   if(e.photo && e.photo.indexOf("data:")===0){ evPhotoData=e.photo; $("ev-photo-url").value=""; }
   else { $("ev-photo-url").value=e.photo||""; }
   evPhotoPreview();
   var t=e.tournament||{};
-  $("ev-ttype").value=t.type||""; $("ev-rounds").value=t.rounds||""; $("ev-wins").value=t.winsPerRound||""; setTimeSelect("ev-est-end", t.estEnd||""); setTimeSelect("ev-arrival", t.arrival||""); $("ev-restrictions").value=t.restrictions||"";
+  $("ev-ttype").value=t.type||""; $("ev-rounds").value=t.rounds||""; $("ev-wins").value=t.winsPerRound||"";
+  // estimated end / arrival are time-of-day; keep on edit, blank on duplicate
+  if(blankDateTime){ setTimeSelect("ev-est-end",""); setTimeSelect("ev-arrival",""); }
+  else { setTimeSelect("ev-est-end", t.estEnd||""); setTimeSelect("ev-arrival", t.arrival||""); }
+  $("ev-restrictions").value=t.restrictions||"";
   var p=e.prizes||{};
   $("ev-prizes-place").value=p.placement||""; $("ev-prizes-part").value=p.participation||"";
   $("ev-admin-notes").value=e.adminNotes||"";
@@ -1756,11 +1802,16 @@ function editEvent(id){
   var reg=e.registration||{};
   if($("ev-reg-enabled")){
     $("ev-reg-enabled").checked=!!reg.enabled; $("ev-reg-ui").style.display=reg.enabled?"block":"none";
-    $("ev-reg-min").value=reg.min||""; $("ev-reg-max").value=reg.max||""; $("ev-reg-cost").value=(reg.cost!=null?reg.cost:""); 
+    $("ev-reg-min").value=reg.min||""; $("ev-reg-max").value=reg.max||""; $("ev-reg-cost").value=(reg.cost!=null?reg.cost:"");
     if($("ev-reg-paywhen")) $("ev-reg-paywhen").value=reg.payWhen||"onfire";
   }
-  window.scrollTo({top:0,behavior:"smooth"});
+  // remember the original recurrence so saveEvent can detect a change for scope prompts
+  _editOrigRecurrence = e.recurrence ? JSON.stringify(e.recurrence) : "";
+  _editGroupId = e.groupId || "";
+  if(typeof onFbLinkChange==="function") onFbLinkChange();
 }
+var _editOrigRecurrence = "";
+var _editGroupId = "";
 async function saveEvent(){
   var title=$("ev-title").value.trim(), date=$("ev-date").value, allDay=$("ev-allday").checked, start=$("ev-start").value, end=$("ev-end").value, notes=$("ev-notes").value.trim();
   if(!title){ alert("Give the event a title."); return; }
@@ -1793,13 +1844,66 @@ async function saveEvent(){
       payWhen:($("ev-reg-paywhen")?$("ev-reg-paywhen").value:"onfire")
     };
   } else { ev.registration={enabled:false}; }
-  var saveBtn=$("ev-save-btn"); var orig=saveBtn?saveBtn.textContent:"";
+
+  // ---- Recurring-series edit scope ----
+  // If we're editing an event that is part of a recurring series, ask whether to
+  // apply to the whole series, this + following, or just this one occurrence.
+  var orig = editingEventId ? cache.events.filter(function(x){return x.id===editingEventId;})[0] : null;
+  var wasRecurring = orig && orig.recurrence;
+  if(editingEventId && wasRecurring){
+    var scope = await askRecurrenceScope();
+    if(scope===null){ return; } // canceled — leave form as-is
+    var sb=$("ev-save-btn"); if(sb){ sb.disabled=true; sb.textContent="Saving…"; }
+    try {
+      if(scope==="all"){
+        // keep groupId + recurrence anchor date as original's first date
+        ev.recurrence = ev.recurrence || orig.recurrence;
+        ev.date = orig.date;                  // series anchor stays
+        ev.groupId = orig.groupId || ("EVGRP-"+genId());
+        ev.exceptions = orig.exceptions||[];
+        await Store.saveEvent(ev);
+      } else if(scope==="following"){
+        // Split: truncate the original series to end before this occurrence,
+        // and create a NEW recurring event starting at the edited date.
+        var splitDate = ev.date; // the date now in the form = where the new series begins
+        var occ = eventDates(orig); // original occurrence dates
+        var keep = occ.filter(function(d){ return d < splitDate; });
+        // update original to stop before split
+        var origUpd = Object.assign({}, orig);
+        if(keep.length<=1){ origUpd.recurrence=null; } // only the anchor remains
+        else { origUpd.recurrence = { freq:orig.recurrence.freq, count:keep.length }; }
+        await Store.saveEvent(origUpd);
+        // new series from split date onward
+        var remaining = occ.filter(function(d){ return d >= splitDate; }).length;
+        ev.id=undefined; ev.groupId="EVGRP-"+genId();
+        ev.recurrence = { freq:(ev.recurrence?ev.recurrence.freq:orig.recurrence.freq), count:Math.max(2,remaining) };
+        ev.exceptions=[];
+        await Store.saveEvent(ev);
+      } else { // "one"
+        // Add this date as an exception on the parent, create a standalone event for it.
+        var parent = Object.assign({}, orig);
+        parent.exceptions = (parent.exceptions||[]).slice();
+        if(parent.exceptions.indexOf(ev.date)<0) parent.exceptions.push(ev.date);
+        await Store.saveEvent(parent);
+        // standalone single occurrence with the edits
+        ev.id=undefined; ev.recurrence=null; ev.groupId=null; ev.exceptions=[]; ev.detachedFrom=orig.id;
+        await Store.saveEvent(ev);
+      }
+      await refreshCache(); resetEventForm(); renderEventsAdmin();
+    } catch(err){
+      if(sb){ sb.disabled=false; sb.textContent="Update Event"; }
+      alert("Couldn't save the change: "+((err&&err.message)||err));
+    }
+    return;
+  }
+
+  var saveBtn=$("ev-save-btn"); var orig2=saveBtn?saveBtn.textContent:"";
   if(saveBtn){ saveBtn.disabled=true; saveBtn.textContent="Saving…"; }
   try {
     await Store.saveEvent(ev);
     await refreshCache(); resetEventForm(); renderEventsAdmin();
   } catch(err){
-    if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent=orig; }
+    if(saveBtn){ saveBtn.disabled=false; saveBtn.textContent=orig2; }
     var msg = (err && err.message) ? err.message : "Could not save the event.";
     if(/413|payload|too large|entity/i.test(msg) || (ev.photo && ev.photo.length>200000)){
       alert("Couldn't save — the uploaded photo is too large for the database. Please use a smaller image or paste a photo URL instead.");
@@ -1807,6 +1911,24 @@ async function saveEvent(){
       alert("Couldn't save the event: "+msg);
     }
   }
+}
+// Scope prompt for editing a recurring series. Resolves to
+// "all" | "following" | "one" | null(cancel).
+function askRecurrenceScope(){
+  return new Promise(function(resolve){
+    var choice = window.prompt(
+      "This is a recurring event. Apply your changes to which occurrences?\n\n"+
+      "  all       = every occurrence in the series\n"+
+      "  following = this date and all that follow\n"+
+      "  one       = only this one occurrence (the date currently in the form)\n\n"+
+      "Type all, following, or one:", "all");
+    if(choice===null){ resolve(null); return; }
+    choice=(choice||"").trim().toLowerCase();
+    if(choice==="all"||choice==="following"||choice==="one"){ resolve(choice); return; }
+    alert("Please type exactly: all, following, or one.");
+    var c2=(window.prompt("Type all, following, or one:","all")||"").trim().toLowerCase();
+    resolve((c2==="all"||c2==="following"||c2==="one")?c2:"all");
+  });
 }
 async function deleteEvent(id){
   var e=cache.events.filter(function(x){return x.id===id;})[0];
@@ -2156,7 +2278,7 @@ function copyAllEventLinks(){
   var horizon=new Date(today); horizon.setDate(horizon.getDate()+60);
   var rows=[];
   (cache.events||[]).forEach(function(e){
-    var dates = e.recurrence ? recurrenceDates(e.date,e.recurrence.freq,e.recurrence.count) : [e.date];
+    var dates = eventDates(e);
     dates.forEach(function(d){
       var dt=new Date(d+"T12:00:00");
       if(dt>=today && dt<=horizon){ rows.push({id:e.id, date:d, title:e.title, dt:dt}); }
@@ -2200,7 +2322,7 @@ function downloadCalImage(mode){
   function eventsOn(ds){
     var out=[];
     (cache.events||[]).forEach(function(e){
-      var dts = e.recurrence ? recurrenceDates(e.date,e.recurrence.freq,e.recurrence.count) : [e.date];
+      var dts = eventDates(e);
       if(dts.indexOf(ds)>=0) out.push(e);
     });
     return out;
@@ -2404,8 +2526,7 @@ function custEventsForDate(ds){
 }
 function expandedEventsC(){
   var out=[]; custCalData.events.forEach(function(e){
-    if(e.recurrence){ recurrenceDates(e.date,e.recurrence.freq,e.recurrence.count).forEach(function(d){ var c=Object.assign({},e); c.date=d; out.push(c); }); }
-    else out.push(Object.assign({},e));
+    eventDates(e).forEach(function(d){ var c=Object.assign({},e); c.date=d; out.push(c); });
   }); return out;
 }
 function expandedBlackoutsC(){
