@@ -1201,6 +1201,16 @@ function reqCardHtml(r){
   '</div>';
 }
 
+// Normal staffed open hours (24h clock). Bookings that start before open or
+// end after close are "after-hours" and need a door code. Adjust if needed.
+var OPEN_HOUR = 10;   // 10:00 AM
+var CLOSE_HOUR = 22;  // 10:00 PM
+function isAfterHours(r){
+  if(!r || !r.start) return false;
+  var startMin = timeToMins(r.start);
+  var endMin = startMin + (Number(r.hours)||1)*60;
+  return (startMin < OPEN_HOUR*60) || (endMin > CLOSE_HOUR*60);
+}
 async function approve(id){ await Store.updateBooking(id,{status:"approved"}); await refreshCache(); await resendApproval(id, true); renderAdmin(adminFilter); }
 async function resendApproval(id, silent){
   var r=getReq(id); if(!r) return;
@@ -1211,6 +1221,13 @@ async function resendApproval(id, silent){
   await Store.updateBooking(id,{invoiceLink:link, invoiceFileName:fileName, status:"approved"});
   await refreshCache();
   r=getReq(id);
+  // Auto-issue a door code for after-hours bookings (if not already issued and Seam is set up).
+  if(isAfterHours(r) && !r.doorCode){
+    try {
+      var dc=await Store.doorCode(id, "issue");
+      if(dc && dc.pin){ await refreshCache(); r=getReq(id); }
+    } catch(e){ console.warn("auto door-code failed", e); }
+  }
   var body=buildApprovalEmail(r);
   // Generate Stripe pay-now buttons for any unpaid fee / deposit.
   var buttons=[];
@@ -1226,7 +1243,7 @@ async function resendApproval(id, silent){
   } catch(e){ console.warn("pay-link generation failed", e); }
   await Store.sendEmail(r.email, "Your Northwood Game Haven booking "+id+" is APPROVED ✅", body,
     { heading:"Your booking is approved! 🎉", buttons:buttons });
-  if(!silent){ alert("Approval email sent to "+r.email+(buttons.length?" with "+buttons.length+" pay button(s).":".")); }
+  if(!silent){ alert("Approval email sent to "+r.email+(buttons.length?(" with "+buttons.length+" pay button(s)"):"")+(r.doorCode?(". Door code "+r.doorCode+" was auto-issued (after-hours)."):".")); }
   renderAdmin(adminFilter);
 }
 function buildApprovalEmail(r){
