@@ -170,6 +170,12 @@
 
   .conflict-note { background:#fdeaea; border:1px solid #e3b3b3; border-radius:9px; padding:11px 14px; font-size:0.82rem; color:#8a2b2b; margin-top:10px; display:none; }
   .conflict-note.show { display:block; }
+  /* Draft events: crosshatch texture so admins can tell at a glance they're not live */
+  .cal-ev.draft, .wevent.draft {
+    background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.18) 0, rgba(0,0,0,0.18) 2px, transparent 2px, transparent 6px) !important;
+    background-color: #9aa39a !important;
+    color:#23301f !important; opacity:0.92; font-style:italic;
+  }
   .avail-note { background:#eef7f0; border:1px solid #c2e0cb; border-radius:9px; padding:11px 14px; font-size:0.82rem; color:var(--forest); margin-top:10px; }
 
   /* SUCCESS */
@@ -477,7 +483,46 @@
         <button class="btn btn-sm btn-ghost" id="view-cal-btn" onclick="setAdminView('calendar')">📅 Calendar</button>
         <button class="btn btn-sm btn-ghost" id="view-events-btn" onclick="setAdminView('events')">🎉 Public Events</button>
         <button class="btn btn-sm btn-ghost" onclick="newEventQuick()" style="border-color:var(--gold);color:var(--gold);">➕ New Event</button>
+        <button class="btn btn-sm btn-ghost" onclick="openManualBooking()" style="border-color:var(--forest);color:var(--forest);">➕ New Booking (in-person)</button>
         <span id="mode-indicator"></span>
+      </div>
+
+      <!-- ADMIN MANUAL BOOKING MODAL -->
+      <div id="manual-modal" style="display:none;position:fixed;inset:0;background:rgba(20,30,20,0.55);z-index:9000;overflow:auto;padding:24px;">
+        <div style="max-width:560px;margin:24px auto;background:#fff;border-radius:14px;padding:22px 24px;box-shadow:0 18px 50px rgba(0,0,0,0.3);">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <h2 style="font-family:'Cinzel',serif;color:var(--forest);margin:0;font-size:1.15rem;">➕ New In-Person Booking</h2>
+            <button class="btn btn-sm btn-ghost" onclick="closeManualBooking()">✕</button>
+          </div>
+          <p class="hint" style="margin:6px 0 14px;">Record a reservation a customer made in person. Availability is checked against all bookings <b>and</b> events (including room holds).</p>
+          <div class="row"><div><label class="fld">Customer name *</label><input type="text" id="mb-name"></div>
+            <div><label class="fld">Email *</label><input type="email" id="mb-email" placeholder="for confirmation / invoice"></div></div>
+          <div class="row"><div><label class="fld">Phone</label><input type="text" id="mb-phone"></div>
+            <div><label class="fld">Date *</label><input type="date" id="mb-date" onchange="mbCheck()"></div></div>
+          <div class="row"><div><label class="fld">Start time *</label><span id="mb-start-wrap"></span></div>
+            <div><label class="fld">Hours *</label><select id="mb-hours" onchange="mbCheck()"></select></div></div>
+          <label class="fld" style="margin-top:8px;">Rooms *</label>
+          <div id="mb-rooms" style="display:flex;gap:14px;flex-wrap:wrap;"></div>
+          <label class="check-line" style="margin-top:8px;"><input type="checkbox" id="mb-karaoke" onchange="mbRecalc()"> Karaoke add-on (+$25 deposit)</label>
+          <div id="mb-conflict" class="conflict-note"></div>
+          <div id="mb-cost" class="avail-note" style="margin-top:10px;"></div>
+          <hr style="border:none;border-top:1px solid #e6ece2;margin:14px 0;">
+          <label class="fld">Approval</label>
+          <select id="mb-approval">
+            <option value="confirm">Instantly confirm (it's already arranged in person)</option>
+            <option value="flow">Send through normal review (pending)</option>
+          </select>
+          <label class="fld" style="margin-top:10px;">Payment status</label>
+          <select id="mb-paid" onchange="mbPaidChange()">
+            <option value="unpaid">Unpaid</option>
+            <option value="paid">Paid (cash/card in person)</option>
+          </select>
+          <label class="check-line" id="mb-invoice-line" style="margin-top:8px;"><input type="checkbox" id="mb-invoice"> Email a Stripe payment link (invoice) for the balance</label>
+          <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn" id="mb-save" onclick="saveManualBooking()">Create Booking</button>
+            <button class="btn btn-ghost" onclick="closeManualBooking()">Cancel</button>
+          </div>
+        </div>
       </div>
 
       <!-- LIST VIEW -->
@@ -814,6 +859,10 @@ function eventDates(e){
   if(e.exceptions && e.exceptions.length){ dates = dates.filter(function(d){ return e.exceptions.indexOf(d)<0; }); }
   return dates;
 }
+// An event is "live" (customer-visible) unless explicitly draft. Legacy events
+// without a status field are treated as live (they were already published).
+function isLiveEvent(e){ return !e || e.status!=="draft"; }
+function isDraftEvent(e){ return e && e.status==="draft"; }
 function freqLabel(f){ return f==="weekly"?"Weekly":f==="biweekly"?"Every 2 weeks":f==="monthly"?"Monthly":f; }
 function toggleRecurringUI(){ var on=$("bk-recurring").checked; $("recurring-ui").style.display = on ? "block" : "none"; recalc(); }
 function getRecurrence(){
@@ -842,6 +891,62 @@ function onDateTimeChange(){
   recalc();
 }
 function overlaps(aS,aE,bS,bE){ return aS < bE && bS < aE; }
+
+/* ---------------------------------------------------------------
+   UNIFIED AVAILABILITY ENGINE
+   Busy intervals per room for a date, from bookings + events (draft
+   AND live hard-block) + blackouts. Events block during their hours
+   plus the tournament arrival/setup buffer. Shared by customer
+   booking, admin manual booking, and the conflict recommender.
+   --------------------------------------------------------------- */
+function roomBusyIntervals(date, opts){
+  opts = opts || {};
+  var byRoom = {}; ROOMS.forEach(function(r){ byRoom[r.id]=[]; });
+  function add(room, s, e, kind, label, ref){ if(byRoom[room]) byRoom[room].push({s:s,e:e,kind:kind,label:label,ref:ref}); }
+  cache.bookings.forEach(function(r){
+    if(r.status==="rejected"||r.status==="canceled") return;
+    if(r.date!==date) return;
+    if(opts.ignoreBookingId && r.id===opts.ignoreBookingId) return;
+    var rs=timeToMins(r.start), re=Math.min(rs + r.hours*60, 1440);
+    (r.rooms||[]).forEach(function(room){ add(room, rs, re, "booking", (r.name||"Booking"), r); });
+  });
+  expandedEvents().forEach(function(e){
+    if(e.date!==date) return;
+    if(opts.ignoreEventId && e.id===opts.ignoreEventId) return;
+    var es = e.allDay ? 0 : timeToMins(e.start), ee = e.allDay ? 1440 : timeToMins(e.end);
+    if(e.tournament && e.tournament.arrival){ var am=timeToMins(e.tournament.arrival); if(!isNaN(am) && am<es) es=am; }
+    var rooms = (e.rooms&&e.rooms.length) ? e.rooms : ROOMS.map(function(x){return x.id;});
+    rooms.forEach(function(room){ add(room, es, ee, "event", (e.title||"NGH event")+(isDraftEvent(e)?" (draft)":""), e); });
+  });
+  expandedBlackouts().forEach(function(b){
+    if(b.date!==date) return;
+    var bs = b.allDay ? 0 : timeToMins(b.start), be = b.allDay ? 1440 : timeToMins(b.end);
+    var rooms = (b.rooms&&b.rooms.length) ? b.rooms : ROOMS.map(function(x){return x.id;});
+    rooms.forEach(function(room){ add(room, bs, be, "blackout", (b.label||"Blackout"), b); });
+  });
+  return byRoom;
+}
+// Returns the conflicting interval for [sm,em) in room on date, or null.
+function roomConflict(date, sm, em, room, opts){
+  var busy=roomBusyIntervals(date, opts)[room]||[];
+  var endCk=Math.min(em,1440);
+  for(var i=0;i<busy.length;i++){ if(overlaps(sm, endCk, busy[i].s, busy[i].e)) return busy[i]; }
+  return null;
+}
+// Suggest a free alternate room (not in chosenRooms) for the window.
+function suggestFreeRoom(date, sm, em, chosenRooms, opts){
+  for(var i=0;i<ROOMS.length;i++){ var rid=ROOMS[i].id; if(chosenRooms.indexOf(rid)>=0) continue; if(!roomConflict(date, sm, em, rid, opts)) return rid; }
+  return null;
+}
+// Suggest an alternate start time (same rooms) within open hours.
+function suggestFreeTime(date, durMin, rooms, opts){
+  var oh=(typeof OPEN_HOUR!=="undefined"?OPEN_HOUR:10)*60, ch=(typeof CLOSE_HOUR!=="undefined"?CLOSE_HOUR:22)*60;
+  for(var t=oh; t+durMin<=ch; t+=30){
+    var ok=true; for(var j=0;j<rooms.length;j++){ if(roomConflict(date, t, t+durMin, rooms[j], opts)){ ok=false; break; } }
+    if(ok) return t;
+  }
+  return null;
+}
 function checkConflicts(){
   var note=$("conflict-note"), avail=$("avail-note");
   note.classList.remove("show"); avail.style.display="none";
@@ -882,7 +987,16 @@ function checkConflicts(){
 
   if(conflictRooms.length){
     var names=conflictRooms.map(roomName).join(", ");
-    note.innerHTML="⚠ <strong>"+names+"</strong> "+(conflictRooms.length>1?"are":"is")+" already booked, reserved for an NGH event, or blacked out during that window. Please choose a different time or room.";
+    var rmsg="⚠ <strong>"+names+"</strong> "+(conflictRooms.length>1?"are":"is")+" already booked, reserved for an NGH event, or blacked out during that window.";
+    // recommend an alternate room and/or time
+    var freeRoom=suggestFreeRoom(date, sm, endForCheck, sel.rooms);
+    var altTime=suggestFreeTime(date, hours*60, sel.rooms);
+    var recs=[];
+    if(freeRoom) recs.push("try <strong>"+roomName(freeRoom)+"</strong> (free then)");
+    if(altTime!=null) recs.push("or start at <strong>"+fmtTime(altTime)+"</strong> (your rooms are free)");
+    if(recs.length) rmsg+="<br>💡 "+recs.join(", ")+".";
+    else rmsg+=" Please choose a different time or room.";
+    note.innerHTML=rmsg;
     note.classList.add("show");
     return false;
   } else {
@@ -1599,11 +1713,14 @@ function renderEventsAdmin(){
     var rooms=(e.rooms&&e.rooms.length)?e.rooms.map(roomName).join(", "):"all rooms";
     var time=e.allDay?"All day":(fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end)));
     var rec=e.recurrence?(' <span class="recur-badge">🔁 '+freqLabel(e.recurrence.freq)+' ×'+e.recurrence.count+'</span>'):'';
+    var statusBadge = isDraftEvent(e)
+      ? ' <span class="recur-badge" style="background:#6b7280;">📝 Draft</span>'
+      : ' <span class="recur-badge" style="background:#2e7d32;">● Live</span>';
     var t=e.tournament||{}, p=e.prizes||{};
     var ttypeLabel={swiss:"Swiss",single:"Single elim",double:"Double elim",roundrobin:"Round robin",other:"Other"}[t.type]||"";
     return '<div class="card ev-card">'+
       '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center;">'+
-        '<h2 style="margin:0;">🎉 '+esc(e.title||"Public NGH Event")+rec+'</h2>'+
+        '<h2 style="margin:0;">🎉 '+esc(e.title||"Public NGH Event")+rec+statusBadge+'</h2>'+
         '<div class="kv" style="color:#9a9a80;">'+e.id+'</div></div>'+
       (e.photo?'<img src="'+esc(e.photo)+'" alt="" style="max-width:160px;max-height:100px;border-radius:8px;margin:8px 0;border:1px solid #d8e0d4;">':'')+
       '<div class="kv"><b>When</b> '+e.date+' · '+time+'</div>'+
@@ -1618,7 +1735,12 @@ function renderEventsAdmin(){
       (e.adminNotes?'<div class="kv" style="color:#9a6310;"><b>Admin notes</b> '+esc(e.adminNotes)+'</div>':'')+
       ((e.registration&&e.registration.enabled)?('<div class="kv" style="margin-top:6px;"><b>🎟️ Registration</b> '+(e.registration.cost>0?("$"+Number(e.registration.cost).toFixed(2)):"Free")+(e.registration.min?(" · min "+e.registration.min):"")+(e.registration.max?(" · max "+e.registration.max):"")+'</div>'+
         '<div id="regwrap-'+e.id+'"><button class="btn btn-sm btn-ghost" onclick="viewRegistrants(\''+e.id+'\')">👥 View registrants</button></div>'):'')+
-      '<div class="admin-actions"><button class="btn btn-sm btn-ghost" onclick="editEvent(\''+e.id+'\')">✎ Edit</button>'+
+      '<div class="admin-actions">'+
+      (isDraftEvent(e)
+        ? '<button class="btn btn-sm" style="background:#2e7d32;color:#fff;" onclick="toggleEventLive(\''+e.id+'\',true)">🚀 Publish (go live)</button>'
+        : '<button class="btn btn-sm btn-ghost" onclick="toggleEventLive(\''+e.id+'\',false)">📝 Unpublish (to draft)</button>')+
+      '<button class="btn btn-sm btn-ghost" onclick="editEvent(\''+e.id+'\')">✎ Edit</button>'+
+      '<button class="btn btn-sm btn-ghost" onclick="setAdminView(\'calendar\');calGoto(\''+e.date+'\',\'day\');">📅 View day schedule</button>'+
       '<button class="btn btn-sm btn-ghost" onclick="duplicateEvent(\''+e.id+'\')">⧉ Duplicate</button>'+
       '<button class="btn btn-sm btn-ghost" onclick="exportEvent(\''+e.id+'\')">📥 Export (.ics)</button>'+
       '<a class="btn btn-sm btn-ghost" href="'+adminGcalUrl(e)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">📅 Add to Google</a>'+
@@ -1702,6 +1824,7 @@ function renderEventsAdmin(){
     '<div class="row" id="ev-rec-ui" style="display:none;"><div><label class="fld">Repeats</label><select id="ev-rec-freq"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option></select></div>'+
     '<div><label class="fld">Occurrences</label><input type="number" id="ev-rec-count" min="2" max="52" value="8"></div></div>'+
     '<p class="hint" style="margin-top:6px;">For recurring events, each occurrence takes registrations independently.</p>'+
+    '<label class="check-line" style="margin-top:14px;padding:10px 12px;background:#f6faf4;border:1px solid #d8e8d6;border-radius:9px;"><input type="checkbox" id="ev-publish"><b>Publish now (make live)</b> — leave unchecked to save as a private draft. Drafts are hidden from customers but still hold their room(s).</label>'+
     '<div style="margin-top:14px;"><button class="btn btn-sm" id="ev-save-btn" onclick="saveEvent()">Save Event</button> <button class="btn btn-sm btn-ghost" onclick="resetEventForm()" id="ev-cancel-btn" style="display:none;">Cancel edit</button></div>'+
     '</div>'+
     '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">Current Public Events <button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></h2>'+list;
@@ -1756,6 +1879,7 @@ function resetEventForm(){ editingEventId=null; evPhotoData=null;
   if($("ev-photo-file")) $("ev-photo-file").value="";
   if($("ev-photo-preview")) $("ev-photo-preview").innerHTML="";
   $("ev-allday").checked=false; $("ev-times").style.display="grid";
+  if($("ev-publish")) $("ev-publish").checked=false;
   document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=false; }); $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none";
   if($("ev-reg-enabled")){ $("ev-reg-enabled").checked=false; $("ev-reg-ui").style.display="none"; ["ev-reg-min","ev-reg-max","ev-reg-cost"].forEach(function(id){ if($(id))$(id).value=""; }); if($("ev-reg-paywhen")) $("ev-reg-paywhen").value="onfire"; }
 }
@@ -1805,6 +1929,8 @@ function _fillEventForm(e, blankDateTime){
     $("ev-reg-min").value=reg.min||""; $("ev-reg-max").value=reg.max||""; $("ev-reg-cost").value=(reg.cost!=null?reg.cost:"");
     if($("ev-reg-paywhen")) $("ev-reg-paywhen").value=reg.payWhen||"onfire";
   }
+  // publish checkbox reflects current status (legacy events w/o status = live)
+  if($("ev-publish")) $("ev-publish").checked = isLiveEvent(e);
   // remember the original recurrence so saveEvent can detect a change for scope prompts
   _editOrigRecurrence = e.recurrence ? JSON.stringify(e.recurrence) : "";
   _editGroupId = e.groupId || "";
@@ -1832,6 +1958,7 @@ async function saveEvent(){
     tournament: hasTourney ? tournament : null,
     prizes: hasPrizes ? prizes : null,
     adminNotes:$("ev-admin-notes").value.trim(),
+    status: ($("ev-publish") && $("ev-publish").checked) ? "live" : "draft",
     public:true
   };
   if($("ev-recurring").checked){ ev.recurrence={ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }; if(!editingEventId) ev.groupId="EVGRP-"+genId(); }
@@ -2199,13 +2326,128 @@ function evClass(e){
 function evChip(e){
   var cls="cal-ev "+evClass(e);
   if(e.cat==="booking" && e.status==="approved" && !fullyPaid(e._src||e)) cls+=" unpaid";
+  if(e.draft || (e.cat==="event" && isDraftEvent(e._src||e))) cls+=" draft";
   var t = e.allDay ? "All day" : (e.start?fmtTime(timeToMins(e.start)):"");
   var click = (e.cat==="booking") ? (' onclick="jumpToReq(\''+e.id+'\')"') : (e.isEvent?(' onclick="jumpToEvent(\''+e.id+'\')"'):'');
-  return '<div class="'+cls+'"'+click+evHover(e)+' title="'+esc(e.label)+'">'+(e.rec?'🔁 ':'')+(t?(t+' '):'')+esc(e.label)+'</div>';
+  var isDraft = (e.draft || (e.cat==="event" && isDraftEvent(e._src||e)));
+  return '<div class="'+cls+'"'+click+evHover(e)+' title="'+esc(e.label)+(isDraft?' (DRAFT — not visible to customers)':'')+'">'+(e.rec?'🔁 ':'')+(t?(t+' '):'')+esc(e.label)+'</div>';
 }
 function jumpToReq(id){ setAdminView('list'); var r=getReq(id); if(r&&r.groupId) showGroup(r.groupId); else { adminFilter="all"; renderAdmin("all"); } }
 function jumpToEvent(id){ setAdminView('events'); setTimeout(function(){ editEvent(id); }, 60); }
+async function toggleEventLive(id, makeLive){
+  var e=cache.events.filter(function(x){return x.id===id;})[0]; if(!e) return;
+  var ev=Object.assign({}, e, { status: makeLive?"live":"draft" });
+  try {
+    await Store.saveEvent(ev);
+    await refreshCache(); renderEventsAdmin();
+  } catch(err){ alert("Couldn't update: "+((err&&err.message)||err)); }
+}
 function newEventQuick(){ setAdminView('events'); setTimeout(function(){ resetEventForm(); window.scrollTo({top:0,behavior:"smooth"}); var t=$("ev-title"); if(t) t.focus(); }, 60); }
+
+/* ---------- ADMIN MANUAL (in-person) BOOKING ---------- */
+function openManualBooking(){
+  $("mb-rooms").innerHTML = ROOMS.map(function(r){ return '<label class="check-line" style="display:inline-flex;margin:2px 0;"><input type="checkbox" class="mb-room" value="'+r.id+'" onchange="mbRecalc()"> '+r.name+'</label>'; }).join("");
+  $("mb-start-wrap").innerHTML = timeSelectHTML("mb-start", "mbCheck()", 15);
+  var ho=""; for(var i=1;i<=MAX_HOURS;i++){ ho+='<option value="'+i+'">'+i+' hour'+(i>1?"s":"")+'</option>'; }
+  $("mb-hours").innerHTML=ho;
+  $("mb-name").value=""; $("mb-email").value=""; $("mb-phone").value="";
+  $("mb-date").value=""; $("mb-karaoke").checked=false; $("mb-paid").value="unpaid"; $("mb-invoice").checked=false;
+  $("mb-approval").value="confirm";
+  $("mb-conflict").classList.remove("show"); $("mb-conflict").textContent="";
+  $("mb-cost").textContent="";
+  mbPaidChange();
+  $("manual-modal").style.display="block";
+}
+function closeManualBooking(){ $("manual-modal").style.display="none"; }
+function mbPaidChange(){
+  var unpaid = $("mb-paid").value==="unpaid";
+  $("mb-invoice-line").style.display = unpaid ? "flex" : "none";
+  if(!unpaid) $("mb-invoice").checked=false;
+}
+function mbSelectedRooms(){ var out=[]; document.querySelectorAll(".mb-room:checked").forEach(function(c){ out.push(c.value); }); return out; }
+function mbRecalc(){ mbCheck(); }
+function mbCheck(){
+  var date=$("mb-date").value, start=$("mb-start")?$("mb-start").value:"", hours=parseInt($("mb-hours").value,10)||0;
+  var rooms=mbSelectedRooms();
+  var cn=$("mb-conflict"), cost=$("mb-cost");
+  if(rooms.length && hours){
+    var per=calcRoomCost(hours), sub=per*rooms.length;
+    var dep=(DEPOSIT[Math.min(rooms.length,3)]||0) + ($("mb-karaoke").checked?KARAOKE_DEPOSIT_ADD:0);
+    cost.innerHTML="Booking fee: <b>"+fmtMoney(sub)+"</b> · Refundable deposit: <b>"+fmtMoney(dep)+"</b> · Total due: <b>"+fmtMoney(sub+dep)+"</b>";
+  } else { cost.textContent=""; }
+  if(!date || !start || !hours || !rooms.length){ cn.classList.remove("show"); return true; }
+  var sm=timeToMins(start), em=sm+hours*60;
+  var conflicts=[];
+  rooms.forEach(function(room){ var c=roomConflict(date, sm, em, room); if(c) conflicts.push({room:room, c:c}); });
+  if(!conflicts.length){ cn.classList.remove("show"); return true; }
+  var msg="<b>⚠ Room conflict:</b><br>";
+  conflicts.forEach(function(x){
+    var what = x.c.kind==="event" ? ("event “"+esc(x.c.label)+"”") : (x.c.kind==="blackout" ? ("blackout “"+esc(x.c.label)+"”") : ("booking by "+esc(x.c.label)));
+    msg += "• "+roomName(x.room)+" is busy "+fmtTime(x.c.s)+"–"+fmtTime(x.c.e)+" ("+what+")<br>";
+  });
+  var freeRoom=suggestFreeRoom(date, sm, em, rooms);
+  var altTime=suggestFreeTime(date, hours*60, rooms);
+  var recs=[];
+  if(freeRoom) recs.push("switch to <b>"+roomName(freeRoom)+"</b> (free at this time)");
+  if(altTime!=null) recs.push("change start time to <b>"+fmtTime(altTime)+"</b> (rooms free then)");
+  if(recs.length) msg += "<br><b>Suggestion:</b> "+recs.join(", or ")+".";
+  cn.innerHTML=msg; cn.classList.add("show");
+  return false;
+}
+async function saveManualBooking(){
+  var name=$("mb-name").value.trim(), email=$("mb-email").value.trim(), phone=$("mb-phone").value.trim();
+  var date=$("mb-date").value, start=$("mb-start")?$("mb-start").value:"", hours=parseInt($("mb-hours").value,10)||0;
+  var rooms=mbSelectedRooms();
+  var problems=[];
+  if(!name) problems.push("name");
+  if(!email||email.indexOf("@")<0) problems.push("valid email");
+  if(!date) problems.push("date");
+  if(!start) problems.push("start time");
+  if(!hours) problems.push("hours");
+  if(!rooms.length) problems.push("at least one room");
+  if(problems.length){ alert("Please enter: "+problems.join(", ")+"."); return; }
+  await refreshCache();
+  if(!mbCheck()){ if(!confirm("There's a room conflict (see the note). Create this booking anyway?")) return; }
+  var per=calcRoomCost(hours), sub=per*rooms.length;
+  var dep=(DEPOSIT[Math.min(rooms.length,3)]||0) + ($("mb-karaoke").checked?KARAOKE_DEPOSIT_ADD:0);
+  var instant = $("mb-approval").value==="confirm";
+  var paid = $("mb-paid").value==="paid";
+  var addons=[]; if($("mb-karaoke").checked) addons.push({id:"karaoke", title:"Karaoke Equipment", comment:""});
+  var sm=timeToMins(start), em=sm+hours*60;
+  var req={
+    id:genId(), submitted:new Date().toISOString(),
+    status: instant ? "approved" : "pending",
+    payment: paid ? "paid" : "due",
+    feePaid: paid, depositPaid: paid,
+    milRequested:false, milVerified:null,
+    name:name, phone:phone, email:email, guests:"",
+    rooms:rooms.slice(), date:date, hours:hours, start:start,
+    endLabel: (em>=1440? fmtTime(em-1440)+" (next day)" : fmtTime(em)),
+    addons:addons, guruReach:false, overnightInterest:false,
+    wantsInvoice: ($("mb-invoice").checked && !paid),
+    expeditePay:false, comments:"(Booked in person by staff)",
+    subtotal:sub, discount:0, costBooking:sub, deposit:dep, totalDue:sub+dep,
+    adminQuestions:"", invoiceLink:"", invoiceFileName:"",
+    groupId:null, recIndex:null, recTotal:null, recFreq:null,
+    manualBooking:true
+  };
+  var btn=$("mb-save"); btn.disabled=true; btn.textContent="Saving…";
+  try {
+    await Store.addBookings([req]);
+    if(instant && isAfterHours(req)){ try{ await Store.doorCode(req.id,"issue"); }catch(e){} }
+    if(!paid && $("mb-invoice").checked){
+      await refreshCache(); try { await resendApproval(req.id, true); } catch(e){ console.warn("invoice email failed", e); }
+    } else if(instant){
+      await refreshCache(); try { await resendApproval(req.id, true); } catch(e){}
+    }
+    await refreshCache(); renderAdmin(adminFilter); if(typeof renderCalendar==="function") renderCalendar();
+    closeManualBooking();
+    alert("Booking created"+(instant?" and confirmed":" (pending review)")+(paid?" — marked PAID":(($("mb-invoice").checked)?" — invoice emailed":" — marked unpaid"))+".");
+  } catch(e){
+    btn.disabled=false; btn.textContent="Create Booking";
+    alert("Couldn't create the booking: "+((e&&e.message)||e));
+  }
+}
 
 /* ---- Bulk import of public events ---- */
 function bulkPrefillNGH(){
@@ -2434,7 +2676,8 @@ function weekDayHTML(isDay){
         var bg = e.cat==="blackout"?"var(--cal-blackout)":(e.cat==="event"?"var(--cal-event)":(e.status==="approved"?"var(--cal-approved)":"var(--cal-pending)"));
         var ht = e.allDay?"100%":((e.hours||1)*26-2)+"px";
         var click = (e.cat==="booking")?(' onclick="jumpToReq(\''+e.id+'\')"'):(e.isEvent?(' onclick="jumpToEvent(\''+e.id+'\')"'):'');
-        return '<div class="wevent" style="background:'+bg+';height:'+ht+';"'+click+evHover(e)+'>'+(e.rec?'🔁':'')+esc(e.label)+'</div>';
+        var draftCls = (e.cat==="event" && isDraftEvent(e._src||e)) ? " draft" : "";
+        return '<div class="wevent'+draftCls+'" style="background:'+bg+';height:'+ht+';"'+click+evHover(e)+' title="'+esc(e.label)+(draftCls?' (DRAFT — not visible to customers)':'')+'">'+(e.rec?'🔁':'')+esc(e.label)+'</div>';
       }).join("")+'</div>';
     });
   }

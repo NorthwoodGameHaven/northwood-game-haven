@@ -1633,6 +1633,9 @@
       if(API){ var r=await fetch(API+"/events"); events = r.ok ? await r.json() : []; }
       else { try { events = JSON.parse(localStorage.getItem("ngh_events")||"[]"); } catch(e){ events=[]; } }
     } catch(e){ events=[]; }
+    // Customers never see draft events (status==="draft"). Legacy events without
+    // a status field were already public, so they remain visible.
+    events = (events||[]).filter(function(e){ return e && e.status!=="draft"; });
     render();
     // Deep link: /?event=<id>&date=<ds> opens that event directly (from social posts).
     try {
