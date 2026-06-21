@@ -428,6 +428,20 @@
     </div>
   </div>
 
+  <!-- ROOM SCHEDULE CONFLICT MODAL -->
+  <div id="conflict-modal" style="display:none;position:fixed;inset:0;background:rgba(20,30,20,0.6);z-index:9100;align-items:flex-start;justify-content:center;padding:20px;overflow:auto;">
+    <div style="max-width:460px;width:100%;background:#fff;border-radius:16px;border:2px solid var(--den);box-shadow:0 24px 60px rgba(0,0,0,0.4);margin:40px auto;overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#b3541e,#d4762e);color:#fff;padding:18px 22px;position:relative;text-align:center;">
+        <button onclick="closeConflictModal()" style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,0.2);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:1.1rem;cursor:pointer;line-height:1;">&times;</button>
+        <h3 style="font-family:'Cinzel Decorative',serif;font-size:1.25rem;margin:0;">⚠ Schedule Conflict</h3>
+      </div>
+      <div id="conflict-modal-body" style="padding:18px 22px;"></div>
+      <div style="padding:0 22px 20px;text-align:center;">
+        <button class="btn btn-gold btn-sm" onclick="closeConflictModal()">Pick a Different Time</button>
+      </div>
+    </div>
+  </div>
+
   <!-- SUCCESS -->
   <div class="card" id="success">
     <div class="big">🦦🎟️</div>
@@ -583,6 +597,7 @@ var ROOMS = [
 ];
 var DEPOSIT = { 1:40, 2:80, 3:100 };
 var KARAOKE_DEPOSIT_ADD = 25;
+var TAX_RATE = 0.055; // Chippewa Falls, WI combined sales tax (5% state + 0.5% county). Update here if the rate changes.
 var BYO_FOOD_FEE = 40;
 var GURU_HOURLY = 10;
 var MAX_HOURS = 8;
@@ -887,7 +902,8 @@ function onDateTimeChange(){
     var sm=timeToMins(start); var em=sm+hours*60;
     $("bk-end").value = em>=1440 ? fmtTime(em-1440)+" (next day)" : fmtTime(em);
   } else { $("bk-end").value=""; }
-  checkConflicts();
+  var ok=checkConflicts();
+  if(!ok && conflictSig()!==lastConflictSig) showConflictModal();
   recalc();
 }
 function overlaps(aS,aE,bS,bE){ return aS < bE && bS < aE; }
@@ -956,6 +972,11 @@ function checkConflicts(){
   var sm=timeToMins(start), em=sm+hours*60;
   var endForCheck = Math.min(em, 1440);
   var conflictRooms=[];
+  var conflicts=[];   // detailed list for the popup
+  function addConflict(room, type, label, s, e){
+    if(conflictRooms.indexOf(room)<0) conflictRooms.push(room);
+    conflicts.push({ room:room, type:type, label:label, win:fmtTime(s)+"–"+fmtTime(Math.min(e,1440)) });
+  }
 
   // existing bookings (approved or pending hold the slot)
   cache.bookings.forEach(function(r){
@@ -963,7 +984,7 @@ function checkConflicts(){
     if(r.date!==date) return;
     var rs=timeToMins(r.start), re=Math.min(rs + r.hours*60, 1440);
     (r.rooms||[]).forEach(function(room){
-      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,rs,re) && conflictRooms.indexOf(room)<0) conflictRooms.push(room);
+      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,rs,re)) addConflict(room, "booking", (r.status==="pending"?"Pending booking":"Confirmed booking")+(r.name?(" · "+r.name):""), rs, re);
     });
   });
   // public NGH events block their rooms
@@ -972,7 +993,7 @@ function checkConflicts(){
     var es = e.allDay ? 0 : timeToMins(e.start), ee = e.allDay ? 1440 : timeToMins(e.end);
     var rooms = (e.rooms&&e.rooms.length) ? e.rooms : ROOMS.map(function(x){return x.id;});
     rooms.forEach(function(room){
-      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,es,ee) && conflictRooms.indexOf(room)<0) conflictRooms.push(room);
+      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,es,ee)) addConflict(room, "event", "NGH event: "+(e.title||"Scheduled event")+(e.allDay?" (all day)":""), es, ee);
     });
   });
   // blackout windows
@@ -981,9 +1002,12 @@ function checkConflicts(){
     var bs = b.allDay ? 0 : timeToMins(b.start), be = b.allDay ? 1440 : timeToMins(b.end);
     var rooms = (b.rooms&&b.rooms.length) ? b.rooms : ROOMS.map(function(x){return x.id;});
     rooms.forEach(function(room){
-      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,bs,be) && conflictRooms.indexOf(room)<0) conflictRooms.push(room);
+      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,bs,be)) addConflict(room, "blackout", "Blacked out / unavailable"+(b.reason?(" · "+b.reason):"")+(b.allDay?" (all day)":""), bs, be);
     });
   });
+
+  lastConflicts = conflicts;
+  lastConflictMeta = { date:date, sm:sm, hours:hours };
 
   if(conflictRooms.length){
     var names=conflictRooms.map(roomName).join(", ");
@@ -991,6 +1015,7 @@ function checkConflicts(){
     // recommend an alternate room and/or time
     var freeRoom=suggestFreeRoom(date, sm, endForCheck, sel.rooms);
     var altTime=suggestFreeTime(date, hours*60, sel.rooms);
+    lastConflictAlt = { freeRoom:freeRoom, altTime:altTime };
     var recs=[];
     if(freeRoom) recs.push("try <strong>"+roomName(freeRoom)+"</strong> (free then)");
     if(altTime!=null) recs.push("or start at <strong>"+fmtTime(altTime)+"</strong> (your rooms are free)");
@@ -1000,10 +1025,46 @@ function checkConflicts(){
     note.classList.add("show");
     return false;
   } else {
+    lastConflictAlt = null;
     avail.style.display="block";
     avail.innerHTML="✅ "+sel.rooms.map(roomName).join(", ")+" available "+fmtTime(sm)+"–"+ ($("bk-end").value||"") +" on "+date+".";
     return true;
   }
+}
+var lastConflicts=[], lastConflictMeta=null, lastConflictAlt=null, lastConflictSig="";
+function conflictSig(){ return (lastConflictMeta?(lastConflictMeta.date+"|"+lastConflictMeta.sm+"|"+lastConflictMeta.hours):"")+"|"+sel.rooms.slice().sort().join(",")+"|"+lastConflicts.length; }
+function showConflictModal(){
+  if(!lastConflicts.length) return;
+  var m=$("conflict-modal"), body=$("conflict-modal-body");
+  var typeIcon={ booking:"📅", event:"🎲", blackout:"🚫" };
+  var rows = lastConflicts.map(function(c){
+    return '<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f0e6d8;">'+
+      '<span style="font-size:1.1rem;">'+(typeIcon[c.type]||"⚠")+'</span>'+
+      '<div><div style="font-family:\'Cinzel\',serif;color:var(--den);font-size:0.9rem;">'+esc(roomName(c.room))+' · '+esc(c.win)+'</div>'+
+      '<div style="font-size:0.82rem;color:#7a6a4a;">'+esc(c.label)+'</div></div></div>';
+  }).join("");
+  var recs="";
+  if(lastConflictAlt){
+    var parts=[];
+    if(lastConflictAlt.freeRoom) parts.push('<button class="btn btn-ghost btn-sm" style="margin:4px;" onclick="applyConflictRoom(\''+lastConflictAlt.freeRoom+'\')">Use '+esc(roomName(lastConflictAlt.freeRoom))+' instead</button>');
+    if(lastConflictAlt.altTime!=null) parts.push('<button class="btn btn-ghost btn-sm" style="margin:4px;" onclick="applyConflictTime('+lastConflictAlt.altTime+')">Start at '+fmtTime(lastConflictAlt.altTime)+' instead</button>');
+    if(parts.length) recs='<div style="margin-top:14px;text-align:center;"><div class="hint" style="margin-bottom:6px;">💡 Quick fixes:</div>'+parts.join("")+'</div>';
+  }
+  body.innerHTML='<p style="font-size:0.9rem;color:#5a4a30;margin-bottom:6px;">Part of your requested time overlaps something already on the schedule for that room:</p>'+rows+recs;
+  m.style.display="flex";
+  lastConflictSig=conflictSig();
+}
+function closeConflictModal(){ $("conflict-modal").style.display="none"; }
+function applyConflictRoom(rid){
+  // clear current room selection, select the suggested free room
+  sel.rooms.slice().forEach(function(r){ var el=$("rp-"+r); if(el) el.classList.remove("sel"); });
+  sel.rooms=[rid]; var el=$("rp-"+rid); if(el) el.classList.add("sel");
+  closeConflictModal(); onDateTimeChange();
+}
+function applyConflictTime(mins){
+  var hh=pad(Math.floor(mins/60)), mm=pad(mins%60);
+  var selEl=$("bk-start"); if(selEl){ selEl.value=hh+":"+mm; }
+  closeConflictModal(); onDateTimeChange();
 }
 
 /* ---------- cost calculation ---------- */
@@ -1030,8 +1091,10 @@ function computeTotals(){
   var subtotal = bookingTotal + addonTotal;
   var military = $("c-military") && $("c-military").checked;
   var discount = military ? Math.round(subtotal * MIL_DISCOUNT * 100)/100 : 0;
-  var grand = subtotal - discount;
-  return { lines:lines, subtotal:subtotal, addonTotal:addonTotal, deposit:deposit, discount:discount, military:military, grand:grand, hours:hours, nRooms:nRooms };
+  var grand = subtotal - discount;                                  // taxable booking charges (deposit is NOT taxed)
+  var tax = Math.round(grand * TAX_RATE * 100)/100;
+  var totalDue = grand + tax + deposit;                             // booking + tax + refundable deposit
+  return { lines:lines, subtotal:subtotal, addonTotal:addonTotal, deposit:deposit, discount:discount, military:military, grand:grand, tax:tax, totalDue:totalDue, hours:hours, nRooms:nRooms };
 }
 function recalc(){
   var t=computeTotals();
@@ -1042,15 +1105,16 @@ function recalc(){
     if(peek) peek.textContent="";
     return;
   }
-  if(peek) peek.textContent="· "+fmtMoney(t.grand+t.deposit)+" due";
+  if(peek) peek.textContent="· "+fmtMoney(t.totalDue)+" due";
   var h="";
   t.lines.forEach(function(l){ h+='<div class="sum-row"><span>'+l.label+'</span><span>'+fmtMoney(l.amt)+'</span></div>'; });
   h+='<div class="sum-row"><span>Subtotal</span><span>'+fmtMoney(t.subtotal)+'</span></div>';
   if(t.military){ h+='<div class="sum-row discount"><span>Military / First Responder −15%*</span><span>−'+fmtMoney(t.discount)+'</span></div>'; }
-  h+='<div class="sum-row total"><span>Booking Subtotal</span><span>'+fmtMoney(t.grand)+'</span></div>';
+  h+='<div class="sum-row"><span>Booking Subtotal</span><span>'+fmtMoney(t.grand)+'</span></div>';
+  h+='<div class="sum-row"><span>Sales Tax (5.5%)</span><span>'+fmtMoney(t.tax)+'</span></div>';
   h+='<div class="sum-row deposit"><span>Refundable Deposit (hold)</span><span>'+fmtMoney(t.deposit)+'</span></div>';
-  h+='<div class="sum-row total"><span>Total Due Before Booking*</span><span>'+fmtMoney(t.grand+t.deposit)+'</span></div>';
-  h+='<p class="sum-note">Totals do <strong>not</strong> include applicable taxes required by law.<br>';
+  h+='<div class="sum-row total"><span>Total Due Before Booking*</span><span>'+fmtMoney(t.totalDue)+'</span></div>';
+  h+='<p class="sum-note">Includes 5.5% Wisconsin sales tax on the booking fee. The <strong>refundable deposit</strong> is a hold and is not taxed.<br>';
   if(t.military) h+='<strong>*</strong> The 15% military / first-responder discount is applied once a Game Guru verifies your valid ID at check-in or during in-person payment. If ID can\'t be verified, the standard rate applies.<br>';
   h+='<strong>*</strong> You may pay the <strong>booking fee</strong> (plus tax) anytime after approval to lock in your reservation. The <strong>refundable deposit</strong> can be paid later — but both the fee and deposit must be paid <strong>no later than the end of the day before</strong> your booking begins, or the reservation is automatically canceled.<br>'+
      'The deposit is fully refunded provided nothing is stolen or damaged and the room(s) are left reasonably cleaned, per our <a href="terms.html" target="_blank">Terms &amp; Conditions</a>.</p>';
@@ -1082,7 +1146,7 @@ async function submitBooking(){
   if(problems.length){ err.textContent="Please "+problems.join(", ")+"."; err.classList.add("show"); window.scrollTo({top:err.getBoundingClientRect().top+window.scrollY-120,behavior:"smooth"}); return; }
 
   await refreshCache();
-  if(!$("bk-recurring").checked && !checkConflicts()){ err.textContent="That time conflicts with an existing booking or NGH event. Please adjust."; err.classList.add("show"); return; }
+  if(!$("bk-recurring").checked && !checkConflicts()){ showConflictModal(); err.textContent="That time conflicts with an existing booking, NGH event, or blackout. Please pick another time or room."; err.classList.add("show"); return; }
 
   var t=computeTotals();
   var addonsChosen=[];
