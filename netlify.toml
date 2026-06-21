@@ -46,6 +46,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/email-test"
+  to   = "/.netlify/functions/email-test"
+  status = 200
+
+[[redirects]]
   from = "/api/registrations/*"
   to   = "/.netlify/functions/registrations/:splat"
   status = 200
