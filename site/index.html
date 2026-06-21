@@ -2116,7 +2116,7 @@
     document.getElementById('event-req-form').style.display = 'none';
     document.getElementById('event-req-success').style.display = 'block';
   }
-  function submitNewCategoryRequest() {
+  async function submitNewCategoryRequest() {
     const name = document.getElementById('nc-name').value.trim();
     const email = document.getElementById('nc-email').value.trim();
     const cat = document.getElementById('nc-cat').value.trim();
@@ -2124,11 +2124,19 @@
     const selfGuru = document.getElementById('nc-guru-interest').checked;
     if (!name || !email || !cat) { alert('Please fill in your name, email, and the category.'); return; }
     const body = `New Guru Category Request\n\nName: ${name}\nEmail: ${email}\n\nRequested Category: ${cat}\n\nReason / Community Interest:\n${why || 'Not provided'}\n\nInterested in being the Guru themselves: ${selfGuru ? 'YES' : 'No'}`;
-    window.location.href = `mailto:stash@northwoodgamehaven.com?subject=${encodeURIComponent('New Guru Category Request: ' + cat)}&body=${encodeURIComponent(body)}`;
-    setTimeout(() => {
-      document.getElementById('new-cat-form').style.display = 'none';
-      document.getElementById('new-cat-success').style.display = 'block';
-    }, 800);
+    let sent = false;
+    try {
+      if (window.NGH_API_BASE) {
+        const r = await fetch(window.NGH_API_BASE + '/send-email', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: (window.NGH_ADMIN_EMAIL || 'stash@northwoodgamehaven.com'), subject: 'New Guru Category Request: ' + cat, body: body, heading: '🌿 New Game / Category Request' })
+        });
+        sent = r.ok;
+      }
+    } catch (e) {}
+    if (!sent) { window.location.href = `mailto:stash@northwoodgamehaven.com?subject=${encodeURIComponent('New Guru Category Request: ' + cat)}&body=${encodeURIComponent(body)}`; }
+    document.getElementById('new-cat-form').style.display = 'none';
+    document.getElementById('new-cat-success').style.display = 'block';
   }
   // Guru tree toggle
   function toggleTree(id) {
@@ -2156,12 +2164,19 @@
     if (!name || !email) { alert('Please fill in your name and email.'); return; }
     if (cats.length === 0) { alert('Please select at least one Foraging Focus category.'); return; }
     const body = `New Game Guru Application\n\nName: ${name}\nEmail: ${email}\nPhone: ${document.getElementById('gf-phone').value}\n\nForaging Focus Categories:\n${cats.map(c => '• ' + c).join('\n')}\n\nNotes: ${notes}`;
-    const mailto = `mailto:stash@northwoodgamehaven.com?subject=${encodeURIComponent('Game Guru Application: ' + name)}&body=${encodeURIComponent(body)}`;
-    window.location.href = mailto;
-    setTimeout(() => {
-      document.getElementById('guru-form-wrap').style.display = 'none';
-      document.getElementById('guru-success').style.display = 'block';
-    }, 800);
+    let sent = false;
+    try {
+      if (window.NGH_API_BASE) {
+        const r = await fetch(window.NGH_API_BASE + '/send-email', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: (window.NGH_ADMIN_EMAIL || 'stash@northwoodgamehaven.com'), subject: 'Game Guru Application: ' + name, body: body, heading: '🦦 New Game Guru Application' })
+        });
+        sent = r.ok;
+      }
+    } catch (e) {}
+    if (!sent) { window.location.href = `mailto:stash@northwoodgamehaven.com?subject=${encodeURIComponent('Game Guru Application: ' + name)}&body=${encodeURIComponent(body)}`; }
+    document.getElementById('guru-form-wrap').style.display = 'none';
+    document.getElementById('guru-success').style.display = 'block';
   }
 
   // Share Your Glory — copy hashtag for Instagram (no web share URL for posts)
