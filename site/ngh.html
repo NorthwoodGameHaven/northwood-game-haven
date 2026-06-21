@@ -138,6 +138,32 @@
   .location-tag { font-size:0.85rem; color:#7a7a5a; letter-spacing:0.1em; font-family:'Cinzel',serif; animation:fadeUp 0.8s 1.1s both; }
   .quest-jump-link { display:inline-flex; align-items:center; gap:10px; margin-top:18px; background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); font-family:'Cinzel',serif; font-size:0.82rem; font-weight:700; letter-spacing:0.15em; text-transform:uppercase; padding:12px 28px; border-radius:50px; text-decoration:none; box-shadow:0 4px 20px rgba(201,151,58,0.4); animation:fadeUp 0.8s 1.2s both; transition:transform 0.2s,box-shadow 0.2s; }
   .quest-jump-link:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(201,151,58,0.55); }
+
+  /* SPARKLY FULL-CALENDAR BUTTON */
+  .full-cal-btn {
+    position:relative; display:inline-flex; align-items:center; justify-content:center; gap:10px;
+    background:linear-gradient(135deg,#256048 0%,#3d7a54 50%,#256048 100%); color:#fff; text-decoration:none;
+    font-family:'Cinzel',serif; font-size:0.9rem; font-weight:700; letter-spacing:0.05em; text-align:center;
+    padding:15px 34px; border-radius:50px; border:2px solid var(--gold-light);
+    box-shadow:0 8px 28px rgba(45,90,61,0.38), inset 0 0 18px rgba(232,184,75,0.15);
+    overflow:hidden; transition:transform 0.2s, box-shadow 0.2s; isolation:isolate;
+  }
+  .full-cal-btn:hover { transform:translateY(-2px); box-shadow:0 12px 34px rgba(45,90,61,0.5), 0 0 18px rgba(232,184,75,0.45); }
+  .full-cal-btn::before {
+    content:''; position:absolute; top:0; left:-65%; width:55%; height:100%; z-index:1;
+    background:linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+    transform:skewX(-20deg); animation:calShine 3.4s ease-in-out infinite;
+  }
+  @keyframes calShine { 0% { left:-65%; } 55% { left:135%; } 100% { left:135%; } }
+  .full-cal-btn span.label { position:relative; z-index:2; }
+  .full-cal-btn .spark { position:absolute; z-index:2; color:var(--gold-light); pointer-events:none;
+    text-shadow:0 0 6px rgba(232,184,75,0.8); animation:calTwinkle 2.4s ease-in-out infinite; }
+  .full-cal-btn .s1 { top:7px; left:18px; font-size:0.78rem; animation-delay:0s; }
+  .full-cal-btn .s2 { bottom:8px; left:46px; font-size:0.56rem; animation-delay:0.6s; }
+  .full-cal-btn .s3 { top:10px; right:24px; font-size:0.68rem; animation-delay:1.1s; }
+  .full-cal-btn .s4 { bottom:9px; right:54px; font-size:0.5rem; animation-delay:1.7s; }
+  @keyframes calTwinkle { 0%,100% { opacity:0; transform:scale(0.5) rotate(0deg); } 50% { opacity:1; transform:scale(1.15) rotate(25deg); } }
+  @media (prefers-reduced-motion: reduce) { .full-cal-btn::before, .full-cal-btn .spark { animation:none; } .full-cal-btn .spark { opacity:0.8; } }
   @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
 
   .divider { width:100%; overflow:hidden; line-height:0; margin-top:-2px; }
@@ -1258,14 +1284,17 @@
   <div class="section-inner">
     <span class="section-label">What's Happening</span>
     <h2 class="section-title">Event Calendar 📅</h2>
-    <p class="section-body" style="margin-bottom:28px;">Stay up to date with tournaments, open play nights, organized play events, special guests, and everything else happening at Northwood Game Haven. Browse the current and upcoming months below.</p>
+    <p class="section-body" style="margin-bottom:28px;">Stay up to date with tournaments, open play nights, organized play events, special guests, and everything else happening at Northwood Game Haven. Here's <strong>this week's schedule</strong> — open the full calendar for month and day views.</p>
 
     <!-- Live NGH Event Calendar (publishes from the admin console) -->
     <div id="ngh-event-cal" style="border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(45,90,61,0.12);border:1px solid #d8e8d0;margin-bottom:14px;background:#fff;padding:18px 16px;">
       <p style="text-align:center;color:#8a8a6a;font-size:0.9rem;padding:30px;">Loading events…</p>
     </div>
     <div style="text-align:center;margin-bottom:22px;">
-      <a href="events.html" style="display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,var(--forest),var(--forest-light));color:#fff;text-decoration:none;font-family:'Cinzel',serif;font-size:0.86rem;font-weight:700;letter-spacing:0.06em;padding:13px 28px;border-radius:50px;box-shadow:0 4px 20px rgba(45,90,61,0.3);">📅 Open the Full Event Calendar — Month, Week &amp; Day Views →</a>
+      <a href="events.html" class="full-cal-btn">
+        <span class="spark s1">✦</span><span class="spark s2">✧</span><span class="spark s3">✦</span><span class="spark s4">✧</span>
+        <span class="label">✨ Open the Full Event Calendar — Month, Week &amp; Day Views →</span>
+      </a>
     </div>
     <!-- Event detail modal -->
     <div id="ngh-event-modal" style="display:none;position:fixed;inset:0;background:rgba(26,26,18,0.6);z-index:500;padding:20px;overflow-y:auto;" onclick="if(event.target===this)closeEventModal()">
@@ -1273,7 +1302,7 @@
     </div>
 
     <!-- Request an Event -->
-    <div style="background:#fff;border:2px solid var(--forest);border-radius:18px;padding:36px 32px;">
+    <div id="request-event" style="background:#fff;border:2px solid var(--forest);border-radius:18px;padding:36px 32px;scroll-margin-top:90px;">
       <div style="font-family:'Cinzel Decorative',serif;font-size:1.1rem;color:var(--forest);margin-bottom:8px;">✨ Suggest an Event or Game Night</div>
       <p style="font-size:0.88rem;color:#5a6a50;line-height:1.75;margin-bottom:8px;">Got an idea for something you'd love to see at the Haven? We want to hear it — whether it's a full tournament or just "hey, you should do a Lorcana night sometime." <strong>No commitment required.</strong></p>
       <p style="font-size:0.84rem;color:#8a8a6a;line-height:1.7;margin-bottom:24px;">Only your name, email, and the idea are needed. Everything else is optional — fill in as much or as little as you like.</p>
@@ -1567,6 +1596,14 @@
     return out;
   }
   function allOccurrences(){ var out=[]; events.forEach(function(e){ expand(e).forEach(function(x){ out.push(x); }); }); return out; }
+  function weekStart(d){ var x=new Date(d); x.setDate(x.getDate()-x.getDay()); x.setHours(12,0,0,0); return x; }
+  function laneSplit(evs){
+    var ends=[];
+    evs.forEach(function(e){ var s=t2m(e.start), en=t2m(e.end); if(en==null||en<=s) en=s+120;
+      var placed=-1; for(var i=0;i<ends.length;i++){ if(s>=ends[i]){ placed=i; break; } }
+      if(placed<0){ placed=ends.length; ends.push(en); } else ends[placed]=en; e._lane=placed; });
+    var n=ends.length||1; evs.forEach(function(e){ e._n=n; }); return n;
+  }
 
   async function load(){
     try {
@@ -1595,35 +1632,52 @@
 
   function render(){
     var wrap=document.getElementById("ngh-event-cal"); if(!wrap) return;
-    var title = ref.toLocaleDateString(undefined,{month:'long',year:'numeric'});
-    var first=new Date(ref.getFullYear(),ref.getMonth(),1), start=new Date(first); start.setDate(1-first.getDay());
-    var occ = allOccurrences();
-    var todayStr=ymd(new Date());
+    var H0=8, H1=24, ROW=24, GRIDH=(H1-H0)*ROW;   // open hours: 8 AM – midnight
+    var ws=weekStart(ref), days=[]; for(var i=0;i<7;i++){ var dd=new Date(ws); dd.setDate(ws.getDate()+i); days.push(dd); }
+    var we=new Date(ws); we.setDate(ws.getDate()+6);
+    var occ=allOccurrences(), todayStr=ymd(new Date());
+    var title=ws.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' – '+we.toLocaleDateString(undefined,{month:'short',day:'numeric'});
 
-    var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">'+
-      '<div style="font-family:\'Cinzel\',serif;color:'+FOREST+';font-size:1.1rem;">'+title+'</div>'+
+    var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">'+
+      '<div style="font-family:\'Cinzel\',serif;color:'+FOREST+';font-size:1rem;">This Week · '+title+'</div>'+
       '<div style="display:flex;gap:6px;">'+
-        '<button onclick="NGHCAL.shift(-1)" style="border:1.5px solid #d8e0d4;background:#fff;border-radius:50px;padding:5px 13px;cursor:pointer;color:'+FOREST+';font-family:\'Cinzel\',serif;">‹</button>'+
-        '<button onclick="NGHCAL.today()" style="border:1.5px solid #d8e0d4;background:#fff;border-radius:50px;padding:5px 13px;cursor:pointer;color:'+FOREST+';font-family:\'Cinzel\',serif;font-size:0.8rem;">Today</button>'+
-        '<button onclick="NGHCAL.shift(1)" style="border:1.5px solid #d8e0d4;background:#fff;border-radius:50px;padding:5px 13px;cursor:pointer;color:'+FOREST+';font-family:\'Cinzel\',serif;">›</button>'+
+        '<button onclick="NGHCAL.shift(-1)" style="border:1.5px solid #d8e0d4;background:#fff;border-radius:50px;padding:5px 12px;cursor:pointer;color:'+FOREST+';font-family:\'Cinzel\',serif;">‹</button>'+
+        '<button onclick="NGHCAL.today()" style="border:1.5px solid #d8e0d4;background:#fff;border-radius:50px;padding:5px 12px;cursor:pointer;color:'+FOREST+';font-family:\'Cinzel\',serif;font-size:0.78rem;">Today</button>'+
+        '<button onclick="NGHCAL.shift(1)" style="border:1.5px solid #d8e0d4;background:#fff;border-radius:50px;padding:5px 12px;cursor:pointer;color:'+FOREST+';font-family:\'Cinzel\',serif;">›</button>'+
       '</div></div>';
-    h+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">';
-    ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(function(d){ h+='<div style="text-align:center;font-family:\'Cinzel\',serif;font-size:0.62rem;letter-spacing:0.06em;text-transform:uppercase;color:#8a8a6a;padding:3px 0;">'+d+'</div>'; });
-    for(var i=0;i<42;i++){
-      var d=new Date(start); d.setDate(start.getDate()+i);
-      var ds=ymd(d), other=d.getMonth()!==ref.getMonth();
-      var dayEvents=occ.filter(function(e){ return e.date===ds; }).sort(function(a,b){ return (t2m(a.start)||0)-(t2m(b.start)||0); });
-      h+='<div style="min-height:78px;border:1px solid #e8ece4;border-radius:7px;padding:3px;background:'+(other?"#f6f7f4":"#fff")+';opacity:'+(other?0.55:1)+';'+(ds===todayStr?"box-shadow:inset 0 0 0 2px "+GOLD+";":"")+'overflow:hidden;">'+
-        '<div style="font-size:0.66rem;color:#6a6a50;font-weight:700;margin-bottom:2px;">'+d.getDate()+'</div>';
-      dayEvents.slice(0,3).forEach(function(e){
-        var tm = e.allDay ? "" : (fmtTime(t2m(e.start))+" ");
-        h+='<div onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" style="font-size:0.57rem;line-height:1.2;border-radius:3px;padding:1px 4px;margin-bottom:2px;background:'+TEAL+';color:#fff;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+esc(e.title)+'">'+tm+esc(e.title)+'</div>';
-      });
-      if(dayEvents.length>3) h+='<div style="font-size:0.55rem;color:#8a8a6a;">+'+(dayEvents.length-3)+' more</div>';
-      h+='</div>';
-    }
+
+    // header: weekday + date (links to the full day view)
+    h+='<div style="display:grid;grid-template-columns:34px repeat(7,1fr);gap:0;border-bottom:1px solid #e4e8df;"><div></div>';
+    days.forEach(function(d){ var dds=ymd(d), isT=dds===todayStr;
+      h+='<a href="events.html?view=day&date='+dds+'" style="text-decoration:none;text-align:center;font-family:\'Cinzel\',serif;font-size:0.56rem;color:'+(isT?GOLD:'#8a8a6a')+';padding:4px 0;border-left:1px solid #eef0ec;line-height:1.2;display:block;">'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br><span style="font-size:0.84rem;font-weight:700;color:'+(isT?GOLD:FOREST)+';">'+d.getDate()+'</span></a>'; });
     h+='</div>';
-    h+='<p style="text-align:center;font-size:0.78rem;color:#8a8a6a;margin-top:12px;">Tap an event for details. Want a tournament or game night that isn\'t listed? Request one below.</p>';
+
+    // body: hour gutter + 7 day columns (blocks scaled to the time of day)
+    h+='<div style="display:grid;grid-template-columns:34px repeat(7,1fr);gap:0;">';
+    h+='<div style="position:relative;height:'+GRIDH+'px;">';
+    for(var hr=H0;hr<=H1;hr++){ h+='<div style="position:absolute;right:4px;top:'+((hr-H0)*ROW-5)+'px;font-size:0.5rem;color:#9a9a80;">'+fmtTime(hr*60).replace(":00","")+'</div>'; }
+    h+='</div>';
+    days.forEach(function(d){
+      var ds=ymd(d);
+      h+='<div style="position:relative;height:'+GRIDH+'px;border-left:1px solid #eef0ec;'+(ds===todayStr?'background:rgba(201,151,58,0.06);':'')+'">';
+      for(var hr=H0;hr<H1;hr++){ h+='<div style="position:absolute;left:0;right:0;top:'+((hr-H0)*ROW)+'px;border-top:1px solid #f2f4ef;"></div>'; }
+      var dayEv=occ.filter(function(e){ return e.date===ds; }).sort(function(a,b){ return (t2m(a.start)||0)-(t2m(b.start)||0); });
+      var timed=dayEv.filter(function(e){ return !e.allDay && e.start; });
+      laneSplit(timed);
+      timed.forEach(function(e){
+        var s=t2m(e.start), en=t2m(e.end); if(en==null||en<=s) en=s+120;
+        var top=Math.max(0,(s-H0*60)/60*ROW);
+        var bottom=Math.min(GRIDH,(en-H0*60)/60*ROW);
+        var height=Math.max(13, bottom-top-2);
+        var w=100/(e._n||1), lf=(e._lane||0)*w;
+        h+='<div onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+' · '+fmtTime(s)+'–'+fmtTime(en)+'" style="position:absolute;top:'+top+'px;height:'+height+'px;left:calc('+lf+'% + 1px);width:calc('+w+'% - 2px);background:'+TEAL+';color:#fff;border-radius:3px;padding:1px 3px;font-size:0.5rem;line-height:1.15;overflow:hidden;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.18);">'+esc(e.title)+'</div>';
+      });
+      var ad=dayEv.filter(function(e){ return e.allDay; }), adTop=1;
+      ad.forEach(function(e){ h+='<div onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+' · All day" style="position:absolute;top:'+adTop+'px;left:1px;right:1px;height:11px;background:'+GOLD+';color:#3a2e15;border-radius:3px;padding:0 3px;font-size:0.46rem;line-height:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;">'+esc(e.title)+'</div>'; adTop+=12; });
+      h+='</div>';
+    });
+    h+='</div>';
+    h+='<p style="text-align:center;font-size:0.74rem;color:#8a8a6a;margin-top:10px;">Showing this week · 8 AM–midnight. Tap an event for details, or open the <a href="events.html" style="color:'+FOREST+';">full calendar</a> for month &amp; day views.</p>';
     wrap.innerHTML=h;
   }
 
@@ -1788,7 +1842,7 @@
   }
 
   window.NGHCAL = {
-    shift:function(n){ ref.setMonth(ref.getMonth()+n); render(); },
+    shift:function(n){ ref.setDate(ref.getDate()+7*n); render(); },
     today:function(){ ref=new Date(); render(); },
     open:openModal,
     ics:downloadIcs,
