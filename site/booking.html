@@ -446,7 +446,7 @@
     <a href="terms.html">Northwood Game Haven Terms &amp; Conditions</a>,
     including the refundable damage/cleanliness deposit and house rules.<br>
     Questions? <a href="mailto:stash@northwoodgamehaven.com">stash@northwoodgamehaven.com</a>
-    &nbsp;·&nbsp; <a href="#" onclick="openAdmin();return false;" style="color:#9a9a80;">Staff Login</a>
+    &nbsp;·&nbsp; <a href="#" onclick="openAdmin();return false;" style="color:#9a9a80;">Guru Console Login</a>
   </p>
   <div style="text-align:center;padding:0 20px 40px;">
     <a href="ngh.html" style="display:inline-block;margin:0 8px 10px;background:linear-gradient(135deg,var(--forest),var(--forest-light));color:#fff;padding:12px 26px;border-radius:50px;text-decoration:none;font-family:'Cinzel',serif;font-size:0.8rem;">← Return to Northwood Game Haven</a>
@@ -1186,7 +1186,7 @@ function addonSummary(req){
 }
 function buildAdminEmail(req){
   return "A new booking request has been submitted.\n\n"+
-  "REVIEW / APPROVE HERE: "+REVIEW_URL+"\n(Open the Staff Login on the booking page, then find request "+req.id+".)\n\n"+
+  "REVIEW / APPROVE HERE: "+REVIEW_URL+"\n(Open the Guru Console Login on the booking page, then find request "+req.id+".)\n\n"+
   "Ref: "+req.id+"\nName: "+req.name+"\nPhone: "+req.phone+"\nEmail: "+req.email+"\n"+
   "Rooms: "+roomList(req)+"\nDate: "+req.date+"\nTime: "+fmtTime(timeToMins(req.start))+" – "+req.endLabel+" ("+req.hours+"h)\n"+
   "Max concurrent guests: "+req.guests+"\n\n"+
