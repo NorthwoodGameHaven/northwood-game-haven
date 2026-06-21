@@ -206,7 +206,8 @@ async function notifyNewBooking(list) {
           'Add-ons: ' + addonList + '\n\n' +
           'Questions? Just reply to this email or reach us at ' + adminEmail + '.\n\n' +
           '— The Northwood Game Haven Gurus',
-        buttons: [{ label: 'Visit gamehaven.guru', url: SITE, primary: false }]
+        buttons: [{ label: 'Visit gamehaven.guru', url: SITE, primary: false }],
+        replyTo: adminEmail
       }
     );
   }
@@ -230,7 +231,8 @@ async function notifyNewBooking(list) {
         'Add-ons: ' + addonList + '\n' +
         'Military / first-responder discount: ' + (first.milRequested ? 'REQUESTED (verify ID)' : 'no') + '\n\n' +
         'Review and approve in the Guru Console.',
-      buttons: [{ label: 'Open Guru Console', url: SITE + '/booking.html?admin=1', primary: true }]
+      buttons: [{ label: 'Open Guru Console', url: SITE + '/booking.html?admin=1', primary: true }],
+      replyTo: first.email || undefined
     }
   );
 }
