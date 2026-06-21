@@ -279,10 +279,15 @@
 
 <div class="wrap">
 
+  <!-- UP-FRONT DEPOSIT NOTICE -->
+  <div class="suite-box" style="border-color:var(--den);background:#fbf6ec;">
+    <p class="hint" style="margin:0;">💳 <strong>A refundable deposit is required</strong>, and is calculated for each booking based on the room(s) you reserve. It's a hold, not an added fee — <strong>refunded in full</strong> so long as nothing is stolen or damaged and the room(s) are left reasonably cleaned. There is a <strong>4-hour minimum</strong> on all play-space bookings. Your exact deposit and total are itemized in the cost summary at the bottom of this form. Full details in our <a href="terms.html" target="_blank" rel="noopener">Terms &amp; Conditions</a>.</p>
+  </div>
+
   <!-- STEP 1: ROOMS -->
   <div class="card">
     <h2><span class="step-num">1</span>Choose Your Play Space(s)</h2>
-    <p class="hint">$10/hour for the first 4 hours, then $5/hour after. Select one or more rooms to use during the same time block.</p>
+    <p class="hint">$10/hour for the first 4 hours, then $5/hour after — <strong>4-hour minimum</strong>. Select one or more rooms to use during the same time block.</p>
     <div class="rooms" id="rooms"></div>
     <div class="avail-note" style="margin-top:14px;">💡 Want all the privacy? Book all three rooms together. The Lodge &amp; The Adventurer's Rest (overnight suites) are booked separately — see below.</div>
 
@@ -298,30 +303,10 @@
     </div>
   </div>
 
-  <!-- CHECK AVAILABILITY (collapsible) -->
-  <div class="card">
-    <div class="avail-toggle" onclick="toggleAvail()">
-      <h2 style="margin:0;"><span class="step-num">📅</span>Check Availability</h2>
-      <span class="avail-chevron" id="avail-chevron">▾</span>
-    </div>
-    <div id="avail-panel" style="display:none;margin-top:16px;">
-      <p class="hint">See what's already booked, blacked out, or scheduled as a Northwood Game Haven event — so you can spot open gaps before you request a time. Other guests' bookings show only as <strong>“Reserved”</strong>; public NGH events show full details.</p>
-      <div class="mine-box">
-        <label class="fld" style="margin-top:0;">See your own bookings in detail</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <input type="email" id="mine-email" placeholder="Enter the email you booked with" style="flex:1;min-width:200px;">
-          <button class="btn btn-sm btn-ghost" onclick="loadMine()">Show my bookings</button>
-        </div>
-        <p class="hint" id="mine-status" style="margin:8px 0 0;"></p>
-      </div>
-      <div id="cust-cal"></div>
-    </div>
-  </div>
-
   <!-- STEP 2: DATE & TIME -->
   <div class="card">
     <h2><span class="step-num">2</span>Pick Your Date &amp; Time</h2>
-    <p class="hint">Bookings run up to <strong>8 hours</strong> max. Slots already booked, reserved for an NGH event, or blacked out can't be selected.</p>
+    <p class="hint">Bookings are a <strong>4-hour minimum</strong> and run up to <strong>8 hours</strong> max. Slots already booked, reserved for an NGH event, or blacked out can't be selected.</p>
     <div class="row">
       <div>
         <label class="fld req">Date</label>
@@ -368,6 +353,26 @@
         <p class="hint" style="margin-top:8px;margin-bottom:0;">Each occurrence is reviewed and approved individually. You'll only be charged for occurrences you confirm — pay for each by the day before it happens. We'll email you the schedule after review.</p>
         <div class="avail-note" id="rec-preview" style="display:none;margin-top:10px;"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- CHECK AVAILABILITY (collapsible) -->
+  <div class="card">
+    <div class="avail-toggle" onclick="toggleAvail()">
+      <h2 style="margin:0;"><span class="step-num">📅</span>Check Availability</h2>
+      <span class="avail-chevron" id="avail-chevron">▾</span>
+    </div>
+    <div id="avail-panel" style="display:none;margin-top:16px;">
+      <p class="hint">See what's already booked, blacked out, or scheduled as a Northwood Game Haven event — so you can spot open gaps before you request a time. Other guests' bookings show only as <strong>“Reserved”</strong>; public NGH events show full details.</p>
+      <div class="mine-box">
+        <label class="fld" style="margin-top:0;">See your own bookings in detail</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input type="email" id="mine-email" placeholder="Enter the email you booked with" style="flex:1;min-width:200px;">
+          <button class="btn btn-sm btn-ghost" onclick="loadMine()">Show my bookings</button>
+        </div>
+        <p class="hint" id="mine-status" style="margin:8px 0 0;"></p>
+      </div>
+      <div id="cust-cal"></div>
     </div>
   </div>
 
@@ -817,7 +822,7 @@ function toggleRoom(id){
 /* ---------- hours dropdown ---------- */
 function renderHours(){
   var sel2=$("bk-hours");
-  for(var h=1; h<=MAX_HOURS; h++){
+  for(var h=4; h<=MAX_HOURS; h++){
     var o=document.createElement("option");
     o.value=h; o.textContent=h+" hour"+(h>1?"s":"");
     sel2.appendChild(o);
