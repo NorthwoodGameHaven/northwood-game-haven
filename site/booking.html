@@ -2667,17 +2667,22 @@ function weekDayHTML(isDay){
   var todayStr=ymd(new Date()), h='<div class="cal-week" style="--wcols:'+days.length+'">';
   h+='<div class="whead"></div>';
   days.forEach(function(d){ var dds=ymd(d); h+='<div class="whead whead-link"'+(dds===todayStr?' style="color:var(--gold)"':'')+' title="View this day" onclick="calGoto(\''+dds+'\',\'day\')">'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
+  var WPITCH=28; // px per hour = .wslot min-height (26) + grid row gap (2); keeps blocks on the time scale
   for(var hr=0; hr<=23; hr++){
     h+='<div class="whour">'+fmtTime(hr*60)+'</div>';
     days.forEach(function(d){
       var ds=ymd(d);
       var slotEvents=eventsForDate(ds).filter(function(e){ if(e.allDay) return hr===8; if(!e.start) return false; return Math.floor(timeToMins(e.start)/60)===hr; });
-      h+='<div class="wslot">'+slotEvents.map(function(e){
+      var nS=slotEvents.length;
+      h+='<div class="wslot">'+slotEvents.map(function(e, i){
         var bg = e.cat==="blackout"?"var(--cal-blackout)":(e.cat==="event"?"var(--cal-event)":(e.status==="approved"?"var(--cal-approved)":"var(--cal-pending)"));
-        var ht = e.allDay?"100%":((e.hours||1)*26-2)+"px";
         var click = (e.cat==="booking")?(' onclick="jumpToReq(\''+e.id+'\')"'):(e.isEvent?(' onclick="jumpToEvent(\''+e.id+'\')"'):'');
         var draftCls = (e.cat==="event" && isDraftEvent(e._src||e)) ? " draft" : "";
-        return '<div class="wevent'+draftCls+'" style="background:'+bg+';height:'+ht+';"'+click+evHover(e)+' title="'+esc(e.label)+(draftCls?' (DRAFT — not visible to customers)':'')+'">'+(e.rec?'🔁':'')+esc(e.label)+'</div>';
+        var pos;
+        if(e.allDay){ pos='top:0;height:'+(WPITCH-2)+'px;'; }
+        else { var sm=timeToMins(e.start); var off=(sm-hr*60)/60*WPITCH; var ht=Math.max(14,(e.hours||1)*WPITCH-2); pos='top:'+off+'px;height:'+ht+'px;'; }
+        var w=100/nS, lf=i*w; pos+='left:calc('+lf+'% + 1px);width:calc('+w+'% - 2px);right:auto;';
+        return '<div class="wevent'+draftCls+'" style="background:'+bg+';'+pos+'"'+click+evHover(e)+' title="'+esc(e.label)+(draftCls?' (DRAFT — not visible to customers)':'')+'">'+(e.rec?'🔁':'')+esc(e.label)+'</div>';
       }).join("")+'</div>';
     });
   }
@@ -2863,7 +2868,7 @@ function custWeekDayHTML(isDay){
   var todayStr=ymd(new Date()), h='<div class="cc-week" style="--ccc:'+days.length+'">';
   h+='<div class="cch"></div>';
   days.forEach(function(d){ var dds=ymd(d); h+='<div class="cch cch-link"'+(dds===todayStr?' style="color:var(--gold)"':'')+' title="View this day" onclick="custGoto(\''+dds+'\',\'day\')">'+d.toLocaleDateString(undefined,{weekday:'short'})+'<br>'+d.getDate()+'</div>'; });
-  var ROW=24; // px per hour, matches .cc-week .ccslot min-height
+  var ROW=26; // px per hour = .ccslot min-height (24) + grid row gap (2); aligns blocks to the time scale
   for(var hr=0; hr<=23; hr++){
     h+='<div class="cchour">'+fmtTime(hr*60)+'</div>';
     days.forEach(function(d){
