@@ -176,8 +176,8 @@
   <div class="cal-card">
     <div class="cal-toolbar">
       <div class="cal-views">
-        <button id="v-month" class="active" onclick="CAL.setView('month')">Month</button>
-        <button id="v-week" onclick="CAL.setView('week')">Week</button>
+        <button id="v-month" onclick="CAL.setView('month')">Month</button>
+        <button id="v-week" class="active" onclick="CAL.setView('week')">Week</button>
         <button id="v-day" onclick="CAL.setView('day')">Day</button>
       </div>
       <div class="cal-nav">
@@ -241,7 +241,7 @@
   var API = (window.NGH_API_BASE||"");
   var FOREST="#2d5a3d", GOLD="#c9973a", TEAL="#1488a6";
   var ROW = 46;            // pixels per hour on the time grid
-  var view="month", ref=new Date(), events=[];
+  var view="week", ref=new Date(), events=[];
 
   /* ---------- helpers ---------- */
   function pad(n){ return (n<10?"0":"")+n; }
