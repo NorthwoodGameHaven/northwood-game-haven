@@ -2885,7 +2885,15 @@ function weekDayHTML(isDay){
         var draftCls = (e.cat==="event" && isDraftEvent(e._src||e)) ? " draft" : "";
         var pos;
         if(e.allDay){ pos='top:0;height:'+(WPITCH-2)+'px;'; }
-        else { var sm=timeToMins(e.start); var off=(sm-hr*60)/60*WPITCH; var ht=Math.max(14,(e.hours||1)*WPITCH-2); pos='top:'+off+'px;height:'+ht+'px;'; }
+        else {
+          var sm=timeToMins(e.start);
+          var off=(sm-hr*60)/60*WPITCH;
+          var hrsToMidnight=(1440-sm)/60;                 // cap so block ends at the midnight gridline
+          var drawHrs=Math.min(e.hours||1, hrsToMidnight);
+          var overnightAdmin=((e.hours||1) > hrsToMidnight + 0.001);
+          var ht=Math.max(14, drawHrs*WPITCH-2);
+          pos='top:'+off+'px;height:'+ht+'px;'+(overnightAdmin?'border-bottom:2px dashed rgba(255,255,255,0.85);':'');
+        }
         var w=100/nS, lf=i*w; pos+='left:calc('+lf+'% + 1px);width:calc('+w+'% - 2px);right:auto;';
         return '<div class="wevent'+draftCls+'" style="background:'+bg+';'+pos+'"'+click+evHover(e)+' title="'+esc(e.label)+(draftCls?' (DRAFT — not visible to customers)':'')+'">'+(e.rec?'🔁':'')+esc(e.label)+'</div>';
       }).join("")+'</div>';
@@ -3108,6 +3116,15 @@ function custWeekDayHTML(isDay){
     <img id="rpm-main" class="rpm-main" src="" alt="">
     <div id="rpm-occ" class="rpm-occ"></div>
     <div id="rpm-thumbs" class="rpm-thumbs"></div>
+  </div>
+</div>
+<!-- NGH SOCIAL -->
+<div class="ngh-social" style="text-align:center;padding:22px 16px 28px;background:#22311f;color:#e9e2cc;font-family:Georgia,serif;">
+  <div style="font-size:0.82rem;letter-spacing:0.06em;opacity:0.8;margin-bottom:12px;">Connect with Northwood Game Haven</div>
+  <div style="display:flex;justify-content:center;align-items:center;gap:14px;">
+    <a href="https://www.facebook.com/profile.php?id=61579663353904" target="_blank" rel="noopener" aria-label="Northwood Game Haven on Facebook" title="Facebook" style="display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:#1877F2;color:#fff;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.28)'"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.09 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.92-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.09 24 18.1 24 12.07z"/></svg></a>
+    <a href="https://www.instagram.com/northwoodgamehaven?igsh=NG8xM256anh3cDlr" target="_blank" rel="noopener" aria-label="Northwood Game Haven on Instagram" title="Instagram" style="display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:radial-gradient(circle at 30% 110%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285aeb 90%);color:#fff;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.28)'"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41a3.7 3.7 0 0 1-1.38-.9 3.7 3.7 0 0 1-.9-1.38c-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16zm0 1.62c-3.15 0-3.52.01-4.76.07-1.15.05-1.77.24-2.19.4-.55.21-.94.47-1.35.88-.41.41-.67.8-.88 1.35-.16.42-.35 1.04-.4 2.19-.06 1.24-.07 1.61-.07 4.76s.01 3.52.07 4.76c.05 1.15.24 1.77.4 2.19.21.55.47.94.88 1.35.41.41.8.67 1.35.88.42.16 1.04.35 2.19.4 1.24.06 1.61.07 4.76.07s3.52-.01 4.76-.07c1.15-.05 1.77-.24 2.19-.4.55-.21.94-.47 1.35-.88.41-.41.67-.8.88-1.35.16-.42.35-1.04.4-2.19.06-1.24.07-1.61.07-4.76s-.01-3.52-.07-4.76c-.05-1.15-.24-1.77-.4-2.19a3.6 3.6 0 0 0-.88-1.35 3.6 3.6 0 0 0-1.35-.88c-.42-.16-1.04-.35-2.19-.4-1.24-.06-1.61-.07-4.76-.07zm0 2.76a5.46 5.46 0 1 0 0 10.92 5.46 5.46 0 0 0 0-10.92zm0 9a3.54 3.54 0 1 1 0-7.08 3.54 3.54 0 0 1 0 7.08zm5.68-9.22a1.28 1.28 0 1 1-2.56 0 1.28 1.28 0 0 1 2.56 0z"/></svg></a>
+    <a href="https://discord.gg/k3jzthfQ" target="_blank" rel="noopener" aria-label="Northwood Game Haven Discord server" title="Discord" style="display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:#5865F2;color:#fff;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.28)'"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.32 4.37A19.8 19.8 0 0 0 15.45 3a13.9 13.9 0 0 0-.62 1.27 18.27 18.27 0 0 0-5.66 0A13.9 13.9 0 0 0 8.55 3 19.8 19.8 0 0 0 3.68 4.37C.55 9.06-.3 13.63.12 18.13a19.95 19.95 0 0 0 6.06 3.06c.49-.67.92-1.38 1.3-2.12-.71-.27-1.39-.6-2.04-.99.17-.13.34-.26.5-.39a14.25 14.25 0 0 0 12.12 0c.16.14.33.27.5.39-.65.39-1.34.72-2.05.99.37.74.81 1.45 1.3 2.12a19.9 19.9 0 0 0 6.07-3.06c.49-5.21-.84-9.74-3.56-13.76zM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42s.95-2.42 2.16-2.42 2.18 1.09 2.16 2.42c0 1.34-.95 2.42-2.16 2.42zm7.96 0c-1.18 0-2.16-1.08-2.16-2.42s.95-2.42 2.16-2.42 2.18 1.09 2.16 2.42c0 1.34-.94 2.42-2.16 2.42z"/></svg></a>
   </div>
 </div>
 </body>
