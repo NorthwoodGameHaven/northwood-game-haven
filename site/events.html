@@ -361,7 +361,7 @@
   function lanes(evs){
     var laneEnds=[]; // end-minute of last event in each lane
     evs.forEach(function(e){
-      var s=t2m(e.start), en=t2m(e.end); if(en==null||en<=s) en=s+120;
+      var s=t2m(e.start), en=t2m(e.end); if(en==null) en=s+120; else if(en<=s) en=1440;
       var placed=-1;
       for(var i=0;i<laneEnds.length;i++){ if(s>=laneEnds[i]){ placed=i; break; } }
       if(placed<0){ placed=laneEnds.length; laneEnds.push(en); } else { laneEnds[placed]=en; }
@@ -406,7 +406,7 @@
       // blank-space fill: this day's event images tile the empty parts of the column (drawn behind the events)
       h+=fillBlankImages(evs, timed, adBottom, gridH, h0, ds);
       timed.forEach(function(e){
-        var s=t2m(e.start), en=t2m(e.end); if(en==null||en<=s) en=s+120;
+        var s=t2m(e.start), en=t2m(e.end); if(en==null) en=s+120; else if(en<=s) en=1440;
         var top=(s-h0*60)/60*ROW;
         var height=Math.max(18,(en-s)/60*ROW)-2;
         var w=100/ (e._lanes||1); var left=(e._lane||0)*w;
@@ -437,7 +437,7 @@
     var occ=[];
     if(adBottom>0) occ.push([0, adBottom]);
     timed.forEach(function(e){
-      var s=t2m(e.start), en=t2m(e.end); if(en==null||en<=s) en=s+120;
+      var s=t2m(e.start), en=t2m(e.end); if(en==null) en=s+120; else if(en<=s) en=1440;
       var top=(s-h0*60)/60*ROW, bot=top+Math.max(18,(en-s)/60*ROW);
       occ.push([Math.max(0,top), Math.min(gridH,bot)]);
     });
@@ -661,7 +661,7 @@
     var date=ds||e.date;
     if(e.allDay){ var s=new Date(date+"T00:00:00"), en=new Date(date+"T00:00:00"); en.setDate(en.getDate()+1); return {start:s,end:en,allDay:true}; }
     var s=evDateTime(date,e.start,"12:00"), en=evDateTime(date,e.end,e.start);
-    if(en<=s) en=new Date(s.getTime()+2*3600000); return {start:s,end:en,allDay:false};
+    if(en<=s) en.setDate(en.getDate()+1); return {start:s,end:en,allDay:false};
   }
   function gcalUrl(e, ds){
     var tt=eventTimes(e,ds);

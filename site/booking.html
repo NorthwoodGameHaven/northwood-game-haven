@@ -962,6 +962,26 @@ function onDateTimeChange(){
 }
 function overlaps(aS,aE,bS,bE){ return aS < bE && bS < aE; }
 
+/* ---- offsite + overnight (midnight-crossing) event helpers ---- */
+// Offsite events are NOT held at NGH, so they hold ZERO rooms (they must NOT
+// fall into the "no rooms checked = all rooms" default).
+function eventIsOffsite(e){ return !!(e && e.offsite); }
+function eventRooms(e){
+  if(eventIsOffsite(e)) return [];
+  return (e && e.rooms && e.rooms.length) ? e.rooms : ROOMS.map(function(x){return x.id;});
+}
+// True when a timed event ends at or before it starts → it runs past midnight
+// into the following morning (e.g. 9:00 PM → 2:00 AM).
+function eventCrossesMidnight(e){
+  return !!(e && !e.allDay && e.start && e.end && timeToMins(e.end) <= timeToMins(e.start));
+}
+// Human label for what an event holds, for cards/calendar/hovers.
+function eventRoomsLabel(e){
+  if(eventIsOffsite(e)) return e.offsiteLocation ? ("Offsite · "+e.offsiteLocation) : "Offsite";
+  return (e && e.rooms && e.rooms.length) ? e.rooms.map(roomName).join(", ") : "all rooms";
+}
+function prevYMD(dateStr){ var d=new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()-1); return ymd(d); }
+
 /* ---------------------------------------------------------------
    UNIFIED AVAILABILITY ENGINE
    Busy intervals per room for a date, from bookings + events (draft
@@ -981,12 +1001,26 @@ function roomBusyIntervals(date, opts){
     (r.rooms||[]).forEach(function(room){ add(room, rs, re, "booking", (r.name||"Booking"), r); });
   });
   expandedEvents().forEach(function(e){
-    if(e.date!==date) return;
     if(opts.ignoreEventId && e.id===opts.ignoreEventId) return;
-    var es = e.allDay ? 0 : timeToMins(e.start), ee = e.allDay ? 1440 : timeToMins(e.end);
+    var rooms = eventRooms(e);
+    if(!rooms.length) return;            // offsite events hold no NGH rooms
+    var label = (e.title||"NGH event")+(isDraftEvent(e)?" (draft)":"");
+    if(e.allDay){
+      if(e.date!==date) return;
+      rooms.forEach(function(room){ add(room, 0, 1440, "event", label, e); });
+      return;
+    }
+    var es = timeToMins(e.start), ee = timeToMins(e.end);
     if(e.tournament && e.tournament.arrival){ var am=timeToMins(e.tournament.arrival); if(!isNaN(am) && am<es) es=am; }
-    var rooms = (e.rooms&&e.rooms.length) ? e.rooms : ROOMS.map(function(x){return x.id;});
-    rooms.forEach(function(room){ add(room, es, ee, "event", (e.title||"NGH event")+(isDraftEvent(e)?" (draft)":""), e); });
+    var overnight = ee<=es;              // ends next morning
+    // Head: start → end (or start → midnight if it crosses) on the event's own date.
+    if(e.date===date){
+      rooms.forEach(function(room){ add(room, es, overnight?1440:ee, "event", label, e); });
+    }
+    // Tail: midnight → end lands on the FOLLOWING calendar day.
+    if(overnight && e.date===prevYMD(date)){
+      rooms.forEach(function(room){ add(room, 0, ee, "event", label+" (overnight)", e); });
+    }
   });
   expandedBlackouts().forEach(function(b){
     if(b.date!==date) return;
@@ -1043,11 +1077,23 @@ function checkConflicts(){
   });
   // public NGH events block their rooms
   expandedEvents().forEach(function(e){
-    if(e.date!==date) return;
-    var es = e.allDay ? 0 : timeToMins(e.start), ee = e.allDay ? 1440 : timeToMins(e.end);
-    var rooms = (e.rooms&&e.rooms.length) ? e.rooms : ROOMS.map(function(x){return x.id;});
-    rooms.forEach(function(room){
-      if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,es,ee)) addConflict(room, "event", "NGH event: "+(e.title||"Scheduled event")+(e.allDay?" (all day)":""), es, ee);
+    var rooms = eventRooms(e);
+    if(!rooms.length) return;            // offsite events hold no rooms
+    if(e.allDay){
+      if(e.date!==date) return;
+      rooms.forEach(function(room){
+        if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,0,1440)) addConflict(room, "event", "NGH event: "+(e.title||"Scheduled event")+" (all day)", 0, 1440);
+      });
+      return;
+    }
+    var es=timeToMins(e.start), ee=timeToMins(e.end), overnight=ee<=es;
+    var segs=[];
+    if(e.date===date) segs.push([es, overnight?1440:ee, ""]);
+    if(overnight && e.date===prevYMD(date)) segs.push([0, ee, " (overnight)"]);
+    segs.forEach(function(sg){
+      rooms.forEach(function(room){
+        if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,sg[0],sg[1])) addConflict(room, "event", "NGH event: "+(e.title||"Scheduled event")+sg[2], sg[0], sg[1]);
+      });
     });
   });
   // blackout windows
@@ -1762,13 +1808,13 @@ function eventVEVENT(e, ds){
   } else {
     var s=new Date(date+"T"+(e.start||"12:00")+":00");
     var en=new Date(date+"T"+(e.end||e.start||"12:00")+":00");
-    if(en<=s) en=new Date(s.getTime()+2*3600000);
+    if(en<=s) en.setDate(en.getDate()+1);   // crosses midnight → ends the next morning
     lines.push("DTSTART:"+icsUTC(s)); lines.push("DTEND:"+icsUTC(en));
   }
   var desc=(e.notes||"")+(e.fbLink?("\n\nFacebook: "+e.fbLink):"");
   lines.push("SUMMARY:"+icsEscape(e.title||"NGH Event"));
   lines.push("DESCRIPTION:"+icsEscape(desc));
-  lines.push("LOCATION:"+icsEscape("Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI"));
+  lines.push("LOCATION:"+icsEscape(eventIsOffsite(e) ? (e.offsiteLocation||"Offsite") : "Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI"));
   lines.push("END:VEVENT");
   return lines.join("\r\n");
 }
@@ -1831,7 +1877,7 @@ function renderEventsAdmin(){
   var roomChecks=ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="ev-room" value="'+r.id+'">'+r.name+'</label>'; }).join("");
   var evs=cache.events.slice();
   var list = evs.length ? evs.map(function(e){
-    var rooms=(e.rooms&&e.rooms.length)?e.rooms.map(roomName).join(", "):"all rooms";
+    var rooms=eventRoomsLabel(e);
     var time=e.allDay?"All day":(fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end)));
     var rec=e.recurrence?(' <span class="recur-badge">🔁 '+freqLabel(e.recurrence.freq)+' ×'+e.recurrence.count+'</span>'):'';
     var statusBadge = isDraftEvent(e)
@@ -1892,11 +1938,14 @@ function renderEventsAdmin(){
     '<div class="card"><h2 id="ev-form-title">🎉 Create a Public NGH Event</h2>'+
     '<p class="hint">Public events (tournaments, launch nights, demo days) appear on the booking calendar in teal, hold the selected rooms, and publish to the Event Calendar on the main site for customers to view. Make it recurring for a weekly series.</p>'+
     '<div class="row"><div><label class="fld req">Event title</label><input type="text" id="ev-title" placeholder="e.g. Friday Night Magic"></div>'+
-    '<div><label class="fld req">Date</label><input type="date" id="ev-date"></div></div>'+
-    '<label class="check-line" style="margin-top:10px;"><input type="checkbox" id="ev-allday" onchange="$(\'ev-times\').style.display=this.checked?\'none\':\'grid\'">All day</label>'+
-    '<div class="row" id="ev-times"><div><label class="fld">Start time</label>'+timeSelectHTML("ev-start","",15)+'</div>'+
-    '<div><label class="fld">End time</label>'+timeSelectHTML("ev-end","if($(\'ev-est-end\')&&!$(\'ev-est-end\').value)setTimeSelect(\'ev-est-end\',$(\'ev-end\').value);",15)+'</div></div>'+
-    '<label class="fld">Rooms held (none = all rooms)</label><div>'+roomChecks+'</div>'+
+    '<div><label class="fld req">Date</label><input type="date" id="ev-date" onchange="updateEvOvernightHint()"></div></div>'+
+    '<label class="check-line" style="margin-top:10px;"><input type="checkbox" id="ev-allday" onchange="$(\'ev-times\').style.display=this.checked?\'none\':\'grid\';updateEvOvernightHint()">All day</label>'+
+    '<div class="row" id="ev-times"><div><label class="fld">Start time</label>'+timeSelectHTML("ev-start","updateEvOvernightHint();",15)+'</div>'+
+    '<div><label class="fld">End time</label>'+timeSelectHTML("ev-end","if($(\'ev-est-end\')&&!$(\'ev-est-end\').value)setTimeSelect(\'ev-est-end\',$(\'ev-end\').value);updateEvOvernightHint();",15)+'</div></div>'+
+    '<div id="ev-overnight-hint" class="hint" style="display:none;margin:-2px 0 10px;padding:8px 11px;background:#fff7e8;border:1px solid #f0dcae;border-radius:9px;color:#7a5a14;"></div>'+
+    '<label class="fld">Rooms held (none = all NGH rooms)</label><div>'+roomChecks+'</div>'+
+    '<label class="check-line" id="ev-offsite-line" style="margin:6px 12px 4px 0;display:inline-flex;"><input type="checkbox" id="ev-offsite" onchange="onEvOffsiteToggle()">🚗 Offsite event (held away from NGH — holds no rooms)</label>'+
+    '<div id="ev-offsite-loc-wrap" style="display:none;margin-top:6px;"><label class="fld">Offsite location (optional)</label><input type="text" id="ev-offsite-loc" placeholder="e.g. The Plus, Eau Claire"></div>'+
 
     // ---- Photo + Facebook ----
     '<div class="ev-section"><div class="ev-section-label">📷 Photo &amp; Links</div>'+
@@ -1993,8 +2042,30 @@ function evPhotoUpload(){
   };
   rd.readAsDataURL(f);
 }
-function resetEventForm(){ editingEventId=null; evPhotoData=null;
-  $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
+// Offsite events are held away from NGH, so the in-house room checkboxes can't
+// apply: clear + disable them and reveal the optional location field.
+function onEvOffsiteToggle(){
+  var off = !!($("ev-offsite") && $("ev-offsite").checked);
+  var wrap = $("ev-offsite-loc-wrap"); if(wrap) wrap.style.display = off ? "block" : "none";
+  document.querySelectorAll(".ev-room").forEach(function(c){
+    if(off) c.checked=false;
+    c.disabled = off;
+    var lbl = c.closest ? c.closest("label") : null; if(lbl) lbl.style.opacity = off ? "0.4" : "1";
+  });
+}
+// Live note under the time pickers when an event runs past midnight (end <= start).
+function updateEvOvernightHint(){
+  var h=$("ev-overnight-hint"); if(!h) return;
+  var ad = $("ev-allday") && $("ev-allday").checked;
+  var s = $("ev-start") ? $("ev-start").value : "", e = $("ev-end") ? $("ev-end").value : "";
+  if(!ad && s && e && timeToMins(e) <= timeToMins(s)){
+    var d = $("ev-date") ? $("ev-date").value : "", nextLabel="";
+    if(d){ var nd=new Date(d+"T00:00:00"); nd.setDate(nd.getDate()+1); nextLabel=" ("+nd.toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"})+")"; }
+    h.style.display="block";
+    h.innerHTML="\u23ED\uFE0F Runs <b>overnight</b> \u2014 ends the next morning at "+fmtTime(timeToMins(e))+nextLabel+", holding its room(s) past midnight.";
+  } else { h.style.display="none"; }
+}
+function resetEventForm(){ editingEventId=null; evPhotoData=null; $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
   ["ev-title","ev-date","ev-start","ev-end","ev-notes","ev-photo-url","ev-fb","ev-rounds","ev-wins","ev-est-end","ev-arrival","ev-restrictions","ev-prizes-place","ev-prizes-part","ev-admin-notes"].forEach(function(id){ if($(id)) $(id).value=""; });
   if($("ev-ttype")) $("ev-ttype").value="";
   if($("ev-photo-file")) $("ev-photo-file").value="";
@@ -2002,6 +2073,10 @@ function resetEventForm(){ editingEventId=null; evPhotoData=null;
   $("ev-allday").checked=false; $("ev-times").style.display="grid";
   if($("ev-publish")) $("ev-publish").checked=false;
   document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=false; }); $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none";
+  if($("ev-offsite")) $("ev-offsite").checked=false;
+  if($("ev-offsite-loc")) $("ev-offsite-loc").value="";
+  if(typeof onEvOffsiteToggle==="function") onEvOffsiteToggle();
+  if(typeof updateEvOvernightHint==="function") updateEvOvernightHint();
   if($("ev-reg-enabled")){ $("ev-reg-enabled").checked=false; $("ev-reg-ui").style.display="none"; ["ev-reg-min","ev-reg-max","ev-reg-cost"].forEach(function(id){ if($(id))$(id).value=""; }); if($("ev-reg-paywhen")) $("ev-reg-paywhen").value="onfire"; }
 }
 function editEvent(id){
@@ -2042,6 +2117,10 @@ function _fillEventForm(e, blankDateTime){
   $("ev-prizes-place").value=p.placement||""; $("ev-prizes-part").value=p.participation||"";
   $("ev-admin-notes").value=e.adminNotes||"";
   document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=(e.rooms||[]).indexOf(c.value)>=0; });
+  if($("ev-offsite")) $("ev-offsite").checked=!!e.offsite;
+  if($("ev-offsite-loc")) $("ev-offsite-loc").value=e.offsiteLocation||"";
+  if(typeof onEvOffsiteToggle==="function") onEvOffsiteToggle();
+  if(typeof updateEvOvernightHint==="function") updateEvOvernightHint();
   if(e.recurrence){ $("ev-recurring").checked=true; $("ev-rec-ui").style.display="grid"; $("ev-rec-freq").value=e.recurrence.freq; $("ev-rec-count").value=e.recurrence.count; }
   else { $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none"; }
   var reg=e.registration||{};
@@ -2065,6 +2144,9 @@ async function saveEvent(){
   if(!date){ alert("Pick a date."); return; }
   if(!allDay && (!start||!end)){ alert("Set start & end times or choose All day."); return; }
   var rooms=[]; document.querySelectorAll(".ev-room:checked").forEach(function(c){ rooms.push(c.value); });
+  var offsite = !!($("ev-offsite") && $("ev-offsite").checked);
+  var offsiteLocation = ($("ev-offsite-loc") && $("ev-offsite-loc").value.trim()) || "";
+  if(offsite) rooms=[];   // offsite events never hold NGH rooms
   var photo = $("ev-photo-url").value.trim() || evPhotoData || "";
   var tournament = {
     type:$("ev-ttype").value, rounds:$("ev-rounds").value, winsPerRound:$("ev-wins").value,
@@ -2075,6 +2157,7 @@ async function saveEvent(){
   var hasPrizes = prizes.placement || prizes.participation;
   var ev={
     id:editingEventId||undefined, title:title, date:date, allDay:allDay, start:start, end:end, rooms:rooms,
+    offsite:offsite, offsiteLocation: offsite?offsiteLocation:"",
     notes:notes, photo:photo, fbLink:$("ev-fb").value.trim(),
     tournament: hasTourney ? tournament : null,
     prizes: hasPrizes ? prizes : null,
@@ -2376,7 +2459,8 @@ function eventHoverHTML(e, ds){
   var when=(ds||e.date)+(e.allDay?" · All day":(" · "+fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end))));
   var h='<div style="font-family:\'Cinzel\',serif;color:var(--forest);font-weight:700;font-size:0.9rem;">🎉 '+esc(e.title||"NGH Event")+'</div>';
   h+=_row("When", when);
-  if(e.rooms&&e.rooms.length) h+=_row("Rooms", e.rooms.map(roomName).join(", "));
+  if(eventIsOffsite(e)) h+=_row("Location", e.offsiteLocation?("Offsite · "+e.offsiteLocation):"Offsite (not at NGH)");
+  else if(e.rooms&&e.rooms.length) h+=_row("Rooms", e.rooms.map(roomName).join(", "));
   var rs=regSummary(e); if(rs) h+=_row("Registration", rs);
   if(e.tournament&&e.tournament.type){ var tl={swiss:"Swiss",single:"Single elim",double:"Double elim",roundrobin:"Round robin",other:"Tournament"}[e.tournament.type]; h+=_row("Format", tl+(e.tournament.rounds?(" · "+e.tournament.rounds+" rounds"):"")); }
   if(e.notes) h+='<div style="margin-top:5px;color:#5a6a50;font-size:0.76rem;">'+esc(e.notes.slice(0,120))+(e.notes.length>120?"…":"")+'</div>';
@@ -2424,7 +2508,7 @@ function eventsForDate(dateStr){
     if(r.date===dateStr) evs.push({cat:"booking", status:r.status, payment:r.payment, rec:!!r.groupId, start:r.start, hours:r.hours, label:r.name+" · "+roomList(r), id:r.id, groupId:r.groupId, _src:r});
   });
   expandedEvents().forEach(function(e){
-    if(e.date===dateStr) evs.push({cat:"event", rec:!!e.recurrence, start:e.allDay?null:e.start, end:e.allDay?null:e.end, allDay:e.allDay, hours:e.allDay?null:durHours(e.start,e.end), label:(e.title||"NGH Event")+(e.rooms&&e.rooms.length?(" ("+e.rooms.map(roomName).join(", ")+")"):" (all rooms)"), id:e.id, isEvent:true, _src:e, _ds:dateStr});
+    if(e.date===dateStr) evs.push({cat:"event", rec:!!e.recurrence, start:e.allDay?null:e.start, end:e.allDay?null:e.end, allDay:e.allDay, hours:e.allDay?null:durHours(e.start,e.end), label:(e.title||"NGH Event")+" ("+eventRoomsLabel(e)+")", id:e.id, isEvent:true, _src:e, _ds:dateStr});
   });
   expandedBlackouts().forEach(function(b){
     if(b.date===dateStr) evs.push({cat:"blackout", rec:!!b.recurrence, start:b.allDay?null:b.start, end:b.allDay?null:b.end, allDay:b.allDay, hours:b.allDay?null:durHours(b.start,b.end), label:(b.label||"Blackout")+(b.rooms&&b.rooms.length?(" ("+b.rooms.map(roomName).join(", ")+")"):" (all rooms)"), _src:b});
