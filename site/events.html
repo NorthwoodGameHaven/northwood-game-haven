@@ -250,7 +250,7 @@
   var API = (window.NGH_API_BASE||"");
   var FOREST="#2d5a3d", GOLD="#c9973a", TEAL="#1488a6";
   var ROW = 46;            // pixels per hour on the time grid
-  var view="week", ref=new Date(), events=[];
+  var view="week", ref=new Date(), events=[], allEvents=[];
 
   /* ---------- helpers ---------- */
   function pad(n){ return (n<10?"0":"")+n; }
@@ -280,7 +280,9 @@
       if(API){ var r=await fetch(API+"/events"); events = r.ok ? await r.json() : []; }
       else { try { events = JSON.parse(localStorage.getItem("ngh_events")||"[]"); } catch(e){ events=[]; } }
     } catch(e){ events=[]; }
-    events = (events||[]).filter(function(e){ return e && e.status!=="draft"; });
+    allEvents = (events||[]).filter(function(e){ return e && e.status!=="draft"; });
+    // Private events are hidden from this public calendar; invite links (?event=…) still resolve via allEvents.
+    events = allEvents.filter(function(e){ return !e.private; });
     // deep link: ?event=&date=  and ?view=&date=
     try {
       var qs=new URLSearchParams(location.search);
@@ -288,7 +290,7 @@
       var dt=qs.get('date'); if(dt) ref=new Date(dt+"T12:00:00");
       render();
       var evId=qs.get('event');
-      if(evId){ var ev=events.filter(function(x){return x.id===evId;})[0]; if(ev){ if(!dt) ref=new Date(ev.date+"T12:00:00"); render(); openModal(evId, dt||ev.date); } }
+      if(evId){ var ev=allEvents.filter(function(x){return x.id===evId;})[0]; if(ev){ if(!dt) ref=new Date(ev.date+"T12:00:00"); render(); openModal(evId, dt||ev.date); } }
     } catch(e){ render(); }
   }
 
@@ -483,7 +485,7 @@
   function attachGridHover(){ /* hover wired inline via onmouseenter */ }
 
   /* ---------- hover card ---------- */
-  function findOcc(id, ds){ var list=occForDate(ds); for(var i=0;i<list.length;i++){ if(list[i].id===id) return list[i]; } return events.filter(function(x){return x.id===id;})[0]; }
+  function findOcc(id, ds){ var list=occForDate(ds); for(var i=0;i<list.length;i++){ if(list[i].id===id) return list[i]; } return allEvents.filter(function(x){return x.id===id;})[0]; }
   function hover(evt, id, ds){
     var e=findOcc(id, ds); if(!e) return;
     var card=document.getElementById("hovercard");
@@ -685,7 +687,7 @@
     return "https://www.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(e.title||"NGH Event")+"&dates="+dates+"&details="+encodeURIComponent(details)+"&location="+encodeURIComponent("Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI");
   }
   function downloadIcs(id, ds){
-    var e=events.filter(function(x){return x.id===id;})[0]; if(!e) return;
+    var e=allEvents.filter(function(x){return x.id===id;})[0]; if(!e) return;
     var tt=eventTimes(e,ds), uid=(e.id||"ngh")+"-"+(ds||e.date)+"@gamehaven.guru";
     var body=(e.notes||"").replace(/\n/g,"\\n")+(e.fbLink?("\\n\\nFacebook: "+e.fbLink):"");
     var lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Northwood Game Haven//Events//EN","CALSCALE:GREGORIAN","BEGIN:VEVENT","UID:"+uid,"DTSTAMP:"+icsStamp(new Date()),
@@ -814,7 +816,7 @@
         var d=await r.json(); el.textContent=(d&&d.percent>0)?("🎉 "+d.percent+"% "+(d.groupName?(d.groupName+" "):"")+"member discount will be applied at checkout!"):""; } catch(_){ el.textContent=""; }
     },
     share:function(id, ds){
-      var e=events.filter(function(x){return x.id===id;})[0];
+      var e=allEvents.filter(function(x){return x.id===id;})[0];
       var url=location.origin+"/event/"+encodeURIComponent(id)+(ds?("?date="+encodeURIComponent(ds)):"");
       var title=e?e.title:"Northwood Game Haven Event";
       if(navigator.share){ navigator.share({title:title, text:title+(ds?(" · "+ds):"")+" at Northwood Game Haven", url:url}).catch(function(){}); }

@@ -1648,7 +1648,7 @@
 (function(){
   var API = (window.NGH_API_BASE||"");
   var FOREST="#2d5a3d", GOLD="#c9973a", TEAL="#1488a6";
-  var ref = new Date(), events = [];
+  var ref = new Date(), events = [], allEvents = [];
 
   function pad(n){ return (n<10?"0":"")+n; }
   function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
@@ -1705,14 +1705,17 @@
     } catch(e){ events=[]; }
     // Customers never see draft events (status==="draft"). Legacy events without
     // a status field were already public, so they remain visible.
-    events = (events||[]).filter(function(e){ return e && e.status!=="draft"; });
+    allEvents = (events||[]).filter(function(e){ return e && e.status!=="draft"; });
+    // Private (invite-only) events never appear on public calendars, but stay reachable
+    // by direct invite link (?event=…), which looks them up in allEvents.
+    events = allEvents.filter(function(e){ return !e.private; });
     render();
     // Deep link: /?event=<id>&date=<ds> opens that event directly (from social posts).
     try {
       var qs=new URLSearchParams(window.location.search);
       var evId=qs.get('event'), evDate=qs.get('date');
       if(evId){
-        var ev=events.filter(function(x){return x.id===evId;})[0];
+        var ev=allEvents.filter(function(x){return x.id===evId;})[0];
         if(ev){
           if(evDate){ ref=new Date(evDate+"T12:00:00"); } else if(ev.date){ ref=new Date(ev.date+"T12:00:00"); }
           render();
@@ -1782,7 +1785,7 @@
   }
 
   function openModal(id, ds){
-    var e = events.filter(function(x){return x.id===id;})[0]; if(!e) return;
+    var e = allEvents.filter(function(x){return x.id===id;})[0]; if(!e) return;
     var t=e.tournament||{}, p=e.prizes||{};
     var ttypeLabel={swiss:"Swiss",single:"Single elimination",double:"Double elimination",roundrobin:"Round robin",other:"Tournament"}[t.type]||"";
     var when = (ds||e.date) + (e.allDay?" · All day":(" · "+fmtTime(t2m(e.start))+" – "+fmtTime(t2m(e.end))));
@@ -1950,7 +1953,7 @@
     cancelReg:cancelReg,
     payreg:function(id, btn){ payForRegistration(id, btn); },
     share:function(id, ds){
-      var e=events.filter(function(x){return x.id===id;})[0];
+      var e=allEvents.filter(function(x){return x.id===id;})[0];
       var url=location.origin+"/event/"+encodeURIComponent(id)+(ds?("?date="+encodeURIComponent(ds)):"");
       var title=e?e.title:"Northwood Game Haven Event";
       var text=(e?e.title:"Event")+(ds?(" · "+ds):"")+" at Northwood Game Haven";
@@ -2059,7 +2062,7 @@
       "&location="+encodeURIComponent("Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI");
   }
   function downloadIcs(id, ds){
-    var e = events.filter(function(x){return x.id===id;})[0]; if(!e) return;
+    var e = allEvents.filter(function(x){return x.id===id;})[0]; if(!e) return;
     var tt=eventTimes(e, ds);
     var uid = (e.id||"ngh")+"-"+(ds||e.date)+"@gamehaven.guru";
     var body = (e.notes||"").replace(/\n/g,"\\n") + (e.fbLink?("\\n\\nFacebook: "+e.fbLink):"");
