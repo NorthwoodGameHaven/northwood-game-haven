@@ -752,6 +752,12 @@ var Store = {
     if(!this.apiMode()) return;
     return this._api("/registrations/"+encodeURIComponent(id), { method:"PATCH", body:JSON.stringify(fields) });
   },
+  async createRegistration(reg){
+    // Admin-created registration (walk-in / phone guest). Server marks it manual,
+    // makes email optional, and skips the public capacity hard-block.
+    if(!this.apiMode()) return null;
+    return this._api("/registrations", { method:"POST", body:JSON.stringify(reg) });
+  },
   async doorCode(id, action){
     if(!this.apiMode()) return null;
     return this._api("/door-code", { method:"POST", body:JSON.stringify({ id:id, action:action||"issue" }) });
@@ -1886,12 +1892,18 @@ function guessKind(title){
   if(t.indexOf("open")>=0) return "open";
   return "default";
 }
-function renderEventsAdmin(){
-  var wrap=$("events-view-wrap");
-  var roomChecks=ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="ev-room" value="'+r.id+'">'+r.name+'</label>'; }).join("");
-  var vrboRoomChecks=VRBO_ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="ev-room ev-room-vrbo" value="'+r.id+'" onchange="updateVrboHint()">'+r.name+'</label>'; }).join("");
-  var evs=cache.events.slice();
-  var list = evs.length ? evs.map(function(e){
+var evSearch="", evRegOnly=false;
+function adminEvFilterActive(){ return !!((evSearch&&evSearch.trim())||evRegOnly); }
+function filterAdminEvents(arr){
+  var q=(evSearch||"").trim().toLowerCase();
+  return arr.filter(function(e){
+    if(evRegOnly && !(e.registration&&e.registration.enabled)) return false;
+    if(!q) return true;
+    var hay=[e.title,e.notes,e.offsiteLocation,(e.rooms||[]).map(roomName).join(" "),e.date,(e.private?"private invite-only":"")].join(" ").toLowerCase();
+    return hay.indexOf(q)>=0;
+  });
+}
+function eventCardHTML(e){
     var rooms=eventRoomsLabel(e);
     var time=e.allDay?"All day":(fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end)));
     var rec=e.recurrence?(' <span class="recur-badge">🔁 '+freqLabel(e.recurrence.freq)+' ×'+e.recurrence.count+'</span>'):'';
@@ -1935,7 +1947,24 @@ function renderEventsAdmin(){
       '<a class="btn btn-sm btn-ghost" href="'+adminGcalUrl(e)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">📅 Add to Google</a>'+
       '<button class="btn btn-sm btn-danger" onclick="deleteEvent(\''+e.id+'\')">Delete</button></div>'+
     '</div>';
-  }).join("") : '<div class="card"><p class="hint" style="margin:0;">No public events yet.</p></div>';
+}
+function eventListInnerHTML(){
+  var evs=filterAdminEvents(cache.events.slice());
+  if(!evs.length) return '<div class="card"><p class="hint" style="margin:0;">'+(adminEvFilterActive()?'No events match your search/filter. <button class=\'btn btn-sm btn-ghost\' onclick=\'clearEvFilter()\'>Clear</button>':'No public events yet.')+'</p></div>';
+  return evs.map(eventCardHTML).join("");
+}
+function evFilterChange(){
+  var si=$("ev-search-input"), ro=$("ev-reg-only");
+  evSearch = si?si.value:""; evRegOnly = ro?ro.checked:false;
+  var box=$("ev-list"); if(box) box.innerHTML=eventListInnerHTML();
+  var c=$("ev-filter-count"); if(c) c.textContent=filterAdminEvents(cache.events.slice()).length+" of "+cache.events.length;
+}
+function clearEvFilter(){ evSearch=""; evRegOnly=false; var si=$("ev-search-input"); if(si) si.value=""; var ro=$("ev-reg-only"); if(ro) ro.checked=false; evFilterChange(); }
+function renderEventsAdmin(){
+  var wrap=$("events-view-wrap");
+  var roomChecks=ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="ev-room" value="'+r.id+'">'+r.name+'</label>'; }).join("");
+  var vrboRoomChecks=VRBO_ROOMS.map(function(r){ return '<label class="check-line" style="margin:4px 12px 4px 0;display:inline-flex;"><input type="checkbox" class="ev-room ev-room-vrbo" value="'+r.id+'" onchange="updateVrboHint()">'+r.name+'</label>'; }).join("");
+  var list = '<div id="ev-list">'+eventListInnerHTML()+'</div>';
 
   wrap.innerHTML =
     '<div class="card" style="border-left:4px solid var(--gold);"><h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:0 0 6px;">⚡ Quick Bulk Import</h2>'+
@@ -2026,7 +2055,16 @@ function renderEventsAdmin(){
     '<label class="check-line" style="margin-top:14px;padding:10px 12px;background:#f6faf4;border:1px solid #d8e8d6;border-radius:9px;"><input type="checkbox" id="ev-publish"><b>Publish now (make live)</b> — leave unchecked to save as a private draft. Drafts are hidden from customers but still hold their room(s).</label>'+
     '<div style="margin-top:14px;"><button class="btn btn-sm" id="ev-save-btn" onclick="saveEvent()">Save Event</button> <button class="btn btn-sm btn-ghost" onclick="resetEventForm()" id="ev-cancel-btn" style="display:none;">Cancel edit</button></div>'+
     '</div>'+
-    '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">Current Public Events <button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></h2>'+list;
+    '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">Current Public Events <button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></h2>'+
+    '<div class="card" style="padding:12px 14px;margin-bottom:10px;">'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+
+      '<input type="search" id="ev-search-input" placeholder="🔎 Search events by title, room, date…" value="'+esc(evSearch)+'" oninput="evFilterChange()" style="flex:1 1 240px;min-width:200px;">'+
+      '<label class="check-line" style="margin:0;white-space:nowrap;"><input type="checkbox" id="ev-reg-only" '+(evRegOnly?"checked":"")+' onchange="evFilterChange()"> 🎟️ Only registration-enabled</label>'+
+      '<button class="btn btn-sm btn-ghost" onclick="clearEvFilter()">Clear</button>'+
+      '<span class="hint" id="ev-filter-count" style="white-space:nowrap;">'+filterAdminEvents(cache.events.slice()).length+' of '+cache.events.length+'</span>'+
+      '</div>'+
+      '<p class="hint" style="margin:8px 0 0;">Filter to events set up for customer registration (online <em>or</em> admin-added). Search matches title, rooms, notes, and date.</p>'+
+    '</div>'+list;
 }
 var evPhotoData = null;  // holds an uploaded image as a data URL until saved
 // Show the "grab the FB image" tip whenever a Facebook link is present, and
@@ -2351,9 +2389,10 @@ function renderRegistrants(eventId){
   var byDate={}; regs.forEach(function(r){ var d=r.occDate||"(no date)"; (byDate[d]=byDate[d]||[]).push(r); });
   var h='<div style="margin-top:8px;border:1px solid #e0e8dc;border-radius:10px;padding:10px 12px;background:#fcfdfb;">';
   h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><b style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:0.82rem;">👥 Registrants</b>'+
-     '<span style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="addManualRegistrant(\''+eventId+'\')">➕ Add guest (name only)</button>'+
+     '<span style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="showManualAddForm(\''+eventId+'\')">➕ Add guest</button>'+
      '<button class="btn btn-sm btn-ghost" onclick="viewRegistrants(\''+eventId+'\')">↻ Refresh</button></span></div>';
-  h+='<p class="hint" style="margin:6px 0 0;">Use <b>Add guest</b> to register a walk-in or phone guest by first &amp; last name only — for people who can\u2019t or don\u2019t want to book online. They count toward the event\u2019s min/max.</p>';
+  h+='<p class="hint" style="margin:6px 0 0;">Register a walk-in or phone guest by name (email &amp; phone optional). For paid events you can email them a Stripe payment link. Staff-added guests count toward the event\u2019s min/max.</p>';
+  h+='<div id="manualadd-'+eventId+'"></div>';
   if(!regs.length){
     h+='<div class="kv" style="margin-top:8px;color:#6a6a50;">No registrations yet.</div></div>';
     wrap.innerHTML=h; return;
@@ -2372,12 +2411,17 @@ function renderRegistrants(eventId){
       }
       var canceled=r.status==="canceled", unappr=r.status==="unapproved";
       var tag = canceled?'<span style="color:#9a3b2e;">canceled</span>':(unappr?'<span style="color:#9a6310;">unapproved</span>':'<span style="color:#2e7d32;">confirmed</span>');
+      var staffTag = (r.manual||r.source==="admin") ? ' · <span style="color:#5b3a8a;">✋ added by staff</span>' : '';
+      var contact = (r.email||r.phone) ? (esc(r.email||"")+(r.phone?((r.email?" · ":"")+esc(r.phone)):"")) : '<span style="color:#9a9a80;font-style:italic;">no contact on file</span>';
+      var canEmailPay = (!canceled && Number(r.cost)>0 && !r.feePaid && r.email);
       h+='<div style="border-top:1px solid #eef0ec;padding:6px 0;font-size:0.8rem;'+(canceled?'opacity:0.55;':'')+'">'+
-        '<div><b>'+esc(r.name)+'</b> · '+tag+(r.cost>0?(' · $'+Number(r.cost).toFixed(2)+(r.feePaid?' <span style="color:#2e7d32;">paid</span>':' <span style="color:#9a6310;">due</span>')):' · free')+'</div>'+
-        '<div style="color:#6a6a50;">'+esc(r.email)+(r.phone?(' · '+esc(r.phone)):'')+'</div>'+
+        '<div><b>'+esc(r.name)+'</b> · '+tag+staffTag+(r.cost>0?(' · $'+Number(r.cost).toFixed(2)+(r.feePaid?' <span style="color:#2e7d32;">paid</span>':' <span style="color:#9a6310;">due</span>')):' · free')+'</div>'+
+        '<div style="color:#6a6a50;">'+contact+'</div>'+
         (r.comments?('<div style="color:#6a6a50;font-style:italic;">"'+esc(r.comments)+'"</div>'):'')+
         (r.wantsInvoice?'<div style="color:#9a6310;font-size:0.74rem;">📧 invoice requested</div>':'')+
         (!canceled?('<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">'+
+          (canEmailPay?('<button class="btn btn-sm" onclick="emailRegPaymentLink(\''+r.id+'\',\''+eventId+'\')">📧 Email payment link</button>'):'')+
+          ((!canceled && Number(r.cost)>0 && !r.feePaid && !r.email)?('<button class="btn btn-sm btn-ghost" onclick="copyRegPaymentLink(\''+r.id+'\')">🔗 Copy payment link</button>'):'')+
           '<button class="btn btn-sm btn-ghost" onclick="toggleRegApproval(\''+r.id+'\','+(unappr?'true':'false')+',\''+eventId+'\')">'+(unappr?'✓ Approve':'✕ Mark unapproved')+'</button>'+
           '<button class="btn btn-sm btn-danger" onclick="removeAndRefund(\''+r.id+'\',\''+eventId+'\','+(r.feePaid?'true':'false')+')">'+(r.feePaid?'🗑️ Remove & refund':'🗑️ Remove')+'</button>'+
         '</div>'):
@@ -2389,42 +2433,99 @@ function renderRegistrants(eventId){
   h+='</div>';
   wrap.innerHTML=h;
 }
-// Admin: register a walk-in / phone guest by first + last name only.
-async function addManualRegistrant(eventId){
-  var ev=(cache.events||[]).filter(function(x){return x.id===eventId;})[0]; if(!ev) return;
-  var first=(window.prompt("Guest first name:","")||"").trim();
-  if(!first) return;
-  var last=(window.prompt("Guest last name:","")||"").trim();
-  var name=(first+" "+last).trim();
-  if(!name) return;
-  // Which occurrence? Recurring events ask; single events use their date.
-  var occDate=ev.date||"";
+// Admin: inline form to register a walk-in / phone guest (name required; email, phone optional).
+function showManualAddForm(eventId){
+  var box=$("manualadd-"+eventId); if(!box) return;
+  var ev=(cache.events||[]).filter(function(x){return x.id===eventId;})[0]||{};
+  var reg=ev.registration||{};
   var occs=eventDates(ev);
+  var dateField="";
   if(occs.length>1){
     var def=occs.filter(function(d){ return d>=ymd(new Date()); })[0]||occs[0];
-    var pick=(window.prompt("Which date is "+name+" attending?\n\nUpcoming dates: "+occs.slice(0,8).join(", ")+(occs.length>8?" …":"")+"\n\nEnter a date (YYYY-MM-DD):", def)||"").trim();
-    if(!pick) return;
-    occDate=pick;
+    dateField='<div><label class="fld">Which date?</label><select id="ma-date-'+eventId+'">'+
+      occs.map(function(d){ return '<option value="'+d+'"'+(d===def?' selected':'')+'>'+d+'</option>'; }).join("")+'</select></div>';
+  } else {
+    dateField='<input type="hidden" id="ma-date-'+eventId+'" value="'+esc(ev.date||"")+'">';
   }
-  // capacity guard against max
-  var reg=ev.registration||{};
-  if(reg.max){
-    var serverRegs=(_regCache||[]).filter(function(r){ return r.eventId===eventId && r.occDate===occDate && r.status!=="canceled" && r.status!=="unapproved"; }).length;
-    var manualCount=(ev.manualRegistrants||[]).filter(function(m){ return (m.occDate||ev.date)===occDate; }).length;
-    if(serverRegs+manualCount >= reg.max){
-      if(!confirm("This occurrence is already at its cap of "+reg.max+". Add "+name+" anyway (overbook)?")) return;
-    }
-  }
-  var updated=Object.assign({}, ev);
-  updated.manualRegistrants=(ev.manualRegistrants||[]).slice();
-  updated.manualRegistrants.push({ id:"MR-"+genId(), name:name, occDate:occDate, addedAt:new Date().toISOString() });
-  try {
-    await Store.saveEvent(updated);
-    await refreshCache();
-    renderRegistrants(eventId);
-    renderEventsAdmin();
-  } catch(e){ alert("Couldn't add guest: "+((e&&e.message)||e)); }
+  var cost=Number(reg.cost)||0;
+  var payField = cost>0 ? (
+    '<label class="check-line" style="margin-top:8px;"><input type="checkbox" id="ma-paylink-'+eventId+'"> 📧 Email a Stripe payment link now ($'+cost.toFixed(2)+' — requires an email)</label>'
+  ) : '';
+  box.innerHTML =
+    '<div style="margin-top:10px;border:1px dashed #c9b58a;border-radius:10px;padding:12px;background:#fffdf7;">'+
+    '<div style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:0.82rem;margin-bottom:6px;">➕ Register a guest</div>'+
+    '<div class="row"><div><label class="fld req">First name</label><input type="text" id="ma-first-'+eventId+'" placeholder="First"></div>'+
+    '<div><label class="fld">Last name</label><input type="text" id="ma-last-'+eventId+'" placeholder="Last"></div></div>'+
+    '<div class="row"><div><label class="fld">Email (optional)</label><input type="email" id="ma-email-'+eventId+'" placeholder="guest@email.com"></div>'+
+    '<div><label class="fld">Phone (optional)</label><input type="tel" id="ma-phone-'+eventId+'" placeholder="(715) 555-0123"></div></div>'+
+    dateField+
+    payField+
+    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-sm" id="ma-save-'+eventId+'" onclick="submitManualReg(\''+eventId+'\')">Register guest</button>'+
+    '<button class="btn btn-sm btn-ghost" onclick="$(\'manualadd-'+eventId+'\').innerHTML=\'\'">Cancel</button></div>'+
+    (cost>0?'<p class="hint" style="margin:8px 0 0;">If you don\u2019t email a link now, you can send or copy one anytime from the guest\u2019s row below. Payment can also be taken in person.</p>':'')+
+    '</div>';
+  var f=$("ma-first-"+eventId); if(f) f.focus();
 }
+async function submitManualReg(eventId){
+  var ev=(cache.events||[]).filter(function(x){return x.id===eventId;})[0]; if(!ev) return;
+  var reg=ev.registration||{};
+  if(!Store.apiMode()){ alert("Adding guests requires the live server (you\u2019re in demo mode)."); return; }
+  var first=($("ma-first-"+eventId).value||"").trim();
+  var last=($("ma-last-"+eventId).value||"").trim();
+  var name=(first+" "+last).trim();
+  if(!name){ alert("Enter at least a first name."); return; }
+  var email=($("ma-email-"+eventId).value||"").trim();
+  var phone=($("ma-phone-"+eventId).value||"").trim();
+  var occDate=($("ma-date-"+eventId)?$("ma-date-"+eventId).value:ev.date)||ev.date||"";
+  var wantPay = $("ma-paylink-"+eventId) && $("ma-paylink-"+eventId).checked;
+  if(wantPay && !email){ alert("Add an email address to send a payment link, or uncheck that option."); return; }
+  // capacity advisory (admin may overbook)
+  if(reg.max){
+    var cnt=(_regCache||[]).filter(function(r){ return r.eventId===eventId && (r.occDate||ev.date)===occDate && r.status!=="canceled" && r.status!=="unapproved"; }).length;
+    if(cnt>=reg.max && !confirm("This date is already at its cap of "+reg.max+". Register "+name+" anyway (overbook)?")) return;
+  }
+  var btn=$("ma-save-"+eventId); if(btn){ btn.disabled=true; btn.textContent="Registering…"; }
+  var payload={ eventId:eventId, occDate:occDate, name:name, email:email, phone:phone, manual:true,
+                cost:(Number(reg.cost)||0), eventTitle:ev.title||"NGH Event" };
+  try {
+    var created=await Store.createRegistration(payload);
+    // optionally email a payment link right away
+    if(wantPay && created && created.id){
+      try { await emailRegPaymentLink(created.id, eventId, true); } catch(e){ alert("Guest registered, but the payment link email failed: "+((e&&e.message)||e)); }
+    }
+    $("manualadd-"+eventId).innerHTML="";
+    await viewRegistrants(eventId);   // reloads _regCache + re-renders
+    renderEventsAdmin();
+  } catch(e){
+    if(btn){ btn.disabled=false; btn.textContent="Register guest"; }
+    alert("Couldn't register guest: "+((e&&e.message)||e));
+  }
+}
+// Create a Stripe payment link for a registration; email it to the registrant.
+async function emailRegPaymentLink(regId, eventId, quiet){
+  var res=await fetch(API_BASE+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+Store._token()},body:JSON.stringify({kind:"registration",id:regId})});
+  if(!res.ok){ var er=await res.json().catch(function(){return{};}); throw new Error(er.error||("checkout error "+res.status)); }
+  var data=await res.json();
+  var reg=(_regCache||[]).filter(function(r){return r.id===regId;})[0]||{};
+  var ev=(cache.events||[]).filter(function(x){return x.id===eventId;})[0]||{};
+  var when=(reg.occDate||ev.date||"")+(ev.allDay?"":(" · "+fmtTime(timeToMins(ev.start))+"–"+fmtTime(timeToMins(ev.end))));
+  await Store.sendEmail(reg.email, "Your payment link — "+(ev.title||"NGH Event"),
+    "Hi "+(reg.name||"there")+",\n\nHere is your secure payment link to reserve your spot for "+(ev.title||"NGH Event")+" on "+when+" at Northwood Game Haven:\n\n"+data.url+"\n\nPayment is due no later than 1 hour before the event starts. You can also pay in person.\n\nSee you at the table!\n— Northwood Game Haven",
+    { heading:"Complete your registration", buttons:[{label:"Pay now",url:data.url}] });
+  if(eventId) await viewRegistrants(eventId);
+  if(!quiet) alert("Payment link emailed to "+reg.email+".");
+}
+// No email on file → create the link and hand it to the admin to send manually.
+async function copyRegPaymentLink(regId){
+  try {
+    var res=await fetch(API_BASE+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+Store._token()},body:JSON.stringify({kind:"registration",id:regId})});
+    if(!res.ok){ var er=await res.json().catch(function(){return{};}); alert("Couldn't create payment link: "+(er.error||res.status)); return; }
+    var data=await res.json();
+    try { await navigator.clipboard.writeText(data.url); } catch(e){}
+    window.prompt("Payment link (copied — text or email it to the guest):", data.url);
+  } catch(e){ alert("Couldn't create payment link: "+((e&&e.message)||e)); }
+}
+// Legacy: remove an event-blob manual registrant (from before server-backed manual regs).
 async function removeManualRegistrant(eventId, mrId){
   var ev=(cache.events||[]).filter(function(x){return x.id===eventId;})[0]; if(!ev) return;
   if(!confirm("Remove this staff-added guest?")) return;
