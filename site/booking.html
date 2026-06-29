@@ -1538,18 +1538,11 @@ async function resendApproval(id, silent){
     } catch(e){ console.warn("auto door-code failed", e); }
   }
   var body=buildApprovalEmail(r);
-  // Generate Stripe pay-now buttons for any unpaid fee / deposit.
+  // Durable pay-now buttons: link to /create-checkout (GET) which mints a FRESH
+  // Stripe session on each click, so the emailed link never expires.
   var buttons=[];
-  try {
-    if(!feeIsPaid(r)){
-      var f=await fetch(API_BASE+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"booking",id:id,part:"fee"})});
-      if(f.ok){ var fd=await f.json(); buttons.push({label:"Pay Booking Fee Now", url:fd.url, primary:true}); }
-    }
-    if(!depIsPaid(r)){
-      var d=await fetch(API_BASE+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"booking",id:id,part:"deposit"})});
-      if(d.ok){ var dd=await d.json(); buttons.push({label:"Pay Refundable Deposit Now", url:dd.url, primary:false}); }
-    }
-  } catch(e){ console.warn("pay-link generation failed", e); }
+  if(!feeIsPaid(r)) buttons.push({label:"Pay Booking Fee Now", url:payLinkUrl("booking", id, "fee"), primary:true});
+  if(!depIsPaid(r)) buttons.push({label:"Pay Refundable Deposit Now", url:payLinkUrl("booking", id, "deposit"), primary:false});
   await Store.sendEmail(r.email, "Your Northwood Game Haven booking "+id+" is APPROVED ✅", body,
     { heading:"Your booking is approved! 🎉", buttons:buttons });
   if(!silent){ alert("Approval email sent to "+r.email+(buttons.length?(" with "+buttons.length+" pay button(s)"):"")+(r.doorCode?(". Door code "+r.doorCode+" was auto-issued (after-hours)."):".")); }
@@ -2501,29 +2494,24 @@ async function submitManualReg(eventId){
     alert("Couldn't register guest: "+((e&&e.message)||e));
   }
 }
-// Create a Stripe payment link for a registration; email it to the registrant.
+// Email a durable payment link for a registration (mints a fresh session on click).
 async function emailRegPaymentLink(regId, eventId, quiet){
-  var res=await fetch(API_BASE+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+Store._token()},body:JSON.stringify({kind:"registration",id:regId})});
-  if(!res.ok){ var er=await res.json().catch(function(){return{};}); throw new Error(er.error||("checkout error "+res.status)); }
-  var data=await res.json();
   var reg=(_regCache||[]).filter(function(r){return r.id===regId;})[0]||{};
+  if(!reg.email) throw new Error("no email on file for this registrant");
+  var url=payLinkUrl("registration", regId);
   var ev=(cache.events||[]).filter(function(x){return x.id===eventId;})[0]||{};
   var when=(reg.occDate||ev.date||"")+(ev.allDay?"":(" · "+fmtTime(timeToMins(ev.start))+"–"+fmtTime(timeToMins(ev.end))));
   await Store.sendEmail(reg.email, "Your payment link — "+(ev.title||"NGH Event"),
-    "Hi "+(reg.name||"there")+",\n\nHere is your secure payment link to reserve your spot for "+(ev.title||"NGH Event")+" on "+when+" at Northwood Game Haven:\n\n"+data.url+"\n\nPayment is due no later than 1 hour before the event starts. You can also pay in person.\n\nSee you at the table!\n— Northwood Game Haven",
-    { heading:"Complete your registration", buttons:[{label:"Pay now",url:data.url}] });
+    "Hi "+(reg.name||"there")+",\n\nHere is your secure payment link to reserve your spot for "+(ev.title||"NGH Event")+" on "+when+" at Northwood Game Haven:\n\n"+url+"\n\nPayment is due no later than 1 hour before the event starts. You can also pay in person.\n\nSee you at the table!\n— Northwood Game Haven",
+    { heading:"Complete your registration", buttons:[{label:"Pay now",url:url}] });
   if(eventId) await viewRegistrants(eventId);
   if(!quiet) alert("Payment link emailed to "+reg.email+".");
 }
-// No email on file → create the link and hand it to the admin to send manually.
+// No email on file → hand the durable link to the admin to send manually.
 async function copyRegPaymentLink(regId){
-  try {
-    var res=await fetch(API_BASE+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+Store._token()},body:JSON.stringify({kind:"registration",id:regId})});
-    if(!res.ok){ var er=await res.json().catch(function(){return{};}); alert("Couldn't create payment link: "+(er.error||res.status)); return; }
-    var data=await res.json();
-    try { await navigator.clipboard.writeText(data.url); } catch(e){}
-    window.prompt("Payment link (copied — text or email it to the guest):", data.url);
-  } catch(e){ alert("Couldn't create payment link: "+((e&&e.message)||e)); }
+  var url=payLinkUrl("registration", regId);
+  try { await navigator.clipboard.writeText(url); } catch(e){}
+  window.prompt("Payment link (copied — text or email it to the guest):", url);
 }
 // Legacy: remove an event-blob manual registrant (from before server-backed manual regs).
 async function removeManualRegistrant(eventId, mrId){
@@ -2939,6 +2927,11 @@ async function bulkImport(){
 
 /* ---- Social sharing: calendar image + event links ---- */
 var SITE_ORIGIN = (function(){ try { return (window.NGH_SITE_URL || location.origin).replace(/\/$/,""); } catch(e){ return "https://gamehaven.guru"; } })();
+// Durable payment link: a GET to /create-checkout mints a fresh Stripe session on
+// each click and redirects, so links emailed/texted earlier never expire.
+function payLinkUrl(kind, id, part){
+  return SITE_ORIGIN + API_BASE + "/create-checkout?kind=" + encodeURIComponent(kind) + "&id=" + encodeURIComponent(id) + (part?("&part="+encodeURIComponent(part)):"");
+}
 function eventShareUrl(id, ds){ return SITE_ORIGIN+"/event/"+encodeURIComponent(id)+(ds?("?date="+encodeURIComponent(ds)):""); }
 function copyAllEventLinks(){
   var wrap=$("share-links"); if(!wrap) return;
