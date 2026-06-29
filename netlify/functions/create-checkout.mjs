@@ -19,6 +19,11 @@ function siteBase(req) {
 // Deposit schedule mirrors the front end.
 const DEPOSIT = { 1: 40, 2: 80, 3: 100 };
 const KARAOKE_DEPOSIT_ADD = 25;
+// Sales tax applied to the booking FEE (incl. paid add-ons) only — never the
+// refundable deposit. Override with SALES_TAX_PERCENT; default 5.5% (WI 5% +
+// Chippewa County 0.5%). Set to 0 to disable online tax collection.
+const SALES_TAX_PERCENT = (process.env.SALES_TAX_PERCENT != null && process.env.SALES_TAX_PERCENT !== '')
+  ? Number(process.env.SALES_TAX_PERCENT) : 5.5;
 function bookingDeposit(b) {
   const n = Math.min((b.rooms || []).length, 3);
   let dep = DEPOSIT[n] || 0;
@@ -86,9 +91,9 @@ const _handler = async (req) => {
     if (b.status === 'rejected' || b.status === 'canceled') return bad('this booking is no longer active', 400);
 
     const part = p.part === 'deposit' ? 'deposit' : 'fee';
-    let amount, label;
+    let amount, label, taxCents = 0;
     if (part === 'fee') {
-      // booking fee after discount (taxes handled in person/where applicable)
+      // booking fee (incl. paid add-ons) after any loyalty discount; tax added below
       let fee = (b.costBooking != null ? b.costBooking : 0);
       // Apply loyalty group discount (server-side authority) to the FEE only,
       // never the refundable deposit.
@@ -101,6 +106,8 @@ const _handler = async (req) => {
       amount = Math.round(fee * 100);
       label = label2;
       if (b.feePaid) return bad('fee already paid', 400);
+      // Sales tax on the (discounted) fee + add-ons. Deposit is never taxed.
+      if (SALES_TAX_PERCENT > 0) taxCents = Math.round(amount * (SALES_TAX_PERCENT / 100));
     } else {
       // Prefer the stored deposit (which reflects any admin waiver/reduction);
       // fall back to the computed schedule for older records.
@@ -112,12 +119,14 @@ const _handler = async (req) => {
     }
     if (!amount || amount < 50) return bad('nothing to pay for this item', 400);
 
+    const items = [{ name: label, amountCents: amount, qty: 1 }];
+    if (taxCents > 0) items.push({ name: 'Sales tax (' + SALES_TAX_PERCENT + '%)', amountCents: taxCents, qty: 1 });
     const session = await createCheckoutSession({
-      items: [{ name: label, amountCents: amount, qty: 1 }],
+      items: items,
       successUrl: base + '/booking.html?paid=' + part + '&id=' + encodeURIComponent(b.id),
       cancelUrl: base + '/booking.html?canceled=1',
       customerEmail: b.email,
-      metadata: { kind: 'booking', bookingId: b.id, part }
+      metadata: { kind: 'booking', bookingId: b.id, part, taxCents: String(taxCents) }
     });
     return wantRedirect ? payRedirect(session.url) : json({ url: session.url, id: session.id });
   }
