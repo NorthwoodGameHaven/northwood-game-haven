@@ -661,6 +661,9 @@ function checkGuestCap(){ var m=guestCapMsg(); if(m) alert(m); }
 var DEPOSIT = { 1:40, 2:80, 3:100 };
 var KARAOKE_DEPOSIT_ADD = 25;
 var TAX_RATE = 0.055; // Chippewa Falls, WI combined sales tax (5% state + 0.5% county). Update here if the rate changes.
+// Tax + total for a STORED booking record (deposit is never taxed). Falls back for older records.
+function bookingTaxOf(r){ return (r && r.tax!=null) ? r.tax : Math.round(((r&&r.costBooking)||0)*TAX_RATE*100)/100; }
+function bookingTotalOf(r){ return ((r&&r.costBooking)||0) + bookingTaxOf(r) + ((r&&r.deposit)||0); }
 var BYO_FOOD_FEE = 40;
 var GURU_HOURLY = 10;
 var MAX_HOURS = 8;
@@ -1306,7 +1309,7 @@ async function submitBooking(){
       wantsInvoice:false,
       expeditePay: ($("c-paynow") ? $("c-paynow").checked : true),
       comments:$("c-comments").value.trim(),
-      subtotal:t.subtotal, discount:t.discount, costBooking:t.grand, deposit:t.deposit, totalDue:t.grand+t.deposit,
+      subtotal:t.subtotal, discount:t.discount, costBooking:t.grand, deposit:t.deposit, tax:t.tax, taxRate:TAX_RATE, totalDue:t.totalDue,
       adminQuestions:"", invoiceLink:"", invoiceFileName:"",
       groupId:groupId, recIndex:rec?(idx+1):null, recTotal:rec?rec.count:null, recFreq:rec?rec.freq:null
     };
@@ -1384,7 +1387,7 @@ function buildAdminEmail(req){
   "Requests an invoice: "+(req.wantsInvoice?"YES":"no")+"\n"+
   "Comments: "+(req.comments||"—")+"\n\n"+
   "Subtotal: "+fmtMoney(req.subtotal||req.costBooking)+(req.discount?("\nMil/FR discount: -"+fmtMoney(req.discount)):"")+"\n"+
-  "Booking subtotal: "+fmtMoney(req.costBooking)+"\nRefundable deposit: "+fmtMoney(req.deposit)+"\nTOTAL DUE (excl. tax): "+fmtMoney(req.totalDue)+"\n"+
+  "Booking subtotal: "+fmtMoney(req.costBooking)+"\nSales tax: "+fmtMoney(bookingTaxOf(req))+"\nRefundable deposit (not taxed): "+fmtMoney(req.deposit)+"\nTOTAL DUE: "+fmtMoney(bookingTotalOf(req))+"\n"+
   "Payment status: "+req.payment.toUpperCase()+"\n";
 }
 
@@ -1500,7 +1503,7 @@ function reqCardHtml(r){
     '<div class="kv"><b>Add-ons</b></div>'+addons+
     '<div class="kv"><b>Guru procurement?</b> '+(r.guruReach?"YES":"no")+' · <b>Overnight?</b> '+(r.overnightInterest?"YES":"no")+(r.expeditePay?' · <b style="color:var(--den);">💳 wants to pay on approval</b>':'')+'</div>'+
     (r.comments?'<div class="kv"><b>Comments</b> '+esc(r.comments)+'</div>':'')+
-    '<div class="kv" style="margin-top:8px;"><b>Subtotal</b> '+fmtMoney(r.subtotal||r.costBooking)+(r.discount?(' · <b>Mil/FR −</b> '+fmtMoney(r.discount)):'')+' · <b>Booking</b> '+fmtMoney(r.costBooking)+' · <b>Deposit</b> '+fmtMoney(r.deposit)+' · <b>Total due (excl. tax)</b> '+fmtMoney(r.totalDue)+'</div>'+
+    '<div class="kv" style="margin-top:8px;"><b>Subtotal</b> '+fmtMoney(r.subtotal||r.costBooking)+(r.discount?(' · <b>Mil/FR −</b> '+fmtMoney(r.discount)):'')+' · <b>Booking</b> '+fmtMoney(r.costBooking)+' · <b>Tax</b> '+fmtMoney(bookingTaxOf(r))+' · <b>Deposit</b> '+fmtMoney(r.deposit)+' · <b>Total due</b> '+fmtMoney(bookingTotalOf(r))+'</div>'+
     (r.adminQuestions && r.status==="hold" ? '<div class="email-preview">On-hold questions sent:\n'+esc(r.adminQuestions)+'</div>' : '')+
     milBox+
     ((r.status==="pending"||r.status==="hold"||r.status==="approved")?depositAdjustBox(r):"")+
@@ -1541,7 +1544,7 @@ async function resendApproval(id, silent){
   // Durable pay-now buttons: link to /create-checkout (GET) which mints a FRESH
   // Stripe session on each click, so the emailed link never expires.
   var buttons=[];
-  if(!feeIsPaid(r)) buttons.push({label:"Pay Booking Fee Now", url:payLinkUrl("booking", id, "fee"), primary:true});
+  if(!feeIsPaid(r)) buttons.push({label:"Pay Booking Fee + Tax Now", url:payLinkUrl("booking", id, "fee"), primary:true});
   if(!depIsPaid(r)) buttons.push({label:"Pay Refundable Deposit Now", url:payLinkUrl("booking", id, "deposit"), primary:false});
   await Store.sendEmail(r.email, "Your Northwood Game Haven booking "+id+" is APPROVED ✅", body,
     { heading:"Your booking is approved! 🎉", buttons:buttons });
@@ -1564,9 +1567,15 @@ function buildApprovalEmail(r){
   var doorLine = r.doorCode
     ? ("\n🔑 DOOR ACCESS CODE: "+r.doorCode+"\nThis code unlocks the door(s) for your reserved room(s). It only works during your booking window (from 1 hour before your start time until 1 hour after you finish). Please don't share it.\n")
     : "";
+  // Tax on the fee (+ add-ons) only; deposit is never taxed. Fall back for older records.
+  var taxAmt = (r.tax!=null) ? r.tax : Math.round((r.costBooking||0)*TAX_RATE*100)/100;
+  var taxPct = (r.taxRate!=null ? r.taxRate : TAX_RATE)*100;
+  var feeWithTax = (r.costBooking||0)+taxAmt;
+  var grandTotal = (r.tax!=null) ? r.totalDue : (feeWithTax+(r.deposit||0));
+  var taxLine = taxAmt>0 ? ("Sales tax ("+(Math.round(taxPct*100)/100)+"%): "+fmtMoney(taxAmt)+"\n") : "";
   return "Hi "+r.name+",\n\nGreat news — your booking request is APPROVED! Here are the details:\n\n"+
   "Ref: "+r.id+"\nRooms: "+roomList(r)+"\nDate: "+r.date+"\nTime: "+fmtTime(timeToMins(r.start))+" – "+r.endLabel+" ("+r.hours+"h)\n\n"+
-  "Booking subtotal: "+fmtMoney(r.costBooking)+"\nRefundable deposit (hold): "+fmtMoney(r.deposit)+"\nTOTAL DUE: "+fmtMoney(r.totalDue)+" (plus applicable taxes)\n"+
+  "Booking fee: "+fmtMoney(r.costBooking)+"\n"+taxLine+"Booking fee + tax: "+fmtMoney(feeWithTax)+"\nRefundable deposit (hold, not taxed): "+fmtMoney(r.deposit)+"\nTOTAL DUE: "+fmtMoney(grandTotal)+"\n"+
   milLine+depLine+doorLine+invoiceLine+"\n"+
   "PAYMENT:\n• Use the secure payment buttons below to pay your booking fee and refundable deposit online (card, Apple Pay, or Google Pay).\n• Payment in full — including the deposit hold — is due no later than the calendar day BEFORE your booking ("+dayBefore(r.date)+").\n"+
   "• If not paid by then, the booking is automatically canceled.\n• Prefer to pay in person? You can pay by cash, card, or check at the shop — but no later than the end of the day before your reservation.\n\n"+
@@ -1691,7 +1700,7 @@ async function adjustDeposit(id, mode){
   } else if(mode==="reset"){
     newDep=base;
   }
-  var patch={ depositBase:base, deposit:newDep, totalDue:(r.costBooking||0)+newDep };
+  var patch={ depositBase:base, deposit:newDep, totalDue:(r.costBooking||0)+bookingTaxOf(r)+newDep };
   patch.depositAdjusted = (newDep!==base);
   patch.depositAdjustedBy = (newDep!==base) ? (Store._adminLabel?Store._adminLabel():"staff") : null;
   await Store.updateBooking(id, patch);
@@ -1743,9 +1752,11 @@ function recomputeMil(r, val){
   var subtotal = (r.subtotal!=null) ? r.subtotal : r.costBooking;
   if(val==="yes"){
     var disc = Math.round(subtotal*MIL_DISCOUNT*100)/100;
-    return { milVerified:"yes", discount:disc, costBooking:subtotal-disc, totalDue:(subtotal-disc)+r.deposit };
+    var fee1 = subtotal-disc, tax1 = Math.round(fee1*TAX_RATE*100)/100;
+    return { milVerified:"yes", discount:disc, costBooking:fee1, tax:tax1, taxRate:TAX_RATE, totalDue:fee1+tax1+(r.deposit||0) };
   } else { // no -> remove discount
-    return { milVerified:"no", discount:0, costBooking:subtotal, totalDue:subtotal+r.deposit };
+    var tax0 = Math.round(subtotal*TAX_RATE*100)/100;
+    return { milVerified:"no", discount:0, costBooking:subtotal, tax:tax0, taxRate:TAX_RATE, totalDue:subtotal+tax0+(r.deposit||0) };
   }
 }
 
@@ -2788,7 +2799,8 @@ function mbCheck(){
   if(rooms.length && hours){
     var per=calcRoomCost(hours), sub=per*rooms.length;
     var dep=(DEPOSIT[Math.min(rooms.length,3)]||0) + ($("mb-karaoke").checked?KARAOKE_DEPOSIT_ADD:0);
-    cost.innerHTML="Booking fee: <b>"+fmtMoney(sub)+"</b> · Refundable deposit: <b>"+fmtMoney(dep)+"</b> · Total due: <b>"+fmtMoney(sub+dep)+"</b>";
+    var tx=Math.round(sub*TAX_RATE*100)/100;
+    cost.innerHTML="Booking fee: <b>"+fmtMoney(sub)+"</b> · Tax: <b>"+fmtMoney(tx)+"</b> · Deposit (not taxed): <b>"+fmtMoney(dep)+"</b> · Total due: <b>"+fmtMoney(sub+tx+dep)+"</b>";
   } else { cost.textContent=""; }
   if(!date || !start || !hours || !rooms.length){ cn.classList.remove("show"); return true; }
   var sm=timeToMins(start), em=sm+hours*60;
@@ -2841,7 +2853,7 @@ async function saveManualBooking(){
     addons:addons, guruReach:false, overnightInterest:false,
     wantsInvoice: ($("mb-invoice").checked && !paid),
     expeditePay:false, comments:"(Booked in person by staff)",
-    subtotal:sub, discount:0, costBooking:sub, deposit:dep, totalDue:sub+dep,
+    subtotal:sub, discount:0, costBooking:sub, deposit:dep, tax:Math.round(sub*TAX_RATE*100)/100, taxRate:TAX_RATE, totalDue:sub+Math.round(sub*TAX_RATE*100)/100+dep,
     adminQuestions:"", invoiceLink:"", invoiceFileName:"",
     groupId:null, recIndex:null, recTotal:null, recFreq:null,
     manualBooking:true
