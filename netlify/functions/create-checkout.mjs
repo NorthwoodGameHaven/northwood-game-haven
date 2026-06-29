@@ -26,20 +26,57 @@ function bookingDeposit(b) {
   return dep;
 }
 
+// 302 to Stripe — used for durable GET pay-links.
+function payRedirect(url) {
+  return new Response('', { status: 302, headers: { Location: url, 'Cache-Control': 'no-store' } });
+}
+// Friendly HTML shown if a clicked pay-link can't proceed (already paid, canceled, etc.).
+function payErrorPage(msg) {
+  const html = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>Payment link</title><body style="font-family:Georgia,serif;background:#f4f1e9;color:#23351f;margin:0;">'
+    + '<div style="max-width:520px;margin:12vh auto;padding:28px 24px;background:#fff;border-radius:14px;box-shadow:0 8px 40px rgba(0,0,0,.12);text-align:center;">'
+    + '<div style="font-size:2rem;">🦦</div><h1 style="font-family:Georgia,serif;color:#2d5a3d;font-size:1.3rem;">We couldn\u2019t open that payment</h1>'
+    + '<p style="color:#555;line-height:1.5;">' + String(msg || 'This payment link is no longer valid.').replace(/[<>&]/g, '') + '</p>'
+    + '<p style="color:#555;line-height:1.5;">If you\u2019ve already paid, you\u2019re all set. Otherwise reply to your confirmation email or call us and we\u2019ll sort it out.</p>'
+    + '<p><a href="https://gamehaven.guru" style="color:#2d5a3d;font-weight:bold;">Northwood Game Haven →</a></p></div></body>';
+  return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+}
+
 export default async (req) => {
-  try { return await _handler(req); }
+  try {
+    const res = await _handler(req);
+    // For clicked GET pay-links, render JSON errors as a friendly HTML page instead.
+    if (req.method === 'GET' && res && res.status >= 400) {
+      let msg = 'This payment link is no longer valid.';
+      try { const j = await res.clone().json(); if (j && j.error) msg = j.error; } catch {}
+      return payErrorPage(msg);
+    }
+    return res;
+  }
   catch (e) {
     console.error('[create-checkout] error', e);
+    if (req.method === 'GET') return payErrorPage('Something went wrong creating your payment. Please try again or contact us.');
     return bad('Server error: ' + (e && e.message ? e.message : String(e)), 500);
   }
 };
 
 const _handler = async (req) => {
   if (req.method === 'OPTIONS') return preflight();
-  if (req.method !== 'POST') return bad('Method not allowed', 405);
   await ensureSchema();
 
-  let p; try { p = await req.json(); } catch { return bad('Invalid JSON'); }
+  // Durable pay-links: a GET mints a FRESH Checkout Session on every click and
+  // 302-redirects to Stripe, so links emailed days earlier never "expire".
+  // POST keeps returning JSON {url} for the in-app pay buttons.
+  let p, wantRedirect = false;
+  if (req.method === 'GET') {
+    const u = new URL(req.url);
+    p = { kind: u.searchParams.get('kind'), id: u.searchParams.get('id'), part: u.searchParams.get('part') };
+    wantRedirect = true;
+  } else if (req.method === 'POST') {
+    try { p = await req.json(); } catch { return bad('Invalid JSON'); }
+  } else {
+    return bad('Method not allowed', 405);
+  }
   const base = siteBase(req);
 
   if (p.kind === 'booking') {
@@ -82,7 +119,7 @@ const _handler = async (req) => {
       customerEmail: b.email,
       metadata: { kind: 'booking', bookingId: b.id, part }
     });
-    return json({ url: session.url, id: session.id });
+    return wantRedirect ? payRedirect(session.url) : json({ url: session.url, id: session.id });
   }
 
   if (p.kind === 'registration') {
@@ -108,7 +145,7 @@ const _handler = async (req) => {
       customerEmail: r.email,
       metadata: { kind: 'registration', registrationId: r.id }
     });
-    return json({ url: session.url, id: session.id });
+    return wantRedirect ? payRedirect(session.url) : json({ url: session.url, id: session.id });
   }
 
   return bad('unknown payment kind', 400);
