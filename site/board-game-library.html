@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Board Game Library — Northwood Game Haven</title>
+<title>Board Game Library — Hundreds of Titles to Play | Northwood Game Haven</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600&family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
   :root{ --forest:#2d5a3d;--forest-light:#3d7a54;--gold:#c9973a;--gold-light:#e8b84b;--cream:#faf6ee;--teal-dark:#0f4a56;--dark:#1a1a12;--text:#2a2a1a; }
@@ -14,11 +14,19 @@
   header.pg{background:radial-gradient(ellipse at 50% 0%,#c8e8d080 0%,transparent 60%),linear-gradient(180deg,#e8f4ec,#faf6ee);padding:44px 20px 28px;text-align:center;}
   header.pg .eyebrow{font-family:'Cinzel',serif;font-size:0.7rem;letter-spacing:0.32em;text-transform:uppercase;color:var(--gold);}
   header.pg h1{font-family:'Cinzel Decorative',serif;font-size:clamp(1.7rem,4.5vw,2.6rem);color:var(--forest);margin:8px 0;}
-  header.pg p{color:#4a4a35;max-width:700px;margin:0 auto;font-size:0.95rem;}
+  header.pg p{color:#4a4a35;max-width:720px;margin:0 auto;font-size:0.95rem;}
   .backlink{display:inline-block;margin-top:8px;font-family:'Cinzel',serif;font-size:0.8rem;color:var(--forest);text-decoration:none;}
   .wrap{max-width:1000px;margin:0 auto;padding:28px 18px 70px;}
-  .availbar{background:#eef7f0;border:1px solid #c2e0cb;border-radius:11px;padding:13px 16px;font-size:0.86rem;color:var(--forest);margin-bottom:22px;text-align:center;}
-  .search{width:100%;max-width:420px;display:block;margin:0 auto 26px;border:1px solid #c8d8c0;border-radius:50px;padding:12px 18px;font-family:'Lato',sans-serif;font-size:0.92rem;}
+  .availbar{background:#eef7f0;border:1px solid #c2e0cb;border-radius:11px;padding:13px 16px;font-size:0.86rem;color:var(--forest);margin-bottom:18px;text-align:center;}
+  .search{width:100%;max-width:420px;display:block;margin:0 auto 18px;border:1px solid #c8d8c0;border-radius:50px;padding:12px 18px;font-family:'Lato',sans-serif;font-size:0.92rem;}
+  .viewtabs{display:flex;justify-content:center;margin:0 auto 26px;}
+  .viewtabs .inner{display:inline-flex;background:#eef3ec;border:1px solid #d4e2cf;border-radius:50px;padding:4px;gap:4px;}
+  .viewbtn{border:none;background:transparent;font-family:'Cinzel',serif;font-size:0.76rem;color:var(--forest);padding:8px 15px;border-radius:50px;cursor:pointer;letter-spacing:0.03em;}
+  .viewbtn.active{background:linear-gradient(135deg,var(--forest),var(--forest-light));color:#fff;}
+  .section-head{text-align:center;margin:26px 0 18px;}
+  .section-head .eyebrow{font-family:'Cinzel',serif;font-size:0.66rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--gold);}
+  .section-head h2{font-family:'Cinzel Decorative',serif;font-size:clamp(1.25rem,3.6vw,1.85rem);color:var(--forest);margin:4px 0;}
+  .section-head p{font-size:0.88rem;color:#4a4a35;max-width:640px;margin:0 auto;}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;}
   .cat{background:#fff;border:1px solid #e0e8dc;border-radius:15px;padding:20px 22px;box-shadow:0 6px 22px rgba(45,90,61,0.07);}
   .cat h2{font-family:'Cinzel',serif;font-size:1rem;color:var(--forest);display:flex;align-items:center;gap:9px;margin-bottom:12px;}
@@ -26,94 +34,279 @@
   .cat li{font-size:0.88rem;padding:5px 0 5px 18px;position:relative;border-bottom:1px dashed #eee;}
   .cat li:before{content:"🎲";position:absolute;left:0;font-size:0.7rem;top:7px;}
   .cat li:last-child{border-bottom:none;}
+  /* Vault hero */
+  .vault-hero{background:linear-gradient(180deg,#11333a,#0b1f25);border-radius:20px;padding:26px 18px 16px;text-align:center;margin:34px 0 0;box-shadow:0 12px 34px rgba(11,31,37,.3);}
+  .vault-hero svg{max-width:330px;width:100%;height:auto;display:block;margin:0 auto 6px;}
+  .vault-hero .eyebrow{font-family:'Cinzel',serif;font-size:0.66rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--gold-light);}
+  .vault-hero h2{font-family:'Cinzel Decorative',serif;font-size:clamp(1.3rem,3.8vw,1.95rem);color:#fff;margin:4px 0;}
+  .vault-hero p{font-size:0.9rem;color:#cfe0d8;max-width:600px;margin:6px auto 0;}
+  .vault-note{background:#fff7e8;border:1px solid #e7cf9b;border-radius:11px;padding:13px 16px;font-size:0.86rem;color:#7a5a1e;margin:16px 0 22px;text-align:center;}
+  .vault-note strong{color:#8a5a14;}
+  .vault-pending{background:#fff;border:1px dashed #c9973a;border-radius:15px;padding:30px 22px;text-align:center;color:#7a6a45;font-size:0.92rem;}
+  .vault-pending strong{color:var(--forest);}
   .legend{font-size:0.82rem;color:#7a7a5a;margin-top:26px;text-align:center;line-height:1.7;}
   footer{background:var(--dark);color:rgba(255,255,255,0.6);text-align:center;padding:30px 24px;font-size:0.82rem;margin-top:40px;}
   footer a{color:var(--gold-light);text-decoration:none;}
 </style>
+
+<!-- SEO -->
+<meta name="description" content="Explore Northwood Game Haven's board game library in Chippewa Falls, WI — about 150 games on the open-play shelves plus a vault of hundreds more. Play free during your visit.">
+<link rel="canonical" href="https://gamehaven.guru/board-game-library.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Northwood Game Haven">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Board Game Library — Hundreds of Titles to Play | Northwood Game Haven">
+<meta property="og:description" content="Explore Northwood Game Haven's board game library in Chippewa Falls, WI — about 150 games on the open-play shelves plus a vault of hundreds more. Play free during your visit.">
+<meta property="og:image" content="https://gamehaven.guru/logo.png">
+<meta property="og:url" content="https://gamehaven.guru/board-game-library.html">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Board Game Library — Hundreds of Titles to Play | Northwood Game Haven">
+<meta name="twitter:description" content="Explore Northwood Game Haven's board game library in Chippewa Falls, WI — about 150 games on the open-play shelves plus a vault of hundreds more. Play free during your visit.">
+<meta name="twitter:image" content="https://gamehaven.guru/logo.png">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "CollectionPage", "@id": "https://gamehaven.guru/board-game-library.html#page", "url": "https://gamehaven.guru/board-game-library.html", "name": "Board Game Library — Northwood Game Haven", "isPartOf": {"@id": "https://gamehaven.guru/#website"}, "about": {"@id": "https://gamehaven.guru/#business"}}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://gamehaven.guru/"}, {"@type": "ListItem", "position": 2, "name": "Board Game Library", "item": "https://gamehaven.guru/board-game-library.html"}]}]}</script>
 </head>
 <body>
 <div class="topbar">🦦 Northwood Game Haven · Board Game Library · <a href="ngh.html">← Return to Northwood Game Haven</a> · <a href="booking.html">Return to Booking</a></div>
 <header class="pg">
   <div class="eyebrow">Included Free With Any Room Rental</div>
   <h1>Board Game Library</h1>
-  <p>Hundreds of titles, free to play with any reservation — from quick party games to deep strategy epics. Our Game Gurus will teach you anything in the collection. This list reflects our current shelves and grows constantly.</p>
+  <p>Hundreds of titles, free to play with any reservation — from quick party games to deep strategy epics. Our Game Gurus will teach you anything in the collection. Browse what's <strong>available to play right now</strong>, or dig into <strong>the Vault</strong> — a deeper archive you can request ahead of your visit.</p>
   <a class="backlink" href="booking.html">← Back to booking</a>
 </header>
 
 <div class="wrap">
   <div class="availbar">All titles are <strong>subject to availability</strong> and our library is always expanding. Want a specific game pulled and ready? Note it in the board-game checkout add-on when you book.</div>
-  <input class="search" id="bsearch" placeholder="🔎 Search a game…" oninput="filterB()">
 
-  <div class="grid" id="bgrid">
+  <input class="search" id="bsearch" placeholder="🔎 Search every game…" oninput="filterB()">
+  <div class="viewtabs"><div class="inner">
+    <button class="viewbtn active" data-v="all" onclick="setView('all')">Everything</button>
+    <button class="viewbtn" data-v="avail" onclick="setView('avail')">Available Now</button>
+    <button class="viewbtn" data-v="vault" onclick="setView('vault')">From the Vault</button>
+  </div></div>
 
-    <div class="cat">
-      <h2>🎉 Party &amp; Social</h2>
-      <ul>
-        <li>Taboo</li><li>Mastermind</li><li>Clue</li><li>Clue AVP</li>
-        <li>Sequence</li><li>Sequence Dice</li><li>Sorry!</li><li>Uno Party!</li>
-        <li>Frankie Frenzy</li><li>Connect 4</li><li>Jenga</li><li>Battleship</li>
-        <li>Upwords</li><li>Scattergories</li><li>The Game of Life</li><li>Monopoly</li>
-        <li>Beyond Balderdash</li><li>HedBanz</li><li>Wits &amp; Wagers</li><li>Bezzerwizzer</li>
-        <li>Telestrations</li><li>Telestrations 6-Player</li><li>Telestrations 12-Player Party Pack</li>
-        <li>Concept</li><li>When I Dream</li><li>Wavelength</li>
-      </ul>
+  <!-- ===================== AVAILABLE FOR PLAY ===================== -->
+  <section class="lib-section" id="avail-section">
+    <div class="section-head">
+      <div class="eyebrow">On the shelves today</div>
+      <h2>Available for Play</h2>
+      <p>Pull any of these off the shelf during your visit — no advance notice needed.</p>
     </div>
 
-    <div class="cat">
-      <h2>🃏 Card &amp; Quick Play</h2>
-      <ul>
-        <li>Codenames</li><li>Codenames Duet</li><li>Codenames Pictures</li>
-        <li>Caution Signs</li><li>Unstable Unicorns</li><li>Exploding Kittens</li>
-        <li>Skull</li><li>Silver Bullet</li><li>Taco Cat Goat Cheese Pizza</li>
-        <li>Sea Salt &amp; Paper</li><li>Munchkin</li><li>Tiny Epic</li>
-        <li>Two by Two</li><li>Uno</li>
-      </ul>
+    <div class="grid">
+
+      <div class="cat">
+        <h2>🎉 Party &amp; Social</h2>
+        <ul>
+          <li>Taboo</li><li>Mastermind</li><li>Apples to Apples</li><li>Beyond Balderdash</li>
+          <li>Cards Against Humanity</li><li>Joking Hazard</li><li>Hedbanz</li><li>Wits &amp; Wagers</li>
+          <li>Bezzerwizzer</li><li>Telestrations (6-Player)</li><li>Telestrations (12-Player Party Pack)</li>
+          <li>Wavelength</li><li>What Were You Thinking?</li><li>When I Dream</li><li>Pictomania</li>
+          <li>Just One</li><li>So Clover!</li><li>Happy Salmon</li><li>That Escalated Quickly</li>
+          <li>Why Are You Like This?</li><li>Yogi</li><li>Courtisans</li><li>Pet Names</li>
+          <li>Taco Cat Goat Cheese Pizza</li><li>Concept</li>
+        </ul>
+      </div>
+
+      <div class="cat">
+        <h2>🃏 Card &amp; Quick Play</h2>
+        <ul>
+          <li>Codenames</li><li>Codenames Duet</li><li>Codenames Pictures</li><li>Exploding Kittens</li>
+          <li>Skull</li><li>Silver Bullet</li><li>No Thanks!</li><li>Sea Salt &amp; Paper</li>
+          <li>Mantis</li><li>Fluxx</li><li>Uno</li><li>Uno Party!</li><li>Uno All Wild!</li>
+          <li>DOS</li><li>Ono 99</li><li>Phase 10</li><li>3 Witches</li><li>Rabbit Rabbit</li>
+          <li>Tiny Epic Galaxies</li><li>Spot It!</li><li>Spot It! Connect</li><li>Bites</li><li>Scout</li>
+        </ul>
+      </div>
+
+      <div class="cat">
+        <h2>🧠 Strategy — Light &amp; Medium</h2>
+        <ul>
+          <li>Ticket to Ride</li><li>Ticket to Ride: The Card Game</li><li>7 Wonders</li>
+          <li>7 Wonders Architects</li><li>7 Wonders Dice</li><li>Carcassonne: Hunters &amp; Gatherers</li>
+          <li>Azul</li><li>Takenoko</li><li>Patchwork</li><li>Kingdom Builder</li><li>Kingdomino</li>
+          <li>Catan</li><li>Catan: Seafarers</li><li>Catan ZIP!</li><li>Whistle Stop</li>
+          <li>The Isle of Cats</li><li>Stella</li><li>Dixit</li><li>Challengers!</li><li>Harmonies</li>
+          <li>Camel Up: Off Season</li><li>Mariposas</li><li>Photosynthesis</li><li>Kabuto Sumo</li>
+          <li>Reef</li><li>Planet Unknown</li><li>Costa Rica</li><li>Mountain Goats</li><li>Forest Shuffle</li>
+          <li>Flamecraft</li><li>Flamecraft Duals</li><li>Imperial Settlers: Roll &amp; Write</li>
+          <li>Welcome To…</li><li>Between Two Cities</li><li>Pachakuna</li><li>Splendor</li>
+          <li>Lost Cities</li><li>Jaipur</li>
+        </ul>
+      </div>
+
+      <div class="cat">
+        <h2>⚔️ Strategy — Heavy &amp; Epic</h2>
+        <ul>
+          <li>Twilight Imperium</li><li>Brass: Birmingham</li><li>Agricola</li>
+          <li>Agricola: All Creatures Big and Small</li><li>Agricola: Family Edition</li>
+          <li>Lost Ruins of Arnak</li><li>Euphoria</li><li>Puerto Rico</li><li>Ultimate Railroads</li>
+          <li>Acquire</li><li>Race for the Galaxy</li><li>Castles of Mad King Ludwig</li>
+          <li>The Castles of Burgundy: Special Edition</li><li>Champions of Midgard</li><li>Wendake</li>
+          <li>SpellBook</li><li>The White Castle</li><li>Catapult Feud</li><li>Istanbul</li><li>Bohemians</li>
+        </ul>
+      </div>
+
+      <div class="cat">
+        <h2>🤝 Co-op, Adventure &amp; Thematic</h2>
+        <ul>
+          <li>Legends of Andor</li><li>Fairy Tale Inn</li><li>Dead of Winter</li>
+          <li>Betrayal at House on the Hill</li><li>Disney Villainous</li><li>Small World</li>
+          <li>Marvel Champions</li><li>Arkham Horror</li><li>Arkham Horror: The Card Game</li>
+          <li>MLEM: Space Agency</li><li>Mysterium</li><li>Feya's Swamp</li><li>Bloodborne: The Card Game</li>
+          <li>Zombicide: Black Plague</li><li>Fathom</li><li>Extraordinary Adventures: Pirates!</li>
+          <li>Star Wars: Battle of Hoth</li><li>Detective: A Modern Crime Board Game</li><li>Dice Town</li>
+          <li>Ghost Fightin' Treasure Hunters!</li><li>Wine Cellar</li><li>Heat: Pedal to the Metal</li><li>Heat: Heavy Rain (expansion)</li>
+        </ul>
+      </div>
+
+      <div class="cat">
+        <h2>👪 Family, Kids &amp; Dice</h2>
+        <ul>
+          <li>The Game of Life</li><li>Monopoly</li><li>Sorry!</li><li>Connect 4</li><li>Battleship</li>
+          <li>Jenga</li><li>Upwords</li><li>Rummikub</li><li>Ginnykub</li><li>Pokerkub</li><li>Sequence</li><li>Sequence Dice</li>
+          <li>Farkle</li><li>Farkle Frenzy</li><li>Pentago</li><li>Mahjong</li><li>Blokus</li>
+          <li>Tortuga 1667</li><li>Queendomino</li><li>Critter Kitchen</li><li>The Last Spike</li>
+          <li>Otters</li><li>AI Space Puzzle</li><li>Scattergories</li>
+        </ul>
+      </div>
+
+      <div class="cat">
+        <h2>♟️ Classics &amp; 2-Player</h2>
+        <ul>
+          <li>Chess</li><li>Crokinole</li><li>Cribbage</li><li>Playing Cards</li>
+          <li>Santorini</li><li>Quarto Deluxe</li><li>Splendor Duel</li><li>Morels</li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================== FROM THE VAULT ===================== -->
+  <section class="lib-section" id="vault-section">
+    <div class="vault-hero">
+      <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" role="img" aria-label="Stash the otter framed in the Northwood Game Haven vault door">
+        <defs>
+          <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#f0cf6e"/><stop offset="45%" stop-color="#c9973a"/>
+            <stop offset="100%" stop-color="#8a6520"/>
+          </linearGradient>
+          <clipPath id="port"><circle cx="200" cy="200" r="150"/></clipPath>
+        </defs>
+        <!-- vault recess -->
+        <circle cx="200" cy="200" r="184" fill="#081a1f"/>
+        <!-- hinges -->
+        <g fill="url(#gold)" stroke="#5e4310" stroke-width="2">
+          <rect x="8" y="146" width="34" height="26" rx="6"/>
+          <rect x="8" y="228" width="34" height="26" rx="6"/>
+        </g>
+        <!-- gold door ring -->
+        <circle cx="200" cy="200" r="172" fill="none" stroke="url(#gold)" stroke-width="26"/>
+        <circle cx="200" cy="200" r="185" fill="none" stroke="#5e4310" stroke-width="2"/>
+        <circle cx="200" cy="200" r="159" fill="none" stroke="#5e4310" stroke-width="2"/>
+        <!-- bolts -->
+        <g fill="#5e4310"><circle cx="372.0" cy="200.0" r="3.6"/><circle cx="349.0" cy="286.0" r="3.6"/><circle cx="286.0" cy="349.0" r="3.6"/><circle cx="200.0" cy="372.0" r="3.6"/><circle cx="114.0" cy="349.0" r="3.6"/><circle cx="51.0" cy="286.0" r="3.6"/><circle cx="28.0" cy="200.0" r="3.6"/><circle cx="51.0" cy="114.0" r="3.6"/><circle cx="114.0" cy="51.0" r="3.6"/><circle cx="200.0" cy="28.0" r="3.6"/><circle cx="286.0" cy="51.0" r="3.6"/><circle cx="349.0" cy="114.0" r="3.6"/></g>
+        <!-- inner steel rim + porthole -->
+        <circle cx="200" cy="200" r="156" fill="#0e252b"/>
+        <image href="stash-vault.png" xlink:href="stash-vault.png" x="50" y="50" width="300" height="300" clip-path="url(#port)" preserveAspectRatio="xMidYMid slice"
+               onerror="this.style.display='none'"/>
+        <circle cx="200" cy="200" r="150" fill="none" stroke="#000" stroke-width="8" opacity=".16"/>
+        <!-- handle wheel (offset, lower-right) -->
+        <g transform="translate(322,304)">
+          <circle r="40" fill="#0e252b" stroke="#5e4310" stroke-width="2"/>
+          <g stroke="url(#gold)" stroke-width="7" stroke-linecap="round">
+            <line x1="-30" y1="0" x2="30" y2="0"/>
+            <line x1="-15" y1="-26" x2="15" y2="26"/>
+            <line x1="15" y1="-26" x2="-15" y2="26"/>
+          </g>
+          <circle r="11" fill="url(#gold)" stroke="#5e4310" stroke-width="2"/>
+        </g>
+      </svg>
+      <div class="eyebrow">Request 1 day ahead</div>
+      <h2>From the Vault</h2>
+      <p>Hundreds more titles live in the Vault. Ask a Game Guru and we'll pull anything from it — just give us at least one day's notice so it's ready and waiting when you arrive.</p>
     </div>
 
-    <div class="cat">
-      <h2>🧠 Strategy — Light &amp; Medium</h2>
-      <ul>
-        <li>Ticket to Ride</li><li>Ticket to Ride: The Card Game</li>
-        <li>Quacks (All-In Edition)</li><li>Pictomania</li><li>Stella</li>
-        <li>Dixit</li><li>Challengers!</li><li>7 Wonders Architects</li>
-        <li>Carcassonne</li><li>My First Carcassonne</li><li>Azul</li>
-        <li>Blokus</li><li>Takenoko</li><li>Patchwork</li><li>Kingdom Builder</li>
-        <li>Catan</li><li>Whistle Stop</li><li>Whistle Mountain</li>
-        <li>Roll &amp; Write titles</li><li>Labyrinth</li><li>Isle of Cats</li>
-      </ul>
+    <div class="vault-note">🔐 Vault games are <strong>available by request with at least 1 day advance notice</strong>. Add a note when you book, or message us, and we'll have it on your table.</div>
+
+    <!-- VAULT-CATS: the categorized Vault list will be added here -->
+        <div class="grid">
+      <div class="cat">
+        <h2>🏛️ Heavy Strategy &amp; Civilization</h2>
+        <ul><li>Terraforming Mars</li><li>Scythe</li><li>Dune: Imperium</li><li>Eclipse: New Dawn for the Galaxy</li><li>Civilization: A New Dawn</li><li>Sid Meier's Civilization: The Board Game</li><li>Terra Mystica</li><li>Concordia</li><li>Caverna</li><li>A Feast for Odin</li><li>Food Chain Magnate</li><li>Great Western Trail</li><li>Viticulture</li><li>Tapestry</li><li>Endless Winter: Paleoamericans</li><li>Through the Ages</li><li>Anachrony</li><li>Trajan</li><li>Troyes</li><li>Orleans</li><li>Gentes</li><li>Belfort</li><li>Crusaders: Thy Will Be Done</li><li>Eminent Domain</li><li>Newton</li><li>Deus</li><li>Coimbra</li><li>Altiplano</li><li>Isle of Skye</li><li>Heaven &amp; Ale</li><li>Kingsburg</li><li>Amun-Re</li><li>Mexica</li><li>Stone Age</li><li>Five Tribes</li><li>Alhambra</li><li>Lancaster</li><li>Above and Below</li><li>Marco Polo</li><li>Age of Empires III</li><li>Nations</li><li>Notre Dame</li><li>Architects of the West Kingdom</li><li>Clans of Caledonia</li><li>SETI</li><li>Apiary</li><li>Excavation Earth</li><li>Tainted Grail: The Fall of Avalon</li><li>Endeavor</li><li>Kepler-3042</li><li>World's Fair 1893</li><li>Reykholt</li><li>Karuba</li><li>Topiary</li><li>Dokmus</li><li>San Juan</li><li>Bombay</li><li>Dakota</li><li>Distilled</li><li>Suburbia</li><li>Quadropolis</li><li>MegaCity: Oceania</li><li>Stardew Valley: The Board Game</li><li>La Granja</li><li>AuZtralia</li><li>Cry Havoc: Aftermath</li><li>Blackout: Hong Kong</li><li>China Rails</li><li>Iron Dragon</li><li>Lords of Vegas</li><li>Uchronia</li><li>The Legend of the Cherry Tree that Blossoms Every 10,000 Years</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>⚙️ Worker Placement &amp; Engine Building</h2>
+        <ul><li>Lords of Waterdeep</li><li>Scoundrels of Skullport</li><li>Power Grid</li><li>Steam: Rails to Riches</li><li>Roll for the Galaxy</li><li>Roll Through the Ages: The Bronze Age</li><li>Honey Buzz</li><li>River Valley Glassworks</li><li>Between Two Castles</li><li>Farshore</li><li>Planted</li><li>Champions of Midgard: Valhalla</li><li>Imhotep</li><li>Smallworld Underground</li><li>Res Arcana</li><li>Mystic Vale: Conclave</li><li>Wingspan</li><li>Oceans</li><li>Evolution</li><li>Evolution: Climate</li><li>Slay the Spire: The Board Game</li><li>Steam Up</li><li>Evacuation</li><li>Doodle Dungeon</li><li>Andromeda's Edge</li><li>Nova Luna</li><li>Witchstone</li><li>Redwood</li><li>Ganymede</li><li>Orbis</li><li>Seasons</li><li>Kitara</li><li>Call to Adventure</li><li>The Quest for El Dorado</li><li>Clank!</li><li>Clank! In! Space!</li><li>Gnome Hollow</li><li>New York Zoo</li><li>Bärenpark</li><li>Honey</li><li>Tikal</li><li>Topiary</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>🧩 Family &amp; Gateway Euro</h2>
+        <ul><li>Cascadia</li><li>Cascadia: Landmarks</li><li>Cascadia Junior</li><li>PARKS</li><li>Trekking the National Parks</li><li>Photosynthesis</li><li>Azul: Summer Pavilion</li><li>Azul: Queen's Garden</li><li>Splendor: Marvel</li><li>Kingdomino</li><li>Lanterns</li><li>Lanterns Dice</li><li>Harmonies</li><li>Machi Koro</li><li>Tokaido</li><li>Namiji</li><li>Let's Go to Japan</li><li>The Tea Dragon Society</li><li>Kodama</li><li>Kodama Forest</li><li>Finca</li><li>Ganymede</li><li>Santa Monica</li><li>The Wolves</li><li>Oceans</li><li>Lancaster</li><li>Discover: Lands Unknown</li><li>Chromino</li><li>Four Humours</li><li>Blue Lagoon</li><li>Raccoon Tycoon</li><li>Lizard Wizard</li><li>Ethnos</li><li>Trailblazers</li><li>Bunny Kingdom</li><li>Tiny Towns</li><li>Lotus</li><li>Kanagawa</li><li>Hibernia</li><li>Fresco</li><li>Bark Avenue</li><li>Dragon Castle</li><li>Carpe Diem</li><li>Mountain Goats</li><li>Leaf</li><li>Mycelia</li><li>Undergrove</li><li>Blume</li><li>Mandala</li><li>Targi</li><li>Six Tribes</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>🗺️ Thematic, Adventure &amp; Co-op</h2>
+        <ul><li>Spirit Island</li><li>Robinson Crusoe: Adventures on the Cursed Island</li><li>First Martians</li><li>Oath</li><li>Ecos: First Continent</li><li>Wasteland Express Delivery Service</li><li>Sleeping Gods: Primeval Peril</li><li>Forgotten Waters</li><li>Mice and Mystics</li><li>Mice and Mystics: Downwood Tales</li><li>Tail Feathers</li><li>Stuffed Fables</li><li>Robinson Crusoe</li><li>Etherfields</li><li>Tainted Grail: Monsters of Avalon</li><li>Veiled Fate</li><li>The 7th Citadel</li><li>The Lost Expedition</li><li>Mystic Paths</li><li>Narcos: The Board Game</li><li>Forbidden Sky</li><li>Flash Point: Fire Rescue</li><li>T.I.M.E Stories</li><li>Fallout</li><li>Call to Adventure</li><li>Roller Coaster Rush</li><li>Heroes of Land, Air &amp; Sea</li><li>Dog Park</li><li>The Walking Dead</li><li>Septima</li><li>Black Orchestra</li><li>Star Wars: The Clone Wars</li><li>Andromeda's Edge</li><li>Books of Time</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>💀 Horror &amp; Dungeon Crawl</h2>
+        <ul><li>Arkham Horror</li><li>Eldritch Horror</li><li>Mansions of Madness</li><li>Elder Sign</li><li>Nemesis</li><li>Dark Souls: The Board Game</li><li>Bloodborne: The Board Game</li><li>Blood Rage</li><li>Ankh: Gods of Egypt</li><li>Zombicide: Black Plague</li><li>Zombicide: Rue Morgue</li><li>Last Night on Earth</li><li>Zombies!!!</li><li>Shadows over Camelot</li><li>Ghost Stories</li><li>Dungeon Saga Origins</li><li>Temple of Elemental Evil</li><li>Thunderstone Quest</li><li>The Red Dragon Inn</li><li>The Red Dragon Inn: Pub Crawl</li><li>The Red Dragon Inn: The Undercity</li><li>Heroes of Barcadia</li><li>Wiz-War</li><li>Attack on Titan: The Last Stand</li><li>Wonderland's War</li><li>Tidal Blades</li><li>Rising Sun</li><li>Warhammer Underworlds: Deathgorge</li><li>Warhammer Quest: The Gnarlwood</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>⚔️ Conflict, Area Control &amp; Ameritrash</h2>
+        <ul><li>Root</li><li>Cosmic Encounter</li><li>Cosmic Encounter: Cosmic Odyssey</li><li>Smash Up</li><li>Smash Up: Disney</li><li>Vast: The Crystal Caverns</li><li>Risk</li><li>Twilight Struggle</li><li>War of the Ring</li><li>The Great Wall</li><li>Mission: Red Planet</li><li>Rebellion</li><li>Flick 'em Up</li><li>Flick 'em Up: Dead of Winter</li><li>Captain Sonar</li><li>Shadows: Amsterdam</li><li>Mare Nostrum</li><li>Hyperborea</li><li>NEOM</li><li>Raiders of the North Sea</li><li>Hall of Heroes</li><li>Shipwrights of the North Sea</li><li>Explorers of the North Sea</li><li>Hit Z Road</li><li>Joan of Arc</li><li>Devastation of Indines</li><li>World of Tanks: Rush</li><li>Rocketmen</li><li>Expeditions</li><li>Heat: Pedal to the Metal</li><li>Heat: Heavy Rain</li><li>Formula D</li><li>Iron Dragon</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>🃏 Card Games &amp; Fillers</h2>
+        <ul><li>Citadels</li><li>Coup</li><li>Coup: Rebellion G54</li><li>Love Letter</li><li>For Sale</li><li>Bohnanza</li><li>The Crew</li><li>No Thanks!</li><li>Saboteur</li><li>Bang!</li><li>Sleeping Queens</li><li>Fox in the Forest</li><li>Fox in the Forest Duel</li><li>Tea for 2</li><li>Friday</li><li>Mandala</li><li>Munchkin</li><li>Munchkin Bites</li><li>Munchkin Cthulhu</li><li>Munchkin X-Men</li><li>Munchkin Legends</li><li>Munchkin Batman</li><li>Munchkin Panic</li><li>Fluxx</li><li>Monopoly Card Games</li><li>Hand-to-Hand Wombat</li><li>Hush!</li><li>Maximum Throwdown</li><li>Get Bit!</li><li>Aquarius</li><li>Super Tooth</li><li>Just Desserts</li><li>Marrying Mr. Darcy</li><li>Once Upon a Time</li><li>Aztec</li><li>Byzanz</li><li>Ba Kong</li><li>Amul</li><li>The Number</li><li>Silver</li><li>Kitsune</li><li>Frogriders</li><li>Regatta</li><li>Apples to Apples To Go</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>🎉 Party &amp; Social</h2>
+        <ul><li>Cranium</li><li>Pass the Popcorn</li><li>Telestrations</li><li>Throw Throw Burrito</li><li>Throw Throw Avocado</li><li>You've Got Crabs</li><li>Change My Mind</li><li>Chunky Monkey Business</li><li>You Lying Sack</li><li>UNUM</li><li>Wise and Otherwise</li><li>King of Tokyo</li><li>Cash 'n Guns</li><li>Cash 'n Guns: Team Spirit</li><li>Mars Attacks: The Dice Game</li><li>Voodoo</li><li>Top Tier</li><li>Fun Employed</li><li>Magical Unicorn Quest</li><li>Apocalyptic Picnic</li><li>ThinkBlot</li><li>Half Truth</li><li>Movie Mind</li><li>Poetry Slam</li><li>The Great Split</li><li>Captain Flip</li><li>BombBusters</li><li>Buzzed</li><li>Texas Hold 'Em</li><li>Yahtzee</li><li>Race to the Raft</li><li>Hilarium</li><li>Hotel Samoa</li><li>Ferret Out</li><li>Mr. Jack</li><li>S'mores Wars</li><li>Chez Geek</li><li>Sour Apples to Apples</li><li>Apples to Apples Party Box</li><li>Flapjacks &amp; Sasquatches</li><li>Secret Identity</li><li>Times Up</li><li>Encore</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>🕵️ Deduction &amp; Hidden Role</h2>
+        <ul><li>Codenames</li><li>Codenames Duet</li><li>Codenames Pictures</li><li>Spyfall</li><li>Spyfall 2</li><li>Deception: Murder in Hong Kong</li><li>Mysterium</li><li>Mysterium Park</li><li>Obscurio</li><li>Shadows: Amsterdam</li><li>One Night Ultimate Werewolf</li><li>One Night Ultimate Vampire</li><li>One Night Ultimate Super Villains</li><li>One Night Revolution</li><li>One Week Ultimate Werewolf</li><li>Ultimate Werewolf Extreme</li><li>Avalon</li><li>The Resistance</li><li>Two Rooms and a Boom</li><li>Trial of the Temples</li><li>Holmes</li><li>Rear Window</li><li>Venn</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>🎲 Dice &amp; Roll-and-Write</h2>
+        <ul><li>Railroad Ink</li><li>Welcome To...</li><li>Dice Forge</li><li>Trek 12</li><li>Harvest Dice</li><li>Dinosaur Island: Rawr 'n Write</li><li>Imperial Settlers: Roll &amp; Write</li><li>Settlers Roll &amp; Write</li><li>FUSE</li><li>Countdown</li><li>Qwixx</li><li>Zombie Dice</li><li>Las Vegas</li><li>Cosmic Run</li><li>Istanbul: The Dice Game</li><li>Roll Through the Ages</li><li>Lanterns Dice</li><li>Battle Yahtzee: Deadpool</li><li>Yahtzee: Guardians of the Galaxy</li><li>Sushi Boat</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>♟️ Abstract &amp; 2-Player</h2>
+        <ul><li>Onitama</li><li>Othello</li><li>Hive</li><li>Tak</li><li>Quarto</li><li>Blokus</li><li>7 Wonders Duel</li><li>Tokaido Duo</li><li>Jaipur</li><li>Mandala</li><li>Targi</li><li>Mountain Goats</li><li>Mantis Falls</li><li>One Deck Dungeon</li><li>A Little Wordy</li><li>Tokyo Highway</li><li>Thrive</li><li>Gold Ahoy!</li><li>Ingenious</li><li>Grimslingers Duel</li><li>Bohnanza</li><li>Blossoms</li><li>Duelosaur Island</li><li>Magnet</li><li>Dimension</li><li>Gobblet</li><li>Backgammon</li><li>Aqua</li><li>Kites</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>✏️ Word, Trivia &amp; Drawing</h2>
+        <ul><li>Scrabble Junior</li><li>Boggle</li><li>Boggle Bowl</li><li>Perquackey</li><li>Letter Tycoon</li><li>A Little Wordy</li><li>Trivial Pursuit</li><li>The Simpsons Jeopardy</li><li>Pictureka!</li><li>Rubik's Race</li><li>Q-bitz</li><li>Encore</li><li>Tapple</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>👪 Kids &amp; Family</h2>
+        <ul><li>Ice Cool</li><li>Ice Cool 2</li><li>My First Carcassonne</li><li>Dragomino</li><li>Animal Upon Animal</li><li>Suspend</li><li>Feed the Woozle</li><li>Let's Go Fishin'</li><li>Lift it!</li><li>Rolit</li><li>Racko</li><li>Memory</li><li>Creationary</li><li>Concept Kids: Animals</li><li>Rabbit Rally</li><li>Polar Adventure</li><li>Mysterium Kids</li><li>Cascadia Junior</li><li>Sleeping Queens</li><li>Pete the Cat</li><li>Goldie Blox &amp; the Spinning Machine</li><li>Qwirkle</li><li>Tags</li><li>The Very Hungry Caterpillar</li><li>Worms: The Board Game</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>📚 Legacy &amp; Big-Box Campaign</h2>
+        <ul><li>Pandemic Legacy: Season 0</li><li>Pandemic Legacy: Season 1</li><li>Pandemic Legacy: Season 2</li><li>Pandemic</li><li>Pandemic: The Cure</li><li>Pandemic: Fall of Rome</li><li>Pandemic: Reign of Cthulhu</li><li>Pandemic: Rapid Response</li><li>Gloomhaven</li><li>Risk Legacy</li><li>SeaFall</li><li>Istanbul: Big Box</li><li>Everdell: The Complete Collection</li><li>Castles of Mad King Ludwig: Collector's Edition</li><li>Discover: Lands Unknown</li><li>Clinic: Deluxe Edition</li><li>Red Rising</li><li>Forbidden Sky</li></ul>
+      </div>
+
+      <div class="cat">
+        <h2>🎴 TCG, LCG &amp; Hobby</h2>
+        <ul><li>Arkham Horror: The Card Game</li><li>Marvel Champions: The Card Game</li><li>Battle Spirits Saga</li><li>Digimon Card Game</li><li>KeyForge</li><li>Sentinels of the Multiverse</li><li>Legendary</li><li>Warhammer: Invasion</li><li>Spellbook Cards</li><li>Big Bads</li></ul>
+      </div>
     </div>
 
-    <div class="cat">
-      <h2>⚔️ Strategy — Heavy &amp; Epic</h2>
-      <ul>
-        <li>Twilight Imperium</li><li>Brass: Birmingham</li><li>Brass: Lancashire</li>
-        <li>Agricola</li><li>Lost Ruins of Arnak</li><li>Euphoria</li>
-        <li>Puerto Rico</li><li>Ultimate Railroads</li><li>Russian Railroads</li>
-        <li>Spellbook</li><li>Ankh: Gods of Egypt</li><li>Founders of the Desert</li>
-        <li>Costa Rica</li><li>Planet Unknown</li>
-      </ul>
-    </div>
-
-    <div class="cat">
-      <h2>🤝 Cooperative &amp; Adventure</h2>
-      <ul>
-        <li>Andor</li><li>FairyTale Inn</li><li>Dead of Winter</li>
-        <li>Betrayal at House on the Hill</li><li>Villainous</li>
-        <li>Small World</li><li>Wingspan</li><li>Mariposas</li>
-        <li>Floriculture</li><li>Pirates!</li><li>Galaxy</li>
-      </ul>
-    </div>
-
-    <div class="cat">
-      <h2>♟️ Classics &amp; 2-Player</h2>
-      <ul>
-        <li>Patchwork</li><li>Santorini</li><li>Queen's necklace / 2-player duels</li>
-        <li>Chess, Checkers &amp; classic sets (ask a Guru)</li>
-        <li>Cribbage &amp; traditional card games</li>
-      </ul>
-    </div>
-
-  </div>
+  </section>
 
   <p class="legend">🦦 This is a living list pulled straight from our shelves — new games arrive all the time. If you don't see a favorite, ask a Game Guru or request it in the board-game checkout add-on when you <a href="booking.html">book a play space</a>.</p>
 </div>
@@ -124,24 +317,47 @@
 </div>
 <footer>
   <div style="font-family:'Cinzel Decorative',serif;color:var(--gold-light);font-size:1.05rem;margin-bottom:6px;">Northwood Game Haven</div>
+
+  <!-- NGH SOCIAL -->
+  <div class="ngh-social" style="margin:18px auto 4px;display:flex;justify-content:center;align-items:center;gap:14px;">
+    <a href="https://www.facebook.com/profile.php?id=61579663353904" target="_blank" rel="noopener" aria-label="Northwood Game Haven on Facebook" title="Facebook" style="display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:#1877F2;color:#fff;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.28)'"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.09 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.92-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.09 24 18.1 24 12.07z"/></svg></a>
+    <a href="https://www.instagram.com/northwoodgamehaven?igsh=NG8xM256anh3cDlr" target="_blank" rel="noopener" aria-label="Northwood Game Haven on Instagram" title="Instagram" style="display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:radial-gradient(circle at 30% 110%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285aeb 90%);color:#fff;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.28)'"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41a3.7 3.7 0 0 1-1.38-.9 3.7 3.7 0 0 1-.9-1.38c-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16zm0 1.62c-3.15 0-3.52.01-4.76.07-1.15.05-1.77.24-2.19.4-.55.21-.94.47-1.35.88-.41.41-.67.8-.88 1.35-.16.42-.35 1.04-.4 2.19-.06 1.24-.07 1.61-.07 4.76s.01 3.52.07 4.76c.05 1.15.24 1.77.4 2.19.21.55.47.94.88 1.35.41.41.8.67 1.35.88.42.16 1.04.35 2.19.4 1.24.06 1.61.07 4.76.07s3.52-.01 4.76-.07c1.15-.05 1.77-.24 2.19-.4.55-.21.94-.47 1.35-.88.41-.41.67-.8.88-1.35.16-.42.35-1.04.4-2.19.06-1.24.07-1.61.07-4.76s-.01-3.52-.07-4.76c-.05-1.15-.24-1.77-.4-2.19a3.6 3.6 0 0 0-.88-1.35 3.6 3.6 0 0 0-1.35-.88c-.42-.16-1.04-.35-2.19-.4-1.24-.06-1.61-.07-4.76-.07zm0 2.76a5.46 5.46 0 1 0 0 10.92 5.46 5.46 0 0 0 0-10.92zm0 9a3.54 3.54 0 1 1 0-7.08 3.54 3.54 0 0 1 0 7.08zm5.68-9.22a1.28 1.28 0 1 1-2.56 0 1.28 1.28 0 0 1 2.56 0z"/></svg></a>
+    <a href="https://discord.gg/k3jzthfQ" target="_blank" rel="noopener" aria-label="Northwood Game Haven Discord server" title="Northwood Game Haven Discord server" style="display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:#5865F2;color:#fff;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.28)'"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.32 4.37A19.8 19.8 0 0 0 15.45 3a13.9 13.9 0 0 0-.62 1.27 18.27 18.27 0 0 0-5.66 0A13.9 13.9 0 0 0 8.55 3 19.8 19.8 0 0 0 3.68 4.37C.55 9.06-.3 13.63.12 18.13a19.95 19.95 0 0 0 6.06 3.06c.49-.67.92-1.38 1.3-2.12-.71-.27-1.39-.6-2.04-.99.17-.13.34-.26.5-.39a14.25 14.25 0 0 0 12.12 0c.16.14.33.27.5.39-.65.39-1.34.72-2.05.99.37.74.81 1.45 1.3 2.12a19.9 19.9 0 0 0 6.07-3.06c.49-5.21-.84-9.74-3.56-13.76zM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42s.95-2.42 2.16-2.42 2.18 1.09 2.16 2.42c0 1.34-.95 2.42-2.16 2.42zm7.96 0c-1.18 0-2.16-1.08-2.16-2.42s.95-2.42 2.16-2.42 2.18 1.09 2.16 2.42c0 1.34-.94 2.42-2.16 2.42z"/></svg></a>
+  </div>
   115 W Spring St · Chippewa Falls, WI 54729<br>
   <a href="ngh.html">Home</a> · <a href="booking.html">Book a Space</a> · <a href="video-game-equipment.html">Video Game Equipment</a> · <a href="terms.html">Terms</a> · <a href="booking.html?admin=1" style="color:rgba(255,255,255,0.4);font-size:0.82em;">Staff Login</a>
 </footer>
 
 <script>
-function filterB(){
+var viewMode='all';
+function setView(m){
+  viewMode=m;
+  var btns=document.querySelectorAll('.viewbtn');
+  for(var i=0;i<btns.length;i++){ btns[i].classList.toggle('active', btns[i].getAttribute('data-v')===m); }
+  applyFilters();
+}
+function filterB(){ applyFilters(); }
+function applyFilters(){
   var q=document.getElementById('bsearch').value.toLowerCase();
-  document.querySelectorAll('#bgrid .cat').forEach(function(c){
-    // show category if its name or any li matches; also hide non-matching li
+  var avail=document.getElementById('avail-section');
+  var vault=document.getElementById('vault-section');
+  avail.style.display=(viewMode==='vault')?'none':'';
+  vault.style.display=(viewMode==='avail')?'none':'';
+  var cats=document.querySelectorAll('.lib-section .cat');
+  for(var i=0;i<cats.length;i++){
+    var c=cats[i];
+    var sec=c.closest('.lib-section');
+    if(sec && sec.style.display==='none'){ continue; }
     var anyVisible=false;
-    c.querySelectorAll('li').forEach(function(li){
-      var m=li.textContent.toLowerCase().indexOf(q)>=0;
-      li.style.display=m?'':'none'; if(m)anyVisible=true;
-    });
+    var lis=c.querySelectorAll('li');
+    for(var j=0;j<lis.length;j++){
+      var m=lis[j].textContent.toLowerCase().indexOf(q)>=0;
+      lis[j].style.display=m?'':'none'; if(m)anyVisible=true;
+    }
     var head=c.querySelector('h2').textContent.toLowerCase().indexOf(q)>=0;
     c.style.display=(anyVisible||head||q==='')?'':'none';
-    if(head&&!anyVisible){ c.querySelectorAll('li').forEach(function(li){li.style.display='';}); }
-  });
+    if(head&&!anyVisible){ var all=c.querySelectorAll('li'); for(var k=0;k<all.length;k++){ all[k].style.display=''; } }
+  }
 }
 </script>
 </body>

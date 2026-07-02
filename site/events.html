@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Calendar — Tournaments, Game Nights &amp; More | Northwood Game Haven</title>
+<meta name="description" content="Browse upcoming tournaments, teach-and-play nights, D&D, trading card events, and game nights at Northwood Game Haven in Chippewa Falls, WI — and register online.">
+<!-- Open Graph / social link previews -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Northwood Game Haven">
+<meta property="og:title" content="Event Calendar — Northwood Game Haven">
+<meta property="og:description" content="Tournaments, open play, and special events. Browse month, week, or day view and register online.">
+<meta property="og:image" content="https://gamehaven.guru/logo.png">
+<meta property="og:url" content="https://gamehaven.guru/events.html">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Event Calendar — Northwood Game Haven">
+<meta name="twitter:description" content="Tournaments, open play, and special events at Northwood Game Haven.">
+<meta name="twitter:image" content="https://gamehaven.guru/logo.png">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600&family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --forest: #2d5a3d; --forest-light: #3d7a54;
+    --gold: #c9973a; --gold-light: #e8b84b;
+    --cream: #faf6ee; --teal-dark: #0f4a56; --teal: #1488a6;
+    --dark: #1a1a12; --text: #2a2a1a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--cream); color:var(--text); font-family:'Lato',sans-serif; overflow-x:hidden; }
+  a { color:inherit; }
+
+  /* ---- top nav (matches homepage) ---- */
+  .corner-nav { position:sticky; top:0; z-index:300; display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap;
+    padding:9px 10px; background:linear-gradient(135deg,#1c3a26,#2d5a3d); box-shadow:0 2px 14px rgba(0,0,0,0.22); border-bottom:2px solid var(--gold); }
+  .corner-nav a { font-family:'Cinzel',serif; font-size:0.66rem; letter-spacing:0.08em; text-transform:uppercase; font-weight:700; text-decoration:none;
+    padding:8px 14px; border-radius:50px; white-space:nowrap; transition:transform 0.18s; }
+  .corner-nav a:hover { transform:translateY(-2px); }
+  .nav-home  { background:rgba(255,255,255,0.12); color:#f3ecd8; }
+  .nav-book  { background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); }
+  .nav-shop  { background:linear-gradient(135deg,var(--forest),var(--forest-light)); color:#fff; }
+  @media(max-width:520px){ .corner-nav a{ font-size:0.56rem; padding:7px 10px; letter-spacing:0.04em; } }
+
+  /* ---- header ---- */
+  .cal-header { text-align:center; padding:40px 20px 8px; background:radial-gradient(ellipse at 50% 0%,#c8e8d066 0%,transparent 60%),linear-gradient(180deg,#e8f4ec 0%,var(--cream) 100%); }
+  .cal-eyebrow { font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.32em; text-transform:uppercase; color:var(--forest); margin-bottom:10px; }
+  .cal-h1 { font-family:'Cinzel Decorative',serif; font-size:clamp(1.9rem,5vw,3rem); font-weight:900; color:var(--forest); line-height:1.05; }
+  .cal-sub { font-size:0.95rem; color:#4a4a35; max-width:640px; margin:12px auto 0; line-height:1.7; }
+
+  /* ---- request banner ---- */
+  .req-banner { max-width:1100px; margin:22px auto 0; padding:0 16px; }
+  .req-inner { background:#fff; border:2px solid var(--forest); border-radius:16px; padding:18px 22px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; box-shadow:0 6px 26px rgba(45,90,61,0.10); }
+  .req-text { font-family:'Cinzel',serif; color:var(--forest); font-size:0.98rem; }
+  .req-text small { display:block; font-family:'Lato',sans-serif; font-weight:400; color:#6a6a50; font-size:0.8rem; margin-top:4px; letter-spacing:0; text-transform:none; }
+  .req-btn { background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); text-decoration:none; font-family:'Cinzel',serif; font-weight:700; font-size:0.82rem; letter-spacing:0.06em; padding:12px 22px; border-radius:50px; white-space:nowrap; box-shadow:0 4px 18px rgba(201,151,58,0.4); transition:transform 0.18s; }
+  .req-btn:hover { transform:translateY(-2px); }
+
+  /* ---- calendar shell ---- */
+  .cal-wrap { max-width:1100px; margin:22px auto 60px; padding:0 16px; }
+  .cal-card { background:#fff; border:1px solid #d8e8d0; border-radius:16px; box-shadow:0 8px 40px rgba(45,90,61,0.12); padding:16px 16px 22px; }
+
+  .cal-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .cal-views { display:inline-flex; background:#eef3ec; border-radius:50px; padding:3px; gap:2px; }
+  .cal-views button { border:none; background:transparent; font-family:'Cinzel',serif; font-size:0.78rem; color:var(--forest); padding:7px 16px; border-radius:50px; cursor:pointer; }
+  .cal-views button.active { background:var(--forest); color:#fff; }
+  .cal-nav { display:flex; align-items:center; gap:8px; }
+  .cal-nav button { border:1.5px solid #d8e0d4; background:#fff; border-radius:50px; padding:6px 13px; cursor:pointer; color:var(--forest); font-family:'Cinzel',serif; font-size:0.86rem; }
+  .cal-nav button:hover { background:#f0f5ee; }
+  .cal-title { font-family:'Cinzel',serif; color:var(--forest); font-size:1.05rem; min-width:150px; text-align:center; }
+
+  /* ---- month grid ---- */
+  .m-grid { display:grid; grid-template-columns:30px repeat(7,1fr); gap:3px; align-items:start; }
+  .m-dow { text-align:center; font-family:'Cinzel',serif; font-size:0.62rem; letter-spacing:0.06em; text-transform:uppercase; color:#8a8a6a; padding:4px 0; }
+  .m-wk { display:flex; align-items:center; justify-content:center; color:#b9c4b2; font-weight:700; cursor:pointer; border-radius:6px; user-select:none; font-size:0.85rem; align-self:stretch; }
+  .m-wk:hover { background:#eef3ec; color:var(--forest); }
+  .m-cell { border:1px solid #e8ece4; border-radius:8px; padding:4px 4px 6px; background:#fff; align-self:start; display:flex; flex-direction:column; gap:2px; transition:min-height 0.25s ease; }
+  .m-cell.other { background:#f6f7f4; opacity:0.6; }
+  .m-cell.today { border-color:var(--gold); box-shadow:inset 0 0 0 2px var(--gold-light); }
+  .m-cell.heavy { border-color:#bcd6c4; box-shadow:inset 0 0 0 1px rgba(45,90,61,0.18); }
+  .m-cell.today.heavy { box-shadow:inset 0 0 0 2px var(--gold-light); }
+  .m-daynum { font-size:0.72rem; color:#6a6a50; font-weight:700; cursor:pointer; display:inline-block; padding:1px 6px; border-radius:5px; align-self:flex-start; }
+  .m-daynum:hover { background:var(--forest); color:#fff; }
+  .m-ev { font-size:0.6rem; line-height:1.3; border-radius:4px; padding:3px 5px; cursor:pointer; color:#fff; background:var(--teal);
+    white-space:normal; overflow-wrap:anywhere; word-break:break-word; }
+  .m-ev.allday { background:var(--gold); color:#3a2e15; }
+  .m-ev:hover { filter:brightness(1.08); }
+
+  /* ---- week/day time grid (column-based, perfectly scaled) ---- */
+  .tg { display:grid; gap:0; }
+  .tg-head { display:grid; grid-template-columns:54px repeat(var(--cols,7),1fr); gap:0; border-bottom:1px solid #e4e8df; }
+  .tg-corner { }
+  .tg-dcol-head { text-align:center; font-family:'Cinzel',serif; font-size:0.66rem; color:#8a8a6a; padding:6px 0; cursor:pointer; border-left:1px solid #eef0ec; line-height:1.3; }
+  .tg-dcol-head.today { color:var(--gold); }
+  .tg-dcol-head:hover { background:#f4f7f2; color:var(--forest); }
+  .tg-dcol-head .dn { font-size:0.95rem; font-weight:700; color:var(--forest); }
+  .tg-body { display:grid; grid-template-columns:54px repeat(var(--cols,7),1fr); gap:0; position:relative; }
+  .tg-gutter { position:relative; }
+  .tg-hourlabel { position:absolute; right:6px; font-size:0.58rem; color:#9a9a80; transform:translateY(-6px); }
+  .tg-col { position:relative; border-left:1px solid #eef0ec; }
+  .tg-col .tg-line { position:absolute; left:0; right:0; border-top:1px solid #f0f2ed; }
+  .tg-col .tg-now { position:absolute; left:0; right:0; border-top:2px solid var(--gold); z-index:5; pointer-events:none; }
+  .tg-ev { position:absolute; left:2px; right:2px; border-radius:5px; color:#fff; background:var(--teal); padding:2px 5px; font-size:0.6rem; line-height:1.2;
+    overflow:hidden; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,0.18); z-index:3; }
+  .tg-ev:hover { filter:brightness(1.08); z-index:4; }
+  .tg-ev .tt { font-weight:700; }
+  .tg-ev.allday { background:var(--gold); color:#3a2e15; }
+  .tg-ev.overnight { border-bottom:2px dashed rgba(255,255,255,0.85); }
+  .tg-ev-cont { display:block; margin-top:1px; font-size:0.52rem; font-weight:700; opacity:0.95; letter-spacing:0.2px; }
+  .tg-fill { position:absolute; left:3px; right:3px; border-radius:6px; background-size:cover; background-position:center;
+    opacity:0.42; z-index:1; cursor:pointer; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.45); transition:opacity 0.18s; }
+  .tg-fill:hover { opacity:0.72; z-index:2; }
+
+  /* hover card */
+  #hovercard { position:fixed; z-index:700; max-width:280px; background:#fff; border:1px solid #d8e0d4; border-radius:12px;
+    box-shadow:0 12px 40px rgba(0,0,0,0.22); padding:12px 14px; font-size:0.8rem; color:#3a4a35; display:none; pointer-events:none; }
+  #hovercard h5 { font-family:'Cinzel',serif; color:var(--forest); font-size:0.86rem; margin-bottom:4px; }
+  #hovercard .hc-time { color:var(--gold); font-size:0.74rem; margin-bottom:6px; }
+  #hovercard .hc-note { color:#5a6a50; line-height:1.5; }
+
+  .cal-legend { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; margin-top:14px; font-size:0.74rem; color:#6a6a50; }
+  .cal-legend span { display:inline-flex; align-items:center; gap:6px; }
+  .lg-dot { width:11px; height:11px; border-radius:3px; display:inline-block; }
+  .cal-tip { text-align:center; font-size:0.78rem; color:#8a8a6a; margin-top:10px; }
+
+  /* event modal */
+  #ev-modal { display:none; position:fixed; inset:0; background:rgba(26,26,18,0.6); z-index:600; padding:20px; overflow-y:auto; }
+  #ev-modal-inner { max-width:620px; margin:40px auto; background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+
+  /* share-as-image */
+  .cal-share-btn { border:1.5px solid var(--gold); background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark);
+    border-radius:50px; padding:7px 16px; cursor:pointer; font-family:'Cinzel',serif; font-size:0.78rem; font-weight:700; }
+  .cal-share-btn:hover { filter:brightness(1.06); }
+  #share-modal { display:none; position:fixed; inset:0; background:rgba(26,26,18,0.7); z-index:650; padding:18px; overflow-y:auto; }
+  .share-inner { max-width:480px; margin:30px auto; background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,0.4); border:2px solid var(--gold); }
+  .share-head { background:linear-gradient(135deg,var(--forest),var(--teal-dark)); color:#fff; padding:18px 22px; position:relative; text-align:center; }
+  .share-head h3 { font-family:'Cinzel Decorative',serif; color:var(--gold-light); font-size:1.2rem; }
+  .share-head .x { position:absolute; top:12px; right:14px; background:rgba(255,255,255,0.15); border:none; color:#fff; width:32px; height:32px; border-radius:50%; font-size:1.1rem; cursor:pointer; }
+  .share-body { padding:18px 20px 22px; }
+  .share-preview { width:100%; border:1px solid #e0e8dc; border-radius:10px; margin-bottom:14px; display:block; background:#f6f7f4; }
+  .share-primary { display:flex; gap:8px; margin-bottom:14px; }
+  .share-primary button { flex:1; border:none; border-radius:50px; padding:12px; font-family:'Cinzel',serif; font-weight:700; font-size:0.82rem; cursor:pointer; }
+  .share-dl { background:var(--forest); color:#fff; }
+  .share-native { background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); }
+  .share-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .share-grid a { display:flex; flex-direction:column; align-items:center; gap:4px; text-decoration:none; color:#3a4a35; font-size:0.62rem; padding:9px 2px; border:1px solid #e6ece2; border-radius:10px; cursor:pointer; text-align:center; }
+  .share-grid a:hover { background:#f2f7f0; }
+  .share-grid .ic { font-size:1.3rem; }
+  .share-note { font-size:0.7rem; color:#8a8a6a; margin-top:12px; line-height:1.55; text-align:center; }
+
+  footer { background:var(--dark); color:#fff; text-align:center; padding:40px 24px; }
+  footer a { color:var(--gold-light); text-decoration:none; }
+  .footer-name { font-family:'Cinzel Decorative',serif; font-size:1.1rem; color:var(--gold-light); margin-bottom:8px; }
+</style>
+
+<!-- SEO -->
+<link rel="canonical" href="https://gamehaven.guru/events.html">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebPage", "@id": "https://gamehaven.guru/events.html#page", "url": "https://gamehaven.guru/events.html", "name": "Event Calendar — Northwood Game Haven", "isPartOf": {"@id": "https://gamehaven.guru/#website"}, "about": {"@id": "https://gamehaven.guru/#business"}}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Home", "item": "https://gamehaven.guru/"}, {"@type": "ListItem", "position": 2, "name": "Event Calendar", "item": "https://gamehaven.guru/events.html"}]}]}</script>
+</head>
+<body>
+
+<div class="corner-nav">
+  <a class="nav-home" href="index.html">⌂ Home</a>
+  <a class="nav-book" href="booking.html">🎲 Book a Play Space</a>
+  <a class="nav-shop" href="https://northwoodgamehaven.company.site" target="_blank" rel="noopener">🛒 Shop Now</a>
+</div>
+
+<header class="cal-header">
+  <div class="cal-eyebrow">What's Happening</div>
+  <h1 class="cal-h1">Event Calendar 📅</h1>
+  <p class="cal-sub">Tournaments, open play nights, organized play, special guests, and everything else at Northwood Game Haven. Switch between month, week, and day views — tap any event to see the details and register.</p>
+</header>
+
+<div class="req-banner">
+  <div class="req-inner">
+    <div class="req-text">✨ Don't see your dream event?
+      <small>Request a tournament or game night — plus an optional Game Guru sign-up for that game.</small>
+    </div>
+    <a class="req-btn" href="index.html#request-event">Request It Here →</a>
+  </div>
+</div>
+
+<div class="cal-wrap">
+  <div class="cal-card">
+    <div class="cal-toolbar">
+      <div class="cal-views">
+        <button id="v-month" onclick="CAL.setView('month')">Month</button>
+        <button id="v-week" class="active" onclick="CAL.setView('week')">Week</button>
+        <button id="v-day" onclick="CAL.setView('day')">Day</button>
+      </div>
+      <div class="cal-nav">
+        <button onclick="CAL.shift(-1)" title="Previous">‹</button>
+        <button onclick="CAL.today()" style="font-size:0.78rem;">Today</button>
+        <button onclick="CAL.shift(1)" title="Next">›</button>
+        <button class="cal-share-btn" onclick="CAL.shareImg()" title="Share this view as an image">📤 Share</button>
+      </div>
+      <div class="cal-title" id="cal-title">Loading…</div>
+    </div>
+    <div id="cal-body">
+      <p style="text-align:center;color:#8a8a6a;font-size:0.9rem;padding:40px;">Loading events…</p>
+    </div>
+    <div class="cal-legend">
+      <span><i class="lg-dot" style="background:var(--teal)"></i> Event</span>
+      <span><i class="lg-dot" style="background:var(--gold)"></i> All-day</span>
+    </div>
+    <p class="cal-tip" id="cal-tip">Tap a day number for the day view · tap the ▸ at the start of a week for that week.</p>
+  </div>
+</div>
+
+<!-- hover card + event modal -->
+<div id="hovercard"></div>
+<div id="ev-modal" onclick="if(event.target===this)CAL.close()">
+  <div id="ev-modal-inner"></div>
+</div>
+<div id="share-modal" onclick="if(event.target===this)CAL.closeShare()">
+  <div class="share-inner">
+    <div class="share-head">
+      <button class="x" onclick="CAL.closeShare()" aria-label="Close">&times;</button>
+      <h3>Share This Calendar</h3>
+    </div>
+    <div class="share-body" id="share-body"></div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-name">Northwood Game Haven</div>
+
+  <!-- NGH SOCIAL -->
+  <div class="ngh-social" style="margin:18px auto 4px;display:flex;justify-content:center;align-items:center;gap:14px;">
+    <a href="https://www.facebook.com/profile.php?id=61579663353904" target="_blank" rel="noopener" aria-label="Northwood Game Haven on Facebook" title="Facebook" style="display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:#1877F2;color:#fff;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.28)'"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.09 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.92-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.09 24 18.1 24 12.07z"/></svg></a>
+    <a href="https://www.instagram.com/northwoodgamehaven?igsh=NG8xM256anh3cDlr" target="_blank" rel="noopener" aria-label="Northwood Game Haven on Instagram" title="Instagram" style="display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:radial-gradient(circle at 30% 110%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285aeb 90%);color:#fff;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.28)'"><svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41a3.7 3.7 0 0 1-1.38-.9 3.7 3.7 0 0 1-.9-1.38c-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16zm0 1.62c-3.15 0-3.52.01-4.76.07-1.15.05-1.77.24-2.19.4-.55.21-.94.47-1.35.88-.41.41-.67.8-.88 1.35-.16.42-.35 1.04-.4 2.19-.06 1.24-.07 1.61-.07 4.76s.01 3.52.07 4.76c.05 1.15.24 1.77.4 2.19.21.55.47.94.88 1.35.41.41.8.67 1.35.88.42.16 1.04.35 2.19.4 1.24.06 1.61.07 4.76.07s3.52-.01 4.76-.07c1.15-.05 1.77-.24 2.19-.4.55-.21.94-.47 1.35-.88.41-.41.67-.8.88-1.35.16-.42.35-1.04.4-2.19.06-1.24.07-1.61.07-4.76s-.01-3.52-.07-4.76c-.05-1.15-.24-1.77-.4-2.19a3.6 3.6 0 0 0-.88-1.35 3.6 3.6 0 0 0-1.35-.88c-.42-.16-1.04-.35-2.19-.4-1.24-.06-1.61-.07-4.76-.07zm0 2.76a5.46 5.46 0 1 0 0 10.92 5.46 5.46 0 0 0 0-10.92zm0 9a3.54 3.54 0 1 1 0-7.08 3.54 3.54 0 0 1 0 7.08zm5.68-9.22a1.28 1.28 0 1 1-2.56 0 1.28 1.28 0 0 1 2.56 0z"/></svg></a>
+    <a href="https://discord.gg/k3jzthfQ" target="_blank" rel="noopener" aria-label="Northwood Game Haven Discord server" title="Northwood Game Haven Discord server" style="display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:#5865F2;color:#fff;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.28);transition:transform .18s ease,box-shadow .18s ease;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 6px 18px rgba(0,0,0,.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(0,0,0,.28)'"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.32 4.37A19.8 19.8 0 0 0 15.45 3a13.9 13.9 0 0 0-.62 1.27 18.27 18.27 0 0 0-5.66 0A13.9 13.9 0 0 0 8.55 3 19.8 19.8 0 0 0 3.68 4.37C.55 9.06-.3 13.63.12 18.13a19.95 19.95 0 0 0 6.06 3.06c.49-.67.92-1.38 1.3-2.12-.71-.27-1.39-.6-2.04-.99.17-.13.34-.26.5-.39a14.25 14.25 0 0 0 12.12 0c.16.14.33.27.5.39-.65.39-1.34.72-2.05.99.37.74.81 1.45 1.3 2.12a19.9 19.9 0 0 0 6.07-3.06c.49-5.21-.84-9.74-3.56-13.76zM8.02 15.33c-1.18 0-2.16-1.08-2.16-2.42s.95-2.42 2.16-2.42 2.18 1.09 2.16 2.42c0 1.34-.95 2.42-2.16 2.42zm7.96 0c-1.18 0-2.16-1.08-2.16-2.42s.95-2.42 2.16-2.42 2.18 1.09 2.16 2.42c0 1.34-.94 2.42-2.16 2.42z"/></svg></a>
+  </div>
+  <p>115 W Spring St &nbsp;·&nbsp; Chippewa Falls, WI 54729</p>
+  <p style="margin-top:14px;font-size:0.82rem;">
+    <a href="index.html">Home</a> &nbsp;·&nbsp;
+    <a href="booking.html">Book a Play Space</a> &nbsp;·&nbsp;
+    <a href="index.html#request-event">Request an Event</a> &nbsp;·&nbsp;
+    <a href="https://northwoodgamehaven.company.site" target="_blank" rel="noopener">Shop Online</a>
+  </p>
+  <p style="margin-top:12px;font-size:0.74rem;opacity:0.55;">
+    <a href="booking.html?admin=1" style="color:rgba(232,184,75,0.8);text-decoration:none;">Guru Console Login</a>
+  </p>
+</footer>
+
+<script src="ngh-config.js"></script>
+<script>
+/* =====================================================================
+   NGH FULL EVENT CALENDAR  (events.html)
+   Month / Week / Day views. Week & Day use a column-based time grid so
+   an event's colored block spans exactly start→end on the time scale
+   (e.g. a 2–6 PM event fills 2 PM to 6 PM). Hover = quick card,
+   click = full detail + registration (same backend as the homepage).
+   ===================================================================== */
+(function(){
+  var API = (window.NGH_API_BASE||"");
+  var FOREST="#2d5a3d", GOLD="#c9973a", TEAL="#1488a6";
+  var ROW = 46;            // pixels per hour on the time grid
+  var view="week", ref=new Date(), events=[], allEvents=[];
+
+  /* ---------- helpers ---------- */
+  function pad(n){ return (n<10?"0":"")+n; }
+  function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function t2m(t){ if(!t) return null; var p=String(t).split(":"); return parseInt(p[0],10)*60+parseInt(p[1],10); }
+  function fmtTime(mins){ if(mins==null) return ""; var h=Math.floor(mins/60),m=mins%60,ap=h>=12?"PM":"AM",hh=h%12; if(hh===0)hh=12; return hh+":"+pad(m)+" "+ap; }
+  function addDays(ds,n){ var d=new Date(ds+"T12:00:00"); d.setDate(d.getDate()+n); return ymd(d); }
+  function addMonths(ds,n){ var d=new Date(ds+"T12:00:00"); d.setMonth(d.getMonth()+n); return ymd(d); }
+  function weekStart(d){ var x=new Date(d); x.setDate(x.getDate()-x.getDay()); x.setHours(12,0,0,0); return x; }
+  function expand(e){
+    if(!e.recurrence) return [e];
+    var out=[], cur=e.date, f=e.recurrence.freq, c=e.recurrence.count||1, exc=e.exceptions||[];
+    for(var i=0;i<c;i++){ if(exc.indexOf(cur)<0){ var x=Object.assign({},e); x.date=cur; out.push(x); }
+      cur = f==="weekly"?addDays(cur,7):f==="biweekly"?addDays(cur,14):addMonths(e.date,i+1); }
+    return out;
+  }
+  function occForDate(ds){
+    var out=[];
+    events.forEach(function(e){ expand(e).forEach(function(x){ if(x.date===ds) out.push(x); }); });
+    return out.sort(function(a,b){ return (t2m(a.start)||0)-(t2m(b.start)||0); });
+  }
+
+  /* ---------- load ---------- */
+  async function load(){
+    try {
+      if(API){ var r=await fetch(API+"/events"); events = r.ok ? await r.json() : []; }
+      else { try { events = JSON.parse(localStorage.getItem("ngh_events")||"[]"); } catch(e){ events=[]; } }
+    } catch(e){ events=[]; }
+    allEvents = (events||[]).filter(function(e){ return e && e.status!=="draft"; });
+    // Private events are hidden from this public calendar; invite links (?event=…) still resolve via allEvents.
+    events = allEvents.filter(function(e){ return !e.private; });
+    // deep link: ?event=&date=  and ?view=&date=
+    try {
+      var qs=new URLSearchParams(location.search);
+      var v=qs.get('view'); if(v==="week"||v==="day"||v==="month") view=v;
+      var dt=qs.get('date'); if(dt) ref=new Date(dt+"T12:00:00");
+      render();
+      var evId=qs.get('event');
+      if(evId){ var ev=allEvents.filter(function(x){return x.id===evId;})[0]; if(ev){ if(!dt) ref=new Date(ev.date+"T12:00:00"); render(); openModal(evId, dt||ev.date); } }
+    } catch(e){ render(); }
+  }
+
+  /* ---------- view dispatch ---------- */
+  function setActive(){
+    ["month","week","day"].forEach(function(v){ var b=document.getElementById("v-"+v); if(b) b.classList.toggle("active", v===view); });
+  }
+  function titleText(){
+    if(view==="month") return ref.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+    if(view==="day")   return ref.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    var ws=weekStart(ref), we=new Date(ws); we.setDate(ws.getDate()+6);
+    var sm=ws.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+    var em=we.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+    return sm+" – "+em;
+  }
+  function render(){
+    setActive();
+    document.getElementById("cal-title").textContent = titleText();
+    var tip=document.getElementById("cal-tip");
+    if(view==="month"){ tip.textContent="Tap a day number for the day view · tap the ▸ at the start of a week for that week."; document.getElementById("cal-body").innerHTML = monthHTML(); }
+    else { tip.textContent="Blocks are scaled to the time of day — tap any event to see details and register."; document.getElementById("cal-body").innerHTML = timeGridHTML(view==="day"); attachGridHover(); }
+  }
+
+  /* ---------- MONTH ---------- */
+  function evDurHours(e){
+    if(e.allDay) return 8;                       // all-day counts as a full session for sizing
+    var s=t2m(e.start), en=t2m(e.end);
+    if(s==null) return 1;
+    if(en==null||en<=s) return 2;                // default 2h when no/!valid end
+    return (en-s)/60;
+  }
+  function monthHTML(){
+    var first=new Date(ref.getFullYear(),ref.getMonth(),1), start=new Date(first); start.setDate(1-first.getDay());
+    var todayStr=ymd(new Date());
+    // Day cells are sized by each day's TOTAL combined event duration:
+    // more total hours -> taller cell; little/none -> short cell.
+    var BASE=42, PER_HOUR=15, MAXH=320;          // px
+    var h='<div class="m-grid"><div class="m-dow"></div>';
+    ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(function(d){ h+='<div class="m-dow">'+d+'</div>'; });
+    for(var i=0;i<42;i++){
+      var d=new Date(start); d.setDate(start.getDate()+i);
+      var ds=ymd(d), other=d.getMonth()!==ref.getMonth();
+      if(i%7===0){ h+='<div class="m-wk" title="View this week" onclick="CAL.goto(\''+ds+'\',\'week\')">▸</div>'; }
+      var evs=occForDate(ds);
+      var totalDur=0; evs.forEach(function(e){ totalDur+=evDurHours(e); });
+      var minH=Math.min(MAXH, Math.round(BASE + totalDur*PER_HOUR));
+      var heavy = totalDur>=6 ? " heavy" : "";
+      h+='<div class="m-cell'+(other?" other":"")+(ds===todayStr?" today":"")+heavy+'" style="min-height:'+minH+'px;">'+
+         '<span class="m-daynum" title="View this day" onclick="CAL.goto(\''+ds+'\',\'day\')">'+d.getDate()+'</span>';
+      evs.forEach(function(e){
+        h+='<div class="m-ev'+(e.allDay?" allday":"")+'" data-id="'+esc(e.id)+'" data-ds="'+ds+'" onclick="CAL.open(\''+esc(e.id)+'\',\''+ds+'\')" '+
+           'onmouseenter="CAL.hover(event,\''+esc(e.id)+'\',\''+ds+'\')" onmouseleave="CAL.unhover()">'+esc(e.title)+'</div>';
+      });
+      h+='</div>';
+    }
+    return h+'</div>';
+  }
+
+  /* ---------- WEEK / DAY time grid ---------- */
+  function dayList(isDay){
+    if(isDay) return [new Date(ref)];
+    var ws=weekStart(ref), out=[]; for(var i=0;i<7;i++){ var d=new Date(ws); d.setDate(ws.getDate()+i); out.push(d); } return out;
+  }
+  // dynamic hour window so the grid stays compact but always contains every event
+  function hourWindow(days){
+    var lo=9, hi=23; // sensible default daytime window
+    days.forEach(function(d){
+      occForDate(ymd(d)).forEach(function(e){
+        if(e.allDay) return;
+        var s=t2m(e.start), en=t2m(e.end);
+        if(s!=null) lo=Math.min(lo, Math.floor(s/60));
+        if(en!=null) hi=Math.max(hi, Math.ceil(en/60));
+      });
+    });
+    lo=Math.max(0,Math.min(lo,9)); hi=Math.min(24,Math.max(hi,23));
+    return [lo, hi];
+  }
+  // greedy lane assignment so overlapping events sit side-by-side instead of hiding each other
+  function lanes(evs){
+    var laneEnds=[]; // end-minute of last event in each lane
+    evs.forEach(function(e){
+      var s=t2m(e.start), en=t2m(e.end); if(en==null) en=s+120; else if(en<=s) en=1440;
+      var placed=-1;
+      for(var i=0;i<laneEnds.length;i++){ if(s>=laneEnds[i]){ placed=i; break; } }
+      if(placed<0){ placed=laneEnds.length; laneEnds.push(en); } else { laneEnds[placed]=en; }
+      e._lane=placed;
+    });
+    var n=laneEnds.length||1;
+    evs.forEach(function(e){ e._lanes=n; });
+    return n;
+  }
+  function timeGridHTML(isDay){
+    var days=dayList(isDay), todayStr=ymd(new Date());
+    var win=hourWindow(days), h0=win[0], h1=win[1], nH=h1-h0, gridH=nH*ROW;
+    var cols=days.length;
+
+    var h='<div class="tg" style="--cols:'+cols+'">';
+    // header row
+    h+='<div class="tg-head" style="--cols:'+cols+'"><div class="tg-corner"></div>';
+    days.forEach(function(d){ var dds=ymd(d);
+      h+='<div class="tg-dcol-head'+(dds===todayStr?" today":"")+'" title="View this day" onclick="CAL.goto(\''+dds+'\',\'day\')">'+
+         d.toLocaleDateString(undefined,{weekday:'short'})+'<br><span class="dn">'+d.getDate()+'</span></div>';
+    });
+    h+='</div>';
+    // body
+    h+='<div class="tg-body" style="--cols:'+cols+';">';
+    // gutter with hour labels
+    h+='<div class="tg-gutter" style="height:'+gridH+'px;">';
+    for(var hr=h0; hr<=h1; hr++){ h+='<div class="tg-hourlabel" style="top:'+((hr-h0)*ROW)+'px;">'+fmtTime(hr*60)+'</div>'; }
+    h+='</div>';
+    // day columns
+    days.forEach(function(d){
+      var ds=ymd(d);
+      h+='<div class="tg-col" style="height:'+gridH+'px;">';
+      // hour gridlines
+      for(var hr=h0; hr<h1; hr++){ h+='<div class="tg-line" style="top:'+((hr-h0)*ROW)+'px;"></div>'; }
+      // now-line
+      if(ds===todayStr){ var nowM=new Date().getHours()*60+new Date().getMinutes(); if(nowM>=h0*60&&nowM<=h1*60){ h+='<div class="tg-now" style="top:'+((nowM-h0*60)/60*ROW)+'px;"></div>'; } }
+      // events
+      var evs=occForDate(ds), timed=evs.filter(function(e){ return !e.allDay && e.start; });
+      lanes(timed);
+      var allday=evs.filter(function(e){ return e.allDay; });
+      var adBottom = allday.length ? (2 + allday.length*18) : 0;
+      // blank-space fill: this day's event images tile the empty parts of the column (drawn behind the events)
+      h+=fillBlankImages(evs, timed, adBottom, gridH, h0, ds);
+      timed.forEach(function(e){
+        var s=t2m(e.start), rawEn=t2m(e.end);
+        var overnight = (rawEn!=null && rawEn<=s);          // ends after midnight
+        var en = (rawEn==null) ? s+120 : (overnight ? 1440 : rawEn); // clamp to midnight for sizing only
+        var top=(s-h0*60)/60*ROW;
+        var height=Math.max(18,(en-s)/60*ROW)-2;
+        var w=100/ (e._lanes||1); var left=(e._lane||0)*w;
+        // Label always shows the TRUE end time; never the midnight clamp.
+        var trueEnd = (rawEn==null) ? s+120 : rawEn;
+        var tm=fmtTime(s)+"–"+fmtTime(trueEnd)+(overnight?" +1":"");
+        h+='<div class="tg-ev'+(overnight?" overnight":"")+'" data-id="'+esc(e.id)+'" data-ds="'+ds+'" '+
+           'style="top:'+top+'px;height:'+height+'px;left:calc('+left+'% + 2px);width:calc('+w+'% - 4px);" '+
+           'onclick="CAL.open(\''+esc(e.id)+'\',\''+ds+'\')" '+
+           'onmouseenter="CAL.hover(event,\''+esc(e.id)+'\',\''+ds+'\')" onmouseleave="CAL.unhover()" '+
+           'title="'+esc(e.title)+' · '+tm+(overnight?" (continues past midnight)":"")+'"><span class="tt">'+esc(e.title)+'</span><br>'+tm+
+           (overnight?'<span class="tg-ev-cont" title="Continues past midnight">▾ til '+fmtTime(trueEnd)+'</span>':'')+'</div>';
+      });
+      // all-day chips pinned at the very top
+      var adTop=2;
+      allday.forEach(function(e){
+        h+='<div class="tg-ev allday" data-id="'+esc(e.id)+'" data-ds="'+ds+'" style="top:'+adTop+'px;height:16px;left:2px;right:2px;width:auto;" '+
+           'onclick="CAL.open(\''+esc(e.id)+'\',\''+ds+'\')" onmouseenter="CAL.hover(event,\''+esc(e.id)+'\',\''+ds+'\')" onmouseleave="CAL.unhover()" '+
+           'title="'+esc(e.title)+' · All day">All day · '+esc(e.title)+'</div>';
+        adTop+=18;
+      });
+      h+='</div>';
+    });
+    h+='</div></div>';
+    return h;
+  }
+  // Tile the day's event images into the column's empty vertical space.
+  // Only images from events occurring that day are used; they collectively fill the blanks.
+  function imgCss(p){ return String(p).replace(/\\/g,"").replace(/'/g,"%27").replace(/\n/g,""); }
+  function fillBlankImages(dayEvents, timed, adBottom, gridH, h0, ds){
+    var occ=[];
+    if(adBottom>0) occ.push([0, adBottom]);
+    timed.forEach(function(e){
+      var s=t2m(e.start), en=t2m(e.end); if(en==null) en=s+120; else if(en<=s) en=1440;
+      var top=(s-h0*60)/60*ROW, bot=top+Math.max(18,(en-s)/60*ROW);
+      occ.push([Math.max(0,top), Math.min(gridH,bot)]);
+    });
+    occ.sort(function(a,b){ return a[0]-b[0]; });
+    var merged=[]; occ.forEach(function(iv){ var m=merged[merged.length-1];
+      if(m && iv[0]<=m[1]+1){ m[1]=Math.max(m[1], iv[1]); } else merged.push([iv[0], iv[1]]); });
+    var free=[], cur=0;
+    merged.forEach(function(iv){ if(iv[0]-cur>2) free.push({top:cur, h:iv[0]-cur}); cur=Math.max(cur, iv[1]); });
+    if(gridH-cur>2) free.push({top:cur, h:gridH-cur});
+    var totalFree=free.reduce(function(a,f){ return a+f.h; },0);
+    var imgs=[]; dayEvents.forEach(function(e){ if(e.photo) imgs.push(e); });
+    if(!imgs.length || totalFree<40) return "";
+    var n=imgs.length, perImg=totalFree/n, cum=0;
+    free.forEach(function(f){ f.cum=cum; cum+=f.h; });
+    var out="";
+    for(var k=0;k<n;k++){
+      var vS=k*perImg, vE=(k+1)*perImg, e=imgs[k], u=imgCss(e.photo);
+      free.forEach(function(f){
+        var oS=Math.max(vS, f.cum), oE=Math.min(vE, f.cum+f.h);
+        if(oE-oS>3){
+          var rTop=f.top+(oS-f.cum), rH=oE-oS-2;
+          out+='<div class="tg-fill" style="top:'+rTop+'px;height:'+rH+'px;background-image:url(\''+u+'\');" '+
+               'onclick="CAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+'"></div>';
+        }
+      });
+    }
+    return out;
+  }
+  function attachGridHover(){ /* hover wired inline via onmouseenter */ }
+
+  /* ---------- hover card ---------- */
+  function findOcc(id, ds){ var list=occForDate(ds); for(var i=0;i<list.length;i++){ if(list[i].id===id) return list[i]; } return allEvents.filter(function(x){return x.id===id;})[0]; }
+  function hover(evt, id, ds){
+    var e=findOcc(id, ds); if(!e) return;
+    var card=document.getElementById("hovercard");
+    var when=e.allDay?"All day":(fmtTime(t2m(e.start))+" – "+fmtTime(t2m(e.end)));
+    var note=e.notes?('<div class="hc-note">'+esc(e.notes.length>140?e.notes.slice(0,140)+"…":e.notes)+'</div>'):'';
+    var reg=(e.registration&&e.registration.enabled)?'<div class="hc-note" style="color:var(--forest);margin-top:6px;">🎟️ Registration available — tap to sign up</div>':'';
+    card.innerHTML='<h5>'+esc(e.title)+'</h5><div class="hc-time">'+ (ds||e.date) +' · '+when+'</div>'+note+reg+'<div class="hc-note" style="margin-top:6px;color:#9a9a80;">Tap for full details</div>';
+    card.style.display="block";
+    var x=evt.clientX+14, y=evt.clientY+14;
+    var w=card.offsetWidth, hgt=card.offsetHeight;
+    if(x+w>window.innerWidth-10) x=window.innerWidth-w-10;
+    if(y+hgt>window.innerHeight-10) y=evt.clientY-hgt-12;
+    card.style.left=x+"px"; card.style.top=Math.max(10,y)+"px";
+  }
+  function unhover(){ var c=document.getElementById("hovercard"); if(c) c.style.display="none"; }
+
+  /* ===================================================================
+     EVENT DETAIL MODAL + REGISTRATION  (same flow as the homepage)
+     =================================================================== */
+  function openModal(id, ds){
+    unhover();
+    var e=findOcc(id, ds); if(!e) return;
+    var t=e.tournament||{}, p=e.prizes||{};
+    var ttypeLabel={swiss:"Swiss",single:"Single elimination",double:"Double elimination",roundrobin:"Round robin",other:"Tournament"}[t.type]||"";
+    var when=(ds||e.date)+(e.allDay?" · All day":(" · "+fmtTime(t2m(e.start))+" – "+fmtTime(t2m(e.end))));
+    var h='';
+    if(e.photo) h+='<img src="'+esc(e.photo)+'" alt="" style="width:100%;max-height:260px;object-fit:cover;display:block;">';
+    h+='<div style="padding:24px 26px;">';
+    h+='<h2 style="font-family:\'Cinzel Decorative\',serif;color:'+FOREST+';font-size:1.5rem;margin-bottom:6px;">'+esc(e.title)+'</h2>';
+    h+='<div style="font-family:\'Cinzel\',serif;color:'+GOLD+';font-size:0.82rem;letter-spacing:0.04em;margin-bottom:14px;">'+esc(when)+'</div>';
+    if(e.notes) h+='<p style="font-size:0.92rem;color:#4a4a35;line-height:1.7;margin-bottom:16px;">'+esc(e.notes)+'</p>';
+    if(ttypeLabel){
+      h+='<div style="background:#f0f8f2;border-radius:10px;padding:12px 14px;margin-bottom:12px;"><div style="font-family:\'Cinzel\',serif;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:'+FOREST+';margin-bottom:5px;">🏆 Tournament</div>';
+      h+='<div style="font-size:0.86rem;color:#4a4a35;">'+ttypeLabel;
+      if(t.rounds) h+=' · '+esc(String(t.rounds))+' rounds';
+      if(t.winsPerRound) h+=' · best-of-'+esc(String(parseInt(t.winsPerRound,10)*2-1));
+      h+='</div>';
+      if(t.arrival) h+='<div style="font-size:0.82rem;color:#6a6a50;margin-top:4px;">Arrive by '+fmtTime(t2m(t.arrival))+'</div>';
+      if(t.estEnd) h+='<div style="font-size:0.82rem;color:#6a6a50;">Estimated end '+fmtTime(t2m(t.estEnd))+'</div>';
+      if(t.restrictions) h+='<div style="font-size:0.82rem;color:#6a6a50;margin-top:4px;">Restrictions: '+esc(t.restrictions)+'</div>';
+      h+='</div>';
+    }
+    if(p.placement || p.participation){
+      h+='<div style="background:#fbf6ea;border-radius:10px;padding:12px 14px;margin-bottom:12px;"><div style="font-family:\'Cinzel\',serif;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:'+GOLD+';margin-bottom:5px;">🥇 Prizes</div>';
+      if(p.placement) h+='<div style="font-size:0.85rem;color:#4a4a35;margin-bottom:4px;"><strong>Placement:</strong> '+esc(p.placement)+'</div>';
+      if(p.participation) h+='<div style="font-size:0.85rem;color:#4a4a35;"><strong>Participation:</strong> '+esc(p.participation)+'</div>';
+      h+='</div>';
+    }
+    h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">';
+    if(e.fbLink) h+='<a href="'+esc(e.fbLink)+'" target="_blank" rel="noopener" style="background:#1877f2;color:#fff;text-decoration:none;font-family:\'Cinzel\',serif;font-size:0.8rem;padding:10px 18px;border-radius:50px;">📘 Facebook Event ↗</a>';
+    h+='<a href="'+gcalUrl(e, ds)+'" target="_blank" rel="noopener" style="background:#fff;border:1.5px solid '+FOREST+';color:'+FOREST+';text-decoration:none;font-family:\'Cinzel\',serif;font-size:0.8rem;padding:10px 18px;border-radius:50px;">📅 Add to Google</a>';
+    h+='<button onclick="CAL.ics(\''+esc(e.id)+'\',\''+(ds||e.date)+'\')" style="background:#fff;border:1.5px solid '+FOREST+';color:'+FOREST+';font-family:\'Cinzel\',serif;font-size:0.8rem;padding:10px 18px;border-radius:50px;cursor:pointer;">📥 Apple / Outlook (.ics)</button>';
+    h+='<button onclick="CAL.share(\''+esc(e.id)+'\',\''+(ds||e.date)+'\')" style="background:'+GOLD+';border:none;color:#3a2e15;font-family:\'Cinzel\',serif;font-weight:700;font-size:0.8rem;padding:10px 18px;border-radius:50px;cursor:pointer;">🔗 Share</button>';
+    h+='<button onclick="CAL.close()" style="background:transparent;border:1.5px solid '+FOREST+';color:'+FOREST+';font-family:\'Cinzel\',serif;font-size:0.8rem;padding:10px 18px;border-radius:50px;cursor:pointer;">Close</button>';
+    h+='</div>';
+    var reg=e.registration||{};
+    if(reg.enabled){
+      h+='<div id="reg-zone" style="margin-top:20px;border-top:1px solid #e0e8dc;padding-top:18px;">'+
+         '<div id="reg-status" style="font-size:0.82rem;color:#6a6a50;">Loading registration…</div>'+
+         '<div id="reg-form-wrap"></div></div>';
+    } else {
+      h+='<p style="font-size:0.76rem;color:#8a8a6a;margin-top:14px;">Registration isn\'t required for this event — just come on by! Questions? Watch the Facebook event or contact us.</p>';
+    }
+    h+='</div>';
+    document.getElementById("ev-modal-inner").innerHTML=h;
+    document.getElementById("ev-modal").style.display="block";
+    if(reg.enabled) loadRegStatus(e, ds||e.date);
+  }
+
+  async function loadRegStatus(e, occDate){
+    var reg=e.registration||{}, cnt={approved:0,total:0};
+    try { if(API){ var r=await fetch(API+"/registrations?event="+encodeURIComponent(e.id)+(occDate?("&date="+encodeURIComponent(occDate)):"")); if(r.ok) cnt=await r.json(); } } catch(err){}
+    var statusEl=document.getElementById("reg-status"), formEl=document.getElementById("reg-form-wrap");
+    if(!statusEl) return;
+    var min=reg.min||0, max=reg.max||0, approved=cnt.approved||0;
+    var fired = min>0 ? approved>=min : true;
+    var full = max>0 && approved>=max;
+    var costLabel = reg.cost>0 ? ("$"+reg.cost.toFixed(2)+" per person") : "Free";
+    var bar='';
+    if(min>0){ var pct=Math.min(100, Math.round(approved/min*100));
+      bar='<div style="background:#eef0ec;border-radius:50px;height:10px;overflow:hidden;margin:8px 0;"><div style="height:100%;width:'+pct+'%;background:'+(fired?"#2e7d32":GOLD)+';border-radius:50px;transition:width 0.4s;"></div></div>'; }
+    var banner='';
+    if(fired){ banner='<div style="background:#e7f5e8;border:1px solid #b6dcb8;color:#2e7d32;border-radius:10px;padding:10px 14px;font-family:\'Cinzel\',serif;font-size:0.84rem;margin-bottom:10px;">✅ This event has enough players and is confirmed to happen!</div>'; }
+    else if(min>0){ banner='<div style="background:#fbf6ea;border:1px solid #e8d9b0;color:#8a6d1f;border-radius:10px;padding:10px 14px;font-size:0.84rem;margin-bottom:10px;">'+approved+' of '+min+' players registered — '+(min-approved)+' more needed to confirm this event.</div>'; }
+    var summary='<div style="font-size:0.84rem;color:#4a4a35;margin-bottom:4px;"><strong>Registration:</strong> '+costLabel+' · '+approved+' registered'+(max?(" / "+max+" max"):"")+(min?(" · min "+min+" to confirm"):"")+'</div>';
+    statusEl.innerHTML=banner+bar+summary;
+    if(full){ formEl.innerHTML='<div style="background:#fdecea;border:1px solid #f0c5be;color:#9a3b2e;border-radius:10px;padding:10px 14px;font-size:0.84rem;margin-top:8px;">This event is full. Contact us to join the waitlist.</div>'+myRegsLink(e); return; }
+    var payNote = reg.cost>0 ? ('<p style="font-size:0.74rem;color:#8a8a6a;margin-top:8px;">Payment of '+costLabel+' is '+(reg.payWhen==="now"?"collected now to hold your spot.":"due once the event is confirmed — we\u2019ll email a secure payment link.")+' You must pay no later than <strong>1 hour before</strong> the event. You can also pay in person.</p>') : '';
+    formEl.innerHTML=
+      '<div style="margin-top:10px;display:grid;gap:8px;">'+
+      '<input id="reg-name" placeholder="Your name *" style="padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:0.9rem;">'+
+      '<input id="reg-email" type="email" placeholder="Email *" onblur="CAL.checkLoyalty(this.value)" style="padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:0.9rem;">'+
+      '<div id="reg-loyalty" style="font-size:0.8rem;color:#2e7d32;"></div>'+
+      '<input id="reg-phone" placeholder="Phone (optional)" style="padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:0.9rem;">'+
+      '<textarea id="reg-comments" placeholder="Comments or questions (optional)" style="padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:0.9rem;min-height:60px;"></textarea>'+
+      '<button id="reg-submit" style="background:linear-gradient(135deg,'+FOREST+',#3a7350);color:#fff;border:none;font-family:\'Cinzel\',serif;font-size:0.86rem;font-weight:700;letter-spacing:0.06em;padding:13px;border-radius:50px;cursor:pointer;">🎟️ Register for this Event</button>'+
+      payNote+'<div id="reg-msg" style="font-size:0.82rem;margin-top:4px;"></div></div>'+myRegsLink(e);
+    document.getElementById("reg-submit").onclick=function(){ submitRegistration(e, occDate); };
+  }
+  function myRegsLink(e){
+    return '<div style="margin-top:12px;font-size:0.78rem;color:#6a6a50;border-top:1px dashed #e0e8dc;padding-top:10px;">Already registered? <a href="#" onclick="CAL.myregs(\''+esc(e.id)+'\');return false;" style="color:'+FOREST+';">See or cancel your registration →</a></div>';
+  }
+  function rememberMyReg(email, id){
+    try { var m=JSON.parse(localStorage.getItem("ngh_myregs")||'{"ids":[],"emails":[]}');
+      if(email){ var e=email.trim().toLowerCase(); if(m.emails.indexOf(e)<0) m.emails.push(e); }
+      if(id && m.ids.indexOf(id)<0) m.ids.push(id);
+      localStorage.setItem("ngh_myregs", JSON.stringify(m)); } catch(_){}
+  }
+  async function submitRegistration(e, occDate){
+    var name=(document.getElementById("reg-name").value||"").trim();
+    var email=(document.getElementById("reg-email").value||"").trim();
+    var phone=(document.getElementById("reg-phone").value||"").trim();
+    var comments=(document.getElementById("reg-comments").value||"").trim();
+    var msg=document.getElementById("reg-msg");
+    if(!name||!email||email.indexOf("@")<0){ msg.style.color="#9a3b2e"; msg.textContent="Please enter your name and a valid email."; return; }
+    var btn=document.getElementById("reg-submit"); btn.disabled=true; btn.textContent="Registering…";
+    var payload={ eventId:e.id, eventTitle:e.title, occDate:occDate, name:name, email:email, phone:phone, comments:comments, wantsInvoice:false, cost:(e.registration&&e.registration.cost)||0 };
+    try {
+      if(API){
+        var r=await fetch(API+"/registrations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+        if(!r.ok){ var er=await r.json().catch(function(){return{};}); throw new Error(er.error||"Registration failed"); }
+        var saved=await r.json(); rememberMyReg(email, saved.id);
+        if(e.registration && e.registration.cost>0 && e.registration.payWhen==="now"){
+          msg.style.color="#2e7d32";
+          document.getElementById("reg-form-wrap").innerHTML=
+            '<div style="background:#e7f5e8;border:1px solid #b6dcb8;color:#2e7d32;border-radius:10px;padding:14px;font-size:0.86rem;">🎉 You\'re registered, '+esc(name)+'! To hold your spot, please pay now.</div>'+
+            '<button id="reg-pay" style="margin-top:10px;background:linear-gradient(135deg,'+GOLD+',#e8b84b);color:#3a2e15;border:none;font-family:\'Cinzel\',serif;font-size:0.9rem;font-weight:700;padding:13px 24px;border-radius:50px;cursor:pointer;width:100%;">💳 Pay $'+Number(e.registration.cost).toFixed(2)+' Now</button>';
+          document.getElementById("reg-pay").onclick=function(){ payForRegistration(saved.id, this); };
+          return;
+        }
+      }
+      msg.style.color="#2e7d32";
+      document.getElementById("reg-form-wrap").innerHTML='<div style="background:#e7f5e8;border:1px solid #b6dcb8;color:#2e7d32;border-radius:10px;padding:14px;font-size:0.86rem;">🎉 You\'re registered, '+esc(name)+'! A confirmation has been sent to '+esc(email)+'.'+((e.registration&&e.registration.cost>0)?' Payment details are included — pay in person or watch for an invoice.':'')+'</div>';
+      loadRegStatus(e, occDate);
+    } catch(err){ btn.disabled=false; btn.textContent="🎟️ Register for this Event"; msg.style.color="#9a3b2e"; msg.textContent=err.message||"Something went wrong. Please try again."; }
+  }
+  async function payForRegistration(regId, btn){
+    if(btn){ btn.disabled=true; btn.textContent="Opening secure checkout…"; }
+    try {
+      var r=await fetch(API+"/create-checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"registration",id:regId})});
+      if(!r.ok){ var er=await r.json().catch(function(){return{};}); throw new Error(er.error||"Could not start checkout"); }
+      var data=await r.json(); location.href=data.url;
+    } catch(e){ if(btn){ btn.disabled=false; btn.textContent="💳 Pay Now"; } alert("Couldn't open checkout: "+e.message); }
+  }
+  async function showMyRegs(){
+    var inner=document.getElementById("ev-modal-inner");
+    var m={ids:[],emails:[]}; try{ m=JSON.parse(localStorage.getItem("ngh_myregs")||'{"ids":[],"emails":[]}'); }catch(_){}
+    var knownEmail=(m.emails&&m.emails[0])||"";
+    inner.innerHTML='<div style="padding:24px 26px;">'+
+      '<h2 style="font-family:\'Cinzel Decorative\',serif;color:'+FOREST+';font-size:1.3rem;margin-bottom:10px;">Your Registrations</h2>'+
+      '<p style="font-size:0.84rem;color:#6a6a50;margin-bottom:10px;">Enter the email you registered with to see and manage your registrations.</p>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;"><input id="myreg-email" type="email" value="'+esc(knownEmail)+'" placeholder="you@example.com" style="flex:1;min-width:200px;padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;">'+
+      '<button onclick="CAL.loadmine()" style="background:'+FOREST+';color:#fff;border:none;font-family:\'Cinzel\',serif;font-size:0.82rem;padding:11px 18px;border-radius:50px;cursor:pointer;">Look up</button></div>'+
+      '<div id="myreg-list" style="margin-top:14px;"></div>'+
+      '<button onclick="CAL.close()" style="margin-top:16px;background:transparent;border:1.5px solid '+FOREST+';color:'+FOREST+';font-family:\'Cinzel\',serif;font-size:0.8rem;padding:9px 18px;border-radius:50px;cursor:pointer;">Close</button></div>';
+    document.getElementById("ev-modal").style.display="block";
+    if(knownEmail) loadMyRegs();
+  }
+  async function loadMyRegs(){
+    var email=(document.getElementById("myreg-email").value||"").trim();
+    var list=document.getElementById("myreg-list");
+    if(!email||email.indexOf("@")<0){ list.innerHTML='<p style="color:#9a3b2e;font-size:0.82rem;">Enter a valid email.</p>'; return; }
+    rememberMyReg(email,null); list.innerHTML='<p style="font-size:0.82rem;color:#8a8a6a;">Loading…</p>';
+    var regs=[]; try { if(API){ var r=await fetch(API+"/registrations?mine="+encodeURIComponent(email)); if(r.ok) regs=await r.json(); } } catch(_){}
+    if(!regs.length){ list.innerHTML='<p style="font-size:0.84rem;color:#6a6a50;">No active registrations found for '+esc(email)+'.</p>'; return; }
+    list.innerHTML=regs.map(function(rg){
+      var status={approved:"Confirmed",unapproved:"Pending approval",canceled:"Canceled"}[rg.status]||rg.status;
+      return '<div style="border:1px solid #e0e8dc;border-radius:11px;padding:12px 14px;margin-bottom:10px;">'+
+        '<div style="font-family:\'Cinzel\',serif;color:'+FOREST+';font-weight:700;">'+esc(rg.eventTitle||"Event")+'</div>'+
+        '<div style="font-size:0.8rem;color:#6a6a50;margin-top:3px;">'+esc(rg.occDate||"")+' · '+status+(rg.cost>0?(" · $"+Number(rg.cost).toFixed(2)+(rg.feePaid?" (paid)":" (due)")):" · Free")+'</div>'+
+        (rg.status!=="canceled" && rg.cost>0 && !rg.feePaid?'<button onclick="CAL.payreg(\''+esc(rg.id)+'\',this)" style="margin-top:8px;margin-right:6px;background:linear-gradient(135deg,'+GOLD+',#e8b84b);border:none;color:#3a2e15;font-family:\'Cinzel\',serif;font-size:0.74rem;padding:7px 14px;border-radius:50px;cursor:pointer;">💳 Pay $'+Number(rg.cost).toFixed(2)+'</button>':'')+
+        (rg.status!=="canceled"?'<button onclick="CAL.cancelReg(\''+esc(rg.id)+'\',\''+esc(rg.cancelToken||"")+'\')" style="margin-top:8px;background:#fff;border:1.5px solid #c0392b;color:#c0392b;font-family:\'Cinzel\',serif;font-size:0.74rem;padding:7px 14px;border-radius:50px;cursor:pointer;">Cancel registration</button>':'')+
+        '</div>';
+    }).join("");
+  }
+  async function cancelReg(id, token){
+    if(!confirm("Cancel this registration? If you paid online, your payment will be refunded automatically.")) return;
+    try { if(API){ var res=await fetch(API+"/registrations/"+encodeURIComponent(id)+"?token="+encodeURIComponent(token),{method:"DELETE"});
+      var data=await res.json().catch(function(){return{};});
+      alert(data&&data.refunded?"Your registration was canceled and your payment has been refunded.":"Your registration was canceled."); } } catch(_){ alert("Your registration was canceled."); }
+    loadMyRegs();
+  }
+
+  /* ---------- add-to-calendar helpers ---------- */
+  function pad2(n){ return (n<10?"0":"")+n; }
+  function icsStamp(d){ return d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate())+"T"+pad2(d.getUTCHours())+pad2(d.getUTCMinutes())+pad2(d.getUTCSeconds())+"Z"; }
+  function evDateTime(ds, t, fb){ return new Date(ds+"T"+((t||fb||"12:00"))+":00"); }
+  function eventTimes(e, ds){
+    var date=ds||e.date;
+    if(e.allDay){ var s=new Date(date+"T00:00:00"), en=new Date(date+"T00:00:00"); en.setDate(en.getDate()+1); return {start:s,end:en,allDay:true}; }
+    var s=evDateTime(date,e.start,"12:00"), en=evDateTime(date,e.end,e.start);
+    if(en<=s) en.setDate(en.getDate()+1); return {start:s,end:en,allDay:false};
+  }
+  function gcalUrl(e, ds){
+    var tt=eventTimes(e,ds);
+    function g(d){ return d.getUTCFullYear()+pad2(d.getUTCMonth()+1)+pad2(d.getUTCDate())+"T"+pad2(d.getUTCHours())+pad2(d.getUTCMinutes())+"00Z"; }
+    var dates=tt.allDay ? (ds||e.date).replace(/-/g,"")+"/"+(function(){var x=new Date((ds||e.date)+"T00:00:00");x.setDate(x.getDate()+1);return ymd(x).replace(/-/g,"");})() : g(tt.start)+"/"+g(tt.end);
+    var details=(e.notes||"")+(e.fbLink?("\n\nFacebook: "+e.fbLink):"");
+    return "https://www.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(e.title||"NGH Event")+"&dates="+dates+"&details="+encodeURIComponent(details)+"&location="+encodeURIComponent("Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI");
+  }
+  function downloadIcs(id, ds){
+    var e=allEvents.filter(function(x){return x.id===id;})[0]; if(!e) return;
+    var tt=eventTimes(e,ds), uid=(e.id||"ngh")+"-"+(ds||e.date)+"@gamehaven.guru";
+    var body=(e.notes||"").replace(/\n/g,"\\n")+(e.fbLink?("\\n\\nFacebook: "+e.fbLink):"");
+    var lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Northwood Game Haven//Events//EN","CALSCALE:GREGORIAN","BEGIN:VEVENT","UID:"+uid,"DTSTAMP:"+icsStamp(new Date()),
+      tt.allDay?"DTSTART;VALUE=DATE:"+(ds||e.date).replace(/-/g,""):"DTSTART:"+icsStamp(tt.start),
+      tt.allDay?"DTEND;VALUE=DATE:"+(function(){var x=new Date((ds||e.date)+"T00:00:00");x.setDate(x.getDate()+1);return ymd(x).replace(/-/g,"");})():"DTEND:"+icsStamp(tt.end),
+      "SUMMARY:"+(e.title||"NGH Event").replace(/,/g,"\\,"),"DESCRIPTION:"+body.replace(/,/g,"\\,"),
+      "LOCATION:Northwood Game Haven\\, 115 W Spring St\\, Chippewa Falls\\, WI","END:VEVENT","END:VCALENDAR"];
+    var blob=new Blob([lines.join("\r\n")],{type:"text/calendar"});
+    var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=(e.title||"event").replace(/[^a-z0-9]+/gi,"-").toLowerCase()+".ics"; a.click();
+  }
+
+  /* ---------- share current view as an image ---------- */
+  var _shareBlob=null, _shareUrl="", _shareText="";
+  function ensureH2C(cb){
+    if(window.html2canvas) return cb();
+    var s=document.createElement('script');
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+    s.onload=function(){ cb(); };
+    s.onerror=function(){ cb(new Error("couldn't load the image library")); };
+    document.head.appendChild(s);
+  }
+  function exportNode(){
+    var node=document.createElement('div');
+    node.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;font-family:'Lato',sans-serif;";
+    var viewLabel=view.charAt(0).toUpperCase()+view.slice(1);
+    node.innerHTML=
+      '<div style="background:linear-gradient(135deg,#1c3a26,#2d5a3d);color:#fff;padding:22px 26px;text-align:center;">'+
+        '<div style="font-family:\'Cinzel Decorative\',serif;color:#e8b84b;font-size:1.7rem;letter-spacing:0.04em;">Northwood Game Haven</div>'+
+        '<div style="font-family:\'Cinzel\',serif;font-size:0.95rem;letter-spacing:0.12em;text-transform:uppercase;margin-top:5px;">Event Calendar · '+viewLabel+' View</div>'+
+        '<div style="font-family:\'Cinzel\',serif;color:#cfe6d6;font-size:0.9rem;margin-top:6px;">'+esc(titleText())+'</div>'+
+      '</div>'+
+      '<div style="padding:18px 18px 10px;">'+document.getElementById("cal-body").innerHTML+'</div>'+
+      '<div style="background:#1a1a12;color:#e8b84b;text-align:center;padding:13px;font-family:\'Cinzel\',serif;font-size:0.82rem;letter-spacing:0.06em;">gamehaven.guru/events &nbsp;·&nbsp; Tap an event to register</div>';
+    return node;
+  }
+  function shareImg(){
+    document.getElementById("share-body").innerHTML='<p style="text-align:center;color:#8a8a6a;padding:34px;font-size:0.9rem;">🖼️ Generating your share image…</p>';
+    document.getElementById("share-modal").style.display="block";
+    ensureH2C(function(err){
+      if(err){ shareErr(err.message); return; }
+      var node=exportNode(); document.body.appendChild(node);
+      try {
+        window.html2canvas(node,{backgroundColor:"#ffffff",scale:2,logging:false,useCORS:true}).then(function(canvas){
+          if(node.parentNode) node.parentNode.removeChild(node);
+          canvas.toBlob(function(blob){
+            _shareBlob=blob;
+            _shareUrl=location.origin+"/events?view="+view+"&date="+ymd(ref);
+            _shareText="What's happening at Northwood Game Haven 🎲 — "+titleText()+". See details & register:";
+            showSharePreview(canvas.toDataURL("image/png"));
+          },"image/png");
+        }).catch(function(e){ if(node.parentNode) node.parentNode.removeChild(node); shareErr(e&&e.message); });
+      } catch(e){ if(node.parentNode) node.parentNode.removeChild(node); shareErr(e&&e.message); }
+    });
+  }
+  function shareErr(msg){
+    document.getElementById("share-body").innerHTML='<p style="text-align:center;color:#9a3b2e;padding:24px;font-size:0.86rem;">Couldn\'t generate the image'+(msg?(" ("+esc(msg)+")"):"")+'.<br>You can still take a screenshot of this view to share.</p>';
+  }
+  function showSharePreview(dataUrl){
+    var plats=[["Facebook","📘","facebook"],["Instagram","📸","instagram"],["TikTok","🎵","tiktok"],["X","✖️","x"],
+      ["WhatsApp","💬","whatsapp"],["Snapchat","👻","snapchat"],["Reddit","👽","reddit"],["LinkedIn","💼","linkedin"],
+      ["Pinterest","📌","pinterest"],["Telegram","✈️","telegram"],["Threads","🧵","threads"],["Email","✉️","email"]];
+    var grid=plats.map(function(p){ return '<a onclick="CAL.platform(\''+p[2]+'\')"><span class="ic">'+p[1]+'</span>'+p[0]+'</a>'; }).join("");
+    var native = (navigator.canShare) ? '<button class="share-native" onclick="CAL.shareNative()">📲 Share image…</button>' : '';
+    document.getElementById("share-body").innerHTML=
+      '<img class="share-preview" src="'+dataUrl+'" alt="Calendar preview">'+
+      '<div class="share-primary"><button class="share-dl" onclick="CAL.shareDownload()">⬇ Download</button>'+native+'</div>'+
+      '<div class="share-grid">'+grid+'</div>'+
+      '<p class="share-note">On your phone, <strong>“Share image…”</strong> posts the picture straight to any app (Facebook, Instagram, TikTok, Stories, Groups…). For Instagram, TikTok &amp; Snapchat the image downloads — then attach it in the app. The other buttons open a post with a link back to this calendar.</p>';
+  }
+  function shareDownload(){
+    if(!_shareBlob) return;
+    var a=document.createElement("a"); a.href=URL.createObjectURL(_shareBlob);
+    a.download="ngh-calendar-"+view+"-"+ymd(ref)+".png"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+  async function shareNative(){
+    if(!_shareBlob) return;
+    var file=new File([_shareBlob],"ngh-calendar.png",{type:"image/png"});
+    try {
+      if(navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file], title:"Northwood Game Haven Events", text:_shareText+" "+_shareUrl});
+      else await navigator.share({title:"Northwood Game Haven Events", text:_shareText, url:_shareUrl});
+    } catch(e){}
+  }
+  function platform(key){
+    shareDownload(); // grab the image so it can be attached where needed
+    var u=encodeURIComponent(_shareUrl), t=encodeURIComponent(_shareText);
+    var map={
+      facebook:"https://www.facebook.com/sharer/sharer.php?u="+u,
+      x:"https://twitter.com/intent/tweet?text="+t+"&url="+u,
+      whatsapp:"https://wa.me/?text="+t+"%20"+u,
+      reddit:"https://www.reddit.com/submit?url="+u+"&title="+t,
+      linkedin:"https://www.linkedin.com/sharing/share-offsite/?url="+u,
+      pinterest:"https://www.pinterest.com/pin/create/button/?url="+u+"&description="+t,
+      telegram:"https://t.me/share/url?url="+u+"&text="+t,
+      threads:"https://www.threads.net/intent/post?text="+t+"%20"+u,
+      email:"mailto:?subject="+encodeURIComponent("Northwood Game Haven — Event Calendar")+"&body="+t+"%20"+u,
+      instagram:"https://www.instagram.com/",
+      tiktok:"https://www.tiktok.com/upload",
+      snapchat:"https://www.snapchat.com/"
+    };
+    window.open(map[key]||_shareUrl,"_blank","noopener");
+  }
+
+  /* ---------- public API ---------- */
+  window.CAL = {
+    setView:function(v){ view=v; render(); },
+    goto:function(ds, v){ ref=new Date(ds+"T12:00:00"); if(v) view=v; render(); },
+    shift:function(n){
+      if(view==="month") ref.setMonth(ref.getMonth()+n);
+      else if(view==="week") ref.setDate(ref.getDate()+7*n);
+      else ref.setDate(ref.getDate()+n);
+      ref=new Date(ref); render();
+    },
+    today:function(){ ref=new Date(); render(); },
+    open:openModal,
+    close:function(){ document.getElementById("ev-modal").style.display="none"; },
+    shareImg:shareImg, closeShare:function(){ document.getElementById("share-modal").style.display="none"; },
+    shareDownload:shareDownload, shareNative:shareNative, platform:platform,
+    hover:hover, unhover:unhover,
+    ics:downloadIcs,
+    myregs:showMyRegs, loadmine:loadMyRegs, cancelReg:cancelReg,
+    payreg:function(id, btn){ payForRegistration(id, btn); },
+    checkLoyalty:async function(email){
+      var el=document.getElementById("reg-loyalty"); if(!el) return;
+      if(!email||email.indexOf("@")<0){ el.textContent=""; return; }
+      try { var r=await fetch(API+"/loyalty-check?email="+encodeURIComponent(email)); if(!r.ok){ el.textContent=""; return; }
+        var d=await r.json(); el.textContent=(d&&d.percent>0)?("🎉 "+d.percent+"% "+(d.groupName?(d.groupName+" "):"")+"member discount will be applied at checkout!"):""; } catch(_){ el.textContent=""; }
+    },
+    share:function(id, ds){
+      var e=allEvents.filter(function(x){return x.id===id;})[0];
+      var url=location.origin+"/event/"+encodeURIComponent(id)+(ds?("?date="+encodeURIComponent(ds)):"");
+      var title=e?e.title:"Northwood Game Haven Event";
+      if(navigator.share){ navigator.share({title:title, text:title+(ds?(" · "+ds):"")+" at Northwood Game Haven", url:url}).catch(function(){}); }
+      else { try{ navigator.clipboard.writeText(url); }catch(_){} window.prompt("Share this event — copy the link:", url); }
+    }
+  };
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ window.CAL.close(); window.CAL.closeShare(); } });
+
+  load();
+})();
+</script>
+</body>
+</html>

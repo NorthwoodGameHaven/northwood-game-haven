@@ -49,16 +49,18 @@ export function renderEmail({ heading, bodyText, buttons }) {
 }
 
 // Send a branded email. Falls back to plain text automatically.
-export async function sendBrandedMail(to, subject, { heading, bodyText, buttons }) {
+export async function sendBrandedMail(to, subject, { heading, bodyText, buttons, replyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.MAIL_FROM || 'Northwood Game Haven <bookings@northwoodgamehaven.com>';
   if (!apiKey) { console.log('[email] RESEND_API_KEY not set; logging only:', to, subject); return { ok: true, simulated: true }; }
   const html = renderEmail({ heading, bodyText, buttons });
+  const payload = { from, to: [to], subject, html, text: bodyText };
+  if (replyTo) payload.reply_to = replyTo;
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [to], subject, html, text: bodyText })
+    body: JSON.stringify(payload)
   });
-  if (!res.ok) { const detail = await res.text(); console.error('[email] Resend error', res.status, detail); return { ok: false }; }
+  if (!res.ok) { const detail = await res.text(); console.error('[email] Resend error', res.status, detail, '| from:', from, '| to:', to); return { ok: false, status: res.status, detail }; }
   return { ok: true };
 }

@@ -1,0 +1,5 @@
+# Northwood Game Haven — gamehaven.guru
+User-agent: *
+Allow: /
+
+Sitemap: https://gamehaven.guru/sitemap.xml

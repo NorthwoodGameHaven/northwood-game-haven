@@ -15,7 +15,7 @@ export default async (req) => {
   const { to, subject, body: text, heading, buttons } = body || {};
   if (!to || !subject) return bad('to and subject required');
 
-  const adminEmail = process.env.ADMIN_EMAIL || '';
+  const adminEmail = process.env.ADMIN_EMAIL || 'stash@northwoodgamehaven.com';
   const isAdmin = requireAdmin(req);
   // Guests may only trigger the staff-notification email (to your own inbox).
   if (!isAdmin && to !== adminEmail) return bad('unauthorized', 401);

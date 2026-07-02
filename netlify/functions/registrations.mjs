@@ -65,14 +65,19 @@ const _handler = async (req) => {
 
   if (req.method === 'POST') {
     let reg; try { reg = await req.json(); } catch { return bad('Invalid JSON'); }
-    if (!reg.eventId || !reg.name || !reg.email) return bad('eventId, name, email required');
+    const isAdmin = requireAdmin(req);
+    const adminManual = !!(reg.manual && isAdmin);   // admin walk-in / phone registration
+    // Online registrations require an email; admin-created ones only need a name.
+    if (!reg.eventId || !reg.name) return bad('eventId and name required');
+    if (!adminManual && !reg.email) return bad('eventId, name, email required');
     // verify the event exists and registration is enabled, enforce cap server-side
     const evRows = await sql`SELECT data FROM events WHERE id = ${reg.eventId}`;
     if (!evRows.length) return bad('event not found', 404);
     const ev = evRows[0].data;
     const r = ev.registration || {};
     if (!r.enabled) return bad('registration is not open for this event', 400);
-    if (r.max) {
+    // Capacity: customers are hard-blocked at the cap; admin may intentionally overbook.
+    if (r.max && !adminManual) {
       const existing = await sql`SELECT data FROM registrations WHERE event_id = ${reg.eventId}`;
       let count = existing.map(x => x.data).filter(d => d.status !== 'canceled' && d.status !== 'unapproved');
       if (reg.occDate) count = count.filter(d => d.occDate === reg.occDate);
@@ -83,6 +88,10 @@ const _handler = async (req) => {
     reg.cancelToken = Math.random().toString(36).slice(2, 12);
     reg.feePaid = false;
     reg.submitted = new Date().toISOString();
+    if (adminManual) { reg.source = 'admin'; reg.manual = true; }
+    // Always record per-person cost + title so a payment link/invoice can be generated later.
+    if (reg.cost == null) reg.cost = Number(r.cost) || 0;
+    if (!reg.eventTitle) reg.eventTitle = ev.title || 'NGH Event';
     await sql`INSERT INTO registrations (id, event_id, occ_date, data)
               VALUES (${reg.id}, ${reg.eventId}, ${reg.occDate || null}, ${JSON.stringify(reg)}::jsonb)`;
 
@@ -93,10 +102,13 @@ const _handler = async (req) => {
     const costLine = cost > 0
       ? ('Cost: $' + cost.toFixed(2) + ' per person. Payment is due no later than 1 hour before the event starts — pay in person, or ' + (reg.wantsInvoice ? 'watch for an emailed invoice.' : 'request an emailed invoice.'))
       : 'This event is free.';
-    await sendMail(reg.email, "You're registered: " + (ev.title || 'NGH Event'),
-      'Hi ' + reg.name + ',\n\nYou are registered for ' + (ev.title || 'NGH Event') + ' on ' + when + ' at Northwood Game Haven.\n\n' + costLine + '\n\nNeed to cancel? Use the "See or cancel your registration" link on the event page.\n\nSee you at the table!\n— Northwood Game Haven');
+    // Only email the registrant if we actually have an address (admin manual adds may not).
+    if (reg.email) {
+      await sendMail(reg.email, "You're registered: " + (ev.title || 'NGH Event'),
+        'Hi ' + reg.name + ',\n\nYou are registered for ' + (ev.title || 'NGH Event') + ' on ' + when + ' at Northwood Game Haven.\n\n' + costLine + '\n\nNeed to cancel? Use the "See or cancel your registration" link on the event page.\n\nSee you at the table!\n— Northwood Game Haven');
+    }
     await sendMail(adminEmail, 'New registration: ' + (ev.title || 'NGH Event'),
-      'New event registration\n\nEvent: ' + (ev.title || 'NGH Event') + '\nWhen: ' + when + '\nName: ' + reg.name + '\nEmail: ' + reg.email + '\nPhone: ' + (reg.phone || '—') + '\nComments: ' + (reg.comments || '—') + '\nInvoice requested: ' + (reg.wantsInvoice ? 'YES' : 'no') + '\n' + costLine);
+      'New event registration' + (adminManual ? ' (added by staff)' : '') + '\n\nEvent: ' + (ev.title || 'NGH Event') + '\nWhen: ' + when + '\nName: ' + reg.name + '\nEmail: ' + (reg.email || '—') + '\nPhone: ' + (reg.phone || '—') + '\nComments: ' + (reg.comments || '—') + '\nInvoice requested: ' + (reg.wantsInvoice ? 'YES' : 'no') + '\n' + costLine);
 
     // ---- Auto "event confirmed to fire" notification ----
     // If this registration just brought the approved count UP TO the minimum,
