@@ -108,3 +108,13 @@
 # Nightly auto-cancel of unpaid approved bookings.
 [functions."auto-cancel"]
   schedule = "@daily"
+
+# USA250 giveaway landing page (unlisted — linked only from Facebook Live)
+[[redirects]]
+  from = "/USA250"
+  to   = "/usa250.html"
+  status = 200
+[[redirects]]
+  from = "/usa250"
+  to   = "/usa250.html"
+  status = 200
