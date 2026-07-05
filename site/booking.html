@@ -30,6 +30,7 @@
   .corner-nav a:hover { transform:translateY(-2px); }
   .corner-book { background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); }
   .corner-shop { background:linear-gradient(135deg,var(--forest),var(--forest-light)); color:#fff; }
+  .corner-tcg { background:linear-gradient(135deg,#1c4587,#2f6bbd); color:#fff; }
   @media(max-width:430px){ .corner-nav a{ font-size:0.6rem; padding:8px 11px; } }
 
   .topbar { background:linear-gradient(90deg,var(--gold) 0%,var(--gold-light) 50%,var(--gold) 100%); text-align:center; padding:10px 20px; font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.18em; text-transform:uppercase; color:var(--dark); font-weight:700; margin-top:46px; }
@@ -295,6 +296,7 @@
 <!-- ===== FLOATING CORNER NAV ===== -->
 <div class="corner-nav">
   <a class="corner-book" href="booking.html">🎲 Book Your Play Space</a>
+  <a class="corner-tcg" href="https://www.tcgplayer.com/sellers/Northwood-Game-Haven/ef370221" target="_blank" rel="noopener">🃏 TCG</a>
   <a class="corner-shop" href="https://northwoodgamehaven.company.site" target="_blank" rel="noopener">🛒 Shop Now</a>
 </div>
 
@@ -526,7 +528,7 @@
         <input type="password" id="admin-code" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAdmin()">
         <div class="err" id="admin-err">Incorrect code. Try again.</div>
         <div style="margin-top:16px;"><button class="btn" onclick="checkAdmin()">Unlock Console</button></div>
-        <p class="hint" id="demo-hint" style="margin-top:14px;display:none;">Demo mode (no server configured) — code: <code>stash2026</code>. Live sites use the real server login.</p>
+        <p class="hint" style="margin-top:14px;">Demo code: <code>stash2026</code>. In production this is replaced by a real server login (see DEPLOY.md).</p>
       </div>
       <p style="text-align:center;"><a href="#" onclick="closeAdmin();return false;">← Back to booking form</a></p>
     </div>
@@ -3439,7 +3441,6 @@ function custWeekDayHTML(isDay){
 
 /* ---------- init ---------- */
 (async function init(){
-  if(!API_BASE && $("demo-hint")) $("demo-hint").style.display="block";
   renderRooms(); renderHours(); renderAddons();
   if($("bk-start-wrap")) $("bk-start-wrap").innerHTML = timeSelectHTML("bk-start", "onDateTimeChange()", 15);
   try { await refreshCache(); } catch(e){ /* offline/demo */ }
