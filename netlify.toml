@@ -70,6 +70,21 @@
   to   = "/.netlify/functions/event-share/:splat"
   status = 200
 
+# Raw calendar deep links (?event=...) copied from the address bar also get
+# rich previews: crawlers hit event-share; humans are 302'd to /ngh.html?event=
+# or /index.html?event= (the .html paths do NOT match these rules — no loop).
+[[redirects]]
+  from = "/ngh"
+  to   = "/.netlify/functions/event-share"
+  status = 200
+  query = { event = ":event" }
+
+[[redirects]]
+  from = "/"
+  to   = "/.netlify/functions/event-share"
+  status = 200
+  query = { event = ":event" }
+
 [[redirects]]
   from = "/api/loyalty-check"
   to   = "/.netlify/functions/loyalty-check"
