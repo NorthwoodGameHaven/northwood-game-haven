@@ -145,8 +145,6 @@
   .date-badge { display:inline-block; background:linear-gradient(135deg,var(--forest),var(--forest-light)); color:#fff; font-family:'Cinzel',serif; font-size:1rem; letter-spacing:0.1em; padding:14px 36px; border-radius:50px; margin-bottom:14px; box-shadow:0 6px 30px rgba(45,90,61,0.3); animation:fadeUp 0.8s 0.95s both; }
   .date-badge span { display:block; font-size:0.68rem; letter-spacing:0.25em; opacity:0.8; margin-bottom:4px; font-family:'Lato',sans-serif; font-weight:300; text-transform:uppercase; }
   .location-tag { font-size:0.85rem; color:#7a7a5a; letter-spacing:0.1em; font-family:'Cinzel',serif; animation:fadeUp 0.8s 1.1s both; }
-  .quest-jump-link { display:inline-flex; align-items:center; gap:10px; margin-top:18px; background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); font-family:'Cinzel',serif; font-size:0.82rem; font-weight:700; letter-spacing:0.15em; text-transform:uppercase; padding:12px 28px; border-radius:50px; text-decoration:none; box-shadow:0 4px 20px rgba(201,151,58,0.4); animation:fadeUp 0.8s 1.2s both; transition:transform 0.2s,box-shadow 0.2s; }
-  .quest-jump-link:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(201,151,58,0.55); }
 
   /* SPARKLY FULL-CALENDAR BUTTON */
   .full-cal-btn {
@@ -302,17 +300,6 @@
   .special-label { font-family:'Cinzel',serif; font-size:0.85rem; color:var(--gold-light); margin-bottom:8px; font-weight:600; }
   .special-detail { font-size:0.87rem; color:rgba(255,255,255,0.68); line-height:1.75; }
 
-  /* QUEST */
-  .quest-section { background:linear-gradient(180deg,#fdf5e8 0%,#faf6ee 100%); text-align:center; }
-  .quest-section .section-inner { max-width:740px; }
-  .quest-scroll { background:linear-gradient(135deg,#fdf0d0,#f5e4b8); border:2px solid var(--gold); border-radius:12px; padding:48px 40px; margin-top:40px; box-shadow:0 0 0 6px rgba(201,151,58,0.1),0 12px 50px rgba(201,151,58,0.2); position:relative; }
-  .quest-scroll::before,.quest-scroll::after { content:'❧'; position:absolute; font-size:1.5rem; color:var(--gold); opacity:0.4; }
-  .quest-scroll::before { top:16px;left:20px; }
-  .quest-scroll::after { bottom:16px;right:20px;transform:rotate(180deg); }
-  .quest-title { font-family:'Cinzel Decorative',serif; font-size:clamp(1.2rem,3vw,1.7rem); color:var(--forest); margin-bottom:20px; }
-  .quest-body { font-size:1rem; color:#5a4a2a; line-height:1.9; margin-bottom:28px; font-style:italic; }
-  .quest-cta { display:inline-block; background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); font-family:'Cinzel',serif; font-size:0.9rem; font-weight:600; letter-spacing:0.1em; padding:14px 32px; border-radius:50px; text-decoration:none; box-shadow:0 6px 24px rgba(201,151,58,0.35); transition:transform 0.2s,box-shadow 0.2s; }
-  .quest-cta:hover { transform:translateY(-2px); box-shadow:0 10px 32px rgba(201,151,58,0.45); }
 
   .qr-section { background:#fff; text-align:center; padding:60px 24px; }
   .qr-placeholder { width:160px;height:160px;margin:32px auto 20px;border:3px dashed var(--forest);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:var(--forest);font-family:'Cinzel',serif;opacity:0.5;background:#f5f8f5;text-align:center;line-height:1.6; }
@@ -331,16 +318,6 @@
   .share-glory-tag { font-size:0.78rem; color:rgba(255,255,255,0.5); margin-top:14px; font-style:italic; }
   .share-glory-tag strong { color:var(--gold-light); font-style:normal; }
 
-  /* SWEEPSTAKES / OFFICIAL RULES MODAL */
-  #sweepstakes-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center; padding:20px; }
-  #sweepstakes-modal-inner { background:var(--cream); border-radius:18px; max-width:680px; width:100%; max-height:88vh; overflow-y:auto; padding:40px 36px; position:relative; box-shadow:0 24px 80px rgba(0,0,0,0.5); }
-  .sw-close { position:absolute; top:16px; right:20px; background:none; border:none; font-size:1.6rem; color:var(--forest); cursor:pointer; line-height:1; }
-  .sw-eyebrow { font-family:'Cinzel',serif; font-size:0.68rem; letter-spacing:0.3em; text-transform:uppercase; color:var(--gold); margin-bottom:8px; }
-  .sw-title { font-family:'Cinzel Decorative',serif; font-size:1.5rem; color:var(--forest); margin-bottom:18px; line-height:1.2; }
-  .sw-body { font-size:0.86rem; color:#4a4a35; line-height:1.7; }
-  .sw-body h4 { font-family:'Cinzel',serif; color:var(--forest); font-size:0.9rem; margin:18px 0 6px; letter-spacing:0.04em; }
-  .sw-body p, .sw-body li { margin-bottom:8px; }
-  .sw-body ul { padding-left:20px; }
 
   /* FLOATING CORNER NAV (Book left / Shop right) */
   .corner-nav { position:fixed; top:54px; left:0; right:0; z-index:300; display:flex; justify-content:space-between; align-items:center; padding:8px 10px; pointer-events:none; gap:6px; transition:transform 0.3s ease, top 0.3s ease; }
@@ -375,7 +352,7 @@
 
   .reveal { opacity:0; transform:translateY(28px); transition:opacity 0.7s ease,transform 0.7s ease; }
   .reveal.visible { opacity:1; transform:translateY(0); }
-  @media(max-width:600px){ .logo-wrap{width:240px;height:240px;} .quest-scroll{padding:32px 20px;} section{padding:60px 18px;} }
+  @media(max-width:600px){ .logo-wrap{width:240px;height:240px;} section{padding:60px 18px;} }
 
   /* NOW OPEN BANNER */
   .now-open-banner {
@@ -598,7 +575,6 @@
     <p class="hero-desc">The Chippewa Valley's first dedicated board game café, retail shop, and event center — with private gaming rooms, a multi-level river deck lounge, and overnight suites. Built for everyone, from first-timers to lifelong hobbyists.</p>
 
     <p class="location-tag">115 W Spring St &nbsp;·&nbsp; Chippewa Falls, WI</p>
-    <a class="quest-jump-link" href="#quest">🎟️ Stash's Quest — Win Free Loot ↓</a>
   </div>
 </section>
 
@@ -900,40 +876,6 @@
   </div>
 </section>
 
-
-<!-- VIP SUMMER TREASURE CHEST -->
-<section id="vip-chest" style="background:linear-gradient(135deg,#1a1a12 0%,#2a2010 100%);color:#fff;padding:80px 24px;">
-  <div class="section-inner reveal" style="max-width:860px;margin:0 auto;text-align:center;">
-    <span class="section-label" style="color:var(--gold-light);display:block;text-align:center;">Free VIP Program</span>
-    <h2 class="section-title" style="color:var(--gold-light);font-size:clamp(1.6rem,4vw,2.4rem);">Stash's VIP Summer Treasure Chest 🏴‍☠️</h2>
-    <p style="font-size:0.92rem;color:rgba(255,255,255,0.55);font-style:italic;margin-bottom:28px;">🦦 <em>"I've been collecting shiny things my whole life. Now I'm sharing the loot — sign up FREE and I'll keep filling your chest all summer long!" — Stash</em></p>
-    <div style="background:rgba(201,151,58,0.1);border:1px solid rgba(201,151,58,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:32px;">
-      <p style="font-family:'Cinzel',serif;font-size:1.1rem;color:var(--gold-light);margin-bottom:10px;">🏴‍☠️ Special VIP discounts, specials, and incentive details coming soon!</p>
-      <p style="font-size:0.85rem;color:rgba(255,255,255,0.5);">Sign up for our FREE VIP Program at the front desk to be first to know.</p>
-    </div>
-
-  </div>
-</section>
-
-<!-- QUEST -->
-<section class="quest-section" id="quest">
-  <div class="section-inner">
-    <div class="reveal">
-      <span class="section-label">A Quest Awaits</span>
-      <h2 class="section-title">Find the Hidden Cache</h2>
-    </div>
-    <div class="quest-scroll reveal">
-      <h3 class="quest-title">⚔ The Northwood Quest ⚔</h3>
-      <p class="quest-body">
-        Somewhere in the Chippewa Valley, a cache has been hidden — sealed within it, a reward waiting to be claimed at Northwood Game Haven all month long.<br><br>
-        To find it, you must seek two halves of a puzzle. The clues are hidden in plain sight — tucked within the pages of <strong>Volume One Magazine</strong>.<br><br>
-        Look closely at both ads. Find the codes. Decipher the order. Follow the coordinates. Claim your <strong>Loot Voucher</strong> — then bring it to Northwood Game Haven <strong>anytime in June</strong> for a <strong>free craft soda</strong> of your choice and <strong>free Game Haven swag</strong>. Glory is its own reward.<br><br>
-        Gather your party. The quest begins now.
-      </p>
-      <a class="quest-cta" href="https://volumeone.org" target="_blank">Begin Your Quest &rarr; Pick Up Volume One</a>
-    </div>
-  </div>
-</section>
 
 <!-- GAME GURUS -->
 <section id="game-gurus" class="guru-section">
@@ -1569,36 +1511,6 @@
   </div>
 </section>
 
-<!-- SWEEPSTAKES / OFFICIAL RULES MODAL -->
-<div id="sweepstakes-modal" onclick="if(event.target===this)this.style.display='none';">
-  <div id="sweepstakes-modal-inner">
-    <button class="sw-close" onclick="document.getElementById('sweepstakes-modal').style.display='none';" aria-label="Close">×</button>
-    <h2 class="sw-title">🏆 Grand Prize Drawing — Official Rules</h2>
-    <div class="sw-body">
-      <p><strong>PRIZE:</strong> One (1) Two-Consecutive-Night Stay in a Northwood Game Haven VRBO overnight suite (The Lodge or The Adventurer's Rest, winner's choice subject to availability), valued at approximately $300–$500 ARV.</p>
-
-      <p><strong>HOW TO ENTER:</strong> No purchase necessary. To enter, bring a completed Loot Voucher (obtained by completing the Northwood Quest via clues in Volume One magazine) to Northwood Game Haven at 115 W Spring St, Chippewa Falls, WI 54729, during Grand Opening Weekend: June 12–14, 2026. One (1) entry per person, total. Vouchers redeemed outside of June 12–14, 2026 are not eligible for the Grand Prize drawing.</p>
-
-      <p><strong>DRAWING:</strong> Winner will be selected by random drawing from all eligible entries on or after June 14, 2026. Winner will be notified in person or by contact information provided at time of entry.</p>
-
-      <p><strong>ELIGIBILITY:</strong> Open to legal U.S. residents age 18 or older. Employees and immediate family members of Northwood Game Haven and its affiliates are not eligible. Void where prohibited by law.</p>
-
-      <p><strong>PRIZE CONDITIONS:</strong> Prize must be booked within thirty (30) days of winner notification. Stay must consist of two (2) consecutive nights. Stay period must occur entirely within the 2026 calendar year (by December 31, 2026). Subject to availability. No cash equivalent. Prize is non-transferable. Winner is responsible for any applicable federal, state, and local taxes.</p>
-
-      <p><strong>ODDS:</strong> Odds of winning depend on the number of eligible entries received.</p>
-
-      <p><strong>SPONSOR:</strong> Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI 54729. stash@northwoodgamehaven.com</p>
-
-      <p><strong>GOVERNING LAW:</strong> This sweepstakes is governed by the laws of the State of Wisconsin. This promotion is in no way sponsored, endorsed, or administered by, or associated with, Volume One Magazine, VRBO, Airbnb, or any other third party.</p>
-
-      <p style="color:#7a7a5a;">For a complete copy of the Official Rules, request in writing at the address above or by emailing stash@northwoodgamehaven.com. No purchase or payment necessary to enter or win.</p>
-
-      <div style="text-align:center;margin-top:24px;">
-        <button onclick="document.getElementById('sweepstakes-modal').style.display='none';" style="background:linear-gradient(135deg,var(--forest),var(--forest-light));color:#fff;border:none;border-radius:50px;padding:15px 40px;font-family:'Cinzel',serif;font-size:0.92rem;letter-spacing:0.06em;cursor:pointer;">Got It — Adventure Awaits!</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- HOURS MODAL -->
 <div id="hours-modal" onclick="if(event.target===this)this.style.display='none';">
@@ -2358,11 +2270,9 @@
     } catch (e) { /* clipboard unavailable; link still opens IG */ }
   }
 
-  // Sweepstakes modal keyboard close
+  // Modal keyboard close (Escape)
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-      var sw = document.getElementById('sweepstakes-modal');
-      if (sw) sw.style.display = 'none';
       var dr = document.getElementById('drawing-terms-modal');
       if (dr) dr.style.display = 'none';
       var hr = document.getElementById('hours-modal');
