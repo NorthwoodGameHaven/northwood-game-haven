@@ -14,7 +14,7 @@
 // Crawlers (Facebook, Twitter/X, Discord, Slack, WhatsApp, iMessage, etc.) get the
 // OG page. Humans get a 302 to /ngh.html?event=... or /index.html?event=... — the
 // .html paths bypass the query-matched rewrite rules, so there is no redirect loop.
-import { sql, ensureSchema } from './_shared/db.mjs';
+import { sql } from './_shared/db.mjs';
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtTime(t){ if(!t) return ''; var p=String(t).split(':'); var h=+p[0],m=+p[1],ap=h>=12?'PM':'AM',hh=h%12; if(hh===0)hh=12; return hh+':'+(m<10?'0':'')+m+' '+ap; }
@@ -40,9 +40,19 @@ export default async (req) => {
     const human = base + (fromIndex ? '/index.html' : '/ngh.html') +
       '?event=' + encodeURIComponent(id) + (ds ? ('&date=' + encodeURIComponent(ds)) : '');
 
-    await ensureSchema();
-    const rows = await sql`SELECT data FROM events WHERE id = ${id}`;
-    const e = rows.length ? rows[0].data : null;
+    // Facebook's crawler aborts after ~10s. A cold serverless DB plus schema
+    // checks can blow that budget, so: no ensureSchema here (read-only path,
+    // table already exists) and the lookup races a 4.5s timer. On timeout we
+    // serve branded fallback tags with no-store so the next scrape retries.
+    let e = null, dbTimedOut = false;
+    try {
+      e = await Promise.race([
+        sql`SELECT data FROM events WHERE id = ${id}`.then(r => (r.length ? r[0].data : null)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('db-timeout')), 4500))
+      ]);
+    } catch (err) {
+      if (String(err && err.message) === 'db-timeout') dbTimedOut = true; else throw err;
+    }
 
     // ---- /event/<id>/photo — serve the stored photo as a fetchable image ----
     if (wantsPhoto) {
@@ -106,7 +116,10 @@ export default async (req) => {
       '<p>Opening <a href="' + esc(human) + '">' + esc(title) + '</a>…</p>' +
       '</body></html>';
 
-    return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=300' } });
+    return new Response(html, { status: 200, headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': dbTimedOut ? 'no-store' : 'public, max-age=300'
+    } });
   } catch (e) {
     // On any error, just bounce to the calendar (the .html path avoids re-entering this function).
     return new Response('', { status: 302, headers: { Location: base + '/ngh.html' } });
