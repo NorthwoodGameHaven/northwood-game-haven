@@ -99,9 +99,9 @@ export default async (req) => {
       '<meta name="twitter:title" content="' + esc(title) + '">' +
       '<meta name="twitter:description" content="' + esc(desc) + '">' +
       '<meta name="twitter:image" content="' + esc(img) + '">' +
-      // safety net for bots we don't recognize that still render HTML
-      '<meta http-equiv="refresh" content="0; url=' + esc(human) + '">' +
-      '<script>location.replace(' + JSON.stringify(human) + ');</scr' + 'ipt>' +
+      // NOTE: no meta refresh / JS redirect here — Facebook's crawler follows
+      // http-equiv="refresh" and scrapes the destination's generic tags instead.
+      // Humans never see this page (they get a 302 above).
       '</head><body style="font-family:Georgia,serif;text-align:center;padding:40px;color:#2d5a3d;">' +
       '<p>Opening <a href="' + esc(human) + '">' + esc(title) + '</a>…</p>' +
       '</body></html>';
