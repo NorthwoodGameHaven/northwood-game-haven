@@ -74,8 +74,12 @@ const _handler = async (req) => {
     let ev; try { ev = await req.json(); } catch { return bad('Invalid JSON'); }
     if (!ev.title || !ev.date) return bad('title and date required');
     const allowTight = !!ev.allowTight; delete ev.allowTight;
+    const allowPend = !!ev.allowPendingOverlap; delete ev.allowPendingOverlap;
     const { red, tight } = await eventConflicts(ev, null);
-    if (red.length) return json({ error: 'Room overlap — ' + describeDated(red), code: 'overlap', conflicts: red }, 409);
+    const pendRed = red.filter(c => c.kind === 'booking' && c.st && c.st !== 'approved');
+    const hardRed = red.filter(c => !(c.kind === 'booking' && c.st && c.st !== 'approved'));
+    if (hardRed.length) return json({ error: 'Room overlap — ' + describeDated(hardRed), code: 'overlap', conflicts: hardRed }, 409);
+    if (pendRed.length && !allowPend) return json({ error: 'Overlaps PENDING booking request(s) — ' + describeDated(pendRed), code: 'pending', conflicts: pendRed }, 409);
     if (tight.length && !allowTight) return json({ error: 'Back-to-back (<' + MIN_GAP_MINS + ' min changeover) — ' + describeDated(tight), code: 'tight', conflicts: tight }, 409);
     ev.id = ev.id || newId();
     ev.public = true;
@@ -87,8 +91,12 @@ const _handler = async (req) => {
     let ev; try { ev = await req.json(); } catch { return bad('Invalid JSON'); }
     ev.id = id; ev.public = true;
     const allowTight = !!ev.allowTight; delete ev.allowTight;
+    const allowPend = !!ev.allowPendingOverlap; delete ev.allowPendingOverlap;
     const { red, tight } = await eventConflicts(ev, id);
-    if (red.length) return json({ error: 'Room overlap — ' + describeDated(red), code: 'overlap', conflicts: red }, 409);
+    const pendRed = red.filter(c => c.kind === 'booking' && c.st && c.st !== 'approved');
+    const hardRed = red.filter(c => !(c.kind === 'booking' && c.st && c.st !== 'approved'));
+    if (hardRed.length) return json({ error: 'Room overlap — ' + describeDated(hardRed), code: 'overlap', conflicts: hardRed }, 409);
+    if (pendRed.length && !allowPend) return json({ error: 'Overlaps PENDING booking request(s) — ' + describeDated(pendRed), code: 'pending', conflicts: pendRed }, 409);
     if (tight.length && !allowTight) return json({ error: 'Back-to-back (<' + MIN_GAP_MINS + ' min changeover) — ' + describeDated(tight), code: 'tight', conflicts: tight }, 409);
     await sql`INSERT INTO events (id, data) VALUES (${id}, ${JSON.stringify(ev)}::jsonb)
               ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`;

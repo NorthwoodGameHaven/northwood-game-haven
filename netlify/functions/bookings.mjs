@@ -83,8 +83,13 @@ const _handler = async (req) => {
         blockers,
         { ignoreBookingId: b.id }
       );
-      if (red.length) {
-        return json({ error: 'Time conflicts with an existing booking, event, or blackout — ' + describe(red), code: 'overlap', conflicts: red }, 409);
+      // Recurring-event occurrences don't hard-block a customer request —
+      // a Game Guru adjudicates at approval (approve + cancel occurrence,
+      // move the request, or reject). Bookings, blackouts, and one-time
+      // events still block.
+      const hardRed = red.filter(c => !(c.kind === 'event' && c.rec));
+      if (hardRed.length) {
+        return json({ error: 'Time conflicts with an existing booking, event, or blackout — ' + describe(hardRed), code: 'overlap', conflicts: hardRed }, 409);
       }
       if (tight.length && !body.allowTight) {
         return json({ error: 'Back-to-back with less than ' + MIN_GAP_MINS + ' minutes of changeover — ' + describe(tight), code: 'tight', conflicts: tight }, 409);

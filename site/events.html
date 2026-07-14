@@ -267,11 +267,18 @@
   function addDays(ds,n){ var d=new Date(ds+"T12:00:00"); d.setDate(d.getDate()+n); return ymd(d); }
   function addMonths(ds,n){ var d=new Date(ds+"T12:00:00"); d.setMonth(d.getMonth()+n); return ymd(d); }
   function weekStart(d){ var x=new Date(d); x.setDate(x.getDate()-x.getDay()); x.setHours(12,0,0,0); return x; }
+  function monthModeDate(anchor,i,mode){
+    var a=new Date(anchor+"T12:00:00"), y=a.getFullYear(), m=a.getMonth()+i;
+    if(mode==="lastday") return ymd(new Date(y,m+1,0,12));
+    if(mode==="lastdow"){ var L=new Date(y,m+1,0,12), df=(L.getDay()-a.getDay()+7)%7; L.setDate(L.getDate()-df); return ymd(L); }
+    if(mode==="nthdow"){ var nth=Math.ceil(a.getDate()/7), F=new Date(y,m,1,12), off=(a.getDay()-F.getDay()+7)%7, day=1+off+(nth-1)*7, dim=new Date(y,m+1,0).getDate(); if(day>dim) day-=7; return ymd(new Date(y,m,day,12)); }
+    return addMonths(anchor,i);
+  }
   function expand(e){
     if(!e.recurrence) return [e];
-    var out=[], cur=e.date, f=e.recurrence.freq, c=e.recurrence.count||1, exc=e.exceptions||[];
+    var out=[], cur=e.date, f=e.recurrence.freq, c=e.recurrence.count||1, md=e.recurrence.mode||"dom", exc=e.exceptions||[];
     for(var i=0;i<c;i++){ if(exc.indexOf(cur)<0){ var x=Object.assign({},e); x.date=cur; out.push(x); }
-      cur = f==="weekly"?addDays(cur,7):f==="biweekly"?addDays(cur,14):addMonths(e.date,i+1); }
+      cur = f==="weekly"?addDays(cur,7):f==="biweekly"?addDays(cur,14):monthModeDate(e.date,i+1,md); }
     return out;
   }
   function occForDate(ds){

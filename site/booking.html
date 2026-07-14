@@ -957,20 +957,86 @@ function saveComment(id){ sel.addonComment[id]=$("acmt-"+id).value; }
 /* ---------- recurrence helpers ---------- */
 function addDays(dateStr, n){ var d=new Date(dateStr+"T12:00:00"); d.setDate(d.getDate()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 function addMonths(dateStr, n){ var d=new Date(dateStr+"T12:00:00"); d.setMonth(d.getMonth()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
-function recurrenceDates(startDate, freq, count){
+function monthlyModeDate(anchor, i, mode){
+  // i months after the anchor date, per the Outlook-style monthly pattern.
+  var a=new Date(anchor+"T12:00:00"), y=a.getFullYear(), m=a.getMonth()+i;
+  if(mode==="lastday"){ return ymd(new Date(y, m+1, 0, 12)); }
+  if(mode==="lastdow"){
+    var L=new Date(y, m+1, 0, 12), df=(L.getDay()-a.getDay()+7)%7;
+    L.setDate(L.getDate()-df); return ymd(L);
+  }
+  if(mode==="nthdow"){
+    var nth=Math.ceil(a.getDate()/7);
+    var F=new Date(y, m, 1, 12), off=(a.getDay()-F.getDay()+7)%7;
+    var day=1+off+(nth-1)*7, dim=new Date(y, m+1, 0).getDate();
+    if(day>dim) day-=7;                       // no 5th <weekday> this month -> last
+    return ymd(new Date(y, m, day, 12));
+  }
+  return addMonths(anchor, i);                // "dom" — same day-of-month (legacy default)
+}
+function recurrenceDates(startDate, freq, count, mode){
   var dates=[startDate];
   for(var i=1;i<count;i++){
     if(freq==="weekly") dates.push(addDays(dates[i-1],7));
     else if(freq==="biweekly") dates.push(addDays(dates[i-1],14));
-    else if(freq==="monthly") dates.push(addMonths(startDate,i));
+    else if(freq==="monthly") dates.push(monthlyModeDate(startDate,i,mode||"dom"));
   }
   return dates;
+}
+var REC_DOW_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+var REC_ORDINALS=["first","second","third","fourth"];
+// Outlook-style monthly pattern options, rendered from the chosen anchor date.
+function monthlyModeOptions(dateStr){
+  if(!dateStr) return [];
+  var d=new Date(dateStr+"T12:00:00"); if(isNaN(d)) return [];
+  var dom=d.getDate(), dow=REC_DOW_NAMES[d.getDay()], nth=Math.ceil(dom/7);
+  var dim=new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  var opts=[{v:"dom", label:"On day "+dom+" of the month"}];
+  if(nth<=4) opts.push({v:"nthdow", label:"On the "+REC_ORDINALS[nth-1]+" "+dow});
+  opts.push({v:"lastdow", label:"On the last "+dow});
+  if(dom===dim) opts.push({v:"lastday", label:"On the last day of the month"});
+  return opts;
+}
+function recModeLabel(rec, anchor){
+  if(!rec || rec.freq!=="monthly" || !rec.mode || rec.mode==="dom") return "";
+  var d=new Date(anchor+"T12:00:00"); if(isNaN(d)) return "";
+  var dow=REC_DOW_NAMES[d.getDay()].slice(0,3), nth=Math.ceil(d.getDate()/7);
+  if(rec.mode==="nthdow") return " · "+REC_ORDINALS[Math.min(nth,4)-1]+" "+dow;
+  if(rec.mode==="lastdow") return " · last "+dow;
+  if(rec.mode==="lastday") return " · last day";
+  return "";
+}
+function evRecMode(){ var r=document.querySelector('input[name="evrecmode"]:checked'); return r?r.value:"dom"; }
+function updateEvRecModes(preselect){
+  var box=$("ev-rec-monthly"); if(!box) return;
+  var on=$("ev-recurring")&&$("ev-recurring").checked&&$("ev-rec-freq")&&$("ev-rec-freq").value==="monthly";
+  if(!on){ box.style.display="none"; box.innerHTML=""; evRecPreview(); return; }
+  var cur=(typeof preselect==="string"&&preselect)?preselect:evRecMode();
+  var opts=monthlyModeOptions($("ev-date")?$("ev-date").value:"");
+  box.style.display="block";
+  if(!opts.length){ box.innerHTML='<span class="hint">Pick a date above to choose how the monthly series repeats.</span>'; evRecPreview(); return; }
+  if(!opts.some(function(o){return o.v===cur;})) cur=opts[0].v;
+  box.innerHTML='<div style="font-size:0.78rem;font-weight:700;color:var(--forest);margin-bottom:4px;">Monthly pattern</div>'+opts.map(function(o){
+    return '<label class="check-line" style="margin:3px 0;"><input type="radio" name="evrecmode" value="'+o.v+'"'+(o.v===cur?" checked":"")+' onchange="evRecPreview()">'+o.label+'</label>';
+  }).join("");
+  evRecPreview();
+}
+function evRecPreview(){
+  var p=$("ev-rec-preview"); if(!p) return;
+  var on=$("ev-recurring")&&$("ev-recurring").checked, date=$("ev-date")?$("ev-date").value:"";
+  if(!on||!date){ p.style.display="none"; return; }
+  var freq=$("ev-rec-freq").value, count=Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2));
+  var mode=(freq==="monthly")?evRecMode():null;
+  var ds=recurrenceDates(date, freq, count, mode);
+  var shown=ds.slice(0,6).map(function(d){ var x=new Date(d+"T12:00:00"); return d+" ("+REC_DOW_NAMES[x.getDay()].slice(0,3)+")"; });
+  p.style.display="block";
+  p.innerHTML="🔁 "+ds.length+" occurrences: "+shown.join(", ")+(ds.length>6?" … +"+(ds.length-6)+" more":"");
 }
 // Occurrence dates for a public EVENT, honoring its exceptions[] (dates to skip
 // because that occurrence was split out / edited individually).
 function eventDates(e){
   if(!e) return [];
-  var dates = e.recurrence ? recurrenceDates(e.date, e.recurrence.freq, e.recurrence.count) : [e.date];
+  var dates = e.recurrence ? recurrenceDates(e.date, e.recurrence.freq, e.recurrence.count, e.recurrence.mode) : [e.date];
   if(e.exceptions && e.exceptions.length){ dates = dates.filter(function(d){ return e.exceptions.indexOf(d)<0; }); }
   return dates;
 }
@@ -990,7 +1056,7 @@ function updateRecPreview(){
   var prev=$("rec-preview"); if(!prev) return;
   var rec=getRecurrence(), date=$("bk-date").value;
   if(!rec || !date){ prev.style.display="none"; return; }
-  var dates=recurrenceDates(date, rec.freq, rec.count);
+  var dates=recurrenceDates(date, rec.freq, rec.count, rec.mode);
   prev.style.display="block";
   prev.innerHTML="🔁 "+freqLabel(rec.freq)+" · "+rec.count+" occurrences:<br>"+dates.map(function(d){return "• "+d;}).join("<br>");
 }
@@ -1108,9 +1174,9 @@ function checkConflicts(){
   var endForCheck = Math.min(em, 1440);
   var conflictRooms=[];
   var conflicts=[];   // detailed list for the popup
-  function addConflict(room, type, label, s, e){
-    if(conflictRooms.indexOf(room)<0) conflictRooms.push(room);
-    conflicts.push({ room:room, type:type, label:label, win:fmtTime(s)+"–"+fmtTime(Math.min(e,1440)) });
+  function addConflict(room, type, label, s, e, soft){
+    if(!soft && conflictRooms.indexOf(room)<0) conflictRooms.push(room);   /* soft = recurring NGH event: submit-with-review */
+    conflicts.push({ room:room, type:type, label:label, soft:!!soft, win:fmtTime(s)+"–"+fmtTime(Math.min(e,1440)) });
   }
 
   // existing bookings (approved or pending hold the slot)
@@ -1129,7 +1195,7 @@ function checkConflicts(){
     if(e.allDay){
       if(e.date!==date) return;
       rooms.forEach(function(room){
-        if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,0,1440)) addConflict(room, (e.private?"private":"event"), (e.private?"Private event (held)":("NGH event: "+(e.title||"Scheduled event")))+" (all day)", 0, 1440);
+        if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,0,1440)) addConflict(room, (e.private?"private":"event"), (e.private?"Private event (held)":("NGH event: "+(e.title||"Scheduled event")))+" (all day)", 0, 1440, !!e.recurrence);
       });
       return;
     }
@@ -1139,7 +1205,7 @@ function checkConflicts(){
     if(overnight && e.date===prevYMD(date)) segs.push([0, ee, " (overnight)"]);
     segs.forEach(function(sg){
       rooms.forEach(function(room){
-        if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,sg[0],sg[1])) addConflict(room, (e.private?"private":"event"), (e.private?"Private event (held)":("NGH event: "+(e.title||"Scheduled event")))+sg[2], sg[0], sg[1]);
+        if(sel.rooms.indexOf(room)>=0 && overlaps(sm,endForCheck,sg[0],sg[1])) addConflict(room, (e.private?"private":"event"), (e.private?"Private event (held)":("NGH event: "+(e.title||"Scheduled event")))+sg[2], sg[0], sg[1], !!e.recurrence);
       });
     });
   });
@@ -1174,8 +1240,12 @@ function checkConflicts(){
   } else {
     lastConflictAlt = null;
     lastTight = tightGapsFor(date, sm, endForCheck, sel.rooms);
+    lastSoftEv = conflicts.filter(function(c){ return c.soft; });
     avail.style.display="block";
-    if(lastTight.length){
+    if(lastSoftEv.length){
+      avail.style.background="#fdf6e3"; avail.style.borderColor="#e8d9b0"; avail.style.color="#8a6d1f";
+      avail.innerHTML="🗓️ Your requested window overlaps recurring NGH event(s): "+lastSoftEv.map(function(c){ return roomName(c.room)+" · "+c.label+" ("+c.win+")"; }).join("; ")+".<br>You can still submit this request — a Game Guru will review it and, if approved, adjudicate any conflicts between room bookings and events scheduled that day/time in the affected room(s)."+(lastTight.length?("<br>⚠️ Also back-to-back (<"+MIN_GAP+" min changeover) with: "+lastTight.map(function(t){ return roomName(t.room)+" · "+t.label+" ("+t.win+")"; }).join("; ")+"."):"");
+    } else if(lastTight.length){
       avail.style.background="#fdf6e3"; avail.style.borderColor="#e8d9b0"; avail.style.color="#8a6d1f";
       avail.innerHTML="⚠️ "+sel.rooms.map(roomName).join(", ")+" available "+fmtTime(sm)+"–"+ ($("bk-end").value||"") +" on "+date+", but back-to-back (less than "+MIN_GAP+" min changeover) with: "+lastTight.map(function(t){ return roomName(t.room)+" · "+t.label+" ("+t.win+")"; }).join("; ")+". You can still submit.";
     } else {
@@ -1185,7 +1255,7 @@ function checkConflicts(){
     return true;
   }
 }
-var lastConflicts=[], lastConflictMeta=null, lastConflictAlt=null, lastConflictSig="";
+var lastConflicts=[], lastConflictMeta=null, lastConflictAlt=null, lastConflictSig="", lastSoftEv=[];
 function conflictSig(){ return (lastConflictMeta?(lastConflictMeta.date+"|"+lastConflictMeta.sm+"|"+lastConflictMeta.hours):"")+"|"+sel.rooms.slice().sort().join(",")+"|"+lastConflicts.length; }
 function showConflictModal(){
   if(!lastConflicts.length) return;
@@ -1307,6 +1377,9 @@ async function submitBooking(){
   if(!$("bk-recurring").checked && lastTight && lastTight.length){
     if(!confirm("⚠️ Heads up — your requested time is back-to-back (less than "+MIN_GAP+" minutes of changeover) with:\n\n"+lastTight.map(function(t){ return "• "+roomName(t.room)+": "+t.label+" ("+t.win+")"; }).join("\n")+"\n\nSubmit your request anyway?")) return;
   }
+  if(!$("bk-recurring").checked && lastSoftEv && lastSoftEv.length){
+    if(!confirm("🗓️ Heads up — your requested time overlaps recurring NGH event(s):\n\n"+lastSoftEv.map(function(c){ return "• "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nYou can still submit. A Game Guru will review your request and, if approved, adjudicate any conflicts between room bookings and events scheduled that day/time in the affected room(s).\n\nSubmit your request?")) return;
+  }
 
   var t=computeTotals();
   var addonsChosen=[];
@@ -1320,7 +1393,7 @@ async function submitBooking(){
 
   var rec=getRecurrence();
   var groupId = rec ? ("GRP-"+genId()) : null;
-  var dates = rec ? recurrenceDates(date, rec.freq, rec.count) : [date];
+  var dates = rec ? recurrenceDates(date, rec.freq, rec.count, rec.mode) : [date];
   var military = !!($("c-military") && $("c-military").checked);
 
   var toAdd=[], firstReq=null;
@@ -1472,6 +1545,18 @@ function milBadge(r){
 
 function reqCardHtml(r){
   var when=fmtTime(timeToMins(r.start))+" – "+r.endLabel;
+  var conflictLine="";
+  if(r.status==="pending"||r.status==="hold"){
+    try{
+      var _cs=bookingConflictScan(r);
+      if(_cs.red.length){
+        var _hasRecEv=_cs.red.some(function(c){ if(c.kind!=="event"&&c.kind!=="private") return false; var _p=(c.ref&&c.ref.id)?_evById(c.ref.id):null; return !!(_p&&_p.recurrence&&!(_p.strategy&&_p.strategy.cadence==="limited")); });
+        conflictLine='<div class="kv" style="margin-top:6px;padding:8px 10px;background:#fdf3f2;border:1px solid #f0c5be;border-radius:8px;color:#9a3b2e;"><b>🔴 Conflicts:</b> '+_cs.red.map(function(c){ return roomName(c.room)+" · "+esc(c.label)+" ("+c.win+")"; }).join("; ")+(_hasRecEv?'<br><span style="font-size:0.78rem;">Overlapping recurring-event occurrence(s) can be auto-canceled when you click ✅ Approve.</span>':'')+'</div>';
+      } else if(_cs.tight.length){
+        conflictLine='<div class="kv" style="margin-top:6px;padding:8px 10px;background:#fdf6e3;border:1px solid #e8d9b0;border-radius:8px;color:#8a6d1f;"><b>🟡 Back-to-back (<'+MIN_GAP+' min):</b> '+_cs.tight.map(function(c){ return roomName(c.room)+" · "+esc(c.label)+" ("+c.win+")"; }).join("; ")+'</div>';
+      }
+    }catch(_e){}
+  }
   var payBadge = "";
   if(r.status==="approved"){
     payBadge = '<span class="badge '+(feeIsPaid(r)?"pay-paid":"pay-due")+'">Fee: '+(feeIsPaid(r)?"Paid":"Due")+'</span>'+
@@ -1532,6 +1617,7 @@ function reqCardHtml(r){
     '<h2 style="margin-top:10px;">'+esc(r.name)+' · '+roomList(r)+'</h2>'+
     (r.groupId?'<div class="kv"><b>Recurring group</b> '+r.groupId+' — occurrence '+r.recIndex+' of '+r.recTotal+' <a href="#" onclick="showGroup(\''+r.groupId+'\');return false;">view all in group</a></div>':'')+
     '<div class="kv"><b>When</b> '+r.date+' · '+when+' ('+r.hours+'h)</div>'+
+    conflictLine+
     '<div class="kv"><b>Contact</b> '+esc(r.phone)+' · '+esc(r.email)+'</div>'+
     '<div class="kv"><b>Max guests</b> '+esc(r.guests)+'</div>'+
     '<div class="kv"><b>Add-ons</b></div>'+addons+
@@ -1561,8 +1647,41 @@ async function approve(id){
   var _r=getReq(id);
   if(_r){
     var _chk=bookingConflictScan(_r);
-    if(_chk.red.length && !confirm("🔴 OVERLAP WARNING — approving this DOUBLE-BOOKS a room:\n\n"+_chk.red.map(function(c){ return "• "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nApprove anyway? (Use 🧹 De-conflict afterward if you do.)")) return;
-    if(!_chk.red.length && _chk.tight.length && !confirm("⚠️ Back-to-back (<15 min changeover) with:\n\n"+_chk.tight.map(function(c){ return "• "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nApprove anyway?")) return;
+    var _fmt=function(c){ return "• "+roomName(c.room)+": "+c.label+" ("+c.win+")"; };
+    // Partition red conflicts:
+    //   • recurring-event occurrences  -> resolvable: approve + cancel occurrence
+    //   • one-time / limited events    -> hard block (no overlap option)
+    //   • approved bookings            -> explicit double-book confirm
+    //   • other pending requests       -> heads-up confirm
+    var _evCancel=[], _evHard=[], _bkAppr=[], _bkPend=[];
+    _chk.red.forEach(function(c){
+      if(c.kind==="event"||c.kind==="private"){
+        var _p=(c.ref&&c.ref.id)?_evById(c.ref.id):null;
+        if(_p && _p.recurrence && !(_p.strategy && _p.strategy.cadence==="limited")){ _evCancel.push({c:c, p:_p, date:(c.ref&&c.ref.date)||_r.date}); }
+        else _evHard.push(c);
+      } else if(c.kind==="booking"){ (c.pend?_bkPend:_bkAppr).push(c); }
+      else _bkAppr.push(c);
+    });
+    if(_evHard.length){
+      alert("🔴 Can't approve — this request overlaps one-time / limited NGH event(s):\n\n"+_evHard.map(_fmt).join("\n")+"\n\nOne-time and limited events can't be overlapped or auto-canceled from here. Reschedule the event (Public Events tab), or reject / ask the customer to move this request.");
+      return;
+    }
+    if(_evCancel.length){
+      if(!confirm("🗓️ This request overlaps occurrence(s) of recurring NGH event(s):\n\n"+_evCancel.map(function(x){ return "• "+x.date+" · "+roomName(x.c.room)+": "+x.c.label+" ("+x.c.win+")"; }).join("\n")+"\n\nApprove the booking AND cancel those occurrence(s)?\n\nCanceled occurrences become series exceptions — review or restore them anytime via 🔁 Review instances on each event's card. No automatic emails are sent; if anyone registered for a canceled occurrence, handle them via View registrants.\n\nOK = approve & cancel occurrence(s) · Cancel = don't approve")) return;
+      var _byP={};
+      _evCancel.forEach(function(x){ var g=(_byP[x.p.id]=_byP[x.p.id]||{p:x.p,dates:[]}); if(g.dates.indexOf(x.date)<0) g.dates.push(x.date); });
+      for(var _k in _byP){
+        var _pe=_byP[_k].p, _pu=Object.assign({}, _pe);
+        _pu.exceptions=(_pe.exceptions||[]).slice();
+        _byP[_k].dates.forEach(function(d2){ if(_pu.exceptions.indexOf(d2)<0) _pu.exceptions.push(d2); });
+        try{ await Store.saveEvent(_pu); }
+        catch(_cerr){ alert("Couldn't cancel an occurrence of \""+(_pe.title||_pe.id)+"\": "+((_cerr&&_cerr.message)||_cerr)+"\n\nStopping — the booking was NOT approved. Resolve via 🧹 De-conflict and try again."); await refreshCache(); return; }
+      }
+      await refreshCache();
+    }
+    if(_bkAppr.length && !confirm("🔴 OVERLAP WARNING — approving this DOUBLE-BOOKS a room:\n\n"+_bkAppr.map(_fmt).join("\n")+"\n\nApprove anyway? (Use 🧹 De-conflict afterward if you do.)")) return;
+    if(_bkPend.length && !confirm("⏳ Other PENDING request(s) overlap this window:\n\n"+_bkPend.map(_fmt).join("\n")+"\n\nApproving this one likely means rejecting or moving those. Approve anyway?")) return;
+    if(_chk.tight.length && !confirm("⚠️ Back-to-back (<15 min changeover) with:\n\n"+_chk.tight.map(_fmt).join("\n")+"\n\nApprove anyway?")) return;
   }
   await Store.updateBooking(id,{status:"approved"}); await refreshCache(); await resendApproval(id, true); renderAdmin(adminFilter); }
 async function resendApproval(id, silent){
@@ -2046,7 +2165,7 @@ function reviewInstances(id){
 }
 function instancesHTML(id){
   var e=_evById(id); if(!e||!e.recurrence) return "";
-  var raw=recurrenceDates(e.date, e.recurrence.freq, e.recurrence.count);
+  var raw=recurrenceDates(e.date, e.recurrence.freq, e.recurrence.count, e.recurrence.mode);
   var exc=e.exceptions||[]; var notes=e.occNotes||{};
   var det={}; cache.events.forEach(function(x){ if(x.detachedFrom===id) det[x.date]=x; });
   var today=ymd(new Date());
@@ -2075,7 +2194,7 @@ function instancesHTML(id){
         '<span style="flex:1;"></span>'+
         '<span id="occtw-'+id+'-'+ds+'" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'+
         '<button class="btn btn-sm btn-ghost" onclick="occNoteEdit(\''+id+'\',\''+ds+'\',\''+id+'\')">📌 Note</button>'+
-        (e.allDay?'':'<button class="btn btn-sm btn-ghost" onclick="occTimeForm(\''+id+'\',\''+ds+'\')">⏱ Time</button>')+
+        (e.allDay?'':'<button class="btn btn-sm btn-ghost" onclick="occTimeForm(\''+id+'\',\''+ds+'\')">⏱ Date/time</button>')+
         '<button class="btn btn-sm btn-ghost" style="color:#9a3b2e;" onclick="cancelOccurrence(\''+id+'\',\''+ds+'\')">✖ Cancel date</button>'+
         '</span>';
     }
@@ -2113,31 +2232,32 @@ async function occNoteEdit(id, ds, parentId){
 function occTimeForm(id, ds){
   var e=_evById(id); if(!e) return;
   var span=$("occtw-"+id+"-"+ds); if(!span) return;
-  span.innerHTML='<input type="time" id="occts-'+id+'-'+ds+'" value="'+(e.start||"")+'" step="900" style="padding:6px 8px;border:1.5px solid #d8e0d4;border-radius:8px;">'+
+  span.innerHTML='<input type="date" id="occtd-'+id+'-'+ds+'" value="'+ds+'" style="padding:6px 8px;border:1.5px solid #d8e0d4;border-radius:8px;"> '+
+    '<input type="time" id="occts-'+id+'-'+ds+'" value="'+(e.start||"")+'" step="900" style="padding:6px 8px;border:1.5px solid #d8e0d4;border-radius:8px;">'+
     ' \u2013 <input type="time" id="occte-'+id+'-'+ds+'" value="'+(e.end||"")+'" step="900" style="padding:6px 8px;border:1.5px solid #d8e0d4;border-radius:8px;">'+
     ' <button class="btn btn-sm" onclick="occTimeApply(\''+id+'\',\''+ds+'\')">Apply</button>'+
     ' <button class="btn btn-sm btn-ghost" onclick="occRefreshPanel(\''+id+'\')">Cancel</button>';
 }
 async function occTimeApply(id, ds){
   var e=_evById(id); if(!e) return;
-  var si=$("occts-"+id+"-"+ds), ei=$("occte-"+id+"-"+ds);
-  var ns=si?si.value:"", ne=ei?ei.value:"";
+  var si=$("occts-"+id+"-"+ds), ei=$("occte-"+id+"-"+ds), di=$("occtd-"+id+"-"+ds);
+  var ns=si?si.value:"", ne=ei?ei.value:"", nd=(di&&di.value)?di.value:ds;
   if(!ns||!ne){ alert("Set both a start and end time."); return; }
-  if(!confirm("Change ONLY "+ds+" to "+fmtTime(timeToMins(ns))+" \u2013 "+fmtTime(timeToMins(ne))+"?\n\nThis date becomes its own event; the series keeps its normal time. If people already registered for this date, their registrations stay under the original event — check View registrants on both.")) return;
+  if(!confirm("Change ONLY "+ds+" to "+(nd!==ds?(nd+" · "):"")+fmtTime(timeToMins(ns))+" \u2013 "+fmtTime(timeToMins(ne))+"?\n\nThis date becomes its own event; the series keeps its normal time. If people already registered for this date, their registrations stay under the original event — check View registrants on both.")) return;
   var note=(e.occNotes||{})[ds];
   var parent=Object.assign({}, e);
   parent.exceptions=(e.exceptions||[]).slice();
   if(parent.exceptions.indexOf(ds)<0) parent.exceptions.push(ds);
   if(note){ parent.occNotes=Object.assign({}, e.occNotes); delete parent.occNotes[ds]; }
-  var solo=Object.assign({}, e, { id:undefined, date:ds, start:ns, end:ne, recurrence:null, groupId:null, exceptions:[], detachedFrom:e.id });
+  var solo=Object.assign({}, e, { id:undefined, date:nd, start:ns, end:ne, recurrence:null, groupId:null, exceptions:[], detachedFrom:e.id });
   delete solo.occNotes;
-  if(note){ solo.occNotes={}; solo.occNotes[ds]=note; }
+  if(note){ solo.occNotes={}; solo.occNotes[nd]=note; }
   try{
     await Store.saveEvent(parent);
     try{ await Store.saveEvent(solo); }
     catch(err2){
       var m=(err2&&err2.message)||String(err2);
-      if(/changeover|tight|15\s*min/i.test(m) && confirm("⚠️ "+m+"\n\nProceed anyway?")){ solo.allowTight=true; await Store.saveEvent(solo); }
+      if(/changeover|tight|15\s*min|pending/i.test(m) && confirm("⚠️ "+m+"\n\nProceed anyway?")){ solo.allowTight=true; solo.allowPendingOverlap=true; await Store.saveEvent(solo); }
       else { await Store.saveEvent(Object.assign({}, e)); alert("Couldn't change the time — the series was left unchanged.\n\n"+m); return; }
     }
   }catch(err){ alert("Couldn't change the time: "+((err&&err.message)||err)); return; }
@@ -2146,7 +2266,7 @@ async function occTimeApply(id, ds){
 function eventCardHTML(e){
     var rooms=eventRoomsLabel(e);
     var time=e.allDay?"All day":(fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end)));
-    var rec=e.recurrence?(' <span class="recur-badge">🔁 '+freqLabel(e.recurrence.freq)+' ×'+e.recurrence.count+'</span>'):'';
+    var rec=e.recurrence?(' <span class="recur-badge">🔁 '+freqLabel(e.recurrence.freq)+recModeLabel(e.recurrence, e.date)+' ×'+e.recurrence.count+'</span>'):'';
     var statusBadge = isDraftEvent(e)
       ? ' <span class="recur-badge" style="background:#6b7280;">📝 Draft</span>'
       : ' <span class="recur-badge" style="background:#2e7d32;">● Live</span>';
@@ -2231,7 +2351,7 @@ function renderEventsAdmin(){
     '<div class="card"><h2 id="ev-form-title">🎉 Create a Public NGH Event</h2>'+
     '<p class="hint">Public events (tournaments, launch nights, demo days) appear on the booking calendar in teal, hold the selected rooms, and publish to the Event Calendar on the main site for customers to view. Make it recurring for a weekly series.</p>'+
     '<div class="row"><div><label class="fld req">Event title</label><input type="text" id="ev-title" placeholder="e.g. Friday Night Magic"></div>'+
-    '<div><label class="fld req">Date</label><input type="date" id="ev-date" onchange="updateEvOvernightHint()"></div></div>'+
+    '<div><label class="fld req">Date</label><input type="date" id="ev-date" onchange="updateEvOvernightHint();updateEvRecModes()"></div></div>'+
     '<label class="check-line" style="margin-top:10px;"><input type="checkbox" id="ev-allday" onchange="$(\'ev-times\').style.display=this.checked?\'none\':\'grid\';updateEvOvernightHint()">All day</label>'+
     '<div class="row" id="ev-times"><div><label class="fld">Start time</label>'+timeSelectHTML("ev-start","updateEvOvernightHint();",15)+'</div>'+
     '<div><label class="fld">End time</label>'+timeSelectHTML("ev-end","if($(\'ev-est-end\')&&!$(\'ev-est-end\').value)setTimeSelect(\'ev-est-end\',$(\'ev-end\').value);updateEvOvernightHint();",15)+'</div></div>'+
@@ -2331,10 +2451,12 @@ function renderEventsAdmin(){
     '<p class="hint" style="margin-top:4px;">Customers register on the public Event Calendar. Registrations default to <strong>approved</strong>; you can mark any as unapproved (those don\'t count toward min/max). You\'ll see all registrant details in the admin event card. Confirmation emails go to the registrant and stash@northwoodgamehaven.com.</p>'+
     '</div></div>'+
 
-    '<label class="check-line" style="margin-top:12px;"><input type="checkbox" id="ev-recurring" onchange="$(\'ev-rec-ui\').style.display=this.checked?\'grid\':\'none\'">Recurring event</label>'+
-    '<div class="row" id="ev-rec-ui" style="display:none;"><div><label class="fld">Repeats</label><select id="ev-rec-freq"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option></select></div>'+
-    '<div><label class="fld">Occurrences</label><input type="number" id="ev-rec-count" min="2" max="52" value="8"></div></div>'+
-    '<p class="hint" style="margin-top:6px;">For recurring events, each occurrence takes registrations independently.</p>'+
+    '<label class="check-line" style="margin-top:12px;"><input type="checkbox" id="ev-recurring" onchange="$(\'ev-rec-ui\').style.display=this.checked?\'grid\':\'none\';updateEvRecModes()">Recurring event</label>'+
+    '<div class="row" id="ev-rec-ui" style="display:none;"><div><label class="fld">Repeats</label><select id="ev-rec-freq" onchange="updateEvRecModes()"><option value="weekly">Weekly</option><option value="biweekly">Every 2 weeks</option><option value="monthly">Monthly</option></select></div>'+
+    '<div><label class="fld">Occurrences</label><input type="number" id="ev-rec-count" min="2" max="52" value="8" oninput="evRecPreview()"></div></div>'+
+    '<div id="ev-rec-monthly" style="display:none;margin-top:8px;padding:10px 12px;background:#f6faf4;border:1px solid #d8e8d6;border-radius:9px;"></div>'+
+    '<div class="hint" id="ev-rec-preview" style="display:none;margin-top:6px;"></div>'+
+    '<p class="hint" style="margin-top:6px;">For recurring events, each occurrence takes registrations independently. Weekly and biweekly series always repeat on the anchor date\u2019s weekday; monthly series repeat per the pattern you pick above.</p>'+
     '<label class="check-line" style="margin-top:14px;padding:10px 12px;background:#f6faf4;border:1px solid #d8e8d6;border-radius:9px;"><input type="checkbox" id="ev-publish"><b>Publish now (make live)</b> — leave unchecked to save as a private draft. Drafts are hidden from customers but still hold their room(s).</label>'+
     '<div style="margin-top:14px;"><button class="btn btn-sm" id="ev-save-btn" onclick="saveEvent()">Save Event</button> <button class="btn btn-sm btn-ghost" onclick="resetEventForm()" id="ev-cancel-btn" style="display:none;">Cancel edit</button></div>'+
     '</div>'+
@@ -2582,7 +2704,7 @@ function resetEventForm(){ editingEventId=null; evPhotoData=null; $("ev-form-tit
   if($("ev-photo-preview")) $("ev-photo-preview").innerHTML="";
   $("ev-allday").checked=false; $("ev-times").style.display="grid";
   if($("ev-publish")) $("ev-publish").checked=false;
-  document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=false; }); $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none";
+  document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=false; }); $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none"; updateEvRecModes();
   if($("ev-private")) $("ev-private").checked=false;
   if(typeof updatePrivateHint==="function") updatePrivateHint();
   if(typeof updateVrboHint==="function") updateVrboHint();
@@ -2643,8 +2765,8 @@ function _fillEventForm(e, blankDateTime){
   if($("ev-offsite-loc")) $("ev-offsite-loc").value=e.offsiteLocation||"";
   if(typeof onEvOffsiteToggle==="function") onEvOffsiteToggle();
   if(typeof updateEvOvernightHint==="function") updateEvOvernightHint();
-  if(e.recurrence){ $("ev-recurring").checked=true; $("ev-rec-ui").style.display="grid"; $("ev-rec-freq").value=e.recurrence.freq; $("ev-rec-count").value=e.recurrence.count; }
-  else { $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none"; }
+  if(e.recurrence){ $("ev-recurring").checked=true; $("ev-rec-ui").style.display="grid"; $("ev-rec-freq").value=e.recurrence.freq; $("ev-rec-count").value=e.recurrence.count; updateEvRecModes(e.recurrence.mode||"dom"); }
+  else { $("ev-recurring").checked=false; $("ev-rec-ui").style.display="none"; updateEvRecModes(); }
   var reg=e.registration||{};
   if($("ev-reg-enabled")){
     $("ev-reg-enabled").checked=!!reg.enabled; $("ev-reg-ui").style.display=reg.enabled?"block":"none";
@@ -2681,15 +2803,20 @@ async function saveEvent(){
   var hasPrizes = prizes.placement || prizes.participation;
 
   // ---- room-conflict guard: red blocks the save; yellow asks to proceed ----
-  var _evTight=false, _skipDates=[], _canceledKeys={};
+  var _evTight=false, _evPendOk=false, _skipDates=[], _canceledKeys={};
   if(!offsite && (allDay || (start&&end))){
     var _occ = $("ev-recurring").checked
-      ? eventDates({ date:date, recurrence:{ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }, exceptions:(editingEventId?(((cache.events.filter(function(x){return x.id===editingEventId;})[0])||{}).exceptions||[]):[]) })
+      ? eventDates({ date:date, recurrence:{ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)), mode:($("ev-rec-freq").value==="monthly"?evRecMode():undefined) }, exceptions:(editingEventId?(((cache.events.filter(function(x){return x.id===editingEventId;})[0])||{}).exceptions||[]):[]) })
       : [date];
     var _rooms = rooms.length ? rooms.slice() : ROOMS.map(function(x){ return x.id; });
     var _sm = allDay ? 0 : timeToMins(start);
     var _em = allDay ? 1440 : (timeToMins(end)<=timeToMins(start) ? 1440 : timeToMins(end));
     var _chk = evConflictScan(_occ, _sm, _em, _rooms, editingEventId);
+    // PENDING / on-hold booking REQUESTS aren't confirmed reservations: they
+    // don't hard-block an event, but scheduling over one needs an explicit OK.
+    // APPROVED bookings stay in the red list below — an absolute hard block.
+    var _pendRed=_chk.red.filter(function(c){ return c.kind==="booking" && c.ref && c.ref.status!=="approved"; });
+    _chk.red=_chk.red.filter(function(c){ return !(c.kind==="booking" && c.ref && c.ref.status!=="approved"); });
     if(_chk.red.length){
       var _redMsg=_chk.red.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n");
       var _redDates=[]; _chk.red.forEach(function(c){ if(_redDates.indexOf(c.date)<0) _redDates.push(c.date); });
@@ -2732,6 +2859,11 @@ async function saveEvent(){
         return;
       }
     }
+    var _pendLeft=_pendRed.filter(function(c){ return _skipDates.indexOf(c.date)<0; });
+    if(_pendLeft.length){
+      if(!confirm("⏳ PENDING booking request(s) overlap this event:\n\n"+_pendLeft.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nSchedule the event over them anyway?\n\nThose requests stay pending — when you review them you'll get the option to approve + cancel the conflicting occurrence, or reject / move them.\n\nOK = schedule anyway · Cancel = don't save")) return;
+      _evPendOk=true;
+    }
     var _tightLeft=_chk.tight.filter(function(c){ if(_skipDates.indexOf(c.date)>=0) return false; if(c.ref && c.ref.id && _canceledKeys[c.ref.id+"|"+c.date]) return false; return true; });
     if(_tightLeft.length){
       if(!confirm("⚠️ Back-to-back warning — less than "+MIN_GAP+" minutes of changeover with:\n\n"+_tightLeft.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nSave anyway?")) return;
@@ -2751,8 +2883,9 @@ async function saveEvent(){
     public:true
   };
   if(_evTight) ev.allowTight=true;
+  if(_evPendOk) ev.allowPendingOverlap=true;
   if(_skipDates.length && $("ev-recurring").checked){ ev.exceptions=(ev.exceptions||[]).concat(_skipDates.filter(function(d){ return (ev.exceptions||[]).indexOf(d)<0; })); }
-  if($("ev-recurring").checked){ ev.recurrence={ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }; if(!editingEventId) ev.groupId="EVGRP-"+genId(); }
+  if($("ev-recurring").checked){ ev.recurrence={ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }; if(ev.recurrence.freq==="monthly") ev.recurrence.mode=evRecMode(); if(!editingEventId) ev.groupId="EVGRP-"+genId(); }
   if($("ev-reg-enabled") && $("ev-reg-enabled").checked){
     ev.registration={
       enabled:true,
@@ -2790,12 +2923,12 @@ async function saveEvent(){
         // update original to stop before split
         var origUpd = Object.assign({}, orig);
         if(keep.length<=1){ origUpd.recurrence=null; } // only the anchor remains
-        else { origUpd.recurrence = { freq:orig.recurrence.freq, count:keep.length }; }
+        else { origUpd.recurrence = { freq:orig.recurrence.freq, count:keep.length, mode:orig.recurrence.mode }; }
         await Store.saveEvent(origUpd);
         // new series from split date onward
         var remaining = occ.filter(function(d){ return d >= splitDate; }).length;
         ev.id=undefined; ev.groupId="EVGRP-"+genId();
-        ev.recurrence = { freq:(ev.recurrence?ev.recurrence.freq:orig.recurrence.freq), count:Math.max(2,remaining) };
+        ev.recurrence = { freq:(ev.recurrence?ev.recurrence.freq:orig.recurrence.freq), count:Math.max(2,remaining), mode:(ev.recurrence&&ev.recurrence.mode)||orig.recurrence.mode };
         ev.exceptions=_skipDates.slice();
         await Store.saveEvent(ev);
       } else { // "one"
@@ -3055,7 +3188,7 @@ async function removeAndRefund(id, eventId, wasPaid){
 function expandedBlackouts(){
   var out=[];
   cache.blackouts.forEach(function(b, idx){
-    if(b.recurrence){ recurrenceDates(b.date, b.recurrence.freq, b.recurrence.count).forEach(function(d,i){ var c=Object.assign({},b); c.date=d; c._idx=idx; c._recI=i+1; out.push(c); }); }
+    if(b.recurrence){ recurrenceDates(b.date, b.recurrence.freq, b.recurrence.count, b.recurrence.mode).forEach(function(d,i){ var c=Object.assign({},b); c.date=d; c._idx=idx; c._recI=i+1; out.push(c); }); }
     else { var c=Object.assign({},b); c._idx=idx; out.push(c); }
   });
   return out;
@@ -3601,13 +3734,13 @@ function bookingConflictScan(r){
   var by=roomBusyIntervals(r.date, {ignoreBookingId:r.id}), red=[], tight=[];
   (r.rooms||[]).forEach(function(room){
     (by[room]||[]).forEach(function(iv){
-      if(iv.kind==="booking" && iv.ref && iv.ref.status!=="approved") return; /* other pendings don't count */
+      var pend=(iv.kind==="booking" && iv.ref && iv.ref.status!=="approved");   /* another PENDING/on-hold request */
       var win=fmtTime(iv.s)+"–"+fmtTime(Math.min(iv.e,1440));
-      if(overlaps(sm, em, iv.s, iv.e)){ red.push({room:room, label:iv.label, win:win}); return; }
-      if(iv.kind==="blackout") return;
+      if(overlaps(sm, em, iv.s, iv.e)){ red.push({room:room, label:iv.label, win:win, kind:iv.kind, ref:iv.ref, pend:pend}); return; }
+      if(iv.kind==="blackout"||pend) return;
       var gA=iv.s-em, gB=sm-iv.e;
       var gap=(gA>=0&&gA<MIN_GAP)?gA:((gB>=0&&gB<MIN_GAP)?gB:null);
-      if(gap!==null) tight.push({room:room, label:iv.label, gap:gap, win:win});
+      if(gap!==null) tight.push({room:room, label:iv.label, gap:gap, win:win, kind:iv.kind, ref:iv.ref});
     });
   });
   return {red:red, tight:tight};
@@ -3617,10 +3750,11 @@ function bookingConflictScan(r){
 function _auditItems(){
   var items=[];
   cache.bookings.forEach(function(r){
-    if(r.status!=="approved") return;
+    if(r.status!=="approved" && r.status!=="pending" && r.status!=="hold") return;
+    var pend=(r.status!=="approved");
     var s=timeToMins(r.start), e=Math.min(s+(Number(r.hours)||1)*60,1440);
     (r.rooms||[]).forEach(function(room){
-      items.push({date:r.date, room:room, s:s, e:e, cat:"booking", id:r.id, label:(r.name||"Booking"), rec:!!r.groupId, allDay:false});
+      items.push({date:r.date, room:room, s:s, e:e, cat:"booking", id:r.id, label:(pend?"⏳ Pending · ":"")+(r.name||"Booking"), rec:!!r.groupId, allDay:false, pend:pend});
     });
   });
   expandedEvents().forEach(function(ev){
@@ -3679,7 +3813,7 @@ function deconflictHTML(){
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+
     '<h2 style="margin:0;">🧹 De-conflict audit</h2>'+
     '<div class="kv">'+(a.length?('🔴 '+reds+' overlap'+(reds===1?"":"s")+' · 🟡 '+yels+' back-to-back (<'+MIN_GAP+' min)'):'')+'</div></div>'+
-    '<div class="hint" style="margin-top:4px;">Scans every <b>approved booking</b> and <b>NGH event</b> for room double-bookings (red) and back-to-back turns with less than '+MIN_GAP+' minutes of changeover (yellow). Conflicted items are outlined on the calendar below. Shifting a reservation does <b>not</b> auto-email anyone — let the customer know if you move their booking.</div>';
+    '<div class="hint" style="margin-top:4px;">Scans every <b>approved &amp; pending booking request</b> and <b>NGH event</b> for room double-bookings (red) and back-to-back turns with less than '+MIN_GAP+' minutes of changeover (yellow). Conflicted items are outlined on the calendar below. Shifting a reservation does <b>not</b> auto-email anyone — let the customer know if you move their booking.</div>';
   if(!a.length){ h+='<div class="dcf-row" style="background:#e7f5e8;border-color:#b6dcb8;color:#2e7d32;">✅ All clear — no room overlaps and every changeover has at least '+MIN_GAP+' minutes.</div></div>'; return h; }
   a.forEach(function(c){
     var later=(c.b.s>=c.a.s)?c.b:c.a, earlier=(later===c.b)?c.a:c.b;
@@ -3918,7 +4052,7 @@ function expandedEventsC(){
 }
 function expandedBlackoutsC(){
   var out=[]; custCalData.blackouts.forEach(function(b){
-    if(b.recurrence){ recurrenceDates(b.date,b.recurrence.freq,b.recurrence.count).forEach(function(d){ var c=Object.assign({},b); c.date=d; out.push(c); }); }
+    if(b.recurrence){ recurrenceDates(b.date,b.recurrence.freq,b.recurrence.count,b.recurrence.mode).forEach(function(d){ var c=Object.assign({},b); c.date=d; out.push(c); }); }
     else out.push(Object.assign({},b));
   }); return out;
 }

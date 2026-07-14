@@ -37,18 +37,43 @@ export function eventRoomsOf(e) {
   return (e && e.rooms && e.rooms.length) ? e.rooms : ROOM_IDS;    // unset = whole venue
 }
 
+// Monthly pattern date: i months after the anchor, per the Outlook-style mode.
+//   dom (default) = same day-of-month · nthdow = Nth <weekday> of the month
+//   lastdow = last <weekday> · lastday = last day of the month
+function monthlyModeDate(anchor, i, mode) {
+  const a = new Date(anchor + 'T12:00:00'), y = a.getFullYear(), m = a.getMonth() + i;
+  const iso = (d) => {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+  if (mode === 'lastday') return iso(new Date(y, m + 1, 0, 12));
+  if (mode === 'lastdow') {
+    const L = new Date(y, m + 1, 0, 12), df = (L.getDay() - a.getDay() + 7) % 7;
+    L.setDate(L.getDate() - df); return iso(L);
+  }
+  if (mode === 'nthdow') {
+    const nth = Math.ceil(a.getDate() / 7);
+    const F = new Date(y, m, 1, 12), off = (a.getDay() - F.getDay() + 7) % 7;
+    let day = 1 + off + (nth - 1) * 7;
+    const dim = new Date(y, m + 1, 0).getDate();
+    if (day > dim) day -= 7;
+    return iso(new Date(y, m, day, 12));
+  }
+  return addMonths(anchor, i);
+}
+
 // Expand a recurring event/blackout into per-date copies (honors exceptions).
 export function expandOccurrences(e) {
   if (!e) return [];
   if (!e.recurrence) return [e];
   const out = [];
   const freq = e.recurrence.freq, count = Math.min(60, parseInt(e.recurrence.count, 10) || 1);
+  const mode = e.recurrence.mode || 'dom';
   let cur = e.date;
   for (let i = 0; i < count; i++) {
     out.push({ ...e, date: cur });
     cur = freq === 'weekly' ? addDays(cur, 7)
         : freq === 'biweekly' ? addDays(cur, 14)
-        : addMonths(e.date, i + 1);
+        : monthlyModeDate(e.date, i + 1, mode);
   }
   const exc = e.exceptions || [];
   return exc.length ? out.filter(o => exc.indexOf(o.date) < 0) : out;
@@ -59,7 +84,7 @@ export function expandOccurrences(e) {
 // opts: { ignoreBookingId, ignoreEventId, includeBlackouts (default true) }
 export function busyByRoom(date, blockers, opts = {}) {
   const byRoom = {}; ROOM_IDS.forEach(id => { byRoom[id] = []; });
-  const add = (room, s, e, kind, label, id) => { if (byRoom[room]) byRoom[room].push({ s, e, kind, label, id }); };
+  const add = (room, s, e, kind, label, id, extra) => { if (byRoom[room]) byRoom[room].push({ s, e, kind, label, id, ...(extra || {}) }); };
 
   for (const r of (blockers.bookings || [])) {
     if (!r || r.status === 'rejected' || r.status === 'canceled') continue;
@@ -67,7 +92,7 @@ export function busyByRoom(date, blockers, opts = {}) {
     if (opts.ignoreBookingId && r.id === opts.ignoreBookingId) continue;
     const rs = toMins(r.start), re = Math.min(rs + (Number(r.hours) || 1) * 60, 1440);
     for (const room of (r.rooms && r.rooms.length ? r.rooms : ROOM_IDS)) {
-      add(room, rs, re, 'booking', ((r.status === 'pending' || r.status === 'hold') ? 'Pending booking' : 'Booking') + (r.name ? ' · ' + r.name : ''), r.id);
+      add(room, rs, re, 'booking', ((r.status === 'pending' || r.status === 'hold') ? 'Pending booking' : 'Booking') + (r.name ? ' · ' + r.name : ''), r.id, { st: r.status || 'pending' });
     }
   }
 
@@ -79,13 +104,13 @@ export function busyByRoom(date, blockers, opts = {}) {
       const label = (e.private ? 'Private event' : ('NGH event: ' + (e.title || 'Scheduled event')));
       if (e.allDay) {
         if (e.date !== date) continue;
-        rooms.forEach(room => add(room, 0, 1440, 'event', label + ' (all day)', e.id));
+        rooms.forEach(room => add(room, 0, 1440, 'event', label + ' (all day)', e.id, { rec: !!raw.recurrence }));
         continue;
       }
       if (!e.start || !e.end) continue;
       const es = toMins(e.start), ee = toMins(e.end), overnight = ee <= es;
-      if (e.date === date) rooms.forEach(room => add(room, es, overnight ? 1440 : ee, 'event', label, e.id));
-      if (overnight && e.date === prevYMD(date)) rooms.forEach(room => add(room, 0, ee, 'event', label + ' (overnight)', e.id));
+      if (e.date === date) rooms.forEach(room => add(room, es, overnight ? 1440 : ee, 'event', label, e.id, { rec: !!raw.recurrence }));
+      if (overnight && e.date === prevYMD(date)) rooms.forEach(room => add(room, 0, ee, 'event', label + ' (overnight)', e.id, { rec: !!raw.recurrence }));
     }
   }
 
@@ -112,7 +137,7 @@ export function checkWindow({ date, startM, endM, rooms }, blockers, opts = {}) 
   for (const room of (rooms && rooms.length ? rooms : ROOM_IDS)) {
     for (const iv of (byRoom[room] || [])) {
       if (overlap(startM, endCk, iv.s, iv.e)) {
-        red.push({ room, label: iv.label, kind: iv.kind, win: fmtT(iv.s) + '–' + fmtT(iv.e) });
+        red.push({ room, label: iv.label, kind: iv.kind, st: iv.st, rec: iv.rec, win: fmtT(iv.s) + '–' + fmtT(iv.e) });
         continue;
       }
       if (iv.kind === 'blackout') continue;                        // no margin needed vs closures
