@@ -2681,21 +2681,30 @@ async function saveEvent(){
   var hasPrizes = prizes.placement || prizes.participation;
 
   // ---- room-conflict guard: red blocks the save; yellow asks to proceed ----
-  var _evTight=false;
+  var _evTight=false, _skipDates=[];
   if(!offsite && (allDay || (start&&end))){
     var _occ = $("ev-recurring").checked
-      ? eventDates({ date:date, recurrence:{ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) } })
+      ? eventDates({ date:date, recurrence:{ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }, exceptions:(editingEventId?(((cache.events.filter(function(x){return x.id===editingEventId;})[0])||{}).exceptions||[]):[]) })
       : [date];
     var _rooms = rooms.length ? rooms.slice() : ROOMS.map(function(x){ return x.id; });
     var _sm = allDay ? 0 : timeToMins(start);
     var _em = allDay ? 1440 : (timeToMins(end)<=timeToMins(start) ? 1440 : timeToMins(end));
     var _chk = evConflictScan(_occ, _sm, _em, _rooms, editingEventId);
     if(_chk.red.length){
-      alert("🔴 Can't save — this event's room(s) overlap something already scheduled:\n\n"+_chk.red.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nChange the time, date, or rooms — or open 🧹 De-conflict in the calendar to resolve it.");
-      return;
+      var _redMsg=_chk.red.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n");
+      var _redDates=[]; _chk.red.forEach(function(c){ if(_redDates.indexOf(c.date)<0) _redDates.push(c.date); });
+      if($("ev-recurring").checked && _redDates.length < _occ.length){
+        if(confirm("🔴 Some dates of this series overlap something already scheduled:\n\n"+_redMsg+"\n\nSkip the "+_redDates.length+" conflicting date"+(_redDates.length===1?"":"s")+" and save the rest of the series?\n\nSkipped dates become canceled instances of the series — review or restore them anytime via 🔁 Review instances on this event's card.\n\nOK = skip those dates & save · Cancel = don't save")){
+          _skipDates=_redDates;
+        } else { return; }
+      } else {
+        alert("🔴 Can't save — this event's room(s) overlap something already scheduled:\n\n"+_redMsg+"\n\nChange the time, date, or rooms — or open 🧹 De-conflict in the calendar to resolve it.");
+        return;
+      }
     }
-    if(_chk.tight.length){
-      if(!confirm("⚠️ Back-to-back warning — less than "+MIN_GAP+" minutes of changeover with:\n\n"+_chk.tight.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nSave anyway?")) return;
+    var _tightLeft=_chk.tight.filter(function(c){ return _skipDates.indexOf(c.date)<0; });
+    if(_tightLeft.length){
+      if(!confirm("⚠️ Back-to-back warning — less than "+MIN_GAP+" minutes of changeover with:\n\n"+_tightLeft.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nSave anyway?")) return;
       _evTight=true;
     }
   }
@@ -2712,6 +2721,7 @@ async function saveEvent(){
     public:true
   };
   if(_evTight) ev.allowTight=true;
+  if(_skipDates.length && ev.recurrence){ ev.exceptions=(ev.exceptions||[]).concat(_skipDates.filter(function(d){ return (ev.exceptions||[]).indexOf(d)<0; })); }
   if($("ev-recurring").checked){ ev.recurrence={ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }; if(!editingEventId) ev.groupId="EVGRP-"+genId(); }
   if($("ev-reg-enabled") && $("ev-reg-enabled").checked){
     ev.registration={
@@ -2739,7 +2749,7 @@ async function saveEvent(){
         ev.recurrence = ev.recurrence || orig.recurrence;
         ev.date = orig.date;                  // series anchor stays
         ev.groupId = orig.groupId || ("EVGRP-"+genId());
-        ev.exceptions = orig.exceptions||[];
+        ev.exceptions = (orig.exceptions||[]).concat((ev.exceptions||[]).filter(function(d){ return (orig.exceptions||[]).indexOf(d)<0; }));
         await Store.saveEvent(ev);
       } else if(scope==="following"){
         // Split: truncate the original series to end before this occurrence,
@@ -2756,7 +2766,7 @@ async function saveEvent(){
         var remaining = occ.filter(function(d){ return d >= splitDate; }).length;
         ev.id=undefined; ev.groupId="EVGRP-"+genId();
         ev.recurrence = { freq:(ev.recurrence?ev.recurrence.freq:orig.recurrence.freq), count:Math.max(2,remaining) };
-        ev.exceptions=[];
+        ev.exceptions=_skipDates.slice();
         await Store.saveEvent(ev);
       } else { // "one"
         // Add this date as an exception on the parent, create a standalone event for it.
