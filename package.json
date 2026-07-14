@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@netlify/functions": "^2.8.1",
-    "@netlify/neon": "^0.1.0"
+    "@netlify/neon": "^0.1.0",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "netlify-cli": "^17.0.0"

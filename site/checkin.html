@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>NGH Event Check-In</title>
+<style>
+  :root{--forest:#2d5a3d;--gold:#c79a3b;--cream:#f4f1e9;--dark:#1a2e20;}
+  *{box-sizing:border-box;}
+  body{font-family:Georgia,serif;background:var(--cream);color:#23351f;margin:0;}
+  .wrap{max-width:520px;margin:0 auto;padding:14px 14px 60px;}
+  h1{color:var(--forest);font-size:1.25rem;text-align:center;margin:14px 0 4px;}
+  .sub{color:#8a8a6a;font-size:0.8rem;text-align:center;margin-bottom:14px;}
+  .card{background:#fff;border-radius:14px;box-shadow:0 6px 30px rgba(0,0,0,.10);padding:18px 16px;margin-bottom:14px;}
+  input,select{padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:1rem;width:100%;}
+  .btn{display:inline-block;background:#fff;border:2px solid #cfe0d4;color:var(--forest);font-weight:bold;font-size:0.95rem;padding:11px 20px;border-radius:40px;cursor:pointer;font-family:Georgia,serif;margin:5px 5px 0 0;}
+  .btn.primary{background:var(--gold);border-color:var(--gold);color:#1a1a12;}
+  .btn.green{background:var(--forest);border-color:var(--forest);color:#fff;}
+  .btn.danger{border-color:#c0392b;color:#c0392b;}
+  .btn:disabled{opacity:0.5;cursor:default;}
+  #video{width:100%;border-radius:12px;background:#000;aspect-ratio:3/4;object-fit:cover;}
+  .chip{display:inline-block;padding:4px 12px;border-radius:50px;font-size:0.78rem;font-weight:bold;margin:2px 4px 2px 0;}
+  .chip.ok{background:#e7f5e8;color:#2e7d32;border:1px solid #b6dcb8;}
+  .chip.warn{background:#fbf6ea;color:#8a6d1f;border:1px solid #e8d9b0;}
+  .chip.bad{background:#fdecea;color:#9a3b2e;border:1px solid #f0c5be;}
+  .party{font-size:0.86rem;color:#4a4a35;margin:6px 0;}
+  .big{font-size:1.5rem;color:var(--forest);font-weight:bold;}
+  #msg{font-size:0.85rem;min-height:1.2em;margin-top:6px;}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .hidden{display:none!important;}
+  .beepflash{animation:flash 0.5s;}
+  @keyframes flash{0%{box-shadow:0 0 0 6px #2e7d32;}100%{box-shadow:0 6px 30px rgba(0,0,0,.10);}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎟️ Event Check-In</h1>
+  <div class="sub">Northwood Game Haven · staff only</div>
+
+  <!-- login -->
+  <div id="login" class="card">
+    <p style="font-size:0.9rem;margin-top:0;">Enter the admin code to start scanning.</p>
+    <input id="admincode" type="password" placeholder="Admin code" autocomplete="off">
+    <button class="btn green" style="margin-top:10px;width:100%;" onclick="doLogin()">Sign in</button>
+    <div id="loginmsg" style="color:#9a3b2e;font-size:0.84rem;margin-top:6px;"></div>
+  </div>
+
+  <!-- scanner -->
+  <div id="scanner" class="card hidden">
+    <video id="video" playsinline muted></video>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn" id="camtoggle" onclick="toggleCam()">📷 Start camera</button>
+      <span id="camstate" style="font-size:0.78rem;color:#8a8a6a;">camera off</span>
+    </div>
+    <div style="margin-top:12px;">
+      <div style="font-size:0.8rem;color:#8a8a6a;margin-bottom:4px;">Or paste / type a ticket code:</div>
+      <div class="row">
+        <input id="manual" placeholder="REG-XXXXXX-123.a1b2… or ticket URL" style="flex:1;min-width:200px;">
+        <button class="btn" onclick="lookup(document.getElementById('manual').value)">Look up</button>
+      </div>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <!-- result -->
+  <div id="result" class="card hidden"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script>
+var API="/.netlify/functions";
+var token=sessionStorage.getItem("ngh_checkin_token")||"";
+var stream=null, scanning=false, lastCode="", lastAt=0, current=null, currentCode="";
+
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function show(id,on){document.getElementById(id).classList[on?"remove":"add"]("hidden");}
+function msg(t,ok){var m=document.getElementById("msg");m.textContent=t||"";m.style.color=ok?"#2e7d32":"#9a3b2e";}
+
+if(token){ show("login",false); show("scanner",true); }
+
+async function doLogin(){
+  var code=document.getElementById("admincode").value;
+  var lm=document.getElementById("loginmsg"); lm.textContent="";
+  try{
+    var r=await fetch(API+"/admin-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:code})});
+    var d=await r.json().catch(function(){return{};});
+    if(!r.ok||!d.token) throw new Error(d.error||"Incorrect code");
+    token=d.token; sessionStorage.setItem("ngh_checkin_token",token);
+    show("login",false); show("scanner",true);
+  }catch(e){ lm.textContent=e.message||"Login failed"; }
+}
+document.getElementById("admincode").addEventListener("keydown",function(e){ if(e.key==="Enter") doLogin(); });
+
+/* ---------- camera scanning ---------- */
+async function toggleCam(){ if(stream) stopCam(); else startCam(); }
+async function startCam(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+    var v=document.getElementById("video"); v.srcObject=stream; await v.play();
+    scanning=true;
+    document.getElementById("camtoggle").textContent="⏹ Stop camera";
+    document.getElementById("camstate").textContent="scanning…";
+    if("BarcodeDetector" in window){ scanWithDetector(); } else { scanWithJsQR(); }
+  }catch(e){ msg("Camera unavailable: "+(e.message||e)+" — use manual entry.",false); }
+}
+function stopCam(){
+  scanning=false;
+  if(stream){ stream.getTracks().forEach(function(t){t.stop();}); stream=null; }
+  document.getElementById("camtoggle").textContent="📷 Start camera";
+  document.getElementById("camstate").textContent="camera off";
+}
+async function scanWithDetector(){
+  var det=new BarcodeDetector({formats:["qr_code"]});
+  var v=document.getElementById("video");
+  (async function loop(){
+    if(!scanning) return;
+    try{ var codes=await det.detect(v); if(codes.length) onScan(codes[0].rawValue); }catch(_){}
+    setTimeout(loop,350);
+  })();
+}
+function scanWithJsQR(){
+  var v=document.getElementById("video");
+  var c=document.createElement("canvas"), ctx=c.getContext("2d",{willReadFrequently:true});
+  (function loop(){
+    if(!scanning) return;
+    if(v.videoWidth){
+      c.width=v.videoWidth; c.height=v.videoHeight;
+      ctx.drawImage(v,0,0);
+      try{
+        var img=ctx.getImageData(0,0,c.width,c.height);
+        var q=window.jsQR&&jsQR(img.data,c.width,c.height,{inversionAttempts:"dontInvert"});
+        if(q&&q.data) onScan(q.data);
+      }catch(_){}
+    }
+    setTimeout(loop,400);
+  })();
+}
+function onScan(raw){
+  var now=Date.now();
+  if(raw===lastCode&&now-lastAt<4000) return;   // debounce repeat frames
+  lastCode=raw; lastAt=now;
+  if(navigator.vibrate) navigator.vibrate(80);
+  lookup(raw);
+}
+
+/* ---------- lookup + check-in ---------- */
+async function api(path,opts){
+  opts=opts||{}; opts.headers=Object.assign({"Content-Type":"application/json","Authorization":"Bearer "+token},opts.headers||{});
+  var r=await fetch(API+path,opts);
+  if(r.status===401){ sessionStorage.removeItem("ngh_checkin_token"); token=""; show("scanner",false); show("result",false); show("login",true); throw new Error("Session expired — sign in again."); }
+  var d=await r.json().catch(function(){return{};});
+  if(!r.ok) throw new Error(d.error||("Error "+r.status));
+  return d;
+}
+async function lookup(code){
+  code=String(code||"").trim(); if(!code) return;
+  msg("Looking up…",true);
+  try{
+    current=await api("/checkin?code="+encodeURIComponent(code));
+    currentCode=code;
+    msg("",true); render();
+  }catch(e){ msg(e.message||"Not a valid ticket.",false); }
+}
+function render(flash){
+  var r=current; if(!r) return;
+  var el=document.getElementById("result"); show("result",true);
+  var chips="";
+  if(r.status==="canceled") chips+='<span class="chip bad">CANCELED — DO NOT ADMIT</span>';
+  else if(r.cost>0&&!r.feePaid) chips+='<span class="chip warn">⚠️ NOT PAID — collect $ at door</span>';
+  else if(r.cost>0) chips+='<span class="chip ok">✅ Paid</span>';
+  else chips+='<span class="chip ok">Free event</span>';
+  if(r.remaining===0&&r.status!=="canceled") chips+='<span class="chip warn">All checked in</span>';
+  var opts=""; for(var i=1;i<=r.remaining;i++) opts+='<option value="'+i+'"'+(i===r.remaining?" selected":"")+'>'+i+"</option>";
+  el.innerHTML=
+    '<div style="font-size:0.78rem;color:#8a8a6a;">'+esc(r.id)+'</div>'+
+    '<div class="big">'+esc(r.name)+'</div>'+
+    '<div class="party">'+esc(r.eventTitle)+(r.occDate?(' · '+esc(r.occDate)):'')+'</div>'+
+    '<div>'+chips+'</div>'+
+    '<div class="party"><strong>'+r.checkedIn+' / '+r.qty+'</strong> checked in · Party: '+esc((r.attendees||[]).join(", "))+'</div>'+
+    (r.status!=="canceled"&&r.remaining>0?
+      '<div class="row" style="margin-top:8px;"><select id="cin" style="max-width:90px;">'+opts+'</select>'+
+      '<button class="btn green" onclick="checkin()">✔ Check in</button>'+
+      '<button class="btn primary" onclick="checkinAll()">Check in all '+r.remaining+'</button></div>':'')+
+    (r.checkedIn>0?'<button class="btn danger" style="margin-top:6px;" onclick="undo()">↩ Undo 1</button>':'')+
+    '<button class="btn" style="margin-top:6px;" onclick="clearResult()">Next scan →</button>';
+  if(flash){ el.classList.remove("beepflash"); void el.offsetWidth; el.classList.add("beepflash"); }
+}
+async function checkin(){ var n=parseInt(document.getElementById("cin").value,10)||1; await doCheckin(n); }
+async function checkinAll(){ await doCheckin(current.remaining); }
+async function doCheckin(n){
+  try{ current=await api("/checkin",{method:"POST",body:JSON.stringify({code:currentCode,count:n})}); render(true); }
+  catch(e){ msg(e.message,false); }
+}
+async function undo(){
+  try{ current=await api("/checkin",{method:"POST",body:JSON.stringify({code:currentCode,undo:1})}); render(); }
+  catch(e){ msg(e.message,false); }
+}
+function clearResult(){ current=null; currentCode=""; show("result",false); lastCode=""; }
+</script>
+</body>
+</html>

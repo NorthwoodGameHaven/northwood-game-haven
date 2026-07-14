@@ -79,9 +79,12 @@ export async function retrieveSession(id) {
   return stripeRequest('GET', '/checkout/sessions/' + encodeURIComponent(id), null);
 }
 
-// Refund a payment_intent (full refund by default).
-export async function refundPaymentIntent(paymentIntentId) {
-  return stripeRequest('POST', '/refunds', { payment_intent: paymentIntentId });
+// Refund a payment_intent. Full refund by default; pass amountCents for a
+// partial refund (used when a customer reduces their ticket count).
+export async function refundPaymentIntent(paymentIntentId, amountCents) {
+  const body = { payment_intent: paymentIntentId };
+  if (amountCents != null && Number(amountCents) > 0) body.amount = Math.round(Number(amountCents));
+  return stripeRequest('POST', '/refunds', body);
 }
 
 // Verify a Stripe webhook signature (HMAC-SHA256 over "timestamp.payload").

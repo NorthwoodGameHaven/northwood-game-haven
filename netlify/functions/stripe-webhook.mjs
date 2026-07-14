@@ -1,12 +1,17 @@
 // netlify/functions/stripe-webhook.mjs
 // Receives Stripe events. On checkout.session.completed we mark the
 // corresponding booking (fee or deposit) or registration as PAID.
+// For registrations we also record the amount breakdown and send the
+// payment-confirmation + ticket email (QR entry code, Wallet link,
+// manage/cancel link).
 // The signature is verified so only genuine Stripe calls are trusted.
 //
 // IMPORTANT: this function must read the RAW request body for signature
 // verification — do not JSON.parse before verifying.
 import { sql, ensureSchema, json, bad } from './_shared/db.mjs';
 import { verifyWebhook } from './_shared/stripe.mjs';
+import { sendBrandedMail } from './_shared/email.mjs';
+import { ticketUrl, walletConfigured, money } from './_shared/ticket.mjs';
 
 export default async (req) => {
   try {
@@ -43,9 +48,26 @@ export default async (req) => {
         const rows = await sql`SELECT data FROM registrations WHERE id = ${md.registrationId}`;
         if (rows.length) {
           const r = rows[0].data;
+          const alreadySent = !!r.ticketEmailSent; // idempotency vs Stripe retries
           r.feePaid = true; r.paymentPI = paymentIntent; r.checkoutSessionId = s.id || r.checkoutSessionId;
+          r.paidAt = r.paidAt || new Date().toISOString();
+          // Authoritative amounts from the session + our checkout metadata.
+          if (s.amount_total != null) r.amountPaidCents = Number(s.amount_total);
+          r.paidBreakdown = {
+            subtotalCents: Number(md.subtotalCents) || 0,
+            taxCents: Number(md.taxCents) || 0,
+            feeCents: Number(md.feeCents) || 0,
+            totalCents: Number(md.totalCents) || Number(s.amount_total) || 0,
+            qty: Number(md.qty) || Math.max(1, parseInt(r.qty, 10) || 1)
+          };
+          r.ticketEmailSent = true;
           await sql`UPDATE registrations SET data = ${JSON.stringify(r)}::jsonb WHERE id = ${r.id}`;
-          console.log('[stripe-webhook] registration', r.id, 'marked paid');
+          console.log('[stripe-webhook] registration', r.id, 'marked paid,', s.amount_total, 'cents');
+
+          if (!alreadySent && r.email) {
+            try { await sendTicketEmail(r); }
+            catch (e) { console.error('[stripe-webhook] ticket email failed', e); }
+          }
         }
       }
     }
@@ -58,3 +80,33 @@ export default async (req) => {
     return json({ received: true, error: String(e && e.message || e) });
   }
 };
+
+// Payment confirmation + ticket. QR is served as a hosted PNG (Gmail blocks
+// data: URIs). The ticket page carries print/Wallet/manage-or-cancel actions.
+async function sendTicketEmail(r) {
+  const qty = Math.max(1, parseInt(r.qty, 10) || 1);
+  const bd = r.paidBreakdown || {};
+  const tUrl = ticketUrl(r.id);
+  const names = Array.isArray(r.attendees) && r.attendees.length ? r.attendees.join(', ') : r.name;
+  const breakdown = bd.totalCents
+    ? ('Paid: ' + money(bd.totalCents) + ' — ' + qty + ' ticket' + (qty === 1 ? '' : 's') + ' ' + money(bd.subtotalCents) + ' + ' + money(bd.taxCents) + ' sales tax + ' + money(bd.feeCents) + ' processing fee.')
+    : ('Paid: ' + money(r.amountPaidCents || 0) + '.');
+  const buttons = [
+    { label: '🎟️ View / Print Your Ticket', url: tUrl, primary: true }
+  ];
+  if (walletConfigured()) buttons.push({ label: 'Add to Google Wallet', url: tUrl + '/wallet' });
+  buttons.push({ label: 'Modify or Cancel', url: tUrl + '#manage' });
+
+  await sendBrandedMail(r.email, '✅ Payment received — your ticket for ' + (r.eventTitle || 'NGH Event'), {
+    heading: 'Payment confirmed — here\u2019s your ticket! 🎟️',
+    bodyText:
+      'Hi ' + r.name + ',\n\n' +
+      'Your payment for ' + (r.eventTitle || 'NGH Event') + (r.occDate ? (' on ' + r.occDate) : '') + ' is complete.\n\n' +
+      breakdown + '\n' +
+      'Admits: ' + qty + (qty === 1 ? ' person' : ' people') + ' (' + names + ')\n\n' +
+      'Show the QR code below at the door — one scan checks in your whole party. You can also open your ticket any time to print it, add it to Google Wallet, or change your ticket count / cancel (refunds are automatic).\n\n' +
+      'See you at the table!\n— Northwood Game Haven',
+    image: { url: tUrl + '/qr.png', alt: 'Your entry QR code', width: 240 },
+    buttons
+  });
+}

@@ -6,6 +6,7 @@
 //   PATCH  /bookings/group/:groupId {patch} -> update every instance in a series (admin only)
 import { sql, ensureSchema, json, bad, noContent, preflight, requireAdmin } from './_shared/db.mjs';
 import { sendBrandedMail } from './_shared/email.mjs';
+import { checkWindow, loadBlockers, describe, toMins as cToMins, MIN_GAP_MINS } from './_shared/conflicts.mjs';
 
 const ROOM_IDS = ['holt', 'den', 'depths'];
 
@@ -75,8 +76,19 @@ const _handler = async (req) => {
     }
     if (list.length === 1) {
       const b = list[0];
-      const clash = await hasConflict(b);
-      if (clash) return bad('Time conflicts with an existing booking, event, or blackout', 409);
+      const blockers = await loadBlockers(sql);
+      const startM = cToMins(b.start);
+      const { red, tight } = checkWindow(
+        { date: b.date, startM, endM: startM + (Number(b.hours) || 1) * 60, rooms: b.rooms },
+        blockers,
+        { ignoreBookingId: b.id }
+      );
+      if (red.length) {
+        return json({ error: 'Time conflicts with an existing booking, event, or blackout — ' + describe(red), code: 'overlap', conflicts: red }, 409);
+      }
+      if (tight.length && !body.allowTight) {
+        return json({ error: 'Back-to-back with less than ' + MIN_GAP_MINS + ' minutes of changeover — ' + describe(tight), code: 'tight', conflicts: tight }, 409);
+      }
     }
 
     for (const b of list) {
@@ -127,51 +139,6 @@ const _handler = async (req) => {
 
   return bad('Method not allowed', 405);
 };
-
-// Returns true if booking b overlaps any non-rejected booking, public event, or blackout.
-async function hasConflict(b) {
-  const startM = toMins(b.start);
-  const endM = Math.min(startM + b.hours * 60, 1440);
-  const wantRooms = b.rooms.length ? b.rooms : ROOM_IDS;
-
-  // existing bookings same date
-  const bk = await sql`SELECT data FROM bookings WHERE date = ${b.date} AND status <> 'rejected'`;
-  for (const row of bk) {
-    const r = row.data;
-    const rs = toMins(r.start), re = Math.min(rs + r.hours * 60, 1440);
-    if (overlap(startM, endM, rs, re) && shareRoom(wantRooms, r.rooms || ROOM_IDS)) return true;
-  }
-  // events + blackouts (expand recurrence)
-  const evRows = await sql`SELECT data FROM events`;
-  const boRow = await sql`SELECT data FROM blackouts WHERE id = 1`;
-  const blockers = [
-    ...evRows.flatMap(r => expand(r.data)),
-    ...((boRow[0]?.data) || []).flatMap(expand)
-  ];
-  for (const e of blockers) {
-    if (e.date !== b.date) continue;
-    const es = e.allDay ? 0 : toMins(e.start);
-    const ee = e.allDay ? 1440 : toMins(e.end);
-    const rooms = (e.rooms && e.rooms.length) ? e.rooms : ROOM_IDS;
-    if (overlap(startM, endM, es, ee) && shareRoom(wantRooms, rooms)) return true;
-  }
-  return false;
-}
-function toMins(t) { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; }
-function overlap(a1, a2, b1, b2) { return a1 < b2 && b1 < a2; }
-function shareRoom(a, b) { return a.some(x => b.includes(x)); }
-function addDays(d, n) { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); }
-function addMonths(d, n) { const x = new Date(d + 'T12:00:00'); x.setMonth(x.getMonth() + n); return x.toISOString().slice(0, 10); }
-function expand(e) {
-  if (!e.recurrence) return [e];
-  const out = [], { freq, count } = e.recurrence;
-  let cur = e.date;
-  for (let i = 0; i < count; i++) {
-    out.push({ ...e, date: cur });
-    cur = freq === 'weekly' ? addDays(cur, 7) : freq === 'biweekly' ? addDays(cur, 14) : addMonths(e.date, i + 1);
-  }
-  return out;
-}
 
 // ---- email notifications on a new booking request ----
 function fmtT(t) { if (!t) return ''; const p = String(t).split(':'); let h = +p[0]; const m = p[1], ap = h >= 12 ? 'PM' : 'AM'; let hh = h % 12; if (hh === 0) hh = 12; return hh + ':' + m + ' ' + ap; }

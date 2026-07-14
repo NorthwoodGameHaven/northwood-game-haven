@@ -5,6 +5,36 @@
 //   PUT    /events/:id {event}-> update (admin)
 //   DELETE /events/:id        -> delete (admin)
 import { sql, ensureSchema, json, bad, noContent, preflight, requireAdmin } from './_shared/db.mjs';
+import { checkWindow, loadBlockers, describe, expandOccurrences, eventRoomsOf, toMins, MIN_GAP_MINS } from './_shared/conflicts.mjs';
+
+// Conflict guard for admin event create/edit.
+// RED (room overlap with a booking or another event) is a hard block.
+// TIGHT (< MIN_GAP_MINS changeover in the same room) requires allowTight:true.
+// Blackouts don't block events (staff often blackout AROUND their own events).
+async function eventConflicts(ev, ignoreEventId) {
+  const rooms = eventRoomsOf(ev);
+  if (!rooms.length) return { red: [], tight: [] };               // offsite holds nothing
+  const blockers = await loadBlockers(sql);
+  const red = [], tight = [];
+  for (const occ of expandOccurrences(ev)) {
+    let startM, endM;
+    if (occ.allDay) { startM = 0; endM = 1440; }
+    else {
+      if (!occ.start || !occ.end) continue;
+      startM = toMins(occ.start); endM = toMins(occ.end);
+      if (endM <= startM) endM = 1440;                            // overnight head; tail covered by busy logic
+    }
+    const r = checkWindow(
+      { date: occ.date, startM, endM, rooms },
+      blockers,
+      { ignoreEventId, includeBlackouts: false }
+    );
+    r.red.forEach(c => red.push({ ...c, date: occ.date }));
+    r.tight.forEach(c => tight.push({ ...c, date: occ.date }));
+  }
+  return { red, tight };
+}
+function describeDated(list) { return list.map(c => c.date + ' · ' + describe([c])).join('; '); }
 
 function newId() { return 'EVT-' + Date.now().toString(36).toUpperCase().slice(-6) + '-' + Math.floor(Math.random() * 900 + 100); }
 
@@ -26,7 +56,15 @@ const _handler = async (req) => {
 
   if (req.method === 'GET') {
     const rows = await sql`SELECT data FROM events ORDER BY created_at ASC`;
-    return json(rows.map(r => r.data));
+    // Admin-only field: strip strategy scoring from public responses.
+    // (strip strategy marker -- do not remove this comment)
+    const isAdmin = requireAdmin(req);
+    return json(rows.map(r => {
+      if (isAdmin) return r.data;
+      const d = Object.assign({}, r.data);
+      delete d.strategy;
+      return d;
+    }));
   }
 
   // everything below mutates -> admin only
@@ -35,6 +73,10 @@ const _handler = async (req) => {
   if (req.method === 'POST') {
     let ev; try { ev = await req.json(); } catch { return bad('Invalid JSON'); }
     if (!ev.title || !ev.date) return bad('title and date required');
+    const allowTight = !!ev.allowTight; delete ev.allowTight;
+    const { red, tight } = await eventConflicts(ev, null);
+    if (red.length) return json({ error: 'Room overlap — ' + describeDated(red), code: 'overlap', conflicts: red }, 409);
+    if (tight.length && !allowTight) return json({ error: 'Back-to-back (<' + MIN_GAP_MINS + ' min changeover) — ' + describeDated(tight), code: 'tight', conflicts: tight }, 409);
     ev.id = ev.id || newId();
     ev.public = true;
     await sql`INSERT INTO events (id, data) VALUES (${ev.id}, ${JSON.stringify(ev)}::jsonb)`;
@@ -44,6 +86,10 @@ const _handler = async (req) => {
   if (req.method === 'PUT' && id) {
     let ev; try { ev = await req.json(); } catch { return bad('Invalid JSON'); }
     ev.id = id; ev.public = true;
+    const allowTight = !!ev.allowTight; delete ev.allowTight;
+    const { red, tight } = await eventConflicts(ev, id);
+    if (red.length) return json({ error: 'Room overlap — ' + describeDated(red), code: 'overlap', conflicts: red }, 409);
+    if (tight.length && !allowTight) return json({ error: 'Back-to-back (<' + MIN_GAP_MINS + ' min changeover) — ' + describeDated(tight), code: 'tight', conflicts: tight }, 409);
     await sql`INSERT INTO events (id, data) VALUES (${id}, ${JSON.stringify(ev)}::jsonb)
               ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`;
     return json(ev);

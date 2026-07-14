@@ -64,6 +64,21 @@
   to   = "/.netlify/functions/create-checkout"
   status = 200
 
+[[redirects]]
+  from = "/api/checkin"
+  to   = "/.netlify/functions/checkin"
+  status = 200
+
+# Tickets: printable page, QR PNG, Google Wallet save link
+[[redirects]]
+  from = "/ticket/*"
+  to   = "/.netlify/functions/ticket/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/ticket/*"
+  to   = "/.netlify/functions/ticket/:splat"
+  status = 200
+
 # Per-event share links with rich previews (crawlers get OG tags; humans redirect)
 [[redirects]]
   from = "/event/*"

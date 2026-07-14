@@ -580,6 +580,8 @@
     statusEl.innerHTML=banner+bar+summary;
     if(full){ formEl.innerHTML='<div style="background:#fdecea;border:1px solid #f0c5be;color:#9a3b2e;border-radius:10px;padding:10px 14px;font-size:0.84rem;margin-top:8px;">This event is full. Contact us to join the waitlist.</div>'+myRegsLink(e); return; }
     var payNote = reg.cost>0 ? ('<p style="font-size:0.74rem;color:#8a8a6a;margin-top:8px;">Payment of '+costLabel+' is '+(reg.payWhen==="now"?"collected now to hold your spot.":"due once the event is confirmed — we\u2019ll email a secure payment link.")+' You must pay no later than <strong>1 hour before</strong> the event. You can also pay in person.</p>') : '';
+    var remainCap = max>0 ? Math.max(1, max-approved) : 10; if(remainCap>10) remainCap=10;
+    var qtyOpts=""; for(var qi=1;qi<=remainCap;qi++) qtyOpts+='<option value="'+qi+'">'+qi+(qi===1?" ticket":" tickets")+'</option>';
     formEl.innerHTML=
       '<div style="margin-top:10px;display:grid;gap:8px;">'+
       '<input id="reg-name" placeholder="Your name *" style="padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:0.9rem;">'+
@@ -587,9 +589,13 @@
       '<div id="reg-loyalty" style="font-size:0.8rem;color:#2e7d32;"></div>'+
       '<input id="reg-phone" placeholder="Phone (optional)" style="padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:0.9rem;">'+
       '<textarea id="reg-comments" placeholder="Comments or questions (optional)" style="padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:0.9rem;min-height:60px;"></textarea>'+
+      '<div style="display:flex;align-items:center;gap:10px;"><label style="font-size:0.84rem;color:#4a4a35;font-family:\'Cinzel\',serif;">Tickets:</label><select id="reg-qty" style="flex:1;padding:10px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:0.9rem;">'+qtyOpts+'</select></div>'+
+      '<div id="reg-extra-names" style="display:grid;gap:8px;"></div>'+
+      '<div id="reg-price" style="font-size:0.82rem;color:#4a4a35;"></div>'+
       '<button id="reg-submit" style="background:linear-gradient(135deg,'+FOREST+',#3a7350);color:#fff;border:none;font-family:\'Cinzel\',serif;font-size:0.86rem;font-weight:700;letter-spacing:0.06em;padding:13px;border-radius:50px;cursor:pointer;">🎟️ Register for this Event</button>'+
       payNote+'<div id="reg-msg" style="font-size:0.82rem;margin-top:4px;"></div></div>'+myRegsLink(e);
     document.getElementById("reg-submit").onclick=function(){ submitRegistration(e, occDate); };
+    var qsel=document.getElementById("reg-qty"); if(qsel){ qsel.onchange=function(){ regQtyChanged(e); }; regQtyChanged(e); }
   }
   function myRegsLink(e){
     return '<div style="margin-top:12px;font-size:0.78rem;color:#6a6a50;border-top:1px dashed #e0e8dc;padding-top:10px;">Already registered? <a href="#" onclick="CAL.myregs(\''+esc(e.id)+'\');return false;" style="color:'+FOREST+';">See or cancel your registration →</a></div>';
@@ -607,8 +613,11 @@
     var comments=(document.getElementById("reg-comments").value||"").trim();
     var msg=document.getElementById("reg-msg");
     if(!name||!email||email.indexOf("@")<0){ msg.style.color="#9a3b2e"; msg.textContent="Please enter your name and a valid email."; return; }
+    var qty=parseInt((document.getElementById("reg-qty")||{value:"1"}).value,10)||1;
+    var attendees=[name];
+    for(var ai=2;ai<=qty;ai++){ var av=((document.getElementById("reg-att-"+ai)||{value:""}).value||"").trim(); if(!av){ msg.style.color="#9a3b2e"; msg.textContent="Please enter a name for each ticket (attendee "+ai+")."; return; } attendees.push(av); }
     var btn=document.getElementById("reg-submit"); btn.disabled=true; btn.textContent="Registering…";
-    var payload={ eventId:e.id, eventTitle:e.title, occDate:occDate, name:name, email:email, phone:phone, comments:comments, wantsInvoice:false, cost:(e.registration&&e.registration.cost)||0 };
+    var payload={ eventId:e.id, eventTitle:e.title, occDate:occDate, name:name, email:email, phone:phone, comments:comments, qty:qty, attendees:attendees, wantsInvoice:false, cost:(e.registration&&e.registration.cost)||0 };
     try {
       if(API){
         var r=await fetch(API+"/registrations",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
@@ -618,7 +627,7 @@
           msg.style.color="#2e7d32";
           document.getElementById("reg-form-wrap").innerHTML=
             '<div style="background:#e7f5e8;border:1px solid #b6dcb8;color:#2e7d32;border-radius:10px;padding:14px;font-size:0.86rem;">🎉 You\'re registered, '+esc(name)+'! To hold your spot, please pay now.</div>'+
-            '<button id="reg-pay" style="margin-top:10px;background:linear-gradient(135deg,'+GOLD+',#e8b84b);color:#3a2e15;border:none;font-family:\'Cinzel\',serif;font-size:0.9rem;font-weight:700;padding:13px 24px;border-radius:50px;cursor:pointer;width:100%;">💳 Pay $'+Number(e.registration.cost).toFixed(2)+' Now</button>';
+            '<button id="reg-pay" style="margin-top:10px;background:linear-gradient(135deg,'+GOLD+',#e8b84b);color:#3a2e15;border:none;font-family:\'Cinzel\',serif;font-size:0.9rem;font-weight:700;padding:13px 24px;border-radius:50px;cursor:pointer;width:100%;">💳 Pay $'+(saved.totals?(saved.totals.totalCents/100).toFixed(2):Number(e.registration.cost).toFixed(2))+' Now</button>';
           document.getElementById("reg-pay").onclick=function(){ payForRegistration(saved.id, this); };
           return;
         }
@@ -627,6 +636,22 @@
       document.getElementById("reg-form-wrap").innerHTML='<div style="background:#e7f5e8;border:1px solid #b6dcb8;color:#2e7d32;border-radius:10px;padding:14px;font-size:0.86rem;">🎉 You\'re registered, '+esc(name)+'! A confirmation has been sent to '+esc(email)+'.'+((e.registration&&e.registration.cost>0)?' Payment details are included — pay in person or watch for an invoice.':'')+'</div>';
       loadRegStatus(e, occDate);
     } catch(err){ btn.disabled=false; btn.textContent="🎟️ Register for this Event"; msg.style.color="#9a3b2e"; msg.textContent=err.message||"Something went wrong. Please try again."; }
+  }
+  /* ---------- ticketing helpers (multi-ticket + tax + processing fee) ---------- */
+  // Keep in sync with server env: SALES_TAX_PERCENT, STRIPE_FEE_PERCENT, STRIPE_FEE_FIXED_CENTS.
+  // The server (create-checkout) is authoritative; this is the live estimate shown pre-checkout.
+  var NGH_TAX_PCT=5.5, NGH_FEE_PCT=2.9, NGH_FEE_FIX=30;
+  function nghRegTotals(cost, qty){ var sub=Math.round(cost*100)*qty; var tax=Math.round(sub*NGH_TAX_PCT/100); var net=sub+tax; var tot=net>0?Math.ceil((net+NGH_FEE_FIX)/(1-NGH_FEE_PCT/100)):0; return {sub:sub,tax:tax,fee:tot-net,total:tot}; }
+  function nghMoney(c){ return "$"+(c/100).toFixed(2); }
+  function regQtyChanged(e){
+    var sel=document.getElementById("reg-qty"); if(!sel) return;
+    var qty=parseInt(sel.value,10)||1;
+    var wrap=document.getElementById("reg-extra-names"); var h="";
+    for(var i=2;i<=qty;i++){ var old=document.getElementById("reg-att-"+i); var v=old?old.value:"";
+      h+='<input id="reg-att-'+i+'" value="'+String(v).replace(/&/g,"&amp;").replace(/"/g,"&quot;")+'" placeholder="Attendee '+i+' name *" style="padding:11px 13px;border:1.5px solid #d8e0d4;border-radius:9px;font-size:0.9rem;">'; }
+    if(wrap) wrap.innerHTML=h;
+    var cost=(e.registration&&e.registration.cost)||0; var pr=document.getElementById("reg-price");
+    if(pr){ if(cost>0){ var t=nghRegTotals(cost,qty); pr.innerHTML='<strong>'+nghMoney(t.total)+' total</strong> \u2014 '+qty+' \u00d7 '+nghMoney(Math.round(cost*100))+' + '+nghMoney(t.tax)+' sales tax + '+nghMoney(t.fee)+' processing fee'; } else pr.innerHTML=""; }
   }
   async function payForRegistration(regId, btn){
     if(btn){ btn.disabled=true; btn.textContent="Opening secure checkout…"; }
@@ -661,8 +686,9 @@
       var status={approved:"Confirmed",unapproved:"Pending approval",canceled:"Canceled"}[rg.status]||rg.status;
       return '<div style="border:1px solid #e0e8dc;border-radius:11px;padding:12px 14px;margin-bottom:10px;">'+
         '<div style="font-family:\'Cinzel\',serif;color:'+FOREST+';font-weight:700;">'+esc(rg.eventTitle||"Event")+'</div>'+
-        '<div style="font-size:0.8rem;color:#6a6a50;margin-top:3px;">'+esc(rg.occDate||"")+' · '+status+(rg.cost>0?(" · $"+Number(rg.cost).toFixed(2)+(rg.feePaid?" (paid)":" (due)")):" · Free")+'</div>'+
+        '<div style="font-size:0.8rem;color:#6a6a50;margin-top:3px;">'+esc(rg.occDate||"")+' · '+status+((rg.qty>1)?(' · '+rg.qty+' tickets'):'')+(rg.cost>0?(" · $"+Number(rg.cost).toFixed(2)+(rg.feePaid?" (paid)":" (due)")):" · Free")+'</div>'+
         (rg.status!=="canceled" && rg.cost>0 && !rg.feePaid?'<button onclick="CAL.payreg(\''+esc(rg.id)+'\',this)" style="margin-top:8px;margin-right:6px;background:linear-gradient(135deg,'+GOLD+',#e8b84b);border:none;color:#3a2e15;font-family:\'Cinzel\',serif;font-size:0.74rem;padding:7px 14px;border-radius:50px;cursor:pointer;">💳 Pay $'+Number(rg.cost).toFixed(2)+'</button>':'')+
+        (rg.status!=="canceled"&&rg.ticketUrl?'<a href="'+esc(rg.ticketUrl)+'" target="_blank" style="display:inline-block;margin-top:8px;margin-right:6px;background:#fff;border:1.5px solid #2d5a3d;color:#2d5a3d;text-decoration:none;font-family:\'Cinzel\',serif;font-size:0.74rem;padding:7px 14px;border-radius:50px;">🎟️ Ticket & manage</a>':'')+
         (rg.status!=="canceled"?'<button onclick="CAL.cancelReg(\''+esc(rg.id)+'\',\''+esc(rg.cancelToken||"")+'\')" style="margin-top:8px;background:#fff;border:1.5px solid #c0392b;color:#c0392b;font-family:\'Cinzel\',serif;font-size:0.74rem;padding:7px 14px;border-radius:50px;cursor:pointer;">Cancel registration</button>':'')+
         '</div>';
     }).join("");

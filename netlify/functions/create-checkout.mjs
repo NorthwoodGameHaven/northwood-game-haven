@@ -6,9 +6,15 @@
 // POST /create-checkout
 //   { kind:"booking", id:<bookingId>, part:"fee"|"deposit" }
 //   { kind:"registration", id:<registrationId> }
+//
+// Registrations charge: (per-person × qty) + sales tax + processing fee.
+// The processing fee is a gross-up so that after Stripe's cut
+// (STRIPE_FEE_PERCENT% + STRIPE_FEE_FIXED_CENTS, default 2.9% + 30¢) the
+// net deposit equals subtotal + tax exactly.
 import { sql, ensureSchema, json, bad, preflight } from './_shared/db.mjs';
 import { createCheckoutSession } from './_shared/stripe.mjs';
 import { loyaltyDiscountForEmail } from './_shared/lightspeed.mjs';
+import { computeRegTotals, taxPercent, ticketCode } from './_shared/ticket.mjs';
 
 function siteBase(req) {
   // Prefer an explicit configured base; fall back to the request origin.
@@ -137,22 +143,34 @@ const _handler = async (req) => {
     const r = rows[0].data;
     if (r.status === 'canceled') return bad('registration is canceled', 400);
     if (r.feePaid) return bad('already paid', 400);
-    let cost = (Number(r.cost) || 0);
+    const qty = Math.max(1, parseInt(r.qty, 10) || 1);
+    let perPerson = (Number(r.cost) || 0);
     let regLabel = 'Event registration — ' + (r.eventTitle || r.eventId);
     const ld = await loyaltyDiscountForEmail(r.email);
     if (ld.percent > 0) {
-      cost = Math.round(cost * (1 - ld.percent / 100) * 100) / 100;
+      perPerson = Math.round(perPerson * (1 - ld.percent / 100) * 100) / 100;
       regLabel = 'Event registration (' + ld.percent + '% ' + (ld.groupName || 'loyalty') + ' discount) — ' + (r.eventTitle || r.eventId);
     }
-    const amount = Math.round(cost * 100);
-    if (!amount || amount < 50) return bad('this registration is free', 400);
+    const totals = computeRegTotals(Math.round(perPerson * 100), qty);
+    if (!totals.totalCents || totals.totalCents < 50) return bad('this registration is free', 400);
+
+    const items = [{ name: regLabel, amountCents: totals.subtotalCents / qty, qty: qty }];
+    if (totals.taxCents > 0) items.push({ name: 'Sales tax (' + taxPercent() + '%)', amountCents: totals.taxCents, qty: 1 });
+    if (totals.feeCents > 0) items.push({ name: process.env.SERVICE_FEE_LABEL || 'Processing fee', amountCents: totals.feeCents, qty: 1 });
 
     const session = await createCheckoutSession({
-      items: [{ name: regLabel, amountCents: amount, qty: 1 }],
-      successUrl: base + '/?reg_paid=1',
+      items,
+      // Land the customer on their ticket page after payment. The webhook
+      // marks the registration paid and emails the ticket; the page shows a
+      // "confirming" state for the second or two before the webhook lands.
+      successUrl: base + '/ticket/' + ticketCode(r.id) + '?paid=1',
       cancelUrl: base + '/?reg_canceled=1',
       customerEmail: r.email,
-      metadata: { kind: 'registration', registrationId: r.id }
+      metadata: {
+        kind: 'registration', registrationId: r.id, qty: String(qty),
+        subtotalCents: String(totals.subtotalCents), taxCents: String(totals.taxCents),
+        feeCents: String(totals.feeCents), totalCents: String(totals.totalCents)
+      }
     });
     return wantRedirect ? payRedirect(session.url) : json({ url: session.url, id: session.id });
   }

@@ -539,6 +539,7 @@
         <button class="btn btn-sm btn-ghost" id="view-cal-btn" onclick="setAdminView('calendar')">📅 Calendar</button>
         <button class="btn btn-sm btn-ghost" id="view-events-btn" onclick="setAdminView('events')">🎉 Public Events</button>
         <button class="btn btn-sm btn-ghost" id="view-promos-btn" onclick="setAdminView('promos')">🎁 Web Promotions</button>
+        <button class="btn btn-sm btn-ghost" id="view-deconf-btn" onclick="openDeconflict()">🧹 De-conflict Bookings</button>
         <button class="btn btn-sm btn-ghost" onclick="newEventQuick()" style="border-color:var(--gold);color:var(--gold);">➕ New Event</button>
         <button class="btn btn-sm btn-ghost" onclick="openManualBooking()" style="border-color:var(--forest);color:var(--forest);">➕ New Booking (in-person)</button>
         <span id="mode-indicator"></span>
@@ -718,7 +719,8 @@ var Store = {
     opts.headers = Object.assign({ "Content-Type":"application/json", "Authorization":"Bearer "+this._token() }, opts.headers||{});
     var res = await fetch(API_BASE + path, opts);
     if(res.status === 401){ throw new Error("unauthorized"); }
-    if(!res.ok){ throw new Error("API "+res.status); }
+    if(!res.ok){ var eb=null; try { eb=await res.json(); } catch(_){}
+      throw new Error((eb&&eb.error)?eb.error:("API "+res.status)); }
     return res.status === 204 ? null : res.json();
   },
 
@@ -740,9 +742,9 @@ var Store = {
     if(!this.apiMode()){ return this._ls("ngh_bookings"); }
     return this._api("/bookings?mine="+encodeURIComponent(email||""));
   },
-  async addBookings(arr){    // bulk insert (handles recurrence in one go)
+  async addBookings(arr, allowTight){    // bulk insert (handles recurrence in one go)
     if(!this.apiMode()){ var l=this._ls("ngh_bookings"); l=l.concat(arr); this._save("ngh_bookings",l); return arr; }
-    return this._api("/bookings", { method:"POST", body:JSON.stringify({ bookings:arr }) });
+    return this._api("/bookings", { method:"POST", body:JSON.stringify({ bookings:arr, allowTight:!!allowTight }) });
   },
   async updateBooking(id, patch){
     if(!this.apiMode()){ var l=this._ls("ngh_bookings"); for(var i=0;i<l.length;i++){ if(l[i].id===id){ for(var k in patch) l[i][k]=patch[k]; } } this._save("ngh_bookings",l); return; }
@@ -1171,8 +1173,15 @@ function checkConflicts(){
     return false;
   } else {
     lastConflictAlt = null;
+    lastTight = tightGapsFor(date, sm, endForCheck, sel.rooms);
     avail.style.display="block";
-    avail.innerHTML="✅ "+sel.rooms.map(roomName).join(", ")+" available "+fmtTime(sm)+"–"+ ($("bk-end").value||"") +" on "+date+".";
+    if(lastTight.length){
+      avail.style.background="#fdf6e3"; avail.style.borderColor="#e8d9b0"; avail.style.color="#8a6d1f";
+      avail.innerHTML="⚠️ "+sel.rooms.map(roomName).join(", ")+" available "+fmtTime(sm)+"–"+ ($("bk-end").value||"") +" on "+date+", but back-to-back (less than "+MIN_GAP+" min changeover) with: "+lastTight.map(function(t){ return roomName(t.room)+" · "+t.label+" ("+t.win+")"; }).join("; ")+". You can still submit.";
+    } else {
+      avail.style.background=""; avail.style.borderColor=""; avail.style.color="";
+      avail.innerHTML="✅ "+sel.rooms.map(roomName).join(", ")+" available "+fmtTime(sm)+"–"+ ($("bk-end").value||"") +" on "+date+".";
+    }
     return true;
   }
 }
@@ -1295,6 +1304,9 @@ async function submitBooking(){
 
   await refreshCache();
   if(!$("bk-recurring").checked && !checkConflicts()){ showConflictModal(); err.textContent="That time conflicts with an existing booking, NGH event, or blackout. Please pick another time or room."; err.classList.add("show"); return; }
+  if(!$("bk-recurring").checked && lastTight && lastTight.length){
+    if(!confirm("⚠️ Heads up — your requested time is back-to-back (less than "+MIN_GAP+" minutes of changeover) with:\n\n"+lastTight.map(function(t){ return "• "+roomName(t.room)+": "+t.label+" ("+t.win+")"; }).join("\n")+"\n\nSubmit your request anyway?")) return;
+  }
 
   var t=computeTotals();
   var addonsChosen=[];
@@ -1339,7 +1351,7 @@ async function submitBooking(){
     if(idx===0) firstReq=req;
   });
 
-  try { await Store.addBookings(toAdd); }
+  try { await Store.addBookings(toAdd, !!(lastTight&&lastTight.length)); }
   catch(e){ err.textContent="Sorry — we couldn't submit your request. Please try again or email us."; err.classList.add("show"); return; }
   var req=firstReq;
 
@@ -1467,7 +1479,7 @@ function reqCardHtml(r){
   }
   var addons = (r.addons&&r.addons.length) ? r.addons.map(function(a){ return "<div class='kv'>• "+esc(a.title)+(a.qty?(" ×"+a.qty):"")+(a.comment?(" — <i>"+esc(a.comment)+"</i>"):"")+"</div>"; }).join("") : "<div class='kv'>—</div>";
 
-  var actions="";
+  var actions='<button class="btn btn-sm btn-ghost" onclick="viewInCalendar(\''+r.id+'\')">📅 View in calendar</button>';
   if(r.status==="pending" || r.status==="hold"){
     actions+='<button class="btn btn-sm" onclick="approve(\''+r.id+'\')">✅ Approve</button>';
     actions+='<button class="btn btn-sm btn-danger" onclick="reject(\''+r.id+'\')">✕ Reject</button>';
@@ -1545,7 +1557,14 @@ function isAfterHours(r){
   var endMin = startMin + (Number(r.hours)||1)*60;
   return (startMin < OPEN_HOUR*60) || (endMin > CLOSE_HOUR*60);
 }
-async function approve(id){ await Store.updateBooking(id,{status:"approved"}); await refreshCache(); await resendApproval(id, true); renderAdmin(adminFilter); }
+async function approve(id){
+  var _r=getReq(id);
+  if(_r){
+    var _chk=bookingConflictScan(_r);
+    if(_chk.red.length && !confirm("🔴 OVERLAP WARNING — approving this DOUBLE-BOOKS a room:\n\n"+_chk.red.map(function(c){ return "• "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nApprove anyway? (Use 🧹 De-conflict afterward if you do.)")) return;
+    if(!_chk.red.length && _chk.tight.length && !confirm("⚠️ Back-to-back (<15 min changeover) with:\n\n"+_chk.tight.map(function(c){ return "• "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nApprove anyway?")) return;
+  }
+  await Store.updateBooking(id,{status:"approved"}); await refreshCache(); await resendApproval(id, true); renderAdmin(adminFilter); }
 async function resendApproval(id, silent){
   var r=getReq(id); if(!r) return;
   var link = $("invlink-"+id) ? $("invlink-"+id).value.trim() : (r.invoiceLink||"");
@@ -2139,6 +2158,47 @@ function renderEventsAdmin(){
     '<label class="fld">Participation prizes</label><textarea id="ev-prizes-part" placeholder="e.g. All participants receive 1 promo pack · First 16 registrants get a playmat"></textarea></div>'+
 
     // ---- Admin-only notes ----
+    // ---- Strategy scoring (required, admin-only) ----
+    '<div class="ev-section"><div class="ev-section-label">\uD83D\uDD78\uFE0F Strategy Scoring <span style="color:#a33;font-weight:600;">(required \u00B7 admin-only, never shown publicly)</span></div>'+
+    '<div class="row"><div><label class="fld req">Cadence</label><select id="ev-str-cadence" onchange="onStrategyCadenceChange()"><option value="">\u2014 select \u2014</option><option value="recurring">Recurring</option><option value="limited">Limited</option></select></div>'+
+    '<div><label class="fld req">Event type</label><select id="ev-str-type" onchange="updateStrategyType()" disabled><option value="">\u2014 pick cadence first \u2014</option></select></div></div>'+
+    '<p class="hint" style="margin:2px 0 10px;">Score each axis 1\u201310 (higher = more demanding). Solid green = this event \u00B7 dashed gold = typical footprint for the selected type. Hover any indicator bullet for detail.</p>'+
+    '<div class="row"><div><label class="fld req" title="1 = attracting an existing community, 10 = building a new audience from scratch">Community building</label><input type="number" id="ev-str-community" min="1" max="10" step="1" placeholder="1-10" oninput="drawStrategyWeb()"></div>'+
+    '<div><label class="fld req" title="1 = we pick the timing freely, 10 = a fixed date/season/release picks it for us">External dependency</label><input type="number" id="ev-str-external" min="1" max="10" step="1" placeholder="1-10" oninput="drawStrategyWeb()"></div></div>'+
+    '<div class="row"><div><label class="fld req" title="1 = fully passive / self-running, 10 = fully active staff planning + day-of management">Execution effort</label><input type="number" id="ev-str-execution" min="1" max="10" step="1" placeholder="1-10" oninput="drawStrategyWeb()"></div>'+
+    '<div><label class="fld req" title="1 = days of promotion, 10 = 3-6 months of planning and promotion">Lead time</label><input type="number" id="ev-str-lead" min="1" max="10" step="1" placeholder="1-10" oninput="drawStrategyWeb()"></div></div>'+
+    '<div class="row"><div><label class="fld req" title="1 = foot traffic / goodwill only, 10 = direct premium ticketed revenue">Revenue directness</label><input type="number" id="ev-str-revenue" min="1" max="10" step="1" placeholder="1-10" oninput="drawStrategyWeb()"></div><div></div></div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;margin-top:6px;">'+
+    '<svg id="ev-strategy-web" viewBox="0 0 260 240" style="width:250px;max-width:100%;flex:0 0 auto;" aria-label="Strategy spiderweb chart">'+
+      '<g stroke="#d8e0d4" stroke-width="1" fill="none">'+
+        '<polygon points="130.0,94.4 146.7,106.6 140.3,126.2 119.7,126.2 113.3,106.6"/>'+
+        '<polygon points="130.0,76.8 163.5,101.1 150.7,140.5 109.3,140.5 96.5,101.1"/>'+
+        '<polygon points="130.0,59.2 180.2,95.7 161.0,154.7 99.0,154.7 79.8,95.7"/>'+
+        '<polygon points="130.0,41.6 197.0,90.2 171.4,169.0 88.6,169.0 63.0,90.2"/>'+
+        '<polygon points="130.0,24.0 213.7,84.8 181.7,183.2 78.3,183.2 46.3,84.8"/>'+
+        '<line x1="130" y1="112" x2="130.0" y2="24.0"/><line x1="130" y1="112" x2="213.7" y2="84.8"/><line x1="130" y1="112" x2="181.7" y2="183.2"/><line x1="130" y1="112" x2="78.3" y2="183.2"/><line x1="130" y1="112" x2="46.3" y2="84.8"/>'+
+      '</g>'+
+      '<g font-size="9.5" fill="#6a6a50" font-family="sans-serif">'+
+        '<text x="130" y="16" text-anchor="middle">Community</text>'+
+        '<text x="218" y="80" text-anchor="start">External</text>'+
+        '<text x="185" y="196" text-anchor="middle">Execution</text>'+
+        '<text x="75" y="196" text-anchor="middle">Lead time</text>'+
+        '<text x="42" y="80" text-anchor="end">Revenue</text>'+
+      '</g>'+
+      '<g id="ev-strategy-ref"></g>'+
+      '<g id="ev-strategy-poly"></g>'+
+      '<text id="ev-strategy-msg" x="130" y="116" text-anchor="middle" font-size="9.5" fill="#a0a086" font-family="sans-serif">Score all 5 to draw</text>'+
+    '</svg>'+
+    '<ul id="ev-strategy-tips" style="flex:1 1 230px;min-width:210px;font-size:0.76rem;color:#4a4a35;line-height:1.6;margin:0;padding-left:16px;">'+
+      '<li style="cursor:help;" title="Learn-while-Doing territory. Low cost of failure; the event itself is the market research. Launch fast, set pivot triggers, review after 3 sessions."><u style="text-decoration-style:dotted;">Small web (mostly 4 or less):</u> cheap probe \u2014 greenlight it.</li>'+
+      '<li style="cursor:help;" title="Web area roughly tracks total investment and risk. A long Revenue spoke (8+) can justify a big web. If Revenue is short too, see the next bullet."><u style="text-decoration-style:dotted;">Big web area = high cost and risk</u> \u2014 the Revenue spoke must justify it.</li>'+
+      '<li style="cursor:help;" title="Goodwill, press, backlinks, or feeding attendance into recurring events. Name that payoff explicitly before committing, or cut scope."><u style="text-decoration-style:dotted;">Big web, short Revenue spoke:</u> must pay another way.</li>'+
+      '<li style="cursor:help;" title="An existing community will not run a demanding event by itself. Name a Guru owner or hand off to a partner organizer before scheduling."><u style="text-decoration-style:dotted;">Execution 7+ with Community 3 or less:</u> assign an owner.</li>'+
+      '<li style="cursor:help;" title="The date cannot slip. Confirm the lead-time floor is still available before saving; otherwise cut scope or skip this cycle."><u style="text-decoration-style:dotted;">External 7+:</u> promotion runs backward from a fixed date.</li>'+
+      '<li style="cursor:help;" title="Building an audience from scratch is the slowest axis. Cross-promote at a recurring event or class series, and pick a room where a small crowd still feels full."><u style="text-decoration-style:dotted;">Community 7+:</u> pair with an existing funnel.</li>'+
+    '</ul>'+
+    '</div></div>'+
+
     '<label class="fld">Internal admin notes (not shown to customers)</label><textarea id="ev-admin-notes" placeholder="Private logistics, staffing, supplier notes…"></textarea>'+
 
     // ---- Recurrence ----
@@ -2255,9 +2315,151 @@ function updatePrivateHint(){
     h.innerHTML="🔒 This event is <b>hidden</b> from the public Event Calendar and the homepage. It still <b>holds its rooms</b> (customers see a generic purple \u201CPrivate Event\u201D block with no details). Share the registration link from this event\u2019s card with your invitees so they can sign up.";
   } else { h.style.display="none"; }
 }
+// ---- Strategy scoring (5-axis spiderweb + event-type indicators) ----
+var STRATEGY_KEYS=[["ev-str-community","community"],["ev-str-external","external"],["ev-str-execution","execution"],["ev-str-lead","leadTime"],["ev-str-revenue","revenue"]];
+// Axis order everywhere: [community, external, execution, leadTime, revenue]
+var STRATEGY_TYPES={
+ R1:{label:"1 \u2014 Learn while Doing (Seed & Pivot)",cadence:"recurring",profile:[2,1,3,3,2],tips:[
+  ["Hug the center: every spoke 4 or less","A probe should be cheap. If any spoke reaches 6+, it is no longer a probe: reclassify the event or cut scope until it fits."],
+  ["Community above 4 = wrong strategy","Learn while Doing assumes an existing community to attract. If you are building an audience from scratch, use Taught Program (Recurring 4) instead."],
+  ["External above 3 contradicts probing","Probes need freedom to move day/time slots based on feedback. A fixed external driver belongs in the Limited family."],
+  ["Execution creeping to 6+ over time = graduate it","Rising effort means the probe worked. Promote to League/Ladder (Recurring 3) or hand off to Partner-Run (Recurring 6)."]]},
+ R2:{label:"2 \u2014 Open Play",cadence:"recurring",profile:[2,1,1,1,1],tips:[
+  ["Nearly a dot at center: any spoke 3+ is suspect","Open play is passive by definition. Real effort means you are actually running a hosted event: reclassify it honestly."],
+  ["Revenue spoke stays short by design","Open play pays in foot traffic, retail browsing, and Raft sales. Do not force ticketing onto it."],
+  ["Community above 3 means nobody will self-organize","There is no crowd to show up on its own yet. Seed one with Learn while Doing (Recurring 1) first."]]},
+ R3:{label:"3 \u2014 League / Ladder",cadence:"recurring",profile:[3,1,4,4,3],tips:[
+  ["Moderate diamond: Execution and Lead near 4","Standings administration and season prep are the real costs. Budget an admin (staff or trusted regular) before launch."],
+  ["Community above 4 = launched too early","Leagues need critical mass. Run Learn while Doing until the same faces show up 6+ weeks running, then start a season."],
+  ["External should stay 2 or less","Seasons are internally scheduled. If a publisher release dictates timing, that is organized play: consider Partner-Run (Recurring 6)."],
+  ["Revenue 5+ only with season fees","Without entry fees a league pays in retention, not dollars. Both are valid; just be honest about which one this is."]]},
+ R4:{label:"4 \u2014 Taught Program / Class Series",cadence:"recurring",profile:[8,1,8,4,6],tips:[
+  ["Twin peaks: Community AND Execution both high","That is the point. You are building a new audience with instructor labor. One peak without the other means a different type."],
+  ["Revenue should reach 5+","Per-seat fees justify instructor prep. If the class is free, cap prep hours and treat it as marketing."],
+  ["High Execution but low Community = Demo Night","If you are teaching people you already have, this is closer to Demo/Anchor Night (Recurring 5)."],
+  ["Lead 5+ means trim the curriculum","A 4-week series should not need months of planning. Simplify the syllabus."]]},
+ R5:{label:"5 \u2014 Demo / Anchor Night (Game of the Week / Learn to Play)",cadence:"recurring",profile:[4,2,7,2,4],tips:[
+  ["Execution spike near 7 with short Lead near 2","Weekly hustle, minimal planning. That asymmetry is the signature shape of a demo night."],
+  ["Revenue must show 4+ via retail attach","If demos are not moving shelf copies, rotate the featured titles or move the demo table closer to the stock."],
+  ["Lead above 4 = overplanning a weekly","Demo night is fast-twitch content. Save heavy planning for Special events."]]},
+ R6:{label:"6 \u2014 Partner-Run / Outsourced",cadence:"recurring",profile:[5,2,2,3,2],tips:[
+  ["Execution 3 or less is the whole point","If NGH effort is above 4, the partner is not really running it. Renegotiate the split or reclassify the event."],
+  ["Mid-high Community is fine here","Partners bring their own audience and promotion network. That reach is the value of the arrangement."],
+  ["The risk is not on this chart","The chart looks cheap; the real exposure is a single volunteer. Confirm a succession plan and house-rules agreement."]]},
+ LA:{label:"A \u2014 Special Event",cadence:"limited",profile:[4,8,8,6,6],tips:[
+  ["Right-heavy web: External and Execution both 7+","Date-driven and actively produced. This shape is normal for a Special: do not shrink it, fund it."],
+  ["Revenue 6+ or name a feeder","Prize support and labor need ticket revenue, sponsor/publisher support, or an explicit non-cash payoff written down."],
+  ["Community 6+ = cold-start warning","A Special without a recurring feeder event is a cold start. Build the base first or lower turnout expectations."],
+  ["Lead under 5 with External 8+ = calendar check","The 6-8 week promotion floor may already be gone. If so, cut scope or move to the next cycle."]]},
+ LB:{label:"B \u2014 Signature Event",cadence:"limited",profile:[5,3,8,6,5],tips:[
+  ["Tall Execution, moderate External","You produce it, but you pick the timing. That freedom is the advantage a Signature has over a Special."],
+  ["Lead near 6: promotion restarts cold each time","There is no weekly habit to ride. Budget 6-8 weeks of fresh promotion every single instance."],
+  ["The web should shrink by rerun 3","Format reuse should cut Execution and Lead each time. If it does not, the format is not actually repeatable."]]},
+ LC:{label:"C \u2014 Annual Event",cadence:"limited",profile:[5,9,9,8,4],tips:[
+  ["Biggest web outside retreats, short Revenue spoke","Annuals pay in compounding attendance, press, and Chamber goodwill. Name those payoffs explicitly in the plan."],
+  ["External near 9 is structural","The anchor date cannot slip. Work promotion backward 8-12 weeks and lock partners early."],
+  ["Execution should fall year over year","Reusable runbooks are the win condition. If year 3 costs like year 1, capture the playbook in writing."]]},
+ LD:{label:"D \u2014 Pop-up / Opportunistic",cadence:"limited",profile:[3,9,4,1,2],tips:[
+  ["External spike with near-zero Lead","That inverted pair is the signature: reacting to a moment within days. Anything else is not a pop-up."],
+  ["Lead 3+ means it is not a pop-up","If planning creeps in, schedule it properly as a Special or Signature instead."],
+  ["Keep Execution 5 or less","No prizes, no tournament structure. Pop-ups capture energy; they do not manufacture it."]]},
+ LE:{label:"E \u2014 Charity / Community Tie-in",cadence:"limited",profile:[5,6,7,6,2],tips:[
+  ["Short Revenue spoke by design","Charity events pay in press, backlinks, and goodwill. Track those outcomes, not dollars."],
+  ["External 5-7 from partner timelines","The beneficiary org drives the calendar. Pad coordination time into the Lead estimate."],
+  ["Execution 7+ is shared with the partner","Put the labor split in writing. Score only the NGH share here, and re-score if the partner under-delivers."]]},
+ LF:{label:"F \u2014 Destination / Retreat",cadence:"limited",profile:[6,5,10,10,10],tips:[
+  ["Maxed triple: Execution, Lead, and Revenue all near 10","Highest risk, highest reward on the whole board. Anything less than 8+ Revenue kills the math."],
+  ["Lead 9+ is mandatory","12-24 weeks minimum. Lodging, talent, and multi-day space blocking cannot compress."],
+  ["The chart hides the blackout cost","Days of lost regular programming do not show on any spoke. Add that cost to the go/no-go decision."]]}
+};
+var STRATEGY_GENERIC_TIPS=[
+ ["Small web (mostly 4 or less): cheap probe \u2014 greenlight it.","Learn-while-Doing territory. Low cost of failure; the event itself is the market research. Launch fast, set pivot triggers, review after 3 sessions."],
+ ["Big web area = high cost and risk \u2014 the Revenue spoke must justify it.","Web area roughly tracks total investment and risk. A long Revenue spoke (8+) can justify a big web. If Revenue is short too, see the next bullet."],
+ ["Big web, short Revenue spoke: must pay another way.","Goodwill, press, backlinks, or feeding attendance into recurring events. Name that payoff explicitly before committing, or cut scope."],
+ ["Execution 7+ with Community 3 or less: assign an owner.","An existing community will not run a demanding event by itself. Name a Guru owner or hand off to a partner organizer before scheduling."],
+ ["External 7+: promotion runs backward from a fixed date.","The date cannot slip. Confirm the lead-time floor is still available before saving; otherwise cut scope or skip this cycle."],
+ ["Community 7+: pair with an existing funnel.","Building an audience from scratch is the slowest axis. Cross-promote at a recurring event or class series, and pick a room where a small crowd still feels full."]
+];
+function strategySelectedType(){
+  var t=$("ev-str-type"); var v=t?t.value:"";
+  return (v && STRATEGY_TYPES[v]) ? v : null;
+}
+function onStrategyCadenceChange(){
+  var cad=$("ev-str-cadence")?$("ev-str-cadence").value:"";
+  var t=$("ev-str-type"); if(!t) return;
+  var h="";
+  if(!cad){ t.disabled=true; h='<option value="">\u2014 pick cadence first \u2014</option>'; }
+  else{
+    t.disabled=false; h='<option value="">\u2014 select type \u2014</option>';
+    for(var k in STRATEGY_TYPES){ if(STRATEGY_TYPES[k].cadence===cad){ h+='<option value="'+k+'">'+STRATEGY_TYPES[k].label+'</option>'; } }
+  }
+  t.innerHTML=h; t.value="";
+  updateStrategyType();
+}
+function updateStrategyType(){
+  var ul=$("ev-strategy-tips"); if(!ul) return;
+  var key=strategySelectedType();
+  var tips = key ? STRATEGY_TYPES[key].tips : STRATEGY_GENERIC_TIPS;
+  var h="";
+  tips.forEach(function(tp){
+    var head=tp[0], detail=tp[1], parts=head.split(":");
+    var lead = parts.length>1 ? '<u style="text-decoration-style:dotted;">'+parts.shift()+':</u>'+parts.join(":") : head;
+    h+='<li style="cursor:help;" title="'+detail.replace(/"/g,"&quot;")+'">'+lead+'</li>';
+  });
+  ul.innerHTML=h;
+  drawStrategyWeb();
+}
+function readStrategyScores(){
+  var out={}, ok=true;
+  var cad=$("ev-str-cadence"), typ=$("ev-str-type");
+  var key=strategySelectedType();
+  if(!cad || !cad.value){ ok=false; if(cad) cad.style.borderColor="#c0392b"; } else if(cad){ cad.style.borderColor=""; }
+  if(!key){ ok=false; if(typ) typ.style.borderColor="#c0392b"; } else if(typ){ typ.style.borderColor=""; }
+  STRATEGY_KEYS.forEach(function(k){
+    var el=$(k[0]); var v=el?parseInt(el.value,10):NaN;
+    if(!(v>=1&&v<=10)){ ok=false; if(el) el.style.borderColor="#c0392b"; }
+    else { out[k[1]]=v; if(el) el.style.borderColor=""; }
+  });
+  if(!ok) return null;
+  out.cadence=cad.value;
+  out.type=key.slice(1);            // "1".."6" or "A".."F"
+  out.typeKey=key;                  // "R1".."R6" / "LA".."LF"
+  out.typeLabel=STRATEGY_TYPES[key].label.replace(/\u2014\s*/,"").replace(/^[0-9A-F] /,"");
+  return out;
+}
+function _strategyPoints(vals){
+  var cx=130, cy=112, R=88, angles=[-90,-18,54,126,198];
+  return vals.map(function(v,i){ var a=angles[i]*Math.PI/180, r=R*v/10; return (cx+r*Math.cos(a)).toFixed(1)+","+(cy+r*Math.sin(a)).toFixed(1); });
+}
+function drawStrategyWeb(){
+  var poly=$("ev-strategy-poly"), ref=$("ev-strategy-ref"), msg=$("ev-strategy-msg"); if(!poly) return;
+  var key=strategySelectedType();
+  if(ref){
+    if(key){ ref.innerHTML='<polygon points="'+_strategyPoints(STRATEGY_TYPES[key].profile).join(" ")+'" fill="none" stroke="#9a7b1f" stroke-width="1.6" stroke-dasharray="5,4"/>'; }
+    else { ref.innerHTML=""; }
+  }
+  var vals=[], all=true;
+  STRATEGY_KEYS.forEach(function(k){ var el=$(k[0]); var v=el?parseInt(el.value,10):NaN; if(v>=1&&v<=10){ vals.push(v); } else { vals.push(null); all=false; } });
+  var h="";
+  if(all){
+    var pts=_strategyPoints(vals);
+    h+='<polygon points="'+pts.join(" ")+'" fill="rgba(31,77,46,0.18)" stroke="#1f4d2e" stroke-width="2"/>';
+    pts.forEach(function(p){ var xy=p.split(","); h+='<circle cx="'+xy[0]+'" cy="'+xy[1]+'" r="3" fill="#9a7b1f"/>'; });
+    if(msg) msg.style.display="none";
+  } else {
+    if(msg) msg.style.display=key?"none":"";
+  }
+  poly.innerHTML=h;
+}
+function resetStrategyInputs(){
+  STRATEGY_KEYS.forEach(function(k){ var el=$(k[0]); if(el){ el.value=""; el.style.borderColor=""; } });
+  var cad=$("ev-str-cadence"); if(cad){ cad.value=""; cad.style.borderColor=""; }
+  onStrategyCadenceChange();
+}
 function resetEventForm(){ editingEventId=null; evPhotoData=null; $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
   ["ev-title","ev-date","ev-start","ev-end","ev-notes","ev-photo-url","ev-fb","ev-rounds","ev-wins","ev-est-end","ev-arrival","ev-restrictions","ev-prizes-place","ev-prizes-part","ev-admin-notes"].forEach(function(id){ if($(id)) $(id).value=""; });
   if($("ev-ttype")) $("ev-ttype").value="";
+  if(typeof resetStrategyInputs==="function") resetStrategyInputs();
   if($("ev-photo-file")) $("ev-photo-file").value="";
   if($("ev-photo-preview")) $("ev-photo-preview").innerHTML="";
   $("ev-allday").checked=false; $("ev-times").style.display="grid";
@@ -2309,6 +2511,12 @@ function _fillEventForm(e, blankDateTime){
   var p=e.prizes||{};
   $("ev-prizes-place").value=p.placement||""; $("ev-prizes-part").value=p.participation||"";
   $("ev-admin-notes").value=e.adminNotes||"";
+  var st=e.strategy||{};
+  var cadEl=$("ev-str-cadence");
+  if(cadEl){ cadEl.value=st.cadence||""; onStrategyCadenceChange(); }
+  if(st.typeKey && $("ev-str-type")){ $("ev-str-type").value=st.typeKey; updateStrategyType(); }
+  STRATEGY_KEYS.forEach(function(k){ var el=$(k[0]); if(el) el.value=(st[k[1]]!=null?st[k[1]]:""); });
+  setTimeout(drawStrategyWeb,0);
   document.querySelectorAll(".ev-room").forEach(function(c){ c.checked=(e.rooms||[]).indexOf(c.value)>=0; });
   if($("ev-private")) $("ev-private").checked=!!e.private;
   if(typeof updatePrivateHint==="function") updatePrivateHint();
@@ -2349,8 +2557,30 @@ async function saveEvent(){
     estEnd:$("ev-est-end").value, arrival:$("ev-arrival").value, restrictions:$("ev-restrictions").value.trim()
   };
   var hasTourney = tournament.type || tournament.rounds || tournament.estEnd || tournament.arrival || tournament.restrictions;
+  var strategy = readStrategyScores();
+  if(!strategy){ alert("Strategy scoring is required: pick Cadence + Event type and enter 1-10 for all five factors."); return; }
   var prizes = { placement:$("ev-prizes-place").value.trim(), participation:$("ev-prizes-part").value.trim() };
   var hasPrizes = prizes.placement || prizes.participation;
+
+  // ---- room-conflict guard: red blocks the save; yellow asks to proceed ----
+  var _evTight=false;
+  if(!offsite && (allDay || (start&&end))){
+    var _occ = $("ev-recurring").checked
+      ? eventDates({ date:date, recurrence:{ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) } })
+      : [date];
+    var _rooms = rooms.length ? rooms.slice() : ROOMS.map(function(x){ return x.id; });
+    var _sm = allDay ? 0 : timeToMins(start);
+    var _em = allDay ? 1440 : (timeToMins(end)<=timeToMins(start) ? 1440 : timeToMins(end));
+    var _chk = evConflictScan(_occ, _sm, _em, _rooms, editingEventId);
+    if(_chk.red.length){
+      alert("🔴 Can't save — this event's room(s) overlap something already scheduled:\n\n"+_chk.red.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nChange the time, date, or rooms — or open 🧹 De-conflict in the calendar to resolve it.");
+      return;
+    }
+    if(_chk.tight.length){
+      if(!confirm("⚠️ Back-to-back warning — less than "+MIN_GAP+" minutes of changeover with:\n\n"+_chk.tight.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nSave anyway?")) return;
+      _evTight=true;
+    }
+  }
   var ev={
     id:editingEventId||undefined, title:title, date:date, allDay:allDay, start:start, end:end, rooms:rooms,
     offsite:offsite, offsiteLocation: offsite?offsiteLocation:"",
@@ -2358,10 +2588,12 @@ async function saveEvent(){
     tournament: hasTourney ? tournament : null,
     prizes: hasPrizes ? prizes : null,
     adminNotes:$("ev-admin-notes").value.trim(),
+    strategy: strategy,
     private: !!($("ev-private") && $("ev-private").checked),
     status: ($("ev-publish") && $("ev-publish").checked) ? "live" : "draft",
     public:true
   };
+  if(_evTight) ev.allowTight=true;
   if($("ev-recurring").checked){ ev.recurrence={ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }; if(!editingEventId) ev.groupId="EVGRP-"+genId(); }
   if($("ev-reg-enabled") && $("ev-reg-enabled").checked){
     ev.registration={
@@ -2827,7 +3059,7 @@ function eventsForDate(dateStr){
   var evs=[];
   cache.bookings.forEach(function(r){
     if(r.status==="rejected") return;
-    if(r.date===dateStr) evs.push({cat:"booking", status:r.status, payment:r.payment, rec:!!r.groupId, start:r.start, hours:r.hours, label:r.name+" · "+roomList(r), id:r.id, groupId:r.groupId, _src:r});
+    if(r.date===dateStr) evs.push({cat:"booking", status:r.status, payment:r.payment, rec:!!r.groupId, start:r.start, hours:r.hours, label:r.name+" · "+roomList(r), id:r.id, groupId:r.groupId, _src:r, _ds:dateStr});
   });
   expandedEvents().forEach(function(e){
     if(e.date===dateStr) evs.push({cat:"event", priv:!!e.private, rec:!!e.recurrence, start:e.allDay?null:e.start, end:e.allDay?null:e.end, allDay:e.allDay, hours:e.allDay?null:durHours(e.start,e.end), label:(e.private?"🔒 ":"")+(e.title||"NGH Event")+" ("+eventRoomsLabel(e)+")", id:e.id, isEvent:true, _src:e, _ds:dateStr});
@@ -2851,7 +3083,7 @@ function evClass(e){
   return (e.status==="approved") ? "approved" : "pending"; // pending & hold share amber
 }
 function evChip(e){
-  var cls="cal-ev "+evClass(e);
+  var cls="cal-ev "+evClass(e)+confClass(e, e._ds)+((e.cat==="booking"&&e.status!=="approved")?" pendh":"")+((_calFocusId&&e.id===_calFocusId)?" calfocus":"");
   if(e.cat==="booking" && e.status==="approved" && !fullyPaid(e._src||e)) cls+=" unpaid";
   if(e.draft || (e.cat==="event" && isDraftEvent(e._src||e))) cls+=" draft";
   var t = e.allDay ? "All day" : (e.start?fmtTime(timeToMins(e.start)):"");
@@ -3144,8 +3376,194 @@ function downloadCalImage(mode){
   }, "image/png");
 }
 
+/* ===================================================================
+   CONFLICT MANAGEMENT — view-in-calendar, de-conflict audit, red/yellow
+   =================================================================== */
+(function(){ var st=document.createElement("style"); st.textContent=
+  ".cal-ev.confr,.wevent.confr{outline:2.5px solid #c0392b;outline-offset:-2px;}"+
+  ".cal-ev.confy,.wevent.confy{outline:2.5px dashed #d99a1b;outline-offset:-2px;}"+
+  ".wevent.pendh,.cal-ev.pendh{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.35) 0 5px,rgba(255,255,255,0) 5px 10px);}"+
+  ".wevent.calfocus,.cal-ev.calfocus{box-shadow:0 0 0 3px #d4af37,0 0 12px rgba(212,175,55,0.85);z-index:5;}"+
+  ".dcf-row{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;margin-top:8px;border:1px solid;flex-wrap:wrap;}"+
+  ".dcf-red{background:#fdecea;border-color:#f0c5be;}.dcf-yellow{background:#fdf6e3;border-color:#e8d9b0;}";
+  document.head.appendChild(st); })();
+var MIN_GAP=15, deconflictOn=false, _calFocusId=null, _confMap={}, lastTight=null;
+
+/* Jump from a request card to the day view with the booking highlighted. */
+function viewInCalendar(id){
+  var r=getReq(id); if(!r) return;
+  _calFocusId=id;
+  setAdminView("calendar");
+  calGoto(r.date,"day");
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function openDeconflict(){ deconflictOn=true; setAdminView("calendar"); renderCalendar(); window.scrollTo({top:0,behavior:"smooth"}); }
+function toggleDeconflict(){ deconflictOn=!deconflictOn; renderCalendar(); }
+
+/* Customer form: back-to-back (<15 min) detection for the chosen window.
+   Overlaps are handled (blocked) by checkConflicts; this only finds tight gaps. */
+function tightGapsFor(date, sm, em, rooms){
+  var by=roomBusyIntervals(date), out=[];
+  rooms.forEach(function(room){
+    (by[room]||[]).forEach(function(iv){
+      if(iv.kind==="blackout") return;
+      if(overlaps(sm, em, iv.s, iv.e)) return;
+      var gA=iv.s-em, gB=sm-iv.e;
+      var gap=(gA>=0&&gA<MIN_GAP)?gA:((gB>=0&&gB<MIN_GAP)?gB:null);
+      if(gap!==null) out.push({room:room, label:iv.label, gap:gap, win:fmtTime(iv.s)+"–"+fmtTime(Math.min(iv.e,1440))});
+    });
+  });
+  return out;
+}
+
+/* Admin event form: scan every occurrence date for red/tight vs cache. */
+function evConflictScan(dates, sm, em, rooms, ignoreEventId){
+  var red=[], tight=[];
+  dates.forEach(function(d){
+    var by=roomBusyIntervals(d, {ignoreEventId:ignoreEventId});
+    rooms.forEach(function(room){
+      (by[room]||[]).forEach(function(iv){
+        if(iv.kind==="blackout") return; /* staff often blackout around their own events */
+        var win=fmtTime(iv.s)+"–"+fmtTime(Math.min(iv.e,1440));
+        if(overlaps(sm, em, iv.s, iv.e)){ red.push({date:d, room:room, label:iv.label, win:win}); return; }
+        var gA=iv.s-em, gB=sm-iv.e;
+        var gap=(gA>=0&&gA<MIN_GAP)?gA:((gB>=0&&gB<MIN_GAP)?gB:null);
+        if(gap!==null) tight.push({date:d, room:room, label:iv.label, gap:gap, win:win});
+      });
+    });
+  });
+  return {red:red, tight:tight};
+}
+
+/* Approve-time scan: this request vs APPROVED bookings + events + blackouts. */
+function bookingConflictScan(r){
+  var sm=timeToMins(r.start), em=Math.min(sm+(Number(r.hours)||1)*60,1440);
+  var by=roomBusyIntervals(r.date, {ignoreBookingId:r.id}), red=[], tight=[];
+  (r.rooms||[]).forEach(function(room){
+    (by[room]||[]).forEach(function(iv){
+      if(iv.kind==="booking" && iv.ref && iv.ref.status!=="approved") return; /* other pendings don't count */
+      var win=fmtTime(iv.s)+"–"+fmtTime(Math.min(iv.e,1440));
+      if(overlaps(sm, em, iv.s, iv.e)){ red.push({room:room, label:iv.label, win:win}); return; }
+      if(iv.kind==="blackout") return;
+      var gA=iv.s-em, gB=sm-iv.e;
+      var gap=(gA>=0&&gA<MIN_GAP)?gA:((gB>=0&&gB<MIN_GAP)?gB:null);
+      if(gap!==null) tight.push({room:room, label:iv.label, gap:gap, win:win});
+    });
+  });
+  return {red:red, tight:tight};
+}
+
+/* ---------- de-conflict audit: APPROVED bookings + events, per room/day ---------- */
+function _auditItems(){
+  var items=[];
+  cache.bookings.forEach(function(r){
+    if(r.status!=="approved") return;
+    var s=timeToMins(r.start), e=Math.min(s+(Number(r.hours)||1)*60,1440);
+    (r.rooms||[]).forEach(function(room){
+      items.push({date:r.date, room:room, s:s, e:e, cat:"booking", id:r.id, label:(r.name||"Booking"), rec:!!r.groupId, allDay:false});
+    });
+  });
+  expandedEvents().forEach(function(ev){
+    var rooms=eventRooms(ev); if(!rooms.length) return;
+    var label=(ev.private?"🔒 ":"")+(ev.title||"NGH event")+(isDraftEvent(ev)?" (draft)":"");
+    function push(d, s, e){ rooms.forEach(function(room){ items.push({date:d, room:room, s:s, e:e, cat:"event", id:ev.id, label:label, rec:!!ev.recurrence, allDay:!!ev.allDay}); }); }
+    if(ev.allDay){ push(ev.date, 0, 1440); return; }
+    if(!ev.start||!ev.end) return;
+    var es=timeToMins(ev.start), ee=timeToMins(ev.end), overnight=ee<=es;
+    push(ev.date, es, overnight?1440:ee);
+    if(overnight) push(nextYMDc(ev.date), 0, ee);
+  });
+  return items;
+}
+function nextYMDc(d){ var x=new Date(d+"T12:00:00"); x.setDate(x.getDate()+1); return ymd(x); }
+function buildAudit(){
+  var items=_auditItems(), groups={}, out=[];
+  items.forEach(function(it){ var k=it.date+"|"+it.room; (groups[k]=groups[k]||[]).push(it); });
+  Object.keys(groups).forEach(function(k){
+    var g=groups[k].slice().sort(function(a,b){ return a.s-b.s || a.e-b.e; });
+    for(var i=0;i<g.length;i++) for(var j=i+1;j<g.length;j++){
+      var a=g[i], b=g[j];
+      if(a.cat===b.cat && a.id===b.id) continue;              /* same thing (multi-room handled per room) */
+      if(overlaps(a.s,a.e,b.s,b.e)){ out.push({sev:"red", date:a.date, room:a.room, a:a, b:b, gap:null}); continue; }
+      var gap=(b.s>=a.e)?(b.s-a.e):(a.s-b.e);
+      if(gap>=0 && gap<MIN_GAP) out.push({sev:"yellow", date:a.date, room:a.room, a:a, b:b, gap:gap});
+    }
+  });
+  out.sort(function(x,y){ return x.date<y.date?-1:x.date>y.date?1:(x.sev==="red"?-1:1); });
+  return out;
+}
+function computeConfMap(){
+  _confMap={};
+  buildAudit().forEach(function(c){
+    [c.a,c.b].forEach(function(it){
+      var k=it.cat+"|"+it.id+"|"+it.date;
+      if(c.sev==="red" || !_confMap[k]) _confMap[k]=c.sev;
+    });
+  });
+}
+function confClass(e, ds){
+  if(!e || !e.id) return "";
+  var cat=(e.cat==="booking")?"booking":(e.cat==="event"?"event":null);
+  if(!cat) return "";
+  var sev=_confMap[cat+"|"+e.id+"|"+(ds||e._ds||"")];
+  return sev==="red"?" confr":(sev==="yellow"?" confy":"");
+}
+
+/* ---------- audit panel + one-click fixes ---------- */
+function deconflictHTML(){
+  var a=buildAudit();
+  var reds=a.filter(function(c){return c.sev==="red";}).length, yels=a.length-reds;
+  var h='<div class="card" style="margin-bottom:14px;">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+
+    '<h2 style="margin:0;">🧹 De-conflict audit</h2>'+
+    '<div class="kv">'+(a.length?('🔴 '+reds+' overlap'+(reds===1?"":"s")+' · 🟡 '+yels+' back-to-back (<'+MIN_GAP+' min)'):'')+'</div></div>'+
+    '<div class="hint" style="margin-top:4px;">Scans every <b>approved booking</b> and <b>NGH event</b> for room double-bookings (red) and back-to-back turns with less than '+MIN_GAP+' minutes of changeover (yellow). Conflicted items are outlined on the calendar below. Shifting a reservation does <b>not</b> auto-email anyone — let the customer know if you move their booking.</div>';
+  if(!a.length){ h+='<div class="dcf-row" style="background:#e7f5e8;border-color:#b6dcb8;color:#2e7d32;">✅ All clear — no room overlaps and every changeover has at least '+MIN_GAP+' minutes.</div></div>'; return h; }
+  a.forEach(function(c){
+    var later=(c.b.s>=c.a.s)?c.b:c.a, earlier=(later===c.b)?c.a:c.b;
+    var need=(c.sev==="red")?((earlier.e-later.s)+MIN_GAP):(MIN_GAP-c.gap);
+    var fix="";
+    if(later.cat==="booking"){
+      fix='<button class="btn btn-sm" onclick="fixShiftBooking(\''+later.id+'\','+need+')">⏩ Shift '+esc(later.label)+' +'+need+'m</button>';
+    } else if(later.cat==="event" && !later.rec && !later.allDay){
+      fix='<button class="btn btn-sm" onclick="fixShiftEvent(\''+later.id+'\','+need+')">⏩ Shift '+esc(later.label)+' +'+need+'m</button>';
+    } else if(later.cat==="event"){
+      fix='<span class="hint">'+(later.allDay?"all-day":"recurring")+' event — <a href="#" onclick="jumpToEvent(\''+later.id+'\');return false;">edit it manually</a></span>';
+    }
+    h+='<div class="dcf-row '+(c.sev==="red"?"dcf-red":"dcf-yellow")+'">'+
+      '<span style="font-size:1.05rem;">'+(c.sev==="red"?"🔴":"🟡")+'</span>'+
+      '<div style="flex:1;min-width:220px;"><b>'+c.date+' · '+esc(roomName(c.room))+'</b><br>'+
+      '<span style="font-size:0.84rem;">'+esc(c.a.label)+' ('+fmtTime(c.a.s)+'–'+fmtTime(c.a.e)+') '+(c.sev==="red"?"<b>overlaps</b>":("→ only <b>"+c.gap+" min</b> before"))+' '+esc(c.b.label)+' ('+fmtTime(c.b.s)+'–'+fmtTime(c.b.e)+')</span></div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'+
+      '<button class="btn btn-sm btn-ghost" onclick="calGoto(\''+c.date+'\',\'day\')">📅 Day view</button>'+fix+'</div></div>';
+  });
+  return h+'</div>';
+}
+async function fixShiftBooking(id, mins){
+  var r=getReq(id); if(!r) return;
+  var ns=timeToMins(r.start)+mins, ne=ns+(Number(r.hours)||1)*60;
+  if(ne>1440){ alert("Can't shift past midnight — adjust this one manually."); return; }
+  var nsL=pad(Math.floor(ns/60))+":"+pad(ns%60);
+  if(!confirm("Shift "+(r.name||"this booking")+" on "+r.date+" to "+fmtTime(ns)+"–"+fmtTime(ne)+" (+"+mins+" min)?\n\nRemember to let the customer know — no automatic email is sent.")) return;
+  await Store.updateBooking(id,{start:nsL, endLabel:fmtTime(ne)});
+  await refreshCache(); renderCalendar();
+}
+async function fixShiftEvent(id, mins){
+  var e=null; cache.events.forEach(function(x){ if(x.id===id) e=x; }); if(!e) return;
+  var es=timeToMins(e.start), ee=timeToMins(e.end), overnight=ee<=es;
+  var ns=es+mins, ne=ee+mins;
+  if(!overnight && ne>1440){ alert("Can't shift past midnight — adjust this event manually."); return; }
+  var nsL=pad(Math.floor(ns/60))+":"+pad(ns%60), neL=pad(Math.floor((ne%1440)/60))+":"+pad(ne%60);
+  if(!confirm("Shift \""+(e.title||"event")+"\" on "+e.date+" to "+fmtTime(ns)+"–"+fmtTime(ne%1440)+" (+"+mins+" min)?")) return;
+  var upd=Object.assign({}, e, {start:nsL, end:neL, allowTight:true});
+  try { await Store.saveEvent(upd); }
+  catch(err){ alert("Couldn't shift: "+(err.message||err)); return; }
+  await refreshCache(); renderCalendar();
+}
+
 function renderCalendar(){
   var wrap=$("calendar-view-wrap"), title="";
+  computeConfMap();
   if(calMode==="month") title=calRef.toLocaleDateString(undefined,{month:'long',year:'numeric'});
   else if(calMode==="week"){ var ws=weekStart(calRef), we=new Date(ws); we.setDate(we.getDate()+6); title=ws.toLocaleDateString(undefined,{month:'short',day:'numeric'})+" – "+we.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
   else title=calRef.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'});
@@ -3161,6 +3579,7 @@ function renderCalendar(){
       '<span class="cal-title">'+title+'</span>'+
       '<button class="btn btn-sm btn-ghost" onclick="calShift(1)">›</button>'+
       '<button class="btn btn-sm btn-ghost" onclick="calToday()">Today</button>'+
+      '<button class="btn btn-sm'+(deconflictOn?'':' btn-ghost')+'" onclick="toggleDeconflict()">🧹 De-conflict'+(deconflictOn?': ON':'')+'</button>'+
     '</div></div>'+
     '<div class="cal-legend">'+
       '<span><span class="cal-dot" style="background:var(--cal-pending)"></span> Pending / On hold</span>'+
@@ -3171,6 +3590,7 @@ function renderCalendar(){
       '<span><span class="cal-dot" style="background:#fff;outline:2px solid var(--gold-light)"></span> Approved · unpaid</span>'+
       '<span>🔁 recurring</span>'+
     '</div>';
+  if(deconflictOn) html += deconflictHTML();
   html += (calMode==="month") ? monthHTML() : weekDayHTML(calMode==="day");
   wrap.innerHTML=html;
 }
@@ -3212,6 +3632,7 @@ function weekDayHTML(isDay){
         var bg = e.cat==="blackout"?"var(--cal-blackout)":(e.cat==="event"?(e.priv?"var(--cal-private)":"var(--cal-event)"):(e.status==="approved"?"var(--cal-approved)":"var(--cal-pending)"));
         var click = (e.cat==="booking")?(' onclick="jumpToReq(\''+e.id+'\')"'):(e.isEvent?(' onclick="jumpToEvent(\''+e.id+'\')"'):'');
         var draftCls = (e.cat==="event" && isDraftEvent(e._src||e)) ? " draft" : "";
+        draftCls += confClass(e, ds)+((e.cat==="booking"&&e.status!=="approved")?" pendh":"")+((_calFocusId&&e.id===_calFocusId)?" calfocus":"");
         var pos;
         if(e.allDay){ pos='top:0;height:'+(WPITCH-2)+'px;'; }
         else {

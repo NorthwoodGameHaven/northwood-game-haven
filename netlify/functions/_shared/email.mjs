@@ -15,7 +15,10 @@ function textToHtml(text) {
 
 // Build the full branded HTML wrapper. `buttons` is an optional array of
 // { label, url, primary } rendered as nice call-to-action buttons.
-export function renderEmail({ heading, bodyText, buttons }) {
+// `image` is an optional { url, alt, width } block rendered between the body
+// and the buttons (used for ticket QR codes; hosted URL, never data: URIs —
+// Gmail blocks those).
+export function renderEmail({ heading, bodyText, buttons, image }) {
   const btnHtml = (buttons || []).map(b => {
     const bg = b.primary ? GOLD : '#ffffff';
     const color = b.primary ? DARK : FOREST;
@@ -25,6 +28,12 @@ export function renderEmail({ heading, bodyText, buttons }) {
       ';border:2px solid ' + border + ';text-decoration:none;font-family:Georgia,serif;font-weight:bold;' +
       'font-size:15px;padding:12px 26px;border-radius:40px;">' + b.label + '</a></td></tr>';
   }).join('');
+
+  const imgHtml = (image && image.url)
+    ? ('<tr><td align="center" style="padding:6px 30px 4px;">' +
+       '<img src="' + image.url + '" alt="' + String(image.alt || 'QR code').replace(/"/g, '&quot;') + '" width="' + (image.width || 220) + '" ' +
+       'style="display:block;border:6px solid #ffffff;outline:1px solid #ece7d8;border-radius:12px;max-width:' + (image.width || 220) + 'px;height:auto;"></td></tr>')
+    : '';
 
   return '<!doctype html><html><body style="margin:0;padding:0;background:#f4f1e8;">' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1e8;padding:24px 0;"><tr><td align="center">' +
@@ -38,6 +47,8 @@ export function renderEmail({ heading, bodyText, buttons }) {
     // body
     '<tr><td style="padding:16px 30px 8px;font-family:Arial,Helvetica,sans-serif;color:#3a3a30;font-size:15px;line-height:1.6;">' +
     textToHtml(bodyText) + '</td></tr>' +
+    // optional image (ticket QR)
+    imgHtml +
     // buttons
     (btnHtml ? ('<tr><td style="padding:8px 30px 20px;"><table cellpadding="0" cellspacing="0">' + btnHtml + '</table></td></tr>') : '') +
     // footer
@@ -49,11 +60,11 @@ export function renderEmail({ heading, bodyText, buttons }) {
 }
 
 // Send a branded email. Falls back to plain text automatically.
-export async function sendBrandedMail(to, subject, { heading, bodyText, buttons, replyTo }) {
+export async function sendBrandedMail(to, subject, { heading, bodyText, buttons, image, replyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.MAIL_FROM || 'Northwood Game Haven <bookings@northwoodgamehaven.com>';
   if (!apiKey) { console.log('[email] RESEND_API_KEY not set; logging only:', to, subject); return { ok: true, simulated: true }; }
-  const html = renderEmail({ heading, bodyText, buttons });
+  const html = renderEmail({ heading, bodyText, buttons, image });
   const payload = { from, to: [to], subject, html, text: bodyText };
   if (replyTo) payload.reply_to = replyTo;
   const res = await fetch('https://api.resend.com/emails', {
