@@ -2681,7 +2681,7 @@ async function saveEvent(){
   var hasPrizes = prizes.placement || prizes.participation;
 
   // ---- room-conflict guard: red blocks the save; yellow asks to proceed ----
-  var _evTight=false, _skipDates=[];
+  var _evTight=false, _skipDates=[], _canceledKeys={};
   if(!offsite && (allDay || (start&&end))){
     var _occ = $("ev-recurring").checked
       ? eventDates({ date:date, recurrence:{ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }, exceptions:(editingEventId?(((cache.events.filter(function(x){return x.id===editingEventId;})[0])||{}).exceptions||[]):[]) })
@@ -2693,7 +2693,37 @@ async function saveEvent(){
     if(_chk.red.length){
       var _redMsg=_chk.red.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n");
       var _redDates=[]; _chk.red.forEach(function(c){ if(_redDates.indexOf(c.date)<0) _redDates.push(c.date); });
-      if($("ev-recurring").checked && _redDates.length < _occ.length){
+      var _isLimited = strategy && strategy.cadence==="limited";
+      if(_isLimited){
+        // Partition: occurrences of recurring, non-limited events are cancellable;
+        // limited events, one-time events, bookings, and blackouts are hard blocks.
+        var _cancellable=[], _hard=[], _hardLtd=0;
+        _chk.red.forEach(function(c){
+          var _isEvt=(c.kind==="event"||c.kind==="private");
+          var _p=(_isEvt && c.ref && c.ref.id) ? _evById(c.ref.id) : null;
+          if(_isEvt && _p && _p.recurrence && !(_p.strategy && _p.strategy.cadence==="limited")){ _cancellable.push({c:c, pid:_p.id}); }
+          else { _hard.push(c); if(_isEvt && _p && _p.strategy && _p.strategy.cadence==="limited") _hardLtd++; }
+        });
+        if(_hard.length){
+          alert("🔴 Can't save — this LIMITED event conflicts with "+(_hardLtd?"other limited event(s)":"item(s) that can't be auto-canceled (limited/one-time events, customer bookings)")+":\n\n"+_hard.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nDe-conflict those dates/times/rooms first (🧹 De-conflict in the calendar), then publish this event."+(_cancellable.length?"\n\nNothing was canceled — the recurring occurrence(s) in this conflict were left untouched.":""));
+          return;
+        }
+        if(!confirm("🔴 This limited event conflicts with occurrence(s) of recurring events:\n\n"+_redMsg+"\n\nCancel those occurrence(s) and save this event?\n\nCanceled occurrences become series exceptions — review or restore them anytime via 🔁 Review instances on each event's card. No automatic emails are sent; if anyone registered for a canceled occurrence, handle them via View registrants.\n\nOK = cancel those occurrences & save · Cancel = don't save")) return;
+        var _byParent={};
+        _cancellable.forEach(function(x){
+          var _g=(_byParent[x.pid]=_byParent[x.pid]||{dates:[]});
+          if(_g.dates.indexOf(x.c.date)<0) _g.dates.push(x.c.date);
+        });
+        for(var _pid in _byParent){
+          var _pe=_evById(_pid); if(!_pe) continue;
+          var _pu=Object.assign({}, _pe);
+          _pu.exceptions=(_pe.exceptions||[]).slice();
+          _byParent[_pid].dates.forEach(function(d2){ if(_pu.exceptions.indexOf(d2)<0) _pu.exceptions.push(d2); _canceledKeys[_pid+"|"+d2]=1; });
+          try{ await Store.saveEvent(_pu); }
+          catch(_cerr){ alert("Couldn't cancel an occurrence of \""+(_pe.title||_pid)+"\": "+((_cerr&&_cerr.message)||_cerr)+"\n\nStopping here — resolve manually (🧹 De-conflict) and try again."); await refreshCache(); return; }
+        }
+        await refreshCache();
+      } else if($("ev-recurring").checked && _redDates.length < _occ.length){
         if(confirm("🔴 Some dates of this series overlap something already scheduled:\n\n"+_redMsg+"\n\nSkip the "+_redDates.length+" conflicting date"+(_redDates.length===1?"":"s")+" and save the rest of the series?\n\nSkipped dates become canceled instances of the series — review or restore them anytime via 🔁 Review instances on this event's card.\n\nOK = skip those dates & save · Cancel = don't save")){
           _skipDates=_redDates;
         } else { return; }
@@ -2702,7 +2732,7 @@ async function saveEvent(){
         return;
       }
     }
-    var _tightLeft=_chk.tight.filter(function(c){ return _skipDates.indexOf(c.date)<0; });
+    var _tightLeft=_chk.tight.filter(function(c){ if(_skipDates.indexOf(c.date)>=0) return false; if(c.ref && c.ref.id && _canceledKeys[c.ref.id+"|"+c.date]) return false; return true; });
     if(_tightLeft.length){
       if(!confirm("⚠️ Back-to-back warning — less than "+MIN_GAP+" minutes of changeover with:\n\n"+_tightLeft.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nSave anyway?")) return;
       _evTight=true;
@@ -3555,10 +3585,10 @@ function evConflictScan(dates, sm, em, rooms, ignoreEventId){
       (by[room]||[]).forEach(function(iv){
         if(iv.kind==="blackout") return; /* staff often blackout around their own events */
         var win=fmtTime(iv.s)+"–"+fmtTime(Math.min(iv.e,1440));
-        if(overlaps(sm, em, iv.s, iv.e)){ red.push({date:d, room:room, label:iv.label, win:win}); return; }
+        if(overlaps(sm, em, iv.s, iv.e)){ red.push({date:d, room:room, label:iv.label, win:win, kind:iv.kind, ref:iv.ref}); return; }
         var gA=iv.s-em, gB=sm-iv.e;
         var gap=(gA>=0&&gA<MIN_GAP)?gA:((gB>=0&&gB<MIN_GAP)?gB:null);
-        if(gap!==null) tight.push({date:d, room:room, label:iv.label, gap:gap, win:win});
+        if(gap!==null) tight.push({date:d, room:room, label:iv.label, gap:gap, win:win, kind:iv.kind, ref:iv.ref});
       });
     });
   });
@@ -3654,6 +3684,13 @@ function deconflictHTML(){
   a.forEach(function(c){
     var later=(c.b.s>=c.a.s)?c.b:c.a, earlier=(later===c.b)?c.a:c.b;
     var need=(c.sev==="red")?((earlier.e-later.s)+MIN_GAP):(MIN_GAP-c.gap);
+    var _editBtns="";
+    [c.a,c.b].forEach(function(it){
+      if(it.cat==="event"){
+        var _lbl=String(it.label||"event"); if(_lbl.length>24) _lbl=_lbl.slice(0,22)+"…";
+        _editBtns+='<button class="btn btn-sm btn-ghost" onclick="jumpToEvent(\''+it.id+'\')">✎ Edit '+esc(_lbl)+'</button>';
+      }
+    });
     var fix="";
     if(later.cat==="booking"){
       fix='<button class="btn btn-sm" onclick="fixShiftBooking(\''+later.id+'\','+need+')">⏩ Shift '+esc(later.label)+' +'+need+'m</button>';
@@ -3667,7 +3704,7 @@ function deconflictHTML(){
       '<div style="flex:1;min-width:220px;"><b>'+c.date+' · '+esc(roomName(c.room))+'</b><br>'+
       '<span style="font-size:0.84rem;">'+esc(c.a.label)+' ('+fmtTime(c.a.s)+'–'+fmtTime(c.a.e)+') '+(c.sev==="red"?"<b>overlaps</b>":("→ only <b>"+c.gap+" min</b> before"))+' '+esc(c.b.label)+' ('+fmtTime(c.b.s)+'–'+fmtTime(c.b.e)+')</span></div>'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'+
-      '<button class="btn btn-sm btn-ghost" onclick="calGotoScroll(\''+c.date+'\',\'day\')">📅 Day view</button>'+fix+'</div></div>';
+      '<button class="btn btn-sm btn-ghost" onclick="calGotoScroll(\''+c.date+'\',\'day\')">📅 Day view</button>'+_editBtns+fix+'</div></div>';
   });
   return h+'</div>';
 }
