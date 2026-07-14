@@ -2016,11 +2016,19 @@ function guessKind(title){
   if(t.indexOf("open")>=0) return "open";
   return "default";
 }
-var evSearch="", evRegOnly=false;
+var evSearch="", evRegOnly=false, evShowPast=false;
+function evIsUpcoming(e){ var t=ymd(new Date()); var ds=eventDates(e); for(var i=0;i<ds.length;i++){ if(ds[i]>=t) return true; } return false; }
+function toggleEvPast(){
+  evShowPast=!evShowPast;
+  var b=$("ev-past-btn"); if(b) b.textContent = evShowPast ? "\u2B06 Upcoming events" : "\uD83D\uDD70\uFE0F Past events";
+  var t=$("ev-list-title"); if(t) t.textContent = evShowPast ? "Past Public Events" : "Current Public Events";
+  evFilterChange();
+}
 function adminEvFilterActive(){ return !!((evSearch&&evSearch.trim())||evRegOnly); }
 function filterAdminEvents(arr){
   var q=(evSearch||"").trim().toLowerCase();
   return arr.filter(function(e){
+    if(evShowPast ? evIsUpcoming(e) : !evIsUpcoming(e)) return false;
     if(evRegOnly && !(e.registration&&e.registration.enabled)) return false;
     if(!q) return true;
     var hay=[e.title,e.notes,e.offsiteLocation,(e.rooms||[]).map(roomName).join(" "),e.date,(e.private?"private invite-only":"")].join(" ").toLowerCase();
@@ -2074,7 +2082,7 @@ function eventCardHTML(e){
 }
 function eventListInnerHTML(){
   var evs=filterAdminEvents(cache.events.slice());
-  if(!evs.length) return '<div class="card"><p class="hint" style="margin:0;">'+(adminEvFilterActive()?'No events match your search/filter. <button class=\'btn btn-sm btn-ghost\' onclick=\'clearEvFilter()\'>Clear</button>':'No public events yet.')+'</p></div>';
+  if(!evs.length) return '<div class="card"><p class="hint" style="margin:0;">'+(adminEvFilterActive()?'No events match your search/filter. <button class=\'btn btn-sm btn-ghost\' onclick=\'clearEvFilter()\'>Clear</button>':(evShowPast?'No past events.':'No upcoming events.'))+'</p></div>';
   return evs.map(eventCardHTML).join("");
 }
 function evFilterChange(){
@@ -2220,7 +2228,7 @@ function renderEventsAdmin(){
     '<label class="check-line" style="margin-top:14px;padding:10px 12px;background:#f6faf4;border:1px solid #d8e8d6;border-radius:9px;"><input type="checkbox" id="ev-publish"><b>Publish now (make live)</b> — leave unchecked to save as a private draft. Drafts are hidden from customers but still hold their room(s).</label>'+
     '<div style="margin-top:14px;"><button class="btn btn-sm" id="ev-save-btn" onclick="saveEvent()">Save Event</button> <button class="btn btn-sm btn-ghost" onclick="resetEventForm()" id="ev-cancel-btn" style="display:none;">Cancel edit</button></div>'+
     '</div>'+
-    '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">Current Public Events <button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></h2>'+
+    '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span id="ev-list-title">'+(evShowPast?"Past Public Events":"Current Public Events")+'</span> <span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-sm btn-ghost" id="ev-past-btn" onclick="toggleEvPast()" style="font-size:0.72rem;">'+(evShowPast?"\u2B06 Upcoming events":"\uD83D\uDD70\uFE0F Past events")+'</button><button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></span></h2>'+
     '<div class="card" style="padding:12px 14px;margin-bottom:10px;">'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+
       '<input type="search" id="ev-search-input" placeholder="🔎 Search events by title, room, date…" value="'+esc(evSearch)+'" oninput="evFilterChange()" style="flex:1 1 240px;min-width:200px;">'+
