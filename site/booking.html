@@ -2721,7 +2721,7 @@ async function saveEvent(){
     public:true
   };
   if(_evTight) ev.allowTight=true;
-  if(_skipDates.length && ev.recurrence){ ev.exceptions=(ev.exceptions||[]).concat(_skipDates.filter(function(d){ return (ev.exceptions||[]).indexOf(d)<0; })); }
+  if(_skipDates.length && $("ev-recurring").checked){ ev.exceptions=(ev.exceptions||[]).concat(_skipDates.filter(function(d){ return (ev.exceptions||[]).indexOf(d)<0; })); }
   if($("ev-recurring").checked){ ev.recurrence={ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)) }; if(!editingEventId) ev.groupId="EVGRP-"+genId(); }
   if($("ev-reg-enabled") && $("ev-reg-enabled").checked){
     ev.registration={
