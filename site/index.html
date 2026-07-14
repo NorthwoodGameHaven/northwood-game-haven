@@ -1774,6 +1774,7 @@
     h+='<h2 style="font-family:\'Cinzel Decorative\',serif;color:'+FOREST+';font-size:1.5rem;margin-bottom:6px;">'+esc(e.title)+'</h2>';
     h+='<div style="font-family:\'Cinzel\',serif;color:'+GOLD+';font-size:0.82rem;letter-spacing:0.04em;margin-bottom:14px;">'+esc(when)+'</div>';
     if(e.notes) h+='<p style="font-size:0.92rem;color:#4a4a35;line-height:1.7;margin-bottom:16px;">'+esc(e.notes)+'</p>';
+    var _on=(e.occNotes||{})[ds||e.date]; if(_on) h+='<div style="background:#fff7e8;border:1px solid #f0dcae;color:#7a5a14;border-radius:10px;padding:10px 14px;font-size:0.86rem;margin-bottom:16px;">📌 <b>This date:</b> '+esc(_on)+'</div>';
     if(ttypeLabel){
       h+='<div style="background:#f0f8f2;border-radius:10px;padding:12px 14px;margin-bottom:12px;"><div style="font-family:\'Cinzel\',serif;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:'+FOREST+';margin-bottom:5px;">🏆 Tournament</div>';
       h+='<div style="font-size:0.86rem;color:#4a4a35;">'+ttypeLabel;
