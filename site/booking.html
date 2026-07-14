@@ -2951,6 +2951,7 @@ function exportData(){
 var calMode="month", calRef=new Date();
 function setCalMode(m){ calMode=m; renderCalendar(); }
 function calGoto(dateStr, mode){ calRef=new Date(dateStr+"T12:00:00"); calMode=mode; renderCalendar(); }
+function calGotoScroll(dateStr, mode){ calGoto(dateStr, mode); setTimeout(function(){ var g=$("cal-grid-anchor"); if(g) g.scrollIntoView({behavior:"smooth", block:"start"}); }, 30); }
 function calShift(dir){ if(calMode==="month") calRef.setMonth(calRef.getMonth()+dir); else if(calMode==="week") calRef.setDate(calRef.getDate()+dir*7); else calRef.setDate(calRef.getDate()+dir); renderCalendar(); }
 function calToday(){ calRef=new Date(); renderCalendar(); }
 function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
@@ -3478,6 +3479,8 @@ function _auditItems(){
 function nextYMDc(d){ var x=new Date(d+"T12:00:00"); x.setDate(x.getDate()+1); return ymd(x); }
 function buildAudit(){
   var items=_auditItems(), groups={}, out=[];
+  var _todayStr=ymd(new Date());
+  items=items.filter(function(it){ return it.date>=_todayStr; });   // past dates: not our problem anymore
   items.forEach(function(it){ var k=it.date+"|"+it.room; (groups[k]=groups[k]||[]).push(it); });
   Object.keys(groups).forEach(function(k){
     var g=groups[k].slice().sort(function(a,b){ return a.s-b.s || a.e-b.e; });
@@ -3535,7 +3538,7 @@ function deconflictHTML(){
       '<div style="flex:1;min-width:220px;"><b>'+c.date+' · '+esc(roomName(c.room))+'</b><br>'+
       '<span style="font-size:0.84rem;">'+esc(c.a.label)+' ('+fmtTime(c.a.s)+'–'+fmtTime(c.a.e)+') '+(c.sev==="red"?"<b>overlaps</b>":("→ only <b>"+c.gap+" min</b> before"))+' '+esc(c.b.label)+' ('+fmtTime(c.b.s)+'–'+fmtTime(c.b.e)+')</span></div>'+
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'+
-      '<button class="btn btn-sm btn-ghost" onclick="calGoto(\''+c.date+'\',\'day\')">📅 Day view</button>'+fix+'</div></div>';
+      '<button class="btn btn-sm btn-ghost" onclick="calGotoScroll(\''+c.date+'\',\'day\')">📅 Day view</button>'+fix+'</div></div>';
   });
   return h+'</div>';
 }
@@ -3591,6 +3594,7 @@ function renderCalendar(){
       '<span>🔁 recurring</span>'+
     '</div>';
   if(deconflictOn) html += deconflictHTML();
+  html += '<div id="cal-grid-anchor"></div>';
   html += (calMode==="month") ? monthHTML() : weekDayHTML(calMode==="day");
   wrap.innerHTML=html;
 }
