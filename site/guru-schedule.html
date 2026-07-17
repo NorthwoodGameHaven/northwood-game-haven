@@ -62,10 +62,13 @@
   .sched-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
   .sched-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .sched-grid { display:flex; min-width:640px; }
-  .sched-timecol { width:52px; flex:none; padding-top:64px; }
+  .sched-timecol { width:52px; flex:none; padding-top:82px; }
   .sched-timecol .hrlab { height:44px; font-size:0.66rem; color:#8a8a6a; text-align:right; padding-right:6px; position:relative; top:-7px; }
   .sched-day { flex:1; min-width:120px; border-left:1px solid #e6e2d0; }
-  .sched-dayhead { height:64px; padding:6px 6px 2px; font-size:0.72rem; text-align:center; border-bottom:2px solid #d8d4c2; overflow:hidden; }
+  .sched-dayhead { height:82px; padding:6px 6px 2px; font-size:0.72rem; text-align:center; border-bottom:2px solid #d8d4c2; overflow:hidden; }
+  .sched-dayhead .unavline { font-size:0.62rem; color:#8a3b2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .blk.ev.overnight { border-bottom:4px double rgba(255,255,255,0.95); border-radius:7px 7px 0 0; }
+  .blk .contnote { display:block; font-style:italic; font-size:0.6rem; opacity:0.9; }
   .sched-dayhead b { display:block; font-family:'Cinzel',serif; color:var(--forest); font-size:0.78rem; }
   .sched-dayhead .storeline { font-size:0.62rem; color:#5a2b7a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .sched-body { position:relative; background:repeating-linear-gradient(to bottom, #fbf9f0 0, #fbf9f0 43px, #ece8d8 43px, #ece8d8 44px); }
@@ -119,7 +122,7 @@
 <body>
 
 <header class="topbar">
-  <h1>🦦 Guru Schedule Console <span style="font-size:0.6rem;opacity:0.6;font-family:Georgia,serif;">v1.3</span></h1>
+  <h1>🦦 Guru Schedule Console <span style="font-size:0.6rem;opacity:0.6;font-family:Georgia,serif;">v1.4</span></h1>
   <span class="caveat">Who's running the Haven — Stay curious.</span>
   <span class="sp"></span>
   <a href="booking.html?admin=1" style="color:#fff;font-size:0.78rem;">Guru Console (bookings/events) →</a>
@@ -318,10 +321,13 @@ function eventItemsInRange(from,to){
     eventDates(e).forEach(function(d){
       if(d<from||d>to) return;
       var g=gurusFor(e.id,d);
-      out.push({ type:"event", date:d, allDay:!!e.allDay,
-        start:e.allDay?0:timeToMins(e.start), end:e.allDay?1440:timeToMins(e.end||e.start),
-        startLbl:e.allDay?"All day":fmtTime(timeToMins(e.start)),
-        endLbl:e.allDay?"":fmtTime(timeToMins(e.end||e.start)),
+      var sMin=e.allDay?0:timeToMins(e.start), rawEnd=e.allDay?1440:timeToMins(e.end||e.start);
+      var overnight = !e.allDay && rawEnd<=sMin && !!e.end && e.end!==e.start; // crosses midnight
+      var eMin = overnight ? 1440 : rawEnd;
+      out.push({ type:"event", date:d, allDay:!!e.allDay, overnight:overnight,
+        start:sMin, end:eMin,
+        startLbl:e.allDay?"All day":fmtTime(sMin),
+        endLbl:e.allDay?"":(fmtTime(rawEnd)+(overnight?" (+1 day)":"")),
         title:(e.private?"🔒 ":"")+(e.title||"NGH Event")+(isDraftEvent(e)?" (draft)":""),
         eventId:e.id, ev:e, gurus:g.gurus, gstate:g.state });
     });
@@ -493,16 +499,27 @@ function renderSched(){
     var storeLine = dayShifts.length
       ? dayShifts.map(function(s){ return esc(s.guru)+" "+s.startLbl+"–"+s.endLbl; }).join(" · ")
       : "store: no shift set";
-    h+='<div class="sched-day"><div class="sched-dayhead"><b>'+fmtDate(d)+'</b><div class="storeline">🏪 '+storeLine+'</div></div>';
+    var dayUnAll=unav.filter(function(u){ return u.date===d && u.allDay && guruVisible(u.guru); });
+    var unNames={}; dayUnAll.forEach(function(u){ unNames[u.guru]=1; });
+    var unLine=Object.keys(unNames).length?('<div class="unavline">🚫 unavailable: '+Object.keys(unNames).map(esc).join(", ")+'</div>'):'<div class="unavline">&nbsp;</div>';
+    h+='<div class="sched-day"><div class="sched-dayhead"><b>'+fmtDate(d)+'</b><div class="storeline">🏪 '+storeLine+'</div>'+unLine+'</div>';
     h+='<div class="sched-body" style="height:'+bodyH+'px;">';
 
     // store shift bands (behind)
     dayShifts.forEach(function(s){
       h+='<div class="blk shift" style="top:'+top(s.start)+'px;height:'+Math.max(16,top(s.end)-top(s.start))+'px;left:0;right:0;" title="Retail store: '+esc(s.guru)+'">🏪 '+esc(s.guru)+' '+s.startLbl+'–'+s.endLbl+'</div>';
     });
-    // unavailability bands
-    unav.filter(function(u){ return u.date===d && guruVisible(u.guru); }).forEach(function(u){
-      h+='<div class="blk unav" style="top:'+top(u.start)+'px;height:'+Math.max(16,top(u.end)-top(u.start))+'px;left:2%;right:2%;" title="Unavailable">🚫 '+esc(u.guru)+' '+(u.allDay?"all day":(u.startLbl+"–"+u.endLbl))+'</div>';
+    // timed unavailability bands — all-day entries live in the day header instead;
+    // identical windows for multiple Gurus merge into one block
+    var timedUn={};
+    unav.forEach(function(u){
+      if(u.date!==d || u.allDay || !guruVisible(u.guru)) return;
+      var k=u.start+"|"+u.end;
+      (timedUn[k]=timedUn[k]||{start:u.start,end:u.end,startLbl:u.startLbl,endLbl:u.endLbl,gurus:{}}).gurus[u.guru]=1;
+    });
+    Object.keys(timedUn).forEach(function(k){
+      var u=timedUn[k], names=Object.keys(u.gurus).join(" + ");
+      h+='<div class="blk unav" style="top:'+top(u.start)+'px;height:'+Math.max(16,top(u.end)-top(u.start))+'px;left:2%;right:2%;" title="Unavailable: '+esc(names)+'">🚫 '+esc(names)+' '+u.startLbl+'–'+u.endLbl+'</div>';
     });
 
     // events — lane layout
@@ -523,10 +540,11 @@ function renderSched(){
       var w=(70/laneCount), l=28+e._lane*w; // leave left gutter so store band labels stay readable
       var col = e.gstate==="assigned" ? guruColor(e.gurus[0]) : "#a8a288";
       var conf=confKeys[e.eventId+"|"+d];
-      var cls="blk ev"+(e.gstate!=="assigned"?" unassigned":"")+(isDraftEvent(e.ev)?" draft":"")+(conf==="red"?" conf-red":conf==="yel"?" conf-yel":"");
+      var cls="blk ev"+(e.gstate!=="assigned"?" unassigned":"")+(isDraftEvent(e.ev)?" draft":"")+(e.overnight?" overnight":"")+(conf==="red"?" conf-red":conf==="yel"?" conf-yel":"");
       var label = e.gstate==="assigned" ? e.gurus.join(" + ") : (e.gstate==="none"?"No Guru needed":"UNASSIGNED");
       h+='<div class="'+cls+'" style="top:'+top(e.start)+'px;height:'+Math.max(22,top(e.end)-top(e.start))+'px;left:'+l+'%;width:'+(w-1)+'%;background:'+col+';" onclick="openDetails(\''+esc(e.eventId)+'\',\''+d+'\')">'+
-         '<b>'+esc(label)+'</b>'+esc(e.title)+'<br>'+e.startLbl+(e.endLbl?("–"+e.endLbl):"")+'</div>';
+         '<b>'+esc(label)+'</b>'+esc(e.title)+'<br>'+e.startLbl+(e.endLbl?("–"+e.endLbl):"")+
+         (e.overnight?'<span class="contnote">⤵ continues past midnight</span>':'')+'</div>';
     });
     h+='</div></div>';
   });
