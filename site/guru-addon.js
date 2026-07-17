@@ -245,5 +245,28 @@
 
     // initial data load (needs admin token; retries after login via first save/edit)
     loadGd();
+
+    /* ---------- 5. self-healing watchdog ----------
+       The add-on loads async, so the events view may already be rendered
+       (or get re-rendered by code paths we haven't wrapped). Every second,
+       make sure our UI is in place. Cheap no-op when everything's present. */
+    function applyNow() {
+      var pb = gid("view-promos-btn");
+      if (pb && !gid("guru-sched-link")) {
+        var a2 = document.createElement("a");
+        a2.id = "guru-sched-link"; a2.className = "btn btn-sm btn-ghost";
+        a2.href = "guru-schedule.html"; a2.textContent = "🦦 Guru Schedule";
+        a2.style.textDecoration = "none"; a2.style.display = "inline-flex"; a2.style.alignItems = "center";
+        pb.parentNode.insertBefore(a2, pb.nextSibling);
+      }
+      var bt = gid("bulk-text");
+      if (bt) { var card = bt.closest(".card"); if (card) card.remove(); }
+      if (gid("ev-save-btn") && !gid("ga-picker")) {
+        injectPicker();
+        if (window.editingEventId) fillPicker(window.editingEventId);
+      }
+    }
+    applyNow();
+    setInterval(applyNow, 1000);
   });
 })();
