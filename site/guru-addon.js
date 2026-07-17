@@ -1,0 +1,249 @@
+/* =================================================================
+   NGH GURU ADD-ON  (site/guru-addon.js)
+   Loaded into booking.html via Netlify snippet injection — the 2.4 MB
+   booking.html itself is never edited. This add-on:
+     1. Adds a "🦦 Guru Schedule" link to the admin toolbar.
+     2. Injects a Guru picker (Dustin/Mike/Chad/Jen/Sarah/Kyle + Other
+        + None, multi-select) into the event create/edit form and saves
+        the assignment to /gurus when the event saves.
+     3. Runs conflict checks at event save time: overlap / tight-spacing
+        / store-shift warnings with proceed-anyway confirm; a Guru with
+        an Unavailable entry HARD-BLOCKS the save (event not created).
+     4. Removes the "⚡ Quick Bulk Import" card from the events view.
+   Assignments stay admin-only insight — nothing public changes.
+   ================================================================= */
+(function () {
+  "use strict";
+  function ready(fn) { if (document.readyState !== "loading") fn(); else document.addEventListener("DOMContentLoaded", fn); }
+
+  ready(function () {
+    // Only activate inside the booking/admin app.
+    if (!document.getElementById("events-view-wrap")) return;
+    if (typeof window.renderEventsAdmin !== "function" || typeof window.saveEvent !== "function" || !window.Store) return;
+
+    var GURUS = ["Dustin", "Mike", "Chad", "Jen", "Sarah", "Kyle"];
+    var TIGHT_MIN = 15;
+    var API = window.NGH_API_BASE || "/.netlify/functions";
+    var gd = { assignments: [], shifts: [], unavail: [] };
+    var savedDuringCall = [];
+
+    function tok() { return sessionStorage.getItem("ngh_admin_token") || ""; }
+    function gid(x) { return document.getElementById(x); }
+    async function gapi(path, opts) {
+      opts = opts || {}; opts.headers = opts.headers || {};
+      opts.headers["Content-Type"] = "application/json";
+      if (tok()) opts.headers["Authorization"] = "Bearer " + tok();
+      var r = await fetch(API + path, opts);
+      if (r.status === 204) return null;
+      var body = null; try { body = await r.json(); } catch (e) {}
+      if (!r.ok) { var err = new Error((body && body.error) || ("HTTP " + r.status)); err.status = r.status; err.body = body; throw err; }
+      return body;
+    }
+    async function loadGd() { try { var r = await gapi("/gurus"); if (r) gd = r; } catch (e) {} }
+
+    var t2m = window.timeToMins || function (t) { if (!t) return 0; var p = String(t).split(":"); return (+p[0]) * 60 + (+p[1] || 0); };
+    function evDatesOf(e) { try { return (typeof window.eventDates === "function") ? window.eventDates(e) : [e.date]; } catch (_) { return [e.date]; } }
+    function recDates(d, f, c) { try { return (typeof window.recurrenceDates === "function") ? window.recurrenceDates(d, f, c) : [d]; } catch (_) { return [d]; } }
+    function shiftDatesOf(s) { return s.recurrence ? recDates(s.date, s.recurrence.freq, s.recurrence.count) : [s.date]; }
+    function overlap(a, b, c, d) { return a < d && c < b; }
+    function inSpan(d, from, to) { return d >= from && d <= (to || from); }
+
+    function gurusOf(eventId, date) {
+      var ov = null, base = null;
+      gd.assignments.forEach(function (a) {
+        if (a.eventId !== eventId) return;
+        if (a.date === date) ov = a; else if (a.date == null) base = a;
+      });
+      var a = ov || base;
+      return (a && !a.none && a.gurus) ? a.gurus : [];
+    }
+    function baseRecId(eventId) {
+      var r = null;
+      gd.assignments.forEach(function (a) { if (a.eventId === eventId && a.date == null) r = a; });
+      return r ? r.id : undefined;
+    }
+
+    /* ---------- 1. toolbar link ---------- */
+    var promoBtn = gid("view-promos-btn");
+    if (promoBtn && !gid("guru-sched-link")) {
+      var a = document.createElement("a");
+      a.id = "guru-sched-link"; a.className = "btn btn-sm btn-ghost";
+      a.href = "guru-schedule.html"; a.textContent = "🦦 Guru Schedule";
+      a.style.textDecoration = "none"; a.style.display = "inline-flex"; a.style.alignItems = "center";
+      promoBtn.parentNode.insertBefore(a, promoBtn.nextSibling);
+    }
+
+    /* ---------- 2. Guru picker ---------- */
+    function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+    function pickerHTML() {
+      var h = '<div id="ga-picker" style="margin-top:14px;padding:12px 14px;background:#f4f8f2;border:1px solid #cfe0cb;border-radius:9px;">' +
+        '<div style="font-family:\'Cinzel\',serif;color:var(--forest,#2e5d3b);font-size:0.86rem;margin-bottom:6px;">🦦 Game Guru(s) running this event <span style="font-family:Georgia,serif;font-size:0.72rem;color:#7a7a5a;">(admin-only — never shown publicly)</span></div>';
+      GURUS.forEach(function (g) {
+        h += '<label style="display:inline-flex;align-items:center;gap:5px;border:1.5px solid #d8d4c2;border-radius:50px;padding:5px 11px;margin:3px 4px 3px 0;font-size:0.8rem;cursor:pointer;background:#fff;"><input type="checkbox" class="ga-g" value="' + esc(g) + '" onchange="if(this.checked&&document.getElementById(\'ga-none\'))document.getElementById(\'ga-none\').checked=false;"> ' + esc(g) + '</label>';
+      });
+      h += '<label style="display:inline-flex;align-items:center;gap:5px;border:1.5px solid #d8d4c2;border-radius:50px;padding:5px 11px;margin:3px 4px 3px 0;font-size:0.8rem;cursor:pointer;background:#fff;"><input type="checkbox" id="ga-other" onchange="document.getElementById(\'ga-other-name\').style.display=this.checked?\'inline-block\':\'none\';if(this.checked&&document.getElementById(\'ga-none\'))document.getElementById(\'ga-none\').checked=false;"> Other</label>' +
+        '<input type="text" id="ga-other-name" placeholder="Other name(s), comma-separated" style="display:none;width:230px;">' +
+        '<label style="display:inline-flex;align-items:center;gap:5px;border:1.5px dashed #b8b4a2;border-radius:50px;padding:5px 11px;margin:3px 4px 3px 0;font-size:0.8rem;cursor:pointer;background:#fff;"><input type="checkbox" id="ga-none" onchange="if(this.checked){document.querySelectorAll(\'.ga-g\').forEach(function(c){c.checked=false;});var o=document.getElementById(\'ga-other\');if(o){o.checked=false;}document.getElementById(\'ga-other-name\').style.display=\'none\';}"> None — no active Guru management required</label>' +
+        '<div style="font-size:0.72rem;color:#7a7a5a;margin-top:4px;">Saving checks the Guru schedule: overlaps &amp; store shifts warn (you can proceed); an <b>Unavailable</b> Guru blocks the save. Full calendar, store shifts &amp; exports: <a href="guru-schedule.html">Guru Schedule console</a>.</div></div>';
+      return h;
+    }
+    function injectPicker() {
+      if (gid("ga-picker")) return;
+      var sb = gid("ev-save-btn"); if (!sb) return;
+      var row = sb.parentNode;
+      var holder = document.createElement("div");
+      holder.innerHTML = pickerHTML();
+      row.parentNode.insertBefore(holder.firstChild, row);
+    }
+    function clearPicker() {
+      document.querySelectorAll(".ga-g").forEach(function (c) { c.checked = false; });
+      if (gid("ga-other")) gid("ga-other").checked = false;
+      if (gid("ga-other-name")) { gid("ga-other-name").value = ""; gid("ga-other-name").style.display = "none"; }
+      if (gid("ga-none")) gid("ga-none").checked = false;
+    }
+    function fillPicker(eventId) {
+      if (!gid("ga-picker")) injectPicker();
+      clearPicker();
+      var rec = null;
+      gd.assignments.forEach(function (x) { if (x.eventId === eventId && x.date == null) rec = x; });
+      if (!rec) return;
+      if (rec.none) { if (gid("ga-none")) gid("ga-none").checked = true; return; }
+      var others = [];
+      (rec.gurus || []).forEach(function (g) {
+        var hit = false;
+        document.querySelectorAll(".ga-g").forEach(function (c) { if (c.value === g) { c.checked = true; hit = true; } });
+        if (!hit) others.push(g);
+      });
+      if (others.length) { gid("ga-other").checked = true; gid("ga-other-name").value = others.join(", "); gid("ga-other-name").style.display = "inline-block"; }
+    }
+    function collectPicker() {
+      if (!gid("ga-picker")) return null;
+      if (gid("ga-none") && gid("ga-none").checked) return { none: true, gurus: [] };
+      var out = [];
+      document.querySelectorAll(".ga-g").forEach(function (c) { if (c.checked) out.push(c.value); });
+      if (gid("ga-other") && gid("ga-other").checked) {
+        (gid("ga-other-name").value || "").split(",").forEach(function (n) { n = n.trim(); if (n && out.indexOf(n) < 0) out.push(n); });
+      }
+      return { none: false, gurus: out };
+    }
+
+    /* ---------- 3. conflict check at save time ---------- */
+    function fmtT(m) { var h = Math.floor(m / 60), mm = m % 60, ap = h >= 12 ? "pm" : "am"; var hh = h % 12 || 12; return hh + (mm ? ":" + (mm < 10 ? "0" : "") + mm : "") + ap; }
+    function checkConflicts(gurus, dates, s, en, skipEventId) {
+      var warns = [], blocks = [];
+      gurus.forEach(function (g) {
+        dates.forEach(function (d) {
+          // unavailability -> hard block
+          gd.unavail.forEach(function (u) {
+            if (u.guru !== g || !inSpan(d, u.date, u.endDate || u.date)) return;
+            if (u.allDay || overlap(t2m(u.start), t2m(u.end), s, en))
+              blocks.push("⛔ " + g + " is UNAVAILABLE " + d + " " + (u.allDay ? "(all day)" : (fmtT(t2m(u.start)) + "–" + fmtT(t2m(u.end)))) + (u.notes ? (" — " + u.notes) : ""));
+          });
+          // other events same guru
+          (window.cache && window.cache.events || []).forEach(function (e2) {
+            if (!e2 || e2.id === skipEventId) return;
+            if (gurusOf(e2.id, d).indexOf(g) < 0) return;
+            if (evDatesOf(e2).indexOf(d) < 0) return;
+            var s2 = e2.allDay ? 0 : t2m(e2.start), en2 = e2.allDay ? 1440 : t2m(e2.end || e2.start);
+            var lbl = (e2.title || "NGH Event") + " " + (e2.allDay ? "(all day)" : (fmtT(s2) + "–" + fmtT(en2)));
+            if (overlap(s, en, s2, en2)) warns.push("🔴 " + g + " " + d + ": overlaps \"" + lbl + "\"");
+            else { var gap = Math.max(s, s2) - Math.min(en, en2); if (gap >= 0 && gap < TIGHT_MIN) warns.push("🟡 " + g + " " + d + ": only " + gap + " min from \"" + lbl + "\""); }
+          });
+          // store shifts
+          gd.shifts.forEach(function (sh) {
+            if (sh.guru !== g) return;
+            if (shiftDatesOf(sh).indexOf(d) < 0) return;
+            if (overlap(s, en, t2m(sh.open), t2m(sh.close)))
+              warns.push("🏪 " + g + " " + d + ": also running the retail store " + fmtT(t2m(sh.open)) + "–" + fmtT(t2m(sh.close)) + " (allowed)");
+          });
+        });
+      });
+      return { warns: warns, blocks: blocks };
+    }
+
+    /* ---------- 4. wrap app functions ---------- */
+    var _rEA = window.renderEventsAdmin;
+    window.renderEventsAdmin = function () {
+      _rEA.apply(this, arguments);
+      // remove the Quick Bulk Import card
+      var bt = gid("bulk-text");
+      if (bt) { var card = bt.closest(".card"); if (card) card.remove(); }
+      injectPicker();
+      if (window.editingEventId) fillPicker(window.editingEventId); else clearPicker();
+    };
+
+    var _edit = window.editEvent;
+    window.editEvent = function (id) { _edit.apply(this, arguments); fillPicker(id); };
+    var _dup = window.duplicateEvent;
+    if (typeof _dup === "function") window.duplicateEvent = function (id) { _dup.apply(this, arguments); fillPicker(id); };
+    var _reset = window.resetEventForm;
+    window.resetEventForm = function () { _reset.apply(this, arguments); clearPicker(); };
+
+    var _storeSave = window.Store.saveEvent;
+    window.Store.saveEvent = async function (ev) {
+      var r = await _storeSave.apply(window.Store, arguments);
+      savedDuringCall.push(r || ev);
+      return r;
+    };
+
+    function pickTarget(list, date) {
+      for (var i = list.length - 1; i >= 0; i--) {
+        var e = list[i]; if (!e || !e.id) continue;
+        if (evDatesOf(e).indexOf(date) >= 0) return e;
+      }
+      for (var j = list.length - 1; j >= 0; j--) { if (list[j] && list[j].id) return list[j]; }
+      return null;
+    }
+
+    var _save = window.saveEvent;
+    window.saveEvent = async function () {
+      var sel = collectPicker();
+      var capDate = gid("ev-date") ? gid("ev-date").value : "";
+      var allDay = gid("ev-allday") && gid("ev-allday").checked;
+      var s = allDay ? 0 : t2m(gid("ev-start") ? gid("ev-start").value : "");
+      var en = allDay ? 1440 : t2m(gid("ev-end") ? gid("ev-end").value : "");
+      var skipId = window.editingEventId || null;
+
+      if (sel && !sel.none && sel.gurus.length && capDate) {
+        await loadGd();
+        var dates = [capDate];
+        if (gid("ev-recurring") && gid("ev-recurring").checked) {
+          var f = gid("ev-rec-freq") ? gid("ev-rec-freq").value : "weekly";
+          var c = Math.max(2, Math.min(52, parseInt(gid("ev-rec-count") ? gid("ev-rec-count").value : "2", 10) || 2));
+          dates = recDates(capDate, f, c);
+        }
+        var res = checkConflicts(sel.gurus, dates, s, en, skipId);
+        if (res.blocks.length) {
+          alert("⛔ Event NOT saved — a selected Guru is marked Unavailable:\n\n" + res.blocks.join("\n") + "\n\nRemove that Guru, pick someone else, or delete the unavailability entry in the Guru Schedule console.");
+          return;
+        }
+        if (res.warns.length) {
+          if (!confirm("⚠️ Guru schedule conflicts found:\n\n" + res.warns.join("\n") + "\n\nOne Guru can run multiple things at once when it makes sense.\n\nProceed anyway?")) return;
+        }
+      }
+
+      savedDuringCall = [];
+      await _save.apply(this, arguments);
+
+      if (sel && (sel.none || sel.gurus.length) && savedDuringCall.length) {
+        var target = pickTarget(savedDuringCall, capDate);
+        if (target) {
+          try {
+            await gapi("/gurus", { method: "POST", body: JSON.stringify({ action: "save-assignment", item: { id: baseRecId(target.id), eventId: target.id, date: null, gurus: sel.none ? [] : sel.gurus, none: sel.none } }) });
+            await loadGd();
+          } catch (err) {
+            if (err.status === 409 && err.body && err.body.conflicts) {
+              alert("⛔ The event was saved, but the Guru assignment was rejected — Guru marked Unavailable:\n\n" + err.body.conflicts.map(function (v) { return v.guru + " on " + v.date + (v.allDay ? " (all day)" : ""); }).join("\n") + "\n\nAssign a different Guru from the Guru Schedule console.");
+            } else {
+              alert("The event was saved, but the Guru assignment could not be stored (" + err.message + "). You can set it in the Guru Schedule console.");
+            }
+          }
+        }
+      }
+      savedDuringCall = [];
+    };
+
+    // initial data load (needs admin token; retries after login via first save/edit)
+    loadGd();
+  });
+})();
