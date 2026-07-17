@@ -57,18 +57,36 @@ const pad = (n) => (n < 10 ? '0' : '') + n;
 function timeToMins(t) { if (!t) return 0; const p = String(t).split(':'); return (+p[0]) * 60 + (+p[1] || 0); }
 function addDays(dateStr, n) { const d = new Date(dateStr + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 function addMonths(dateStr, n) { const d = new Date(dateStr + 'T12:00:00'); d.setMonth(d.getMonth() + n); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
-function recurrenceDates(startDate, freq, count) {
+function ymdOf(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function monthlyModeDate(anchor, i, mode) {
+  // Ported verbatim from booking.html — Outlook-style monthly patterns (dom/nthdow/lastdow/lastday).
+  const a = new Date(anchor + 'T12:00:00'), y = a.getFullYear(), m = a.getMonth() + i;
+  if (mode === 'lastday') return ymdOf(new Date(y, m + 1, 0, 12));
+  if (mode === 'lastdow') {
+    const L = new Date(y, m + 1, 0, 12), df = (L.getDay() - a.getDay() + 7) % 7;
+    L.setDate(L.getDate() - df); return ymdOf(L);
+  }
+  if (mode === 'nthdow') {
+    const nth = Math.ceil(a.getDate() / 7);
+    const F = new Date(y, m, 1, 12), off = (a.getDay() - F.getDay() + 7) % 7;
+    let day = 1 + off + (nth - 1) * 7; const dim = new Date(y, m + 1, 0).getDate();
+    if (day > dim) day -= 7;
+    return ymdOf(new Date(y, m, day, 12));
+  }
+  return addMonths(anchor, i); // 'dom'
+}
+function recurrenceDates(startDate, freq, count, mode) {
   const dates = [startDate];
   for (let i = 1; i < count; i++) {
     if (freq === 'weekly') dates.push(addDays(dates[i - 1], 7));
     else if (freq === 'biweekly') dates.push(addDays(dates[i - 1], 14));
-    else if (freq === 'monthly') dates.push(addMonths(startDate, i));
+    else if (freq === 'monthly') dates.push(monthlyModeDate(startDate, i, mode || 'dom'));
   }
   return dates;
 }
 function eventDates(e) {
   if (!e) return [];
-  let dates = e.recurrence ? recurrenceDates(e.date, e.recurrence.freq, e.recurrence.count) : [e.date];
+  let dates = e.recurrence ? recurrenceDates(e.date, e.recurrence.freq, e.recurrence.count, e.recurrence.mode) : [e.date];
   if (e.exceptions && e.exceptions.length) dates = dates.filter((d) => e.exceptions.indexOf(d) < 0);
   return dates;
 }
