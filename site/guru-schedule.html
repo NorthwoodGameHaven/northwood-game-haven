@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Guru Schedule Console — Northwood Game Haven</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --forest:#2e5d3b; --forest-light:#3f7a50; --gold:#b8862d; --gold-light:#d4a94e;
+    --den:#2b2b1f; --cream:#faf6ec; --dark:#1d2a1f; --maroon:#6e1f2b; --teal-dark:#134b57;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Georgia,'Times New Roman',serif; background:var(--cream); color:var(--den); }
+  h1,h2,h3 { font-family:'Cinzel',serif; color:var(--forest); }
+  a { color:var(--forest); }
+  .wrap { max-width:1180px; margin:0 auto; padding:16px; }
+  header.topbar { background:linear-gradient(135deg,var(--forest),#234a2e); color:#fff; padding:14px 18px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header.topbar h1 { color:#fff; margin:0; font-size:1.15rem; letter-spacing:0.05em; }
+  header.topbar .caveat { font-family:'Caveat',cursive; color:var(--gold-light); font-size:1.15rem; }
+  header.topbar .sp { flex:1; }
+  .card { background:#fff; border:1px solid #e2e0d2; border-radius:14px; padding:16px 18px; margin-bottom:14px; box-shadow:0 4px 14px rgba(30,40,25,0.06); }
+  .hint { font-size:0.8rem; color:#7a7a5a; }
+  .btn { background:linear-gradient(135deg,var(--forest),var(--forest-light)); color:#fff; border:none; border-radius:50px; padding:11px 24px; font-family:'Cinzel',serif; font-size:0.82rem; letter-spacing:0.06em; cursor:pointer; transition:transform 0.15s,opacity 0.15s; }
+  .btn:hover { transform:translateY(-1px); }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+  .btn-ghost { background:transparent; border:1.5px solid var(--forest); color:var(--forest); }
+  .btn-gold { background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); }
+  .btn-danger { background:linear-gradient(135deg,#9a2b2b,#b23b3b); color:#fff; }
+  .btn-sm { padding:8px 16px; font-size:0.74rem; }
+  .btn-xs { padding:5px 11px; font-size:0.68rem; }
+  input[type=text],input[type=date],input[type=time],input[type=number],select,textarea {
+    font-family:inherit; font-size:0.9rem; padding:9px 11px; border:1.5px solid #d8d4c2; border-radius:9px; background:#fff; color:var(--den); max-width:100%;
+  }
+  input:focus,select:focus,textarea:focus { outline:none; border-color:var(--forest); }
+  label { font-size:0.8rem; color:#5a5a44; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .field { display:flex; flex-direction:column; gap:4px; }
+  .tabbar { display:flex; gap:8px; margin:14px 0; flex-wrap:wrap; }
+  .tab { padding:9px 16px; border-radius:50px; border:1.5px solid #d8e0d4; background:#fff; font-family:'Cinzel',serif; font-size:0.74rem; cursor:pointer; color:var(--forest); }
+  .tab.active { background:var(--forest); color:#fff; border-color:var(--forest); }
+  .chip { display:inline-block; padding:3px 10px; border-radius:50px; font-size:0.72rem; margin:2px 3px 2px 0; border:1px solid transparent; }
+  .chip.guru { color:#fff; }
+  .chip.none { background:#eee; color:#666; border-color:#ddd; }
+  .chip.unassigned { background:#fff4dc; color:#9a6310; border-color:#e8cf9a; }
+  .chip.store { background:#efe6f7; color:#5a2b7a; border-color:#d6c2ea; }
+  .chip.unav { background:#f0f0f0; color:#555; border-color:#ccc; }
+  .badge-red { background:#fdeaea; color:#8a2b2b; border:1px solid #e3b3b3; border-radius:8px; padding:2px 8px; font-size:0.72rem; }
+  .badge-yel { background:#fff6dc; color:#8a6a10; border:1px solid #e8d59a; border-radius:8px; padding:2px 8px; font-size:0.72rem; }
+  .badge-flag{ background:#efe6f7; color:#5a2b7a; border:1px solid #d6c2ea; border-radius:8px; padding:2px 8px; font-size:0.72rem; }
+  .badge-ok  { background:#eef7f0; color:var(--forest); border:1px solid #c2e0cb; border-radius:8px; padding:2px 8px; font-size:0.72rem; }
+
+  /* login */
+  .gate { max-width:420px; margin:60px auto; text-align:center; }
+  .err { color:#b23; font-size:0.82rem; margin-top:8px; display:none; }
+  .err.show { display:block; }
+
+  /* ===== schedule grid ===== */
+  .sched-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .sched-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .sched-grid { display:flex; min-width:640px; }
+  .sched-timecol { width:52px; flex:none; padding-top:64px; }
+  .sched-timecol .hrlab { height:44px; font-size:0.66rem; color:#8a8a6a; text-align:right; padding-right:6px; position:relative; top:-7px; }
+  .sched-day { flex:1; min-width:120px; border-left:1px solid #e6e2d0; }
+  .sched-dayhead { height:64px; padding:6px 6px 2px; font-size:0.72rem; text-align:center; border-bottom:2px solid #d8d4c2; overflow:hidden; }
+  .sched-dayhead b { display:block; font-family:'Cinzel',serif; color:var(--forest); font-size:0.78rem; }
+  .sched-dayhead .storeline { font-size:0.62rem; color:#5a2b7a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sched-body { position:relative; background:repeating-linear-gradient(to bottom, #fbf9f0 0, #fbf9f0 43px, #ece8d8 43px, #ece8d8 44px); }
+  .blk { position:absolute; border-radius:7px; font-size:0.66rem; line-height:1.25; padding:3px 5px; overflow:hidden; cursor:pointer; }
+  .blk.ev { color:#fff; z-index:3; box-shadow:0 1px 4px rgba(0,0,0,0.25); }
+  .blk.ev.unassigned { background:#a8a288 !important; color:#2b2b1f; font-style:italic; }
+  .blk.ev.draft { background-image:repeating-linear-gradient(45deg, rgba(0,0,0,0.18) 0, rgba(0,0,0,0.18) 2px, transparent 2px, transparent 6px); font-style:italic; }
+  .blk.ev b { display:block; font-size:0.66rem; }
+  .blk.shift { z-index:1; border:1.5px dashed rgba(90,43,122,0.55); background:repeating-linear-gradient(135deg, rgba(122,80,160,0.14) 0, rgba(122,80,160,0.14) 6px, rgba(122,80,160,0.05) 6px, rgba(122,80,160,0.05) 12px); color:#5a2b7a; cursor:default; }
+  .blk.unav { z-index:2; background:repeating-linear-gradient(45deg, rgba(60,60,60,0.16) 0, rgba(60,60,60,0.16) 4px, rgba(60,60,60,0.06) 4px, rgba(60,60,60,0.06) 8px); border:1.5px dotted #888; color:#444; cursor:default; }
+  .blk.conf-red { outline:3px solid #c0392b; outline-offset:-1px; }
+  .blk.conf-yel { outline:3px solid #e0b62a; outline-offset:-1px; }
+
+  /* modal */
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(20,30,20,0.55); z-index:9000; overflow:auto; padding:20px; }
+  .modal { max-width:560px; margin:24px auto; background:#fff; border-radius:14px; padding:20px 22px; box-shadow:0 18px 50px rgba(0,0,0,0.3); }
+  .kv { font-size:0.86rem; margin:5px 0; }
+  .kv b { color:var(--forest); }
+
+  .ev-card { border-left:5px solid var(--forest); }
+  .ev-card.hl { animation:hl 2.2s ease; }
+  @keyframes hl { 0% { box-shadow:0 0 0 4px var(--gold); } 100% { box-shadow:0 4px 14px rgba(30,40,25,0.06); } }
+  .gcheck { display:inline-flex; align-items:center; gap:5px; border:1.5px solid #d8d4c2; border-radius:50px; padding:6px 12px; margin:3px 4px 3px 0; font-size:0.8rem; cursor:pointer; background:#fff; }
+  .gcheck input { accent-color:var(--forest); }
+  .gcheck.on { border-color:var(--forest); background:#eef7f0; }
+
+  .audit-card { border-left:6px solid #ccc; }
+  .audit-card.red { border-left-color:#c0392b; background:#fdf3f2; }
+  .audit-card.yellow { border-left-color:#e0b62a; background:#fffaf0; }
+  .audit-card.flag { border-left-color:#7a50a0; background:#faf6ff; }
+
+  table.plain { border-collapse:collapse; width:100%; font-size:0.82rem; }
+  table.plain th, table.plain td { text-align:left; padding:7px 8px; border-bottom:1px solid #eee6d4; }
+  table.plain th { font-family:'Cinzel',serif; font-size:0.7rem; color:var(--forest); }
+
+  /* print */
+  #print-area { display:none; }
+  @media print {
+    body * { visibility:hidden; }
+    #print-area, #print-area * { visibility:visible; }
+    #print-area { display:block; position:absolute; left:0; top:0; width:100%; padding:20px; background:#fff; }
+    #print-area h1 { font-size:1.3rem; margin:0 0 2px; }
+    #print-area .pr-day { page-break-inside:avoid; margin-bottom:14px; }
+    #print-area .pr-day h3 { border-bottom:2px solid #2e5d3b; margin:0 0 6px; padding-bottom:2px; font-size:1rem; }
+    #print-area table { border-collapse:collapse; width:100%; font-size:11px; }
+    #print-area td, #print-area th { border:1px solid #bbb; padding:4px 6px; text-align:left; vertical-align:top; }
+    #print-area .pr-guru { font-weight:bold; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>🦦 Guru Schedule Console</h1>
+  <span class="caveat">Who's running the Haven — Stay curious.</span>
+  <span class="sp"></span>
+  <a href="booking.html?admin=1" style="color:#fff;font-size:0.78rem;">Guru Console (bookings/events) →</a>
+</header>
+
+<div class="wrap">
+
+  <!-- LOGIN GATE -->
+  <div id="gate" class="gate card">
+    <h2 style="margin-top:0;">Guru Login</h2>
+    <p class="hint">Enter the admin code (same one as the booking Guru Console).</p>
+    <input type="text" id="admin-code" placeholder="Admin code" style="width:100%;text-align:center;" autocomplete="off">
+    <div class="err" id="gate-err">That code didn't work. Try again.</div>
+    <div style="margin-top:14px;"><button class="btn" onclick="doLogin()">Unlock Console</button></div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" style="display:none;">
+    <div class="tabbar">
+      <button class="tab" id="tab-sched" onclick="setView('sched')">📅 Schedule</button>
+      <button class="tab" id="tab-assign" onclick="setView('assign')">🎯 Event Gurus</button>
+      <button class="tab" id="tab-shifts" onclick="setView('shifts')">🏪 Store Shifts</button>
+      <button class="tab" id="tab-unavail" onclick="setView('unavail')">🚫 Unavailable</button>
+      <button class="tab" id="tab-audit" onclick="setView('audit')">🧭 Deconflict</button>
+      <button class="tab" id="tab-export" onclick="setView('export')">📤 Export / Print</button>
+      <span style="flex:1;"></span>
+      <button class="tab" onclick="reload()">↻ Refresh</button>
+      <button class="tab" onclick="logout()">Log out</button>
+    </div>
+    <div id="view-sched" style="display:none;"></div>
+    <div id="view-assign" style="display:none;"></div>
+    <div id="view-shifts" style="display:none;"></div>
+    <div id="view-unavail" style="display:none;"></div>
+    <div id="view-audit" style="display:none;"></div>
+    <div id="view-export" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- DETAILS MODAL -->
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-box"></div>
+</div>
+
+<!-- PRINT AREA -->
+<div id="print-area"></div>
+
+<script src="ngh-config.js"></script>
+<script>
+/* =================================================================
+   NGH GURU SCHEDULE CONSOLE
+   Reads events from /events (existing backend, untouched) and guru
+   data (assignments / store shifts / unavailability) from the new
+   /gurus function. Admin-only; token shared with booking.html
+   (sessionStorage "ngh_admin_token").
+   ================================================================= */
+var API_BASE = window.NGH_API_BASE || "/.netlify/functions";
+var $ = function(id){ return document.getElementById(id); };
+var pad = function(n){ return (n<10?"0":"")+n; };
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function timeToMins(t){ if(!t) return 0; var p=String(t).split(":"); return (+p[0])*60+(+p[1]||0); }
+function minsToTime(m){ return pad(Math.floor(m/60))+":"+pad(m%60); }
+function fmtTime(m){ var h=Math.floor(m/60), mm=m%60, ap=h>=12?"pm":"am"; var hh=h%12; if(hh===0)hh=12; return hh+(mm?":"+pad(mm):"")+ap; }
+function todayStr(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function addDays(ds,n){ var d=new Date(ds+"T12:00:00"); d.setDate(d.getDate()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function addMonths(ds,n){ var d=new Date(ds+"T12:00:00"); d.setMonth(d.getMonth()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function dowName(ds){ return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(ds+"T12:00:00").getDay()]; }
+function fmtDate(ds){ var d=new Date(ds+"T12:00:00"); return dowName(ds)+" "+["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]+" "+d.getDate(); }
+function weekStart(ds){ var d=new Date(ds+"T12:00:00"); return addDays(ds, -d.getDay()); }
+function monthStart(ds){ return ds.slice(0,8)+"01"; }
+function rangesOverlap(aS,aE,bS,bE){ return aS<bE && bS<aE; }
+
+/* ---- recurrence (mirrors booking.html) ---- */
+function recurrenceDates(startDate,freq,count){
+  var dates=[startDate];
+  for(var i=1;i<count;i++){
+    if(freq==="weekly") dates.push(addDays(dates[i-1],7));
+    else if(freq==="biweekly") dates.push(addDays(dates[i-1],14));
+    else if(freq==="monthly") dates.push(addMonths(startDate,i));
+  }
+  return dates;
+}
+function eventDates(e){
+  if(!e) return [];
+  var dates = e.recurrence ? recurrenceDates(e.date,e.recurrence.freq,e.recurrence.count) : [e.date];
+  if(e.exceptions && e.exceptions.length){ dates=dates.filter(function(d){ return e.exceptions.indexOf(d)<0; }); }
+  return dates;
+}
+function shiftDates(s){ return s.recurrence ? recurrenceDates(s.date,s.recurrence.freq,s.recurrence.count) : [s.date]; }
+function isDraftEvent(e){ return e && e.status==="draft"; }
+var ROOM_NAMES = { holt:"The Holt", den:"Stash's Den", depths:"The Depths", lodge:"Lakeview Lodge (VRBO)", rest:"Otter's Rest (VRBO)" };
+function roomName(id){ return ROOM_NAMES[id]||id; }
+function roomsLabel(e){
+  if(e && e.offsiteLocation) return "Offsite: "+e.offsiteLocation;
+  return (e && e.rooms && e.rooms.length) ? e.rooms.map(roomName).join(", ") : "all rooms";
+}
+
+/* ---- gurus & colors ---- */
+var GURUS = ["Dustin","Mike","Chad","Jen","Sarah","Kyle"];
+var GURU_COLORS = { "Dustin":"#2e5d3b", "Mike":"#134b57", "Chad":"#9a6310", "Jen":"#7a2b6e", "Sarah":"#b23b3b", "Kyle":"#3b5bb2" };
+var EXTRA_COLORS = ["#4a6d8c","#8c5a2b","#2b8c6e","#8c2b5a","#5a8c2b","#6e4a8c"];
+function guruColor(g){
+  if(GURU_COLORS[g]) return GURU_COLORS[g];
+  var h=0; for(var i=0;i<g.length;i++) h=(h*31+g.charCodeAt(i))>>>0;
+  return EXTRA_COLORS[h%EXTRA_COLORS.length];
+}
+function guruChip(g){ return '<span class="chip guru" style="background:'+guruColor(g)+';">'+esc(g)+'</span>'; }
+function allGuruNames(){
+  var set={}; GURUS.forEach(function(g){ set[g]=1; });
+  cache.assignments.forEach(function(a){ (a.gurus||[]).forEach(function(g){ set[g]=1; }); });
+  cache.shifts.forEach(function(s){ set[s.guru]=1; });
+  cache.unavail.forEach(function(u){ set[u.guru]=1; });
+  return Object.keys(set);
+}
+
+/* ---- API ---- */
+function token(){ return sessionStorage.getItem("ngh_admin_token")||""; }
+async function api(path, opts){
+  opts=opts||{}; opts.headers=opts.headers||{};
+  opts.headers["Content-Type"]="application/json";
+  if(token()) opts.headers["Authorization"]="Bearer "+token();
+  var r=await fetch(API_BASE+path, opts);
+  if(r.status===204) return null;
+  var body=null; try{ body=await r.json(); }catch(e){}
+  if(!r.ok){ var err=new Error((body&&body.error)||("HTTP "+r.status)); err.status=r.status; err.body=body; throw err; }
+  return body;
+}
+
+/* ---- state ---- */
+var cache = { events:[], assignments:[], shifts:[], unavail:[] };
+var curView="sched";
+var sched = { mode:"week", anchor:todayStr(), filter:null, showUnassigned:true }; // filter = null (all) or {name:true}
+var auditDays = 30;
+
+/* ---- login ---- */
+async function doLogin(){
+  try{
+    var r=await api("/admin-login",{method:"POST",body:JSON.stringify({code:$("admin-code").value})});
+    if(r && r.token){ sessionStorage.setItem("ngh_admin_token", r.token); $("gate-err").classList.remove("show"); await boot(); return; }
+  }catch(e){}
+  $("gate-err").classList.add("show");
+}
+function logout(){ sessionStorage.removeItem("ngh_admin_token"); location.reload(); }
+async function boot(){
+  $("gate").style.display="none"; $("app").style.display="block";
+  await reload();
+}
+async function reload(){
+  var ev=await api("/events");
+  var gd=await api("/gurus");
+  cache.events=ev||[];
+  cache.assignments=(gd&&gd.assignments)||[];
+  cache.shifts=(gd&&gd.shifts)||[];
+  cache.unavail=(gd&&gd.unavail)||[];
+  setView(curView);
+}
+
+/* ---- assignment resolution ---- */
+function asgFor(eventId, date){
+  var ov=null, base=null;
+  cache.assignments.forEach(function(a){
+    if(a.eventId!==eventId) return;
+    if(a.date===date) ov=a;
+    else if(a.date==null) base=a;
+  });
+  return ov||base;
+}
+function gurusFor(eventId, date){
+  var a=asgFor(eventId, date);
+  if(!a) return { state:"unassigned", gurus:[] };
+  if(a.none) return { state:"none", gurus:[], rec:a };
+  return { state:"assigned", gurus:a.gurus||[], rec:a };
+}
+
+/* ---- occurrence collection ---- */
+function eventItemsInRange(from,to){
+  var out=[];
+  cache.events.forEach(function(e){
+    eventDates(e).forEach(function(d){
+      if(d<from||d>to) return;
+      var g=gurusFor(e.id,d);
+      out.push({ type:"event", date:d, allDay:!!e.allDay,
+        start:e.allDay?0:timeToMins(e.start), end:e.allDay?1440:timeToMins(e.end||e.start),
+        startLbl:e.allDay?"All day":fmtTime(timeToMins(e.start)),
+        endLbl:e.allDay?"":fmtTime(timeToMins(e.end||e.start)),
+        title:(e.private?"🔒 ":"")+(e.title||"NGH Event")+(isDraftEvent(e)?" (draft)":""),
+        eventId:e.id, ev:e, gurus:g.gurus, gstate:g.state });
+    });
+  });
+  return out;
+}
+function shiftItemsInRange(from,to){
+  var out=[];
+  cache.shifts.forEach(function(s){
+    shiftDates(s).forEach(function(d){
+      if(d<from||d>to) return;
+      out.push({ type:"shift", date:d, guru:s.guru, start:timeToMins(s.open), end:timeToMins(s.close),
+        startLbl:fmtTime(timeToMins(s.open)), endLbl:fmtTime(timeToMins(s.close)), shift:s });
+    });
+  });
+  return out;
+}
+function unavailItemsInRange(from,to){
+  var out=[];
+  cache.unavail.forEach(function(u){
+    var d=u.date, last=u.endDate||u.date;
+    while(d<=last){
+      if(d>=from && d<=to){
+        out.push({ type:"unavail", date:d, guru:u.guru, allDay:!!u.allDay,
+          start:u.allDay?0:timeToMins(u.start), end:u.allDay?1440:timeToMins(u.end),
+          startLbl:u.allDay?"All day":fmtTime(timeToMins(u.start)),
+          endLbl:u.allDay?"":fmtTime(timeToMins(u.end)), un:u });
+      }
+      d=addDays(d,1);
+      if(out.length>1000) break;
+    }
+  });
+  return out;
+}
+
+/* =================================================================
+   CONFLICT ENGINE
+   red    = same guru, two events overlap in time
+   yellow = same guru, gap between events under 15 minutes
+   flag   = guru scheduled on retail store shift during an event (allowed)
+   block  = guru marked unavailable (HARD block on assignment)
+   ================================================================= */
+var TIGHT_MIN = 15;
+function conflictsForGuru(guru, from, to, skipEventId, injected){
+  // injected: optional extra event items to test (used before saving)
+  var evs=eventItemsInRange(from,to).filter(function(it){ return it.gurus.indexOf(guru)>=0 && (!skipEventId || it.eventId!==skipEventId); });
+  if(injected) evs=evs.concat(injected);
+  var shifts=shiftItemsInRange(from,to).filter(function(it){ return it.guru===guru; });
+  var unav=unavailItemsInRange(from,to).filter(function(it){ return it.guru===guru; });
+  var out=[];
+  // group by date
+  var byDate={};
+  evs.forEach(function(it){ (byDate[it.date]=byDate[it.date]||[]).push(it); });
+  Object.keys(byDate).forEach(function(d){
+    var list=byDate[d].slice().sort(function(a,b){ return a.start-b.start; });
+    for(var i=0;i<list.length;i++) for(var j=i+1;j<list.length;j++){
+      var A=list[i], B=list[j];
+      if(A.eventId===B.eventId) continue;
+      if(rangesOverlap(A.start,A.end,B.start,B.end)) out.push({sev:"red", guru:guru, date:d, a:A, b:B, text:"Events overlap"});
+      else {
+        var gap = Math.max(A.start,B.start) - Math.min(A.end,B.end);
+        if(gap>=0 && gap<TIGHT_MIN) out.push({sev:"yellow", guru:guru, date:d, a:A, b:B, text:"Only "+gap+" min between events"});
+      }
+    }
+  });
+  // store overlap flags
+  evs.forEach(function(E){
+    shifts.forEach(function(S){
+      if(S.date===E.date && rangesOverlap(E.start,E.end,S.start,S.end))
+        out.push({sev:"flag", guru:guru, date:E.date, a:E, b:S, text:"Running retail store during this event (allowed)"});
+    });
+  });
+  // unavailability violations
+  evs.forEach(function(E){
+    unav.forEach(function(U){
+      if(U.date===E.date && rangesOverlap(E.start,E.end,U.start,U.end))
+        out.push({sev:"block", guru:guru, date:E.date, a:E, b:U, text:"Guru marked UNAVAILABLE at this time"});
+    });
+  });
+  return out;
+}
+
+/* =================================================================
+   VIEWS
+   ================================================================= */
+function setView(v){
+  curView=v;
+  ["sched","assign","shifts","unavail","audit","export"].forEach(function(x){
+    $("view-"+x).style.display = x===v ? "block":"none";
+    $("tab-"+x).classList.toggle("active", x===v);
+  });
+  if(v==="sched") renderSched();
+  if(v==="assign") renderAssign();
+  if(v==="shifts") renderShifts();
+  if(v==="unavail") renderUnavail();
+  if(v==="audit") renderAudit();
+  if(v==="export") renderExport();
+}
+
+/* ---------------- SCHEDULE ---------------- */
+function schedRange(){
+  if(sched.mode==="day") return [sched.anchor, sched.anchor];
+  var ws=weekStart(sched.anchor); return [ws, addDays(ws,6)];
+}
+function schedNav(n){
+  sched.anchor = addDays(sched.anchor, sched.mode==="day" ? n : n*7);
+  renderSched();
+}
+function toggleGuruFilter(g){
+  if(!sched.filter) sched.filter={};
+  if(sched.filter[g]) delete sched.filter[g]; else sched.filter[g]=true;
+  if(!Object.keys(sched.filter).length) sched.filter=null;
+  renderSched();
+}
+function guruVisible(g){ return !sched.filter || sched.filter[g]; }
+
+function renderSched(){
+  var r=schedRange(), from=r[0], to=r[1];
+  var evs=eventItemsInRange(from,to);
+  var shifts=shiftItemsInRange(from,to);
+  var unav=unavailItemsInRange(from,to);
+  // conflicts across all gurus in this window (for outlines)
+  var confKeys={};
+  allGuruNames().forEach(function(g){
+    conflictsForGuru(g,from,to).forEach(function(c){
+      if(c.sev==="red"||c.sev==="block"){ confKeys[c.a.eventId+"|"+c.date]="red"; confKeys[c.b.eventId+"|"+c.date]="red"; }
+      else if(c.sev==="yellow"){ if(!confKeys[c.a.eventId+"|"+c.date])confKeys[c.a.eventId+"|"+c.date]="yel"; if(!confKeys[c.b.eventId+"|"+c.date])confKeys[c.b.eventId+"|"+c.date]="yel"; }
+    });
+  });
+
+  var names=allGuruNames();
+  var h='<div class="card">';
+  h+='<div class="sched-controls">'+
+     '<button class="btn btn-sm btn-ghost" onclick="schedNav(-1)">◀</button>'+
+     '<button class="btn btn-sm btn-ghost" onclick="sched.anchor=todayStr();renderSched()">Today</button>'+
+     '<button class="btn btn-sm btn-ghost" onclick="schedNav(1)">▶</button>'+
+     '<input type="date" value="'+sched.anchor+'" onchange="sched.anchor=this.value;renderSched()">'+
+     '<button class="btn btn-sm '+(sched.mode==="day"?"":"btn-ghost")+'" onclick="sched.mode=\'day\';renderSched()">Day</button>'+
+     '<button class="btn btn-sm '+(sched.mode==="week"?"":"btn-ghost")+'" onclick="sched.mode=\'week\';renderSched()">Week</button>'+
+     '<label style="margin-left:8px;"><input type="checkbox" '+(sched.showUnassigned?"checked":"")+' onchange="sched.showUnassigned=this.checked;renderSched()"> show unassigned</label>'+
+     '</div>';
+  h+='<div style="margin-bottom:10px;">Filter: ';
+  names.forEach(function(g){
+    var on=guruVisible(g);
+    h+='<span class="chip guru" style="background:'+(on?guruColor(g):"#bbb")+';cursor:pointer;" onclick="toggleGuruFilter(\''+esc(g)+'\')">'+esc(g)+'</span>';
+  });
+  h+='<span class="chip store">🏪 store shift</span><span class="chip unav">🚫 unavailable</span></div>';
+
+  // hour range
+  var hStart=8, hEnd=23;
+  evs.concat(shifts).concat(unav).forEach(function(it){
+    if(it.allDay) return;
+    hStart=Math.min(hStart, Math.floor(it.start/60));
+    hEnd=Math.max(hEnd, Math.ceil(it.end/60));
+  });
+  hStart=Math.max(0,hStart); hEnd=Math.min(24,Math.max(hEnd,hStart+8));
+  var ROW=44, bodyH=(hEnd-hStart)*ROW;
+  function top(m){ return (m/60-hStart)*ROW; }
+
+  var days=[]; for(var d=from; d<=to; d=addDays(d,1)){ days.push(d); if(days.length>7) break; }
+
+  h+='<div class="sched-scroll"><div class="sched-grid">';
+  h+='<div class="sched-timecol">';
+  for(var hr=hStart;hr<hEnd;hr++) h+='<div class="hrlab">'+fmtTime(hr*60)+'</div>';
+  h+='</div>';
+
+  days.forEach(function(d){
+    var dayShifts=shifts.filter(function(s){ return s.date===d && guruVisible(s.guru); });
+    var storeLine = dayShifts.length
+      ? dayShifts.map(function(s){ return esc(s.guru)+" "+s.startLbl+"–"+s.endLbl; }).join(" · ")
+      : "store: no shift set";
+    h+='<div class="sched-day"><div class="sched-dayhead"><b>'+fmtDate(d)+'</b><div class="storeline">🏪 '+storeLine+'</div></div>';
+    h+='<div class="sched-body" style="height:'+bodyH+'px;">';
+
+    // store shift bands (behind)
+    dayShifts.forEach(function(s){
+      h+='<div class="blk shift" style="top:'+top(s.start)+'px;height:'+Math.max(16,top(s.end)-top(s.start))+'px;left:0;right:0;" title="Retail store: '+esc(s.guru)+'">🏪 '+esc(s.guru)+' '+s.startLbl+'–'+s.endLbl+'</div>';
+    });
+    // unavailability bands
+    unav.filter(function(u){ return u.date===d && guruVisible(u.guru); }).forEach(function(u){
+      h+='<div class="blk unav" style="top:'+top(u.start)+'px;height:'+Math.max(16,top(u.end)-top(u.start))+'px;left:2%;right:2%;" title="Unavailable">🚫 '+esc(u.guru)+' '+(u.allDay?"all day":(u.startLbl+"–"+u.endLbl))+'</div>';
+    });
+
+    // events — lane layout
+    var dayEvs=evs.filter(function(e){
+      if(e.date!==d) return false;
+      if(e.gstate==="assigned") return e.gurus.some(guruVisible);
+      return sched.showUnassigned && !sched.filter;
+    }).sort(function(a,b){ return a.start-b.start || b.end-a.end; });
+    var lanes=[];
+    dayEvs.forEach(function(e){
+      var li=0;
+      while(li<lanes.length && lanes[li]>e.start) li++;
+      if(li===lanes.length) lanes.push(0);
+      lanes[li]=e.end; e._lane=li;
+    });
+    var laneCount=Math.max(1,lanes.length);
+    dayEvs.forEach(function(e){
+      var w=(70/laneCount), l=28+e._lane*w; // leave left gutter so store band labels stay readable
+      var col = e.gstate==="assigned" ? guruColor(e.gurus[0]) : "#a8a288";
+      var conf=confKeys[e.eventId+"|"+d];
+      var cls="blk ev"+(e.gstate!=="assigned"?" unassigned":"")+(isDraftEvent(e.ev)?" draft":"")+(conf==="red"?" conf-red":conf==="yel"?" conf-yel":"");
+      var label = e.gstate==="assigned" ? e.gurus.join(" + ") : (e.gstate==="none"?"No Guru needed":"UNASSIGNED");
+      h+='<div class="'+cls+'" style="top:'+top(e.start)+'px;height:'+Math.max(22,top(e.end)-top(e.start))+'px;left:'+l+'%;width:'+(w-1)+'%;background:'+col+';" onclick="openDetails(\''+esc(e.eventId)+'\',\''+d+'\')">'+
+         '<b>'+esc(label)+'</b>'+esc(e.title)+'<br>'+e.startLbl+(e.endLbl?("–"+e.endLbl):"")+'</div>';
+    });
+    h+='</div></div>';
+  });
+  h+='</div></div>';
+  h+='<p class="hint" style="margin-bottom:0;">Blocks show <b>Guru name first</b>, then the event title — tap any block for full event details. Purple striped bands = retail store shifts (open/close). Red outline = same-Guru overlap; yellow outline = under '+TIGHT_MIN+' min between that Guru\'s events.</p>';
+  h+='</div>';
+  $("view-sched").innerHTML=h;
+}
+
+/* ---------------- DETAILS MODAL ---------------- */
+function openDetails(eventId, date){
+  var e=cache.events.find(function(x){ return x.id===eventId; });
+  if(!e) return;
+  var g=gurusFor(eventId,date);
+  var reg=e.registration||{};
+  var t=e.tournament||{}, p=e.prizes||{};
+  var when=(date||e.date)+(e.allDay?" · All day":(" · "+fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end||e.start))));
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">'+
+    '<h2 style="margin:0;font-size:1.1rem;">'+(e.private?"🔒 ":"")+esc(e.title||"NGH Event")+(isDraftEvent(e)?' <span class="badge-yel">draft</span>':'')+'</h2>'+
+    '<button class="btn btn-sm btn-ghost" onclick="closeModal()">✕</button></div>';
+  h+='<div class="kv"><b>When</b> '+esc(when)+(e.recurrence?(' <span class="hint">🔁 '+esc(e.recurrence.freq)+' ×'+e.recurrence.count+'</span>'):'')+'</div>';
+  h+='<div class="kv"><b>Where</b> '+esc(roomsLabel(e))+'</div>';
+  h+='<div class="kv"><b>Guru(s)</b> '+(g.state==="assigned"?g.gurus.map(guruChip).join(""):(g.state==="none"?'<span class="chip none">None — no active Guru management required</span>':'<span class="chip unassigned">Unassigned</span>'))+'</div>';
+  if(e.notes) h+='<div class="kv"><b>Description</b> '+esc(e.notes)+'</div>';
+  if(e.adminNotes) h+='<div class="kv" style="color:#9a6310;"><b>Admin notes</b> '+esc(e.adminNotes)+'</div>';
+  if(t.type) h+='<div class="kv"><b>Tournament</b> '+esc(t.type)+(t.rounds?(" · "+t.rounds+" rounds"):"")+'</div>';
+  if(p.placement) h+='<div class="kv"><b>Prizes</b> '+esc(p.placement)+'</div>';
+  if(reg.enabled) h+='<div class="kv"><b>🎟️ Registration</b> '+(reg.cost>0?("$"+Number(reg.cost).toFixed(2)):"Free")+(reg.max?(" · max "+reg.max):"")+'</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">'+
+     '<button class="btn btn-sm btn-gold" onclick="closeModal();jumpToAssign(\''+esc(eventId)+'\')">✎ Edit Gurus</button>'+
+     '<a class="btn btn-sm btn-ghost" style="text-decoration:none;" target="_blank" rel="noopener" href="'+gcalUrl(e,date,g.gurus)+'">📅 Add to Google</a>'+
+     '<a class="btn btn-sm btn-ghost" style="text-decoration:none;" href="booking.html?admin=1">Open full event admin →</a>'+
+     '</div>';
+  $("modal-box").innerHTML=h;
+  $("modal-bg").style.display="block";
+}
+function closeModal(){ $("modal-bg").style.display="none"; }
+function gcalUrl(e,date,gurus){
+  function g(d){ return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+"T"+pad(d.getHours())+pad(d.getMinutes())+"00"; }
+  var dates;
+  if(e.allDay){ var ds=(date||e.date).replace(/-/g,""); dates=ds+"/"+addDays(date||e.date,1).replace(/-/g,""); }
+  else{
+    var s=new Date((date||e.date)+"T"+(e.start||"12:00")+":00"), en=new Date((date||e.date)+"T"+(e.end||e.start||"12:00")+":00");
+    if(en<=s) en=new Date(s.getTime()+2*3600000);
+    dates=g(s)+"/"+g(en);
+  }
+  var txt=(gurus&&gurus.length?gurus.join(" + ")+" — ":"")+(e.title||"NGH Event");
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent(txt)+
+    "&dates="+dates+"&location="+encodeURIComponent("Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI")+
+    "&details="+encodeURIComponent("Guru schedule — gamehaven.guru");
+}
+
+/* ---------------- EVENT GURUS (assignments) ---------------- */
+var assignSearch="", assignShowPast=false;
+function jumpToAssign(eventId){
+  setView("assign");
+  setTimeout(function(){
+    var el=document.getElementById("evcard-"+eventId);
+    if(el){ el.scrollIntoView({behavior:"smooth",block:"center"}); el.classList.remove("hl"); void el.offsetWidth; el.classList.add("hl"); }
+  },80);
+}
+function nextOccurrence(e){
+  var t=todayStr(), ds=eventDates(e), best=null;
+  ds.forEach(function(d){ if(d>=t && (best==null||d<best)) best=d; });
+  return best || ds[ds.length-1] || e.date;
+}
+function renderAssign(){
+  var t=todayStr();
+  var evs=cache.events.slice().filter(function(e){
+    if(!assignShowPast){ var ds=eventDates(e); if(!ds.some(function(d){ return d>=t; })) return false; }
+    if(assignSearch){ var hay=((e.title||"")+" "+(e.notes||"")+" "+e.date).toLowerCase(); if(hay.indexOf(assignSearch.toLowerCase())<0) return false; }
+    return true;
+  }).sort(function(a,b){ return nextOccurrence(a)<nextOccurrence(b)?-1:1; });
+
+  var h='<div class="card"><div class="row">'+
+    '<div class="field" style="flex:1;min-width:200px;"><label>Search events</label><input type="text" value="'+esc(assignSearch)+'" oninput="assignSearch=this.value;renderAssign()" placeholder="title, notes, date…"></div>'+
+    '<label style="padding-bottom:10px;"><input type="checkbox" '+(assignShowPast?"checked":"")+' onchange="assignShowPast=this.checked;renderAssign()"> include past events</label>'+
+    '</div><p class="hint" style="margin-bottom:0;">Guru assignments are <b>admin-only insight</b> — nothing here is shown on public pages. Assign one or more Gurus, use <b>Other</b> for a name not on the list, or <b>None</b> when no active Guru management is required. Saving checks for conflicts; overlaps can be confirmed through, but an <b>Unavailable</b> Guru is a hard block.</p></div>';
+
+  if(!evs.length) h+='<div class="card hint">No events match.</div>';
+  evs.forEach(function(e){ h+=assignCardHTML(e); });
+  $("view-assign").innerHTML=h;
+}
+function assignCardHTML(e){
+  var g=gurusFor(e.id,null); // series-level record
+  var occ=eventDates(e);
+  var when=e.date+(e.allDay?" · All day":(" · "+fmtTime(timeToMins(e.start))+" – "+fmtTime(timeToMins(e.end||e.start))))+(e.recurrence?(" · 🔁 "+e.recurrence.freq+" ×"+e.recurrence.count):"");
+  var isNone=g.state==="none", chosen=g.gurus||[];
+  var others=chosen.filter(function(x){ return GURUS.indexOf(x)<0; });
+  var h='<div class="card ev-card" id="evcard-'+esc(e.id)+'">';
+  h+='<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">'+
+     '<div><b style="font-family:Cinzel,serif;color:var(--forest);">'+(e.private?"🔒 ":"")+esc(e.title||"NGH Event")+'</b>'+(isDraftEvent(e)?' <span class="badge-yel">draft</span>':'')+
+     '<div class="hint">'+esc(when)+' · '+esc(roomsLabel(e))+'</div></div>'+
+     '<div>'+(g.state==="assigned"?chosen.map(guruChip).join(""):(isNone?'<span class="chip none">None needed</span>':'<span class="chip unassigned">Unassigned</span>'))+'</div></div>';
+  h+='<div style="margin-top:10px;">';
+  GURUS.forEach(function(name){
+    var on=chosen.indexOf(name)>=0;
+    h+='<label class="gcheck'+(on?" on":"")+'"><input type="checkbox" class="gk-'+esc(e.id)+'" value="'+esc(name)+'" '+(on?"checked":"")+' onchange="this.parentNode.classList.toggle(\'on\',this.checked);uncheckNone(\''+esc(e.id)+'\')"> '+esc(name)+'</label>';
+  });
+  h+='<label class="gcheck'+(others.length?" on":"")+'"><input type="checkbox" id="gko-'+esc(e.id)+'" '+(others.length?"checked":"")+' onchange="this.parentNode.classList.toggle(\'on\',this.checked);$(\'gkoName-'+esc(e.id)+'\').style.display=this.checked?\'inline-block\':\'none\';uncheckNone(\''+esc(e.id)+'\')"> Other</label>';
+  h+='<input type="text" id="gkoName-'+esc(e.id)+'" placeholder="Other Guru name(s), comma-separated" value="'+esc(others.join(", "))+'" style="display:'+(others.length?"inline-block":"none")+';width:220px;">';
+  h+='<label class="gcheck'+(isNone?" on":"")+'" style="border-style:dashed;"><input type="checkbox" id="gkn-'+esc(e.id)+'" '+(isNone?"checked":"")+' onchange="this.parentNode.classList.toggle(\'on\',this.checked);if(this.checked)clearGurus(\''+esc(e.id)+'\')"> None — no active Guru management required</label>';
+  h+='</div>';
+  h+='<div class="row" style="margin-top:10px;align-items:center;">';
+  if(occ.length>1){
+    h+='<div class="field"><label>Applies to</label><select id="gkd-'+esc(e.id)+'"><option value="">Entire series ('+occ.length+' dates)</option>';
+    occ.forEach(function(d){ h+='<option value="'+d+'">Only '+fmtDate(d)+' ('+d+')</option>'; });
+    h+='</select></div>';
+  }
+  h+='<button class="btn btn-sm" onclick="saveAssignment(\''+esc(e.id)+'\')">💾 Save Gurus</button>';
+  if(g.rec) h+='<button class="btn btn-sm btn-ghost" onclick="deleteAssignment(\''+esc(g.rec.id)+'\')">Clear</button>';
+  h+='<span id="gkmsg-'+esc(e.id)+'" class="hint"></span></div>';
+  // list date overrides if any
+  var ovs=cache.assignments.filter(function(a){ return a.eventId===e.id && a.date; });
+  if(ovs.length){
+    h+='<div class="hint" style="margin-top:8px;">Date overrides: '+ovs.map(function(a){
+      return esc(a.date)+" → "+(a.none?"None":a.gurus.join(" + "))+' <button class="btn btn-xs btn-ghost" onclick="deleteAssignment(\''+esc(a.id)+'\')">✕</button>';
+    }).join(" · ")+'</div>';
+  }
+  h+='</div>';
+  return h;
+}
+function uncheckNone(eid){ var n=$("gkn-"+eid); if(n&&n.checked){ n.checked=false; n.parentNode.classList.remove("on"); } }
+function clearGurus(eid){
+  document.querySelectorAll(".gk-"+CSS.escape(eid)).forEach(function(c){ c.checked=false; c.parentNode.classList.remove("on"); });
+  var o=$("gko-"+eid); if(o){ o.checked=false; o.parentNode.classList.remove("on"); }
+  var on=$("gkoName-"+eid); if(on) on.style.display="none";
+}
+function collectGurus(eid){
+  var out=[];
+  document.querySelectorAll(".gk-"+CSS.escape(eid)).forEach(function(c){ if(c.checked) out.push(c.value); });
+  var o=$("gko-"+eid);
+  if(o&&o.checked){
+    ($("gkoName-"+eid).value||"").split(",").forEach(function(n){ n=n.trim(); if(n&&out.indexOf(n)<0) out.push(n); });
+  }
+  return out;
+}
+async function saveAssignment(eid){
+  var e=cache.events.find(function(x){ return x.id===eid; }); if(!e) return;
+  var none=$("gkn-"+eid)&&$("gkn-"+eid).checked;
+  var gurus=none?[]:collectGurus(eid);
+  var dateSel=$("gkd-"+eid), date=dateSel?dateSel.value||null:null;
+  var msg=$("gkmsg-"+eid);
+  if(!none && !gurus.length){ msg.textContent="Pick at least one Guru, or choose None."; return; }
+
+  if(!none){
+    // client-side conflict preflight across the affected occurrence dates
+    var dates = date?[date]:eventDates(e);
+    var s=e.allDay?0:timeToMins(e.start), en=e.allDay?1440:timeToMins(e.end||e.start);
+    var report=[];
+    gurus.forEach(function(g){
+      dates.forEach(function(d){
+        var injected=[{type:"event",date:d,allDay:!!e.allDay,start:s,end:en,startLbl:e.allDay?"All day":fmtTime(s),endLbl:e.allDay?"":fmtTime(en),title:(e.title||"NGH Event"),eventId:e.id,ev:e,gurus:[g],gstate:"assigned"}];
+        conflictsForGuru(g,d,d,e.id,injected).forEach(function(c){
+          if(c.a.eventId===e.id||(c.b&&c.b.eventId===e.id)) report.push(c);
+        });
+      });
+    });
+    // de-dupe
+    var seen={}; report=report.filter(function(c){ var k=c.sev+"|"+c.guru+"|"+c.date+"|"+(c.a.eventId||"")+"|"+((c.b&&(c.b.eventId||c.b.type))||""); if(seen[k])return false; seen[k]=1; return true; });
+    var blocks=report.filter(function(c){ return c.sev==="block"; });
+    if(blocks.length){ showConflictModal(report, null, true); return; }
+    if(report.length){
+      showConflictModal(report, async function(){ await pushAssignment(eid,date,gurus,none,msg); }, false);
+      return;
+    }
+  }
+  await pushAssignment(eid,date,gurus,none,msg);
+}
+async function pushAssignment(eid,date,gurus,none,msg){
+  var existing = cache.assignments.find(function(a){ return a.eventId===eid && ((date&&a.date===date)||(!date&&a.date==null)); });
+  try{
+    await api("/gurus",{method:"POST",body:JSON.stringify({action:"save-assignment",item:{ id:existing?existing.id:undefined, eventId:eid, date:date, gurus:gurus, none:none }})});
+    if(msg) msg.textContent="Saved ✓";
+    await reload();
+  }catch(err){
+    if(err.status===409 && err.body && err.body.conflicts){
+      var report=err.body.conflicts.map(function(v){
+        return {sev:"block",guru:v.guru,date:v.date,a:{title:"This event",startLbl:"",endLbl:""},b:{type:"unavail",startLbl:v.allDay?"All day":fmtTime(timeToMins(v.start)),endLbl:v.allDay?"":fmtTime(timeToMins(v.end))},text:"Guru marked UNAVAILABLE"+(v.notes?(" — "+v.notes):"")};
+      });
+      showConflictModal(report,null,true);
+    } else if(msg) msg.textContent="Save failed: "+err.message;
+  }
+}
+async function deleteAssignment(id){
+  await api("/gurus",{method:"POST",body:JSON.stringify({action:"delete-assignment",item:{id:id}})});
+  await reload();
+}
+function confLineHTML(c){
+  var badge=c.sev==="red"?'<span class="badge-red">RED · overlap</span>':c.sev==="yellow"?'<span class="badge-yel">YELLOW · tight</span>':c.sev==="flag"?'<span class="badge-flag">STORE · flag</span>':'<span class="badge-red">⛔ UNAVAILABLE</span>';
+  function side(x){
+    if(!x) return "";
+    if(x.type==="shift") return "🏪 Retail store "+x.startLbl+"–"+x.endLbl;
+    if(x.type==="unavail") return "🚫 Unavailable "+(x.startLbl||"")+(x.endLbl?("–"+x.endLbl):"");
+    return esc(x.title||"Event")+" "+(x.startLbl||"")+(x.endLbl?("–"+x.endLbl):"");
+  }
+  var h='<div style="margin:8px 0;padding:8px 10px;border:1px solid #eee0c8;border-radius:9px;font-size:0.82rem;">'+badge+' <b>'+esc(c.guru)+'</b> · '+esc(c.date)+'<br>'+side(c.a)+' ⟷ '+side(c.b)+'<br><span class="hint">'+esc(c.text)+'</span>';
+  if(c.a&&c.a.eventId) h+=' <button class="btn btn-xs btn-ghost" onclick="closeModal();openDetails(\''+esc(c.a.eventId)+'\',\''+esc(c.date)+'\')">view A</button>';
+  if(c.b&&c.b.eventId) h+=' <button class="btn btn-xs btn-ghost" onclick="closeModal();openDetails(\''+esc(c.b.eventId)+'\',\''+esc(c.date)+'\')">view B</button>';
+  h+='</div>';
+  return h;
+}
+var _confirmCb=null;
+function showConflictModal(report, onProceed, blocked){
+  _confirmCb=onProceed||null;
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;"><h2 style="margin:0;font-size:1.05rem;">'+(blocked?"⛔ Cannot save":"⚠️ Schedule conflicts found")+'</h2><button class="btn btn-sm btn-ghost" onclick="closeModal()">✕</button></div>';
+  h+=blocked
+    ? '<p class="hint">One or more selected Gurus are marked <b>Unavailable</b> during this event. Unavailability is a hard block — remove that Guru, pick a different Guru, or delete the unavailability entry first.</p>'
+    : '<p class="hint">You can proceed anyway — one Guru can run multiple things at once when it makes sense. Review below:</p>';
+  report.forEach(function(c){ h+=confLineHTML(c); });
+  h+='<div style="display:flex;gap:8px;margin-top:12px;">';
+  if(!blocked) h+='<button class="btn btn-gold" onclick="var cb=_confirmCb;_confirmCb=null;closeModal();if(cb)cb();">Proceed anyway</button>';
+  h+='<button class="btn btn-ghost" onclick="_confirmCb=null;closeModal()">'+(blocked?"OK":"Cancel")+'</button></div>';
+  $("modal-box").innerHTML=h;
+  $("modal-bg").style.display="block";
+}
+
+/* ---------------- STORE SHIFTS ---------------- */
+var editShiftId=null;
+function guruSelectHTML(id, val){
+  var names=allGuruNames();
+  var h='<select id="'+id+'" onchange="$(\''+id+'-other\').style.display=this.value===\'__other\'?\'inline-block\':\'none\'">';
+  names.forEach(function(g){ h+='<option value="'+esc(g)+'"'+(val===g?" selected":"")+'>'+esc(g)+'</option>'; });
+  h+='<option value="__other"'+(val&&names.indexOf(val)<0?" selected":"")+'>Other…</option></select> ';
+  h+='<input type="text" id="'+id+'-other" placeholder="Name" value="'+esc(val&&names.indexOf(val)<0?val:"")+'" style="display:'+(val&&names.indexOf(val)<0?"inline-block":"none")+';width:130px;">';
+  return h;
+}
+function guruSelVal(id){
+  var v=$(id).value;
+  if(v==="__other") v=($(id+"-other").value||"").trim();
+  return v;
+}
+function renderShifts(){
+  var s = editShiftId ? cache.shifts.find(function(x){ return x.id===editShiftId; }) : null;
+  var h='<div class="card"><h2 style="margin-top:0;font-size:1rem;">'+(s?"Edit store shift":"Add a retail store shift")+'</h2>'+
+    '<div class="row">'+
+    '<div class="field"><label>Guru</label>'+guruSelectHTML("sh-guru", s?s.guru:"Dustin")+'</div>'+
+    '<div class="field"><label>Date</label><input type="date" id="sh-date" value="'+(s?s.date:todayStr())+'"></div>'+
+    '<div class="field"><label>Open</label><input type="time" id="sh-open" value="'+(s?s.open:"10:00")+'"></div>'+
+    '<div class="field"><label>Close</label><input type="time" id="sh-close" value="'+(s?s.close:"20:00")+'"></div>'+
+    '<div class="field"><label>Repeat</label><select id="sh-freq"><option value="">One time</option><option value="weekly"'+(s&&s.recurrence&&s.recurrence.freq==="weekly"?" selected":"")+'>Weekly</option><option value="biweekly"'+(s&&s.recurrence&&s.recurrence.freq==="biweekly"?" selected":"")+'>Every 2 weeks</option><option value="monthly"'+(s&&s.recurrence&&s.recurrence.freq==="monthly"?" selected":"")+'>Monthly</option></select></div>'+
+    '<div class="field"><label>× times</label><input type="number" id="sh-count" min="1" max="60" value="'+(s&&s.recurrence?s.recurrence.count:8)+'" style="width:70px;"></div>'+
+    '<div class="field" style="flex:1;min-width:160px;"><label>Notes</label><input type="text" id="sh-notes" value="'+esc(s?s.notes:"")+'"></div>'+
+    '<button class="btn btn-sm" onclick="saveShift()">💾 Save</button>'+
+    (s?'<button class="btn btn-sm btn-ghost" onclick="editShiftId=null;renderShifts()">Cancel</button>':'')+
+    '</div><p class="hint" style="margin-bottom:0;">Store shifts shade the schedule behind events and highlight open/close times per day. A Guru covering the store while running an event gets a purple flag — allowed, just visible.</p></div>';
+
+  var t=todayStr(), rows=shiftItemsInRange(t, addDays(t,60)).sort(function(a,b){ return (a.date+minsToTime(a.start))<(b.date+minsToTime(b.start))?-1:1; });
+  h+='<div class="card"><h2 style="margin-top:0;font-size:1rem;">Upcoming store coverage (60 days)</h2>';
+  if(!rows.length) h+='<p class="hint">No shifts yet.</p>';
+  else{
+    h+='<table class="plain"><tr><th>Date</th><th>Guru</th><th>Open–Close</th><th>Repeat</th><th></th></tr>';
+    rows.forEach(function(r){
+      h+='<tr><td>'+fmtDate(r.date)+'</td><td>'+guruChip(r.guru)+'</td><td>'+r.startLbl+' – '+r.endLbl+'</td><td>'+(r.shift.recurrence?("🔁 "+r.shift.recurrence.freq):"")+'</td>'+
+        '<td><button class="btn btn-xs btn-ghost" onclick="editShiftId=\''+esc(r.shift.id)+'\';renderShifts()">✎</button> '+
+        '<button class="btn btn-xs btn-danger" onclick="deleteShift(\''+esc(r.shift.id)+'\')">✕</button></td></tr>';
+    });
+    h+='</table><p class="hint" style="margin-top:8px;">Editing or deleting a repeating shift changes the whole series.</p>';
+  }
+  h+='</div>';
+  $("view-shifts").innerHTML=h;
+}
+async function saveShift(){
+  var rec={ id:editShiftId||undefined, guru:guruSelVal("sh-guru"), date:$("sh-date").value, open:$("sh-open").value, close:$("sh-close").value, notes:$("sh-notes").value,
+    recurrence: $("sh-freq").value ? { freq:$("sh-freq").value, count:+$("sh-count").value||1 } : null };
+  if(!rec.guru||!rec.date||!rec.open||!rec.close){ alert("Guru, date, open, and close are required."); return; }
+  await api("/gurus",{method:"POST",body:JSON.stringify({action:"save-shift",item:rec})});
+  editShiftId=null;
+  await reload();
+}
+async function deleteShift(id){
+  if(!confirm("Delete this store shift (whole series if repeating)?")) return;
+  await api("/gurus",{method:"POST",body:JSON.stringify({action:"delete-shift",item:{id:id}})});
+  await reload();
+}
+
+/* ---------------- UNAVAILABILITY ---------------- */
+var editUnavailId=null;
+function renderUnavail(){
+  var u = editUnavailId ? cache.unavail.find(function(x){ return x.id===editUnavailId; }) : null;
+  var h='<div class="card"><h2 style="margin-top:0;font-size:1rem;">'+(u?"Edit unavailability":"Mark a Guru unavailable")+'</h2>'+
+    '<div class="row">'+
+    '<div class="field"><label>Guru</label>'+guruSelectHTML("un-guru", u?u.guru:"Dustin")+'</div>'+
+    '<div class="field"><label>From date</label><input type="date" id="un-date" value="'+(u?u.date:todayStr())+'"></div>'+
+    '<div class="field"><label>Through (optional)</label><input type="date" id="un-end" value="'+esc(u&&u.endDate?u.endDate:"")+'"></div>'+
+    '<label style="padding-bottom:10px;"><input type="checkbox" id="un-allday" '+(u&&u.allDay?"checked":"")+' onchange="$(\'un-times\').style.display=this.checked?\'none\':\'flex\'"> Entire day(s)</label>'+
+    '<div class="row" id="un-times" style="display:'+(u&&u.allDay?"none":"flex")+';">'+
+    '<div class="field"><label>From</label><input type="time" id="un-start" value="'+(u&&u.start?u.start:"17:00")+'"></div>'+
+    '<div class="field"><label>To</label><input type="time" id="un-endt" value="'+(u&&u.end?u.end:"21:00")+'"></div></div>'+
+    '<div class="field" style="flex:1;min-width:160px;"><label>Notes (optional)</label><input type="text" id="un-notes" value="'+esc(u?u.notes:"")+'"></div>'+
+    '<button class="btn btn-sm" onclick="saveUnavail()">💾 Save</button>'+
+    (u?'<button class="btn btn-sm btn-ghost" onclick="editUnavailId=null;renderUnavail()">Cancel</button>':'')+
+    '</div><p class="hint" style="margin-bottom:0;"><b>Hard rule:</b> once saved, no event can be assigned to this Guru during these times — the save is blocked, not just flagged. If existing assignments already collide, the Deconflict tab will show them so you can re-assign.</p></div>';
+
+  var t=todayStr(), list=cache.unavail.slice().filter(function(x){ return (x.endDate||x.date)>=t; }).sort(function(a,b){ return a.date<b.date?-1:1; });
+  h+='<div class="card"><h2 style="margin-top:0;font-size:1rem;">Upcoming unavailability</h2>';
+  if(!list.length) h+='<p class="hint">Nothing on file — everyone\'s in!</p>';
+  else{
+    h+='<table class="plain"><tr><th>Guru</th><th>Dates</th><th>Times</th><th>Notes</th><th></th></tr>';
+    list.forEach(function(x){
+      h+='<tr><td>'+guruChip(x.guru)+'</td><td>'+esc(x.date)+(x.endDate?(" → "+esc(x.endDate)):"")+'</td>'+
+        '<td>'+(x.allDay?"All day":fmtTime(timeToMins(x.start))+" – "+fmtTime(timeToMins(x.end)))+'</td><td>'+esc(x.notes||"")+'</td>'+
+        '<td><button class="btn btn-xs btn-ghost" onclick="editUnavailId=\''+esc(x.id)+'\';renderUnavail()">✎</button> '+
+        '<button class="btn btn-xs btn-danger" onclick="deleteUnavail(\''+esc(x.id)+'\')">✕</button></td></tr>';
+    });
+    h+='</table>';
+  }
+  h+='</div>';
+  $("view-unavail").innerHTML=h;
+}
+async function saveUnavail(){
+  var rec={ id:editUnavailId||undefined, guru:guruSelVal("un-guru"), date:$("un-date").value, endDate:$("un-end").value||null,
+    allDay:$("un-allday").checked, start:$("un-start").value, end:$("un-endt").value, notes:$("un-notes").value };
+  if(!rec.guru||!rec.date){ alert("Guru and date are required."); return; }
+  if(rec.endDate && rec.endDate<rec.date){ alert("End date is before start date."); return; }
+  if(!rec.allDay && (!rec.start||!rec.end)){ alert("Enter times, or check Entire day(s)."); return; }
+  await api("/gurus",{method:"POST",body:JSON.stringify({action:"save-unavail",item:rec})});
+  editUnavailId=null;
+  await reload();
+  // warn if existing assignments now collide
+  var from=rec.date, to=rec.endDate||rec.date;
+  var viol=conflictsForGuru(rec.guru, from, to).filter(function(c){ return c.sev==="block"; });
+  if(viol.length) showConflictModal(viol, null, true);
+}
+async function deleteUnavail(id){
+  if(!confirm("Delete this unavailability entry?")) return;
+  await api("/gurus",{method:"POST",body:JSON.stringify({action:"delete-unavail",item:{id:id}})});
+  await reload();
+}
+
+/* ---------------- DECONFLICT AUDIT ---------------- */
+function renderAudit(){
+  var from=todayStr(), to=addDays(from,auditDays);
+  var all=[];
+  allGuruNames().forEach(function(g){ all=all.concat(conflictsForGuru(g,from,to)); });
+  var seen={}; all=all.filter(function(c){ var k=c.sev+"|"+c.guru+"|"+c.date+"|"+(c.a.eventId||c.a.type)+"|"+((c.b&&(c.b.eventId||c.b.type))||""); if(seen[k])return false; seen[k]=1; return true; });
+  var order={block:0,red:1,yellow:2,flag:3};
+  all.sort(function(a,b){ return (order[a.sev]-order[b.sev]) || (a.date<b.date?-1:1); });
+
+  var h='<div class="card"><div class="row" style="align-items:center;">'+
+    '<h2 style="margin:0;font-size:1rem;flex:1;">Guru schedule deconflict — next </h2>'+
+    '<select onchange="auditDays=+this.value;renderAudit()">'+[14,30,60,90].map(function(n){ return '<option value="'+n+'"'+(auditDays===n?" selected":"")+'>'+n+' days</option>'; }).join("")+'</select>'+
+    '</div>'+
+    '<p class="hint" style="margin-bottom:0;"><span class="badge-red">RED</span> same Guru double-booked · <span class="badge-yel">YELLOW</span> under '+TIGHT_MIN+' min between that Guru\'s events · <span class="badge-flag">STORE</span> running retail + an event at once (allowed, just flagged) · ⛔ assignment colliding with an Unavailable entry (fix required).</p></div>';
+
+  if(!all.length){
+    h+='<div class="card"><span class="badge-ok">✓ All clear</span> <span class="hint">No Guru conflicts in the next '+auditDays+' days.</span></div>';
+  }
+  all.forEach(function(c){
+    var cls=c.sev==="red"||c.sev==="block"?"red":c.sev;
+    h+='<div class="card audit-card '+cls+'">'+confLineHTML(c);
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    if(c.a&&c.a.eventId) h+='<button class="btn btn-xs btn-gold" onclick="jumpToAssign(\''+esc(c.a.eventId)+'\')">✎ Fix gurus: '+esc((c.a.title||"").slice(0,30))+'</button>';
+    if(c.b&&c.b.eventId) h+='<button class="btn btn-xs btn-gold" onclick="jumpToAssign(\''+esc(c.b.eventId)+'\')">✎ Fix gurus: '+esc((c.b.title||"").slice(0,30))+'</button>';
+    if(c.b&&c.b.type==="shift") h+='<button class="btn btn-xs btn-ghost" onclick="setView(\'shifts\')">Store shifts →</button>';
+    if(c.b&&c.b.type==="unavail") h+='<button class="btn btn-xs btn-ghost" onclick="setView(\'unavail\')">Unavailability →</button>';
+    h+='<button class="btn btn-xs btn-ghost" onclick="sched.anchor=\''+esc(c.date)+'\';sched.mode=\'day\';setView(\'sched\')">📅 View day</button>';
+    h+='</div></div>';
+  });
+  $("view-audit").innerHTML=h;
+}
+
+/* ---------------- EXPORT / PRINT ---------------- */
+var exp = { from:todayStr(), to:addDays(todayStr(),30), gurus:null, printMode:"week", printAnchor:todayStr() };
+function expGurus(){ return exp.gurus ? Object.keys(exp.gurus) : allGuruNames(); }
+function renderExport(){
+  var names=allGuruNames();
+  var h='<div class="card"><h2 style="margin-top:0;font-size:1rem;">Choose Gurus &amp; range</h2><div>';
+  names.forEach(function(g){
+    var on=!exp.gurus||exp.gurus[g];
+    h+='<span class="chip guru" style="background:'+(on?guruColor(g):"#bbb")+';cursor:pointer;" onclick="expToggle(\''+esc(g)+'\')">'+esc(g)+'</span>';
+  });
+  h+='</div><div class="row" style="margin-top:10px;">'+
+    '<div class="field"><label>From</label><input type="date" value="'+exp.from+'" onchange="exp.from=this.value"></div>'+
+    '<div class="field"><label>To</label><input type="date" value="'+exp.to+'" onchange="exp.to=this.value"></div>'+
+    '</div></div>';
+
+  h+='<div class="card"><h2 style="margin-top:0;font-size:1rem;">⬇ Downloads</h2><div class="row">'+
+    '<button class="btn btn-sm" onclick="exportCsv()">CSV (spreadsheets)</button>'+
+    '<button class="btn btn-sm" onclick="exportIcs()">ICS (Outlook / Apple / Google import)</button>'+
+    '</div><p class="hint" style="margin-bottom:0;">ICS is the universal calendar format — Outlook, Apple Calendar, and Google Calendar all import it directly.</p></div>';
+
+  h+='<div class="card"><h2 style="margin-top:0;font-size:1rem;">📅 Google Calendar live tie-in</h2>'+
+    '<p class="hint">Subscribe once and the Guru schedule stays in sync automatically (Google refreshes feeds every few hours).</p>'+
+    '<div class="row"><button class="btn btn-sm btn-gold" onclick="showFeedUrl()">Get subscribe URL</button></div>'+
+    '<div id="feed-out" class="hint" style="word-break:break-all;margin-top:8px;"></div></div>';
+
+  h+='<div class="card"><h2 style="margin-top:0;font-size:1rem;">🖨 Print / PDF</h2><div class="row">'+
+    '<div class="field"><label>Layout</label><select onchange="exp.printMode=this.value">'+
+    '<option value="day"'+(exp.printMode==="day"?" selected":"")+'>Day</option>'+
+    '<option value="week"'+(exp.printMode==="week"?" selected":"")+'>Week</option>'+
+    '<option value="month"'+(exp.printMode==="month"?" selected":"")+'>Month</option></select></div>'+
+    '<div class="field"><label>Anchor date</label><input type="date" value="'+exp.printAnchor+'" onchange="exp.printAnchor=this.value"></div>'+
+    '<button class="btn btn-sm" onclick="doPrint()">🖨 Print / Save as PDF</button>'+
+    '</div><p class="hint" style="margin-bottom:0;">Uses the Guru selection above. On your phone the print dialog\'s "Save as PDF" produces the file.</p></div>';
+  $("view-export").innerHTML=h;
+}
+function expToggle(g){
+  if(!exp.gurus){ exp.gurus={}; allGuruNames().forEach(function(x){ exp.gurus[x]=true; }); }
+  if(exp.gurus[g]) delete exp.gurus[g]; else exp.gurus[g]=true;
+  if(Object.keys(exp.gurus).length===allGuruNames().length) exp.gurus=null;
+  renderExport();
+}
+function exportItems(from,to){
+  var pick=expGurus();
+  var out=[];
+  eventItemsInRange(from,to).forEach(function(it){
+    if(it.gstate!=="assigned") return;
+    var gs=it.gurus.filter(function(g){ return pick.indexOf(g)>=0; });
+    if(!gs.length) return;
+    out.push({kind:"Event",gurus:gs,date:it.date,allDay:it.allDay,start:it.allDay?null:minsToTime(it.start),end:it.allDay?null:minsToTime(it.end),
+      startLbl:it.startLbl,endLbl:it.endLbl,title:it.title,eventId:it.eventId,notes:(it.ev.notes||"")});
+  });
+  shiftItemsInRange(from,to).forEach(function(it){
+    if(pick.indexOf(it.guru)<0) return;
+    out.push({kind:"Store",gurus:[it.guru],date:it.date,allDay:false,start:minsToTime(it.start),end:minsToTime(it.end),
+      startLbl:it.startLbl,endLbl:it.endLbl,title:"Retail Store",eventId:"",notes:it.shift.notes||""});
+  });
+  out.sort(function(a,b){ return (a.date+(a.start||""))<(b.date+(b.start||""))?-1:1; });
+  return out;
+}
+function download(name, mime, text){
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([text],{type:mime}));
+  a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },400);
+}
+function exportCsv(){
+  var rows=[["Type","Guru(s)","Date","Start","End","Title","EventID","Notes"]];
+  exportItems(exp.from,exp.to).forEach(function(it){
+    rows.push([it.kind,it.gurus.join(" + "),it.date,it.allDay?"All day":it.start,it.allDay?"":it.end,it.title,it.eventId,it.notes]);
+  });
+  var csv=rows.map(function(r){ return r.map(function(c){ c=String(c==null?"":c); return '"'+c.replace(/"/g,'""')+'"'; }).join(","); }).join("\r\n");
+  download("ngh-guru-schedule.csv","text/csv;charset=utf-8","\uFEFF"+csv);
+}
+function icsEsc(t){ return String(t||"").replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n"); }
+function exportIcs(){
+  var L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Northwood Game Haven//Guru Schedule//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:NGH Guru Schedule"];
+  var stamp=new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+Z$/,"Z");
+  exportItems(exp.from,exp.to).forEach(function(it,i){
+    L.push("BEGIN:VEVENT");
+    L.push("UID:ngh-guru-"+it.date+"-"+i+"@gamehaven.guru");
+    L.push("DTSTAMP:"+stamp);
+    if(it.allDay){ L.push("DTSTART;VALUE=DATE:"+it.date.replace(/-/g,"")); L.push("DTEND;VALUE=DATE:"+addDays(it.date,1).replace(/-/g,"")); }
+    else{ L.push("DTSTART:"+it.date.replace(/-/g,"")+"T"+it.start.replace(":","")+"00"); L.push("DTEND:"+it.date.replace(/-/g,"")+"T"+it.end.replace(":","")+"00"); }
+    L.push("SUMMARY:"+icsEsc(it.gurus.join(" + ")+" — "+(it.kind==="Store"?"🏪 Retail Store":it.title)));
+    if(it.notes) L.push("DESCRIPTION:"+icsEsc(it.notes));
+    L.push("LOCATION:Northwood Game Haven\\, 115 W Spring St\\, Chippewa Falls\\, WI");
+    L.push("END:VEVENT");
+  });
+  L.push("END:VCALENDAR");
+  download("ngh-guru-schedule.ics","text/calendar;charset=utf-8",L.join("\r\n"));
+}
+async function showFeedUrl(){
+  var out=$("feed-out");
+  out.textContent="Fetching key…";
+  try{
+    var r=await api("/gurus?feedkey=1");
+    var pick=expGurus(), all=allGuruNames();
+    var u=location.origin+API_BASE+"/gurus?ics=1&key="+encodeURIComponent(r.key);
+    if(pick.length!==all.length) u+="&gurus="+encodeURIComponent(pick.join(","));
+    out.innerHTML='<b>Feed URL:</b><br>'+esc(u)+'<br><button class="btn btn-xs btn-ghost" style="margin-top:6px;" onclick="navigator.clipboard.writeText(\''+u.replace(/'/g,"\\'")+'\');this.textContent=\'Copied ✓\'">Copy</button> '+
+      '<a class="btn btn-xs btn-ghost" style="text-decoration:none;" target="_blank" rel="noopener" href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl">Open Google → Add by URL</a>'+
+      '<div class="hint" style="margin-top:6px;">In Google Calendar: Settings → Add calendar → From URL → paste. Outlook: Add calendar → Subscribe from web. Keep this URL private — it grants read access to the Guru schedule.</div>';
+  }catch(e){ out.textContent="Could not fetch feed key: "+e.message; }
+}
+function doPrint(){
+  var from,to,label;
+  if(exp.printMode==="day"){ from=exp.printAnchor; to=from; label=fmtDate(from); }
+  else if(exp.printMode==="week"){ from=weekStart(exp.printAnchor); to=addDays(from,6); label="Week of "+fmtDate(from); }
+  else { from=monthStart(exp.printAnchor); to=addDays(addMonths(from,1),-1); label=from.slice(0,7); }
+  var items=exportItems(from,to);
+  var byDate={}; items.forEach(function(it){ (byDate[it.date]=byDate[it.date]||[]).push(it); });
+  var h='<h1>🦦 Northwood Game Haven — Guru Schedule</h1>'+
+    '<div>'+esc(label)+' · Gurus: '+esc(expGurus().join(", "))+' · printed '+todayStr()+'</div><br>';
+  var any=false;
+  for(var d=from; d<=to; d=addDays(d,1)){
+    var list=byDate[d]||[];
+    if(!list.length && exp.printMode==="month") continue;
+    any=true;
+    h+='<div class="pr-day"><h3>'+fmtDate(d)+' ('+d+')</h3>';
+    if(!list.length){ h+='<div style="font-size:11px;color:#666;">— nothing scheduled —</div></div>'; continue; }
+    h+='<table><tr><th style="width:18%;">Guru(s)</th><th style="width:14%;">Time</th><th>What</th><th style="width:26%;">Notes</th></tr>';
+    list.forEach(function(it){
+      h+='<tr><td class="pr-guru">'+esc(it.gurus.join(" + "))+'</td><td>'+(it.allDay?"All day":(it.startLbl+" – "+it.endLbl))+'</td>'+
+        '<td>'+(it.kind==="Store"?"🏪 Retail Store (open–close)":esc(it.title))+'</td><td>'+esc(it.notes)+'</td></tr>';
+    });
+    h+='</table></div>';
+  }
+  if(!any) h+='<div>Nothing scheduled in this range.</div>';
+  $("print-area").innerHTML=h;
+  window.print();
+}
+
+/* ---- boot ---- */
+(function init(){
+  $("admin-code").addEventListener("keydown",function(e){ if(e.key==="Enter") doLogin(); });
+  if(token()){ boot().catch(function(){ sessionStorage.removeItem("ngh_admin_token"); }); }
+})();
+</script>
+</body>
+</html>
