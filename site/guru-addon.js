@@ -1,5 +1,5 @@
 /* =================================================================
-   NGH GURU ADD-ON v1.3  (site/guru-addon.js)
+   NGH GURU ADD-ON v1.4  (site/guru-addon.js)
    Loaded into booking.html via Netlify snippet injection — the 2.4 MB
    booking.html itself is never edited. This add-on:
      1. Adds a "🦦 Guru Schedule" link to the admin toolbar.
@@ -17,7 +17,7 @@
   function ready(fn) { if (document.readyState !== "loading") fn(); else document.addEventListener("DOMContentLoaded", fn); }
 
   ready(function () {
-    try { console.log("NGH guru-addon v1.3"); } catch(_) {}
+    try { console.log("NGH guru-addon v1.4"); } catch(_) {}
     // Only activate inside the booking/admin app.
     if (!document.getElementById("events-view-wrap")) return;
     if (typeof window.renderEventsAdmin !== "function" || typeof window.saveEvent !== "function" || !window.Store) return;
@@ -436,8 +436,12 @@
         if (!mark) {
           mark = document.createElement("div");
           mark.id = "ga-det-" + e.id;
-          mark.style.cssText = "margin-top:8px;padding:8px 10px;border:1px dashed #c9b3ea;border-radius:9px;background:#faf6ff;";
-          box.appendChild(mark);
+          mark.style.cssText = "margin:8px 0;padding:8px 10px;border:1px dashed #c9b3ea;border-radius:9px;background:#faf6ff;";
+          var panel = box.firstElementChild;
+          if (panel) {
+            var hdr = panel.firstElementChild; // "All instances (N) / Close" row
+            panel.insertBefore(mark, hdr ? hdr.nextSibling : panel.firstChild);
+          } else box.appendChild(mark);
         }
         var key = moved.map(function (x) { return x.id + x.date + (x.start || ""); }).join("|");
         if (mark.getAttribute("data-key") === key) return;
