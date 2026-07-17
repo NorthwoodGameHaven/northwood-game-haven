@@ -1,5 +1,5 @@
 /* =================================================================
-   NGH GURU ADD-ON  (site/guru-addon.js)
+   NGH GURU ADD-ON v1.3  (site/guru-addon.js)
    Loaded into booking.html via Netlify snippet injection — the 2.4 MB
    booking.html itself is never edited. This add-on:
      1. Adds a "🦦 Guru Schedule" link to the admin toolbar.
@@ -17,11 +17,12 @@
   function ready(fn) { if (document.readyState !== "loading") fn(); else document.addEventListener("DOMContentLoaded", fn); }
 
   ready(function () {
+    try { console.log("NGH guru-addon v1.3"); } catch(_) {}
     // Only activate inside the booking/admin app.
     if (!document.getElementById("events-view-wrap")) return;
     if (typeof window.renderEventsAdmin !== "function" || typeof window.saveEvent !== "function" || !window.Store) return;
 
-    var GURUS = ["Dustin", "Mike", "Chad", "Jen", "Sarah", "Kyle"];
+    var GURUS = ["Dustin", "Mike", "Chad", "Jen", "Sarah", "Kyle", "Zach"];
     var TIGHT_MIN = 15;
     var API = window.NGH_API_BASE || "/.netlify/functions";
     var gd = { assignments: [], shifts: [], unavail: [] };
@@ -43,7 +44,7 @@
 
     var t2m = window.timeToMins || function (t) { if (!t) return 0; var p = String(t).split(":"); return (+p[0]) * 60 + (+p[1] || 0); };
     function evDatesOf(e) { try { return (typeof window.eventDates === "function") ? window.eventDates(e) : [e.date]; } catch (_) { return [e.date]; } }
-    function recDates(d, f, c) { try { return (typeof window.recurrenceDates === "function") ? window.recurrenceDates(d, f, c) : [d]; } catch (_) { return [d]; } }
+    function recDates(d, f, c, mode) { try { return (typeof window.recurrenceDates === "function") ? window.recurrenceDates(d, f, c, mode) : [d]; } catch (_) { return [d]; } }
     function shiftDatesOf(s) { return s.recurrence ? recDates(s.date, s.recurrence.freq, s.recurrence.count) : [s.date]; }
     function overlap(a, b, c, d) { return a < d && c < b; }
     function inSpan(d, from, to) { return d >= from && d <= (to || from); }
@@ -246,7 +247,235 @@
     // initial data load (needs admin token; retries after login via first save/edit)
     loadGd();
 
-    /* ---------- 5. self-healing watchdog ----------
+    /* ---------- 5. v1.2 — Guru chips on event cards + per-instance editor ---------- */
+    var GURU_COLORS = { "Dustin": "#2e5d3b", "Mike": "#134b57", "Chad": "#9a6310", "Jen": "#7a2b6e", "Sarah": "#b23b3b", "Kyle": "#3b5bb2", "Zach": "#b2622b" };
+    var EXTRA_COLORS = ["#4a6d8c", "#8c5a2b", "#2b8c6e", "#8c2b5a", "#5a8c2b", "#6e4a8c"];
+    function guruColor(g) {
+      if (GURU_COLORS[g]) return GURU_COLORS[g];
+      var h = 0; for (var i = 0; i < g.length; i++) h = (h * 31 + g.charCodeAt(i)) >>> 0;
+      return EXTRA_COLORS[h % EXTRA_COLORS.length];
+    }
+    function guruState(eventId, date) {
+      var ov = null, base = null;
+      gd.assignments.forEach(function (a) {
+        if (a.eventId !== eventId) return;
+        if (date != null && a.date === date) ov = a; else if (a.date == null) base = a;
+      });
+      var a = ov || base;
+      if (!a) return { state: "unassigned", gurus: [], rec: a, override: !!ov };
+      if (a.none) return { state: "none", gurus: [], rec: a, override: !!ov };
+      return { state: "assigned", gurus: a.gurus || [], rec: a, override: !!ov };
+    }
+    function chipsHTML(st, small) {
+      var pad = small ? "1px 8px" : "2px 9px", fs = small ? "0.66rem" : "0.7rem";
+      if (st.state === "assigned") {
+        return st.gurus.map(function (g) {
+          return '<span style="display:inline-block;background:' + guruColor(g) + ';color:#fff;border-radius:50px;padding:' + pad + ';font-size:' + fs + ';font-family:Georgia,serif;margin-left:4px;vertical-align:middle;">🦦 ' + esc(g) + '</span>';
+        }).join("") + (st.override ? '<span style="font-size:0.62rem;color:#7a5a14;margin-left:3px;vertical-align:middle;">(this date)</span>' : "");
+      }
+      if (st.state === "none") return '<span style="display:inline-block;background:#eee;color:#666;border:1px solid #ddd;border-radius:50px;padding:' + pad + ';font-size:' + fs + ';margin-left:4px;vertical-align:middle;">🦦 No Guru needed</span>';
+      return '<span style="display:inline-block;background:#fff4dc;color:#9a6310;border:1px solid #e8cf9a;border-radius:50px;padding:' + pad + ';font-size:' + fs + ';margin-left:4px;vertical-align:middle;">🦦 unassigned</span>';
+    }
+    function decorateEventCards() {
+      (window.cache && window.cache.events || []).forEach(function (e) {
+        var box = gid("instwrap-" + e.id); if (!box || !box.parentNode) return;
+        var h2 = box.parentNode.querySelector("h2"); if (!h2) return;
+        var st = guruState(e.id, null);
+        var mark = gid("ga-chips-" + e.id);
+        if (!mark) {
+          mark = document.createElement("span");
+          mark.id = "ga-chips-" + e.id;
+          h2.appendChild(mark);
+        }
+        var html = chipsHTML(st, false);
+        if (mark.innerHTML !== html) mark.innerHTML = html;
+      });
+    }
+    function decorateInstances() {
+      (window.cache && window.cache.events || []).forEach(function (e) {
+        if (!e.recurrence) return;
+        evDatesOf(e).forEach(function (ds) {
+          var span = gid("occtw-" + e.id + "-" + ds); if (!span) return;
+          var st = guruState(e.id, ds);
+          var mark = gid("ga-occ-" + e.id + "-" + ds);
+          if (!mark) {
+            mark = document.createElement("span");
+            mark.id = "ga-occ-" + e.id + "-" + ds;
+            mark.style.display = "inline-flex"; mark.style.alignItems = "center"; mark.style.flexWrap = "wrap";
+            span.insertBefore(mark, span.firstChild);
+            var btn = document.createElement("button");
+            btn.className = "btn btn-sm btn-ghost";
+            btn.textContent = "🦦 Gurus";
+            btn.addEventListener("click", function () { openOccEditor(e.id, ds); });
+            span.insertBefore(btn, mark.nextSibling);
+          }
+          var html = chipsHTML(st, true);
+          if (mark.innerHTML !== html) mark.innerHTML = html;
+        });
+      });
+    }
+
+    /* per-date Guru override editor (small overlay) */
+    var occBg = null;
+    function closeOccEditor() { if (occBg) { occBg.remove(); occBg = null; } }
+    function openOccEditor(eventId, ds) {
+      closeOccEditor();
+      var e = null; (window.cache.events || []).forEach(function (x) { if (x.id === eventId) e = x; });
+      if (!e) return;
+      var st = guruState(eventId, ds);           // resolved (override or series)
+      var seriesSt = guruState(eventId, null);   // series default, for reference
+      var others = st.state === "assigned" ? st.gurus.filter(function (g) { return GURUS.indexOf(g) < 0; }) : [];
+
+      occBg = document.createElement("div");
+      occBg.style.cssText = "position:fixed;inset:0;background:rgba(20,30,20,0.55);z-index:9500;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;";
+      occBg.addEventListener("click", function (ev) { if (ev.target === occBg) closeOccEditor(); });
+
+      var box = document.createElement("div");
+      box.style.cssText = "background:#fff;border-radius:14px;padding:18px 20px;max-width:480px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,0.3);font-family:Georgia,serif;";
+      var head = '<div style="font-family:\'Cinzel\',serif;color:var(--forest,#2e5d3b);font-size:0.95rem;margin-bottom:2px;">🦦 Gurus for ' + esc(ds) + '</div>' +
+        '<div style="font-size:0.74rem;color:#7a7a5a;margin-bottom:10px;">' + esc(e.title || "NGH Event") + ' — this date only. Series default: ' +
+        (seriesSt.state === "assigned" ? esc(seriesSt.gurus.join(" + ")) : seriesSt.state === "none" ? "No Guru needed" : "unassigned") + '.</div>';
+      var body = "";
+      GURUS.forEach(function (g) {
+        var on = st.state === "assigned" && st.gurus.indexOf(g) >= 0;
+        body += '<label style="display:inline-flex;align-items:center;gap:5px;border:1.5px solid ' + (on ? "#2e5d3b" : "#d8d4c2") + ';border-radius:50px;padding:5px 11px;margin:3px 4px 3px 0;font-size:0.8rem;cursor:pointer;background:' + (on ? "#eef7f0" : "#fff") + ';"><input type="checkbox" class="gaocc-g" value="' + esc(g) + '" ' + (on ? "checked" : "") + '> ' + esc(g) + '</label>';
+      });
+      body += '<label style="display:inline-flex;align-items:center;gap:5px;border:1.5px solid #d8d4c2;border-radius:50px;padding:5px 11px;margin:3px 4px 3px 0;font-size:0.8rem;cursor:pointer;background:#fff;"><input type="checkbox" id="gaocc-other" ' + (others.length ? "checked" : "") + '> Other</label>' +
+        '<input type="text" id="gaocc-other-name" placeholder="Other name(s), comma-separated" value="' + esc(others.join(", ")) + '" style="display:' + (others.length ? "inline-block" : "none") + ';width:210px;padding:6px 9px;border:1.5px solid #d8d4c2;border-radius:9px;">' +
+        '<label style="display:inline-flex;align-items:center;gap:5px;border:1.5px dashed #b8b4a2;border-radius:50px;padding:5px 11px;margin:3px 4px 3px 0;font-size:0.8rem;cursor:pointer;background:#fff;"><input type="checkbox" id="gaocc-none" ' + (st.state === "none" ? "checked" : "") + '> None needed</label>';
+      var foot = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">' +
+        '<button id="gaocc-save" class="btn btn-sm">💾 Save for this date</button>' +
+        (st.override ? '<button id="gaocc-clear" class="btn btn-sm btn-ghost">↩ Use series default</button>' : "") +
+        '<button id="gaocc-cancel" class="btn btn-sm btn-ghost">Cancel</button></div>';
+      box.innerHTML = head + body + foot;
+      occBg.appendChild(box); document.body.appendChild(occBg);
+
+      gid("gaocc-other").addEventListener("change", function () {
+        gid("gaocc-other-name").style.display = this.checked ? "inline-block" : "none";
+        if (this.checked) gid("gaocc-none").checked = false;
+      });
+      box.querySelectorAll(".gaocc-g").forEach(function (c) {
+        c.addEventListener("change", function () { if (this.checked) gid("gaocc-none").checked = false; });
+      });
+      gid("gaocc-none").addEventListener("change", function () {
+        if (this.checked) {
+          box.querySelectorAll(".gaocc-g").forEach(function (c) { c.checked = false; });
+          gid("gaocc-other").checked = false; gid("gaocc-other-name").style.display = "none";
+        }
+      });
+      gid("gaocc-cancel").addEventListener("click", closeOccEditor);
+      var clearBtn = gid("gaocc-clear");
+      if (clearBtn) clearBtn.addEventListener("click", async function () {
+        try { await gapi("/gurus", { method: "POST", body: JSON.stringify({ action: "delete-assignment", item: { id: st.rec.id } }) }); } catch (err) { alert("Couldn't clear: " + err.message); return; }
+        await loadGd(); closeOccEditor(); decorateInstances(); decorateEventCards();
+      });
+      gid("gaocc-save").addEventListener("click", async function () {
+        var none = gid("gaocc-none").checked;
+        var gurus = [];
+        box.querySelectorAll(".gaocc-g").forEach(function (c) { if (c.checked) gurus.push(c.value); });
+        if (gid("gaocc-other").checked) (gid("gaocc-other-name").value || "").split(",").forEach(function (n) { n = n.trim(); if (n && gurus.indexOf(n) < 0) gurus.push(n); });
+        if (!none && !gurus.length) { alert("Pick at least one Guru, or choose None."); return; }
+        if (!none && gurus.length) {
+          var s = e.allDay ? 0 : t2m(e.start), en = e.allDay ? 1440 : t2m(e.end || e.start);
+          var res = checkConflicts(gurus, [ds], s, en, e.id);
+          if (res.blocks.length) { alert("⛔ Not saved — Guru marked Unavailable:\n\n" + res.blocks.join("\n")); return; }
+          if (res.warns.length && !confirm("⚠️ Conflicts on " + ds + ":\n\n" + res.warns.join("\n") + "\n\nProceed anyway?")) return;
+        }
+        var existingId = (st.override && st.rec) ? st.rec.id : undefined;
+        try {
+          await gapi("/gurus", { method: "POST", body: JSON.stringify({ action: "save-assignment", item: { id: existingId, eventId: e.id, date: ds, gurus: none ? [] : gurus, none: none } }) });
+        } catch (err) {
+          if (err.status === 409) { alert("⛔ Rejected — a selected Guru is marked Unavailable on " + ds + "."); return; }
+          alert("Save failed: " + err.message); return;
+        }
+        await loadGd(); closeOccEditor(); decorateInstances(); decorateEventCards();
+      });
+    }
+
+    /* ---------- 5b. v1.3 — link detached ("moved") occurrences <-> their series ----------
+       Changing one date/time of a recurring event cancels that occurrence and creates a
+       standalone event tagged detachedFrom=<seriesId>. Same-date detachments already show
+       as "✎ Modified" rows; ones moved to a NEW date vanish from the panel. Surface both
+       directions: a "moved off pattern" list inside the instances panel, and a backlink
+       on each detached event's own card. */
+    function seriesPatternDates(e) {
+      if (!e || !e.recurrence) return [];
+      return recDates(e.date, e.recurrence.freq, e.recurrence.count, e.recurrence.mode);
+    }
+    function flashCard(card) {
+      if (!card) return;
+      card.scrollIntoView({ behavior: "smooth", block: "start" });
+      var old = card.style.boxShadow;
+      card.style.boxShadow = "0 0 0 4px #c9973a";
+      setTimeout(function () { card.style.boxShadow = old; }, 2200);
+    }
+    function cardOf(eventId) { var b = gid("instwrap-" + eventId); return b ? b.parentNode : null; }
+    function jumpToSeries(parentId) {
+      var box = gid("instwrap-" + parentId);
+      if (!box) { alert("The series card isn't currently in the list — check the event search/filters (or Past events)."); return; }
+      if (!box.innerHTML && typeof window.reviewInstances === "function") window.reviewInstances(parentId);
+      flashCard(box.parentNode);
+    }
+    function jumpToEvent(eventId) {
+      var card = cardOf(eventId);
+      if (!card) { alert("That event's card isn't currently in the list — check the event search/filters (or Past events)."); return; }
+      flashCard(card);
+    }
+    function fmtEvTime(d) { return d.allDay ? "All day" : (fmtT(t2m(d.start)) + "–" + fmtT(t2m(d.end || d.start))); }
+    function decorateDetached() {
+      var evs = (window.cache && window.cache.events) || [];
+      // (a) inside each OPEN instances panel: list detachments moved off the pattern
+      evs.forEach(function (e) {
+        if (!e.recurrence) return;
+        var box = gid("instwrap-" + e.id);
+        if (!box || !box.innerHTML) { var stale = gid("ga-det-" + e.id); if (stale) stale.remove(); return; }
+        var pattern = seriesPatternDates(e);
+        var moved = evs.filter(function (x) { return x.detachedFrom === e.id && pattern.indexOf(x.date) < 0; });
+        var mark = gid("ga-det-" + e.id);
+        if (!moved.length) { if (mark) mark.remove(); return; }
+        if (!mark) {
+          mark = document.createElement("div");
+          mark.id = "ga-det-" + e.id;
+          mark.style.cssText = "margin-top:8px;padding:8px 10px;border:1px dashed #c9b3ea;border-radius:9px;background:#faf6ff;";
+          box.appendChild(mark);
+        }
+        var key = moved.map(function (x) { return x.id + x.date + (x.start || ""); }).join("|");
+        if (mark.getAttribute("data-key") === key) return;
+        mark.setAttribute("data-key", key);
+        mark.innerHTML = '<b style="font-size:0.8rem;color:#5b3a8a;">🔗 Moved off the series pattern (' + moved.length + ')</b>';
+        moved.sort(function (a, b) { return a.date < b.date ? -1 : 1; }).forEach(function (d) {
+          var row = document.createElement("div");
+          row.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 0;font-size:0.8rem;";
+          row.innerHTML = '<b>' + esc(d.date) + '</b><span style="color:#4a4a35;">' + esc(fmtEvTime(d)) + '</span><span style="color:#5b3a8a;">' + esc(d.title || "") + '</span><span style="flex:1;"></span>';
+          var eb = document.createElement("button"); eb.className = "btn btn-sm btn-ghost"; eb.textContent = "✎ Edit";
+          eb.addEventListener("click", function () { if (typeof window.editEvent === "function") window.editEvent(d.id); });
+          var sb = document.createElement("button"); sb.className = "btn btn-sm btn-ghost"; sb.textContent = "🧭 Show card";
+          sb.addEventListener("click", function () { jumpToEvent(d.id); });
+          row.appendChild(eb); row.appendChild(sb);
+          mark.appendChild(row);
+        });
+      });
+      // (b) on each detached event's own card: backlink to its series
+      evs.forEach(function (d) {
+        if (!d.detachedFrom) return;
+        var card = cardOf(d.id); if (!card) return;
+        if (gid("ga-detline-" + d.id)) return;
+        var parent = null; evs.forEach(function (x) { if (x.id === d.detachedFrom) parent = x; });
+        var line = document.createElement("div");
+        line.id = "ga-detline-" + d.id;
+        line.style.cssText = "margin:4px 0;font-size:0.8rem;color:#5b3a8a;display:flex;gap:8px;align-items:center;flex-wrap:wrap;";
+        line.innerHTML = '🔁 Detached from recurring series' + (parent ? (': <b>' + esc(parent.title || parent.id) + '</b>') : ' (series no longer exists)');
+        if (parent) {
+          var vb = document.createElement("button"); vb.className = "btn btn-sm btn-ghost"; vb.textContent = "🔗 View series & instances";
+          vb.addEventListener("click", function () { jumpToSeries(parent.id); });
+          line.appendChild(vb);
+        }
+        var header = card.firstElementChild;
+        if (header && header.nextSibling) card.insertBefore(line, header.nextSibling); else card.appendChild(line);
+      });
+    }
+
+    /* ---------- 6. self-healing watchdog ----------
        The add-on loads async, so the events view may already be rendered
        (or get re-rendered by code paths we haven't wrapped). Every second,
        make sure our UI is in place. Cheap no-op when everything's present. */
@@ -265,8 +494,12 @@
         injectPicker();
         if (window.editingEventId) fillPicker(window.editingEventId);
       }
+      decorateEventCards();
+      decorateInstances();
+      decorateDetached();
     }
     applyNow();
     setInterval(applyNow, 1000);
+    loadGd().then(function () { decorateEventCards(); decorateInstances(); });
   });
 })();

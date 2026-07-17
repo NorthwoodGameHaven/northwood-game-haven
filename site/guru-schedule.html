@@ -119,7 +119,7 @@
 <body>
 
 <header class="topbar">
-  <h1>🦦 Guru Schedule Console</h1>
+  <h1>🦦 Guru Schedule Console <span style="font-size:0.6rem;opacity:0.6;font-family:Georgia,serif;">v1.2</span></h1>
   <span class="caveat">Who's running the Haven — Stay curious.</span>
   <span class="sp"></span>
   <a href="booking.html?admin=1" style="color:#fff;font-size:0.78rem;">Guru Console (bookings/events) →</a>
@@ -217,8 +217,8 @@ function roomsLabel(e){
 }
 
 /* ---- gurus & colors ---- */
-var GURUS = ["Dustin","Mike","Chad","Jen","Sarah","Kyle"];
-var GURU_COLORS = { "Dustin":"#2e5d3b", "Mike":"#134b57", "Chad":"#9a6310", "Jen":"#7a2b6e", "Sarah":"#b23b3b", "Kyle":"#3b5bb2" };
+var GURUS = ["Dustin","Mike","Chad","Jen","Sarah","Kyle","Zach"];
+var GURU_COLORS = { "Dustin":"#2e5d3b", "Mike":"#134b57", "Chad":"#9a6310", "Jen":"#7a2b6e", "Sarah":"#b23b3b", "Kyle":"#3b5bb2", "Zach":"#b2622b" };
 var EXTRA_COLORS = ["#4a6d8c","#8c5a2b","#2b8c6e","#8c2b5a","#5a8c2b","#6e4a8c"];
 function guruColor(g){
   if(GURU_COLORS[g]) return GURU_COLORS[g];
@@ -786,12 +786,32 @@ async function deleteShift(id){
 }
 
 /* ---------------- UNAVAILABILITY ---------------- */
+function guruChecksHTML(prefix, selected){
+  var names=allGuruNames(); selected=selected||[];
+  var h='<div>';
+  names.forEach(function(g){
+    var on=selected.indexOf(g)>=0;
+    h+='<label class="gcheck'+(on?" on":"")+'"><input type="checkbox" class="'+prefix+'-g" value="'+esc(g)+'" '+(on?"checked":"")+' onchange="this.parentNode.classList.toggle(\'on\',this.checked)"> '+esc(g)+'</label>';
+  });
+  var others=selected.filter(function(g){ return names.indexOf(g)<0; });
+  h+='<label class="gcheck'+(others.length?" on":"")+'"><input type="checkbox" id="'+prefix+'-other" '+(others.length?"checked":"")+' onchange="this.parentNode.classList.toggle(\'on\',this.checked);$(\''+prefix+'-other-name\').style.display=this.checked?\'inline-block\':\'none\'"> Other</label>'+
+    '<input type="text" id="'+prefix+'-other-name" placeholder="Other name(s), comma-separated" value="'+esc(others.join(", "))+'" style="display:'+(others.length?"inline-block":"none")+';width:220px;">'+
+    '</div>';
+  return h;
+}
+function guruChecksVal(prefix){
+  var out=[];
+  document.querySelectorAll("."+prefix+"-g").forEach(function(c){ if(c.checked) out.push(c.value); });
+  var o=$(prefix+"-other");
+  if(o&&o.checked){ ($(prefix+"-other-name").value||"").split(",").forEach(function(n){ n=n.trim(); if(n&&out.indexOf(n)<0) out.push(n); }); }
+  return out;
+}
 var editUnavailId=null;
 function renderUnavail(){
   var u = editUnavailId ? cache.unavail.find(function(x){ return x.id===editUnavailId; }) : null;
-  var h='<div class="card"><h2 style="margin-top:0;font-size:1rem;">'+(u?"Edit unavailability":"Mark a Guru unavailable")+'</h2>'+
+  var h='<div class="card"><h2 style="margin-top:0;font-size:1rem;">'+(u?"Edit unavailability":"Mark Guru(s) unavailable")+'</h2>'+
+    '<div class="field" style="margin-bottom:10px;"><label>Guru(s) — check everyone this applies to</label>'+guruChecksHTML("un", u?[u.guru]:["Dustin"])+'</div>'+
     '<div class="row">'+
-    '<div class="field"><label>Guru</label>'+guruSelectHTML("un-guru", u?u.guru:"Dustin")+'</div>'+
     '<div class="field"><label>From date</label><input type="date" id="un-date" value="'+(u?u.date:todayStr())+'"></div>'+
     '<div class="field"><label>Through (optional)</label><input type="date" id="un-end" value="'+esc(u&&u.endDate?u.endDate:"")+'"></div>'+
     '<label style="padding-bottom:10px;"><input type="checkbox" id="un-allday" '+(u&&u.allDay?"checked":"")+' onchange="$(\'un-times\').style.display=this.checked?\'none\':\'flex\'"> Entire day(s)</label>'+
@@ -820,17 +840,23 @@ function renderUnavail(){
   $("view-unavail").innerHTML=h;
 }
 async function saveUnavail(){
-  var rec={ id:editUnavailId||undefined, guru:guruSelVal("un-guru"), date:$("un-date").value, endDate:$("un-end").value||null,
+  var gurus=guruChecksVal("un");
+  var base={ date:$("un-date").value, endDate:$("un-end").value||null,
     allDay:$("un-allday").checked, start:$("un-start").value, end:$("un-endt").value, notes:$("un-notes").value };
-  if(!rec.guru||!rec.date){ alert("Guru and date are required."); return; }
-  if(rec.endDate && rec.endDate<rec.date){ alert("End date is before start date."); return; }
-  if(!rec.allDay && (!rec.start||!rec.end)){ alert("Enter times, or check Entire day(s)."); return; }
-  await api("/gurus",{method:"POST",body:JSON.stringify({action:"save-unavail",item:rec})});
+  if(!gurus.length){ alert("Check at least one Guru."); return; }
+  if(!base.date){ alert("Pick a date."); return; }
+  if(base.endDate && base.endDate<base.date){ alert("End date is before start date."); return; }
+  if(!base.allDay && (!base.start||!base.end)){ alert("Enter times, or check Entire day(s)."); return; }
+  for(var i=0;i<gurus.length;i++){
+    var rec=Object.assign({ guru:gurus[i] }, base);
+    if(i===0 && editUnavailId) rec.id=editUnavailId; // editing updates the original record; extra checked Gurus get new records
+    await api("/gurus",{method:"POST",body:JSON.stringify({action:"save-unavail",item:rec})});
+  }
   editUnavailId=null;
   await reload();
-  // warn if existing assignments now collide
-  var from=rec.date, to=rec.endDate||rec.date;
-  var viol=conflictsForGuru(rec.guru, from, to).filter(function(c){ return c.sev==="block"; });
+  // warn if existing assignments now collide (any of the saved Gurus)
+  var from=base.date, to=base.endDate||base.date, viol=[];
+  gurus.forEach(function(g){ viol=viol.concat(conflictsForGuru(g, from, to).filter(function(c){ return c.sev==="block"; })); });
   if(viol.length) showConflictModal(viol, null, true);
 }
 async function deleteUnavail(id){
