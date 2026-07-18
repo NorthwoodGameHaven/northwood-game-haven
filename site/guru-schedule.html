@@ -62,15 +62,17 @@
   .sched-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
   .sched-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
   .sched-grid { display:flex; min-width:640px; }
-  .sched-timecol { width:52px; flex:none; padding-top:82px; }
+  .sched-headrow { display:flex; min-width:640px; align-items:stretch; }
+  .sched-headspace { width:52px; flex:none; }
+  .sched-timecol { width:52px; flex:none; }
   .sched-timecol .hrlab { height:44px; font-size:0.66rem; color:#8a8a6a; text-align:right; padding-right:6px; position:relative; top:-7px; }
   .sched-day { flex:1; min-width:120px; border-left:1px solid #e6e2d0; }
-  .sched-dayhead { height:82px; padding:6px 6px 2px; font-size:0.72rem; text-align:center; border-bottom:2px solid #d8d4c2; overflow:hidden; }
-  .sched-dayhead .unavline { font-size:0.62rem; color:#8a3b2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sched-dayhead { flex:1; min-width:120px; padding:6px 6px 4px; font-size:0.72rem; text-align:center; border-bottom:2px solid #d8d4c2; border-left:1px solid #e6e2d0; }
+  .sched-dayhead .unavline { font-size:0.62rem; color:#8a3b2e; line-height:1.35; }
   .blk.ev.overnight { border-bottom:4px double rgba(255,255,255,0.95); border-radius:7px 7px 0 0; }
   .blk .contnote { display:block; font-style:italic; font-size:0.6rem; opacity:0.9; }
   .sched-dayhead b { display:block; font-family:'Cinzel',serif; color:var(--forest); font-size:0.78rem; }
-  .sched-dayhead .storeline { font-size:0.62rem; color:#5a2b7a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sched-dayhead .storeline { font-size:0.62rem; color:#5a2b7a; line-height:1.35; }
   .sched-body { position:relative; background:repeating-linear-gradient(to bottom, #fbf9f0 0, #fbf9f0 43px, #ece8d8 43px, #ece8d8 44px); }
   .blk { position:absolute; border-radius:7px; font-size:0.66rem; line-height:1.25; padding:3px 5px; overflow:hidden; cursor:pointer; }
   .blk.ev { color:#fff; z-index:3; box-shadow:0 1px 4px rgba(0,0,0,0.25); }
@@ -122,7 +124,7 @@
 <body>
 
 <header class="topbar">
-  <h1>🦦 Guru Schedule Console <span style="font-size:0.6rem;opacity:0.6;font-family:Georgia,serif;">v1.4</span></h1>
+  <h1>🦦 Guru Schedule Console <span style="font-size:0.6rem;opacity:0.6;font-family:Georgia,serif;">v1.5</span></h1>
   <span class="caveat">Who's running the Haven — Stay curious.</span>
   <span class="sp"></span>
   <a href="booking.html?admin=1" style="color:#fff;font-size:0.78rem;">Guru Console (bookings/events) →</a>
@@ -489,20 +491,28 @@ function renderSched(){
 
   var days=[]; for(var d=from; d<=to; d=addDays(d,1)){ days.push(d); if(days.length>7) break; }
 
-  h+='<div class="sched-scroll"><div class="sched-grid">';
+  h+='<div class="sched-scroll">';
+  // header row (own flex row so tall unavailable lists wrap without breaking grid alignment)
+  h+='<div class="sched-headrow"><div class="sched-headspace"></div>';
+  days.forEach(function(d){
+    var hdShifts=shifts.filter(function(sx){ return sx.date===d && guruVisible(sx.guru); });
+    var hdStore = hdShifts.length
+      ? hdShifts.map(function(sx){ return esc(sx.guru)+" "+sx.startLbl+"–"+sx.endLbl; }).join(" · ")
+      : "store: no shift set";
+    var hdUnAll=unav.filter(function(u){ return u.date===d && u.allDay && guruVisible(u.guru); });
+    var hdNames={}; hdUnAll.forEach(function(u){ hdNames[u.guru]=1; });
+    var hdUnLine=Object.keys(hdNames).length?('<div class="unavline">🚫 unavailable: '+Object.keys(hdNames).map(esc).join(", ")+'</div>'):'';
+    h+='<div class="sched-dayhead"><b>'+fmtDate(d)+'</b><div class="storeline">🏪 '+hdStore+'</div>'+hdUnLine+'</div>';
+  });
+  h+='</div>';
+  h+='<div class="sched-grid">';
   h+='<div class="sched-timecol">';
   for(var hr=hStart;hr<hEnd;hr++) h+='<div class="hrlab">'+fmtTime(hr*60)+'</div>';
   h+='</div>';
 
   days.forEach(function(d){
     var dayShifts=shifts.filter(function(s){ return s.date===d && guruVisible(s.guru); });
-    var storeLine = dayShifts.length
-      ? dayShifts.map(function(s){ return esc(s.guru)+" "+s.startLbl+"–"+s.endLbl; }).join(" · ")
-      : "store: no shift set";
-    var dayUnAll=unav.filter(function(u){ return u.date===d && u.allDay && guruVisible(u.guru); });
-    var unNames={}; dayUnAll.forEach(function(u){ unNames[u.guru]=1; });
-    var unLine=Object.keys(unNames).length?('<div class="unavline">🚫 unavailable: '+Object.keys(unNames).map(esc).join(", ")+'</div>'):'<div class="unavline">&nbsp;</div>';
-    h+='<div class="sched-day"><div class="sched-dayhead"><b>'+fmtDate(d)+'</b><div class="storeline">🏪 '+storeLine+'</div>'+unLine+'</div>';
+    h+='<div class="sched-day">';
     h+='<div class="sched-body" style="height:'+bodyH+'px;">';
 
     // store shift bands (behind)
