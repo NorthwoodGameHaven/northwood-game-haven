@@ -525,7 +525,22 @@
     var ttypeLabel={swiss:"Swiss",single:"Single elimination",double:"Double elimination",roundrobin:"Round robin",other:"Tournament"}[t.type]||"";
     var when=(ds||e.date)+(e.allDay?" · All day":(" · "+fmtTime(t2m(e.start))+" – "+fmtTime(t2m(e.end))));
     var h='';
-    if(e.photo) h+='<img src="'+esc(e.photo)+'" alt="" style="width:100%;max-height:260px;object-fit:cover;display:block;">';
+    window.nghLightbox=window.nghLightbox||function(src){
+      var o=document.createElement("div");
+      o.style.cssText="position:fixed;inset:0;z-index:2147483000;background:rgba(8,12,8,0.94);display:flex;align-items:center;justify-content:center;padding:14px;cursor:zoom-out;";
+      var im=document.createElement("img"); im.src=src; im.alt="";
+      im.style.cssText="max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;box-shadow:0 10px 44px rgba(0,0,0,0.65);";
+      o.appendChild(im);
+      var x=document.createElement("div"); x.textContent="\u00d7";
+      x.style.cssText="position:absolute;top:6px;right:16px;font-size:2.4rem;color:#fff;cursor:pointer;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.7);";
+      o.appendChild(x);
+      function close(){ o.remove(); document.removeEventListener("keydown",onK); }
+      function onK(ev){ if(ev.key==="Escape") close(); }
+      o.addEventListener("click",close);
+      document.addEventListener("keydown",onK);
+      document.body.appendChild(o);
+    };
+    if(e.photo) h+='<img src="'+esc(e.photo)+'" alt="" title="Tap to view full image" style="width:100%;max-height:260px;object-fit:cover;display:block;cursor:zoom-in;" onclick="nghLightbox(this.src)">';
     h+='<div style="padding:24px 26px;">';
     h+='<h2 style="font-family:\'Cinzel Decorative\',serif;color:'+FOREST+';font-size:1.5rem;margin-bottom:6px;">'+esc(e.title)+'</h2>';
     h+='<div style="font-family:\'Cinzel\',serif;color:'+GOLD+';font-size:0.82rem;letter-spacing:0.04em;margin-bottom:14px;">'+esc(when)+'</div>';

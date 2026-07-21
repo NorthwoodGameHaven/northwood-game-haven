@@ -2281,7 +2281,7 @@ function eventCardHTML(e){
       '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center;">'+
         '<h2 style="margin:0;">🎉 '+esc(e.title||"Public NGH Event")+rec+statusBadge+privBadge+'</h2>'+
         '<div class="kv" style="color:#9a9a80;">'+e.id+'</div></div>'+
-      (e.photo?'<img src="'+esc(e.photo)+'" alt="" style="max-width:160px;max-height:100px;border-radius:8px;margin:8px 0;border:1px solid #d8e0d4;">':'')+
+      (e.photo?'<img src="'+esc(e.photo)+'" alt="" title="Tap to view full image" style="max-width:160px;max-height:100px;border-radius:8px;margin:8px 0;border:1px solid #d8e0d4;cursor:zoom-in;" onclick="nghLightbox(this.src)">':'')+
       '<div class="kv"><b>When</b> '+e.date+' · '+time+'</div>'+
       '<div class="kv"><b>Rooms held</b> '+rooms+'</div>'+
       vrboNote+
@@ -2982,7 +2982,7 @@ async function deleteEvent(id){
     try {
       var regs=await Store.registrations();
       var active=(regs||[]).filter(function(r){ return r.eventId===id && r.status!=="canceled"; });
-      if(active.length){ warn="⚠️ \""+title+"\" has "+active.length+" active registrant"+(active.length>1?"s":"")+".\n\nDeleting it will remove the event and those people will NOT be automatically notified. Consider emailing them first.\n\nDelete anyway? This cannot be undone."; }
+      if(active.length){ var _ppl=active.reduce(function(n,r){ return n+Math.max(1,parseInt(r.qty,10)||1); },0); warn="⚠️ \""+title+"\" has "+_ppl+" active registrant"+(_ppl>1?"s":"")+".\n\nDeleting it will remove the event and those people will NOT be automatically notified. Consider emailing them first.\n\nDelete anyway? This cannot be undone."; }
     } catch(_){}
   }
   if(!confirm(warn)) return;
@@ -2996,6 +2996,21 @@ async function viewRegistrants(eventId){
   try { _regCache = await Store.registrations() || []; } catch(e){ if(wrap) wrap.innerHTML='<p class="hint" style="color:#9a3b2e;">Could not load registrants.</p>'; return; }
   renderRegistrants(eventId);
 }
+window.nghLightbox=window.nghLightbox||function(src){
+var o=document.createElement("div");
+o.style.cssText="position:fixed;inset:0;z-index:2147483000;background:rgba(8,12,8,0.94);display:flex;align-items:center;justify-content:center;padding:14px;cursor:zoom-out;";
+var im=document.createElement("img"); im.src=src; im.alt="";
+im.style.cssText="max-width:100%;max-height:100%;object-fit:contain;border-radius:10px;box-shadow:0 10px 44px rgba(0,0,0,0.65);";
+o.appendChild(im);
+var x=document.createElement("div"); x.textContent="\u00d7";
+x.style.cssText="position:absolute;top:6px;right:16px;font-size:2.4rem;color:#fff;cursor:pointer;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.7);";
+o.appendChild(x);
+function close(){ o.remove(); document.removeEventListener("keydown",onK); }
+function onK(ev){ if(ev.key==="Escape") close(); }
+o.addEventListener("click",close);
+document.addEventListener("keydown",onK);
+document.body.appendChild(o);
+    };
 function renderRegistrants(eventId){
   var wrap=$("regwrap-"+eventId); if(!wrap) return;
   var ev=(cache.events||[]).filter(function(x){return x.id===eventId;})[0]||{};
@@ -3020,7 +3035,11 @@ function renderRegistrants(eventId){
   Object.keys(byDate).sort().forEach(function(d){
     var list=byDate[d];
     var active=list.filter(function(r){ return r.status!=="canceled" && r.status!=="unapproved"; });
-    h+='<div style="margin-top:8px;"><div style="font-size:0.76rem;color:#8a8a6a;font-weight:700;margin-bottom:4px;">'+esc(d)+' — '+active.length+' confirmed / '+list.filter(function(r){return r.status!=="canceled";}).length+' total</div>';
+    var nghQ=function(r){ return Math.max(1, parseInt(r.qty,10)||1); };
+    var nghPpl=function(a){ return a.reduce(function(n,r){ return n+nghQ(r); },0); };
+    var notCanceled=list.filter(function(r){ return r.status!=="canceled"; });
+    var confPpl=nghPpl(active), totPpl=nghPpl(notCanceled);
+    h+='<div style="margin-top:8px;"><div style="font-size:0.76rem;color:#8a8a6a;font-weight:700;margin-bottom:4px;">'+esc(d)+' — '+confPpl+' confirmed / '+totPpl+' total'+(notCanceled.length!==totPpl?(' · '+notCanceled.length+' registration'+(notCanceled.length===1?'':'s')):'')+'</div>';
     list.forEach(function(r){
       if(r.__manual){
         h+='<div style="border-top:1px solid #eef0ec;padding:6px 0;font-size:0.8rem;">'+
@@ -3035,8 +3054,8 @@ function renderRegistrants(eventId){
       var contact = (r.email||r.phone) ? (esc(r.email||"")+(r.phone?((r.email?" · ":"")+esc(r.phone)):"")) : '<span style="color:#9a9a80;font-style:italic;">no contact on file</span>';
       var canEmailPay = (!canceled && Number(r.cost)>0 && !r.feePaid && r.email);
       h+='<div style="border-top:1px solid #eef0ec;padding:6px 0;font-size:0.8rem;'+(canceled?'opacity:0.55;':'')+'">'+
-        '<div><b>'+esc(r.name)+'</b> · '+tag+staffTag+(r.cost>0?(' · $'+Number(r.cost).toFixed(2)+(r.feePaid?' <span style="color:#2e7d32;">paid</span>':' <span style="color:#9a6310;">due</span>')):' · free')+'</div>'+
-        '<div style="color:#6a6a50;">'+contact+'</div>'+
+        '<div><b>'+esc(r.name)+'</b> · '+tag+staffTag+(nghQ(r)>1?(' · <span style="color:#1f6f8b;font-weight:700;">🎟️ ×'+nghQ(r)+' tickets</span>'):'')+(r.cost>0?(' · $'+Number(r.cost).toFixed(2)+(r.feePaid?' <span style="color:#2e7d32;">paid</span>':' <span style="color:#9a6310;">due</span>')):' · free')+'</div>'+
+        '<div style="color:#6a6a50;">'+contact+'</div>'+((r.attendees&&r.attendees.length>1)?('<div style="color:#6a6a50;font-size:0.76rem;">👥 '+r.attendees.map(esc).join(", ")+'</div>'):'')+
         (r.comments?('<div style="color:#6a6a50;font-style:italic;">"'+esc(r.comments)+'"</div>'):'')+
         (r.wantsInvoice?'<div style="color:#9a6310;font-size:0.74rem;">📧 invoice requested</div>':'')+
         (!canceled?('<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;">'+
