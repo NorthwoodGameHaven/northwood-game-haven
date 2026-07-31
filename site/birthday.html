@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 2026-07-31a · birthday party booking form (initial) -->
+<!-- NGH-BUILD 2026-07-31b · fix pkg-card layout (display:block) + meeple winged-cake lockup -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -61,7 +61,7 @@
   .pkg-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; }
   .pkg-card { position:relative; display:block; cursor:pointer; }
   .pkg-card input { position:absolute; opacity:0; pointer-events:none; }
-  .pkg-inner { border:2px solid #e4ddc9; border-radius:14px; padding:14px 16px; background:#fdfbf5; transition:border-color 0.15s, box-shadow 0.15s, transform 0.15s; height:100%; }
+  .pkg-inner { display:block; border:2px solid #e4ddc9; border-radius:14px; padding:14px 16px; background:#fdfbf5; transition:border-color 0.15s, box-shadow 0.15s, transform 0.15s; height:100%; }
   .pkg-card:hover .pkg-inner { transform:translateY(-2px); }
   .pkg-card input:checked + .pkg-inner { border-color:var(--gold); box-shadow:0 0 0 3px rgba(201,151,58,0.25); background:#fffdf6; }
   .pkg-card input:focus-visible + .pkg-inner { outline:3px solid var(--teal); outline-offset:2px; }
