@@ -86,7 +86,7 @@ export default async (req) => {
     heroName ? `Guest of honor: ${heroName}${heroAge ? ` (turning ${heroAge})` : ''}` : '',
     addons.length ? '\nAdd-ons: ' + addons.join('; ') : '',
     '',
-    `A Game Guru will confirm your date within one business day and send a secure payment link to lock it in. Nothing is due until then.`,
+    `We'll confirm your date within one business day and send a secure payment link to lock it in. Nothing is due until then.`,
     '',
     `Every party includes the Party Float Kit, and bringing your own cake is always welcome at no charge.`,
     '',
