@@ -83,6 +83,10 @@
   .blk.unav { z-index:2; background:repeating-linear-gradient(45deg, rgba(60,60,60,0.16) 0, rgba(60,60,60,0.16) 4px, rgba(60,60,60,0.06) 4px, rgba(60,60,60,0.06) 8px); border:1.5px dotted #888; color:#444; cursor:default; }
   .blk.conf-red { outline:3px solid #c0392b; outline-offset:-1px; }
   .blk.conf-yel { outline:3px solid #e0b62a; outline-offset:-1px; }
+  .chip.interest { background:#e0f2f1; color:#0d5c56; border-color:#9ed4cf; }
+  .blk.interest { z-index:2; background:repeating-linear-gradient(135deg, rgba(13,116,107,0.16) 0, rgba(13,116,107,0.16) 6px, rgba(13,116,107,0.05) 6px, rgba(13,116,107,0.05) 12px); border:1.5px dashed #0d746b; color:#0d5c56; }
+  .blk.interest.passed { opacity:0.5; text-decoration:line-through; }
+  .sched-dayhead .radarline { font-size:0.62rem; color:#0d746b; line-height:1.35; }
 
   /* modal */
   .modal-bg { display:none; position:fixed; inset:0; background:rgba(20,30,20,0.55); z-index:9000; overflow:auto; padding:20px; }
@@ -124,9 +128,10 @@
 <body>
 
 <header class="topbar">
-  <h1>🦦 Guru Schedule Console <span style="font-size:0.6rem;opacity:0.6;font-family:Georgia,serif;">v1.5</span></h1>
+  <h1>🦦 Guru Schedule Console <span style="font-size:0.6rem;opacity:0.6;font-family:Georgia,serif;">v1.6</span></h1>
   <span class="caveat">Who's running the Haven — Stay curious.</span>
   <span class="sp"></span>
+  <a href="guru-radar.html" style="color:#fff;font-size:0.78rem;margin-right:14px;">🎪 Guru Radar →</a>
   <a href="booking.html?admin=1" style="color:#fff;font-size:0.78rem;">Guru Console (bookings/events) →</a>
 </header>
 
@@ -271,9 +276,9 @@ async function api(path, opts){
 }
 
 /* ---- state ---- */
-var cache = { events:[], assignments:[], shifts:[], unavail:[] };
+var cache = { events:[], assignments:[], shifts:[], unavail:[], interest:[] };
 var curView="sched";
-var sched = { mode:"week", anchor:todayStr(), filter:null, showUnassigned:true }; // filter = null (all) or {name:true}
+var sched = { mode:"week", anchor:todayStr(), filter:null, showUnassigned:true, showInterest:true }; // filter = null (all) or {name:true}
 var auditDays = 30;
 
 /* ---- login ---- */
@@ -292,6 +297,8 @@ async function boot(){
 async function reload(){
   var ev=await api("/events");
   var gd=await api("/gurus");
+  var ie=[]; try{ ie=await api("/interest-events")||[]; }catch(e){ ie=[]; }
+  cache.interest=ie;
   cache.events=ev||[];
   cache.assignments=(gd&&gd.assignments)||[];
   cache.shifts=(gd&&gd.shifts)||[];
@@ -361,6 +368,41 @@ function unavailItemsInRange(from,to){
       d=addDays(d,1);
       if(out.length>1000) break;
     }
+  });
+  return out;
+}
+/* Events of Interest (Guru Radar layer) — external happenings NGH may support.
+   Expands multi-day spans + weekly repeats. "passed" entries are hidden. */
+var INTEREST_ST={watching:"👀",considering:"🤔",committed:"✅",converted:"🔗"};
+function interestItemsInRange(from,to){
+  var out=[];
+  cache.interest.forEach(function(it){
+    if(!it.date || it.status==="passed") return;
+    var spans=[[it.date, it.endDate&&it.endDate>=it.date?it.endDate:it.date]];
+    if(it.repeatWeeklyUntil){
+      var spanDays=Math.round((new Date(spans[0][1]+"T12:00:00")-new Date(spans[0][0]+"T12:00:00"))/86400000);
+      var s=spans[0][0], guard=0;
+      while(guard++<400){
+        s=addDays(s,7);
+        if(s>it.repeatWeeklyUntil) break;
+        spans.push([s, addDays(s,spanDays)]);
+      }
+    }
+    spans.forEach(function(sp){
+      var d=sp[0];
+      while(d<=sp[1]){
+        if(d>=from && d<=to){
+          var allDay = it.allDay!==false || !it.start;
+          out.push({ type:"interest", date:d, allDay:allDay,
+            start:allDay?0:timeToMins(it.start), end:allDay?1440:timeToMins(it.end||it.start),
+            startLbl:allDay?"All day":fmtTime(timeToMins(it.start)),
+            endLbl:allDay?"":(it.end?fmtTime(timeToMins(it.end)):""),
+            title:it.title, it:it });
+        }
+        d=addDays(d,1);
+        if(out.length>1000) return;
+      }
+    });
   });
   return out;
 }
@@ -451,6 +493,7 @@ function renderSched(){
   var evs=eventItemsInRange(from,to);
   var shifts=shiftItemsInRange(from,to);
   var unav=unavailItemsInRange(from,to);
+  var radar=sched.showInterest?interestItemsInRange(from,to):[];
   // conflicts across all gurus in this window (for outlines)
   var confKeys={};
   allGuruNames().forEach(function(g){
@@ -470,17 +513,18 @@ function renderSched(){
      '<button class="btn btn-sm '+(sched.mode==="day"?"":"btn-ghost")+'" onclick="sched.mode=\'day\';renderSched()">Day</button>'+
      '<button class="btn btn-sm '+(sched.mode==="week"?"":"btn-ghost")+'" onclick="sched.mode=\'week\';renderSched()">Week</button>'+
      '<label style="margin-left:8px;"><input type="checkbox" '+(sched.showUnassigned?"checked":"")+' onchange="sched.showUnassigned=this.checked;renderSched()"> show unassigned</label>'+
+     '<label style="margin-left:8px;"><input type="checkbox" '+(sched.showInterest?"checked":"")+' onchange="sched.showInterest=this.checked;renderSched()"> 🎪 radar</label>'+
      '</div>';
   h+='<div style="margin-bottom:10px;">Filter: ';
   names.forEach(function(g){
     var on=guruVisible(g);
     h+='<span class="chip guru" style="background:'+(on?guruColor(g):"#bbb")+';cursor:pointer;" onclick="toggleGuruFilter(\''+esc(g)+'\')">'+esc(g)+'</span>';
   });
-  h+='<span class="chip store">🏪 store shift</span><span class="chip unav">🚫 unavailable</span></div>';
+  h+='<span class="chip store">🏪 store shift</span><span class="chip unav">🚫 unavailable</span><span class="chip interest">🎪 event of interest</span></div>';
 
   // hour range
   var hStart=8, hEnd=23;
-  evs.concat(shifts).concat(unav).forEach(function(it){
+  evs.concat(shifts).concat(unav).concat(radar).forEach(function(it){
     if(it.allDay) return;
     hStart=Math.min(hStart, Math.floor(it.start/60));
     hEnd=Math.max(hEnd, Math.ceil(it.end/60));
@@ -502,7 +546,9 @@ function renderSched(){
     var hdUnAll=unav.filter(function(u){ return u.date===d && u.allDay && guruVisible(u.guru); });
     var hdNames={}; hdUnAll.forEach(function(u){ hdNames[u.guru]=1; });
     var hdUnLine=Object.keys(hdNames).length?('<div class="unavline">🚫 unavailable: '+Object.keys(hdNames).map(esc).join(", ")+'</div>'):'';
-    h+='<div class="sched-dayhead"><b>'+fmtDate(d)+'</b><div class="storeline">🏪 '+hdStore+'</div>'+hdUnLine+'</div>';
+    var hdRadar=radar.filter(function(x){ return x.date===d && x.allDay; });
+    var hdRadarLine=hdRadar.length?('<div class="radarline">🎪 '+hdRadar.map(function(x){ return (INTEREST_ST[x.it.status]||"")+" "+esc(x.title); }).join(" · ")+'</div>'):'';
+    h+='<div class="sched-dayhead"><b>'+fmtDate(d)+'</b><div class="storeline">🏪 '+hdStore+'</div>'+hdUnLine+hdRadarLine+'</div>';
   });
   h+='</div>';
   h+='<div class="sched-grid">';
@@ -530,6 +576,11 @@ function renderSched(){
     Object.keys(timedUn).forEach(function(k){
       var u=timedUn[k], names=Object.keys(u.gurus).join(" + ");
       h+='<div class="blk unav" style="top:'+top(u.start)+'px;height:'+Math.max(16,top(u.end)-top(u.start))+'px;left:2%;right:2%;" title="Unavailable: '+esc(names)+'">🚫 '+esc(names)+' '+u.startLbl+'–'+u.endLbl+'</div>';
+    });
+    // Events of Interest bands (Guru Radar layer) — tap to open the radar
+    radar.forEach(function(x){
+      if(x.date!==d || x.allDay) return;
+      h+='<div class="blk interest" style="top:'+top(x.start)+'px;height:'+Math.max(16,top(x.end)-top(x.start))+'px;left:1%;right:1%;" title="Event of interest ('+esc(x.it.status)+')'+(x.it.location?(': '+esc(x.it.location)):'')+'" onclick="window.open(\'guru-radar.html\',\'_blank\')">🎪 '+(INTEREST_ST[x.it.status]||"")+' '+esc(x.title)+' '+x.startLbl+(x.endLbl?('–'+x.endLbl):'')+'</div>';
     });
 
     // events — lane layout
@@ -559,7 +610,7 @@ function renderSched(){
     h+='</div></div>';
   });
   h+='</div></div>';
-  h+='<p class="hint" style="margin-bottom:0;">Blocks show <b>Guru name first</b>, then the event title — tap any block for full event details. Purple striped bands = retail store shifts (open/close). Red outline = same-Guru overlap; yellow outline = under '+TIGHT_MIN+' min between that Guru\'s events.</p>';
+  h+='<p class="hint" style="margin-bottom:0;">Blocks show <b>Guru name first</b>, then the event title — tap any block for full event details. Purple striped bands = retail store shifts (open/close). Teal dashed bands / 🎪 header lines = Events of Interest from the Guru Radar (external happenings we may support) — tap to open the radar. Red outline = same-Guru overlap; yellow outline = under '+TIGHT_MIN+' min between that Guru\'s events.</p>';
   h+='</div>';
   $("view-sched").innerHTML=h;
 }
