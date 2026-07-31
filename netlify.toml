@@ -46,6 +46,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/birthday"
+  to   = "/.netlify/functions/birthday"
+  status = 200
+
+[[redirects]]
   from = "/api/email-test"
   to   = "/.netlify/functions/email-test"
   status = 200
@@ -135,6 +140,12 @@
   status = 200
 
 # The Raft landing page — pretty URL
+# Birthday party booking form (pretty URL)
+[[redirects]]
+  from = "/birthday"
+  to   = "/birthday.html"
+  status = 200
+
 [[redirects]]
   from = "/theraft"
   to   = "/theraft.html"

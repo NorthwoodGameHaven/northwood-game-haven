@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<!-- NGH-BUILD 2026-07-31a · birthday party booking form (initial) -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book a Birthday Party — Northwood Game Haven</title>
+<meta name="description" content="Book a birthday party at Northwood Game Haven in Chippewa Falls, WI. Kids' parties with a Game Guru host, adult after-dark parties, private rooms, karaoke, and more.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Northwood Game Haven">
+<meta property="og:title" content="Birthday Parties at the Haven">
+<meta property="og:description" content="Private party rooms, a real Game Guru running the show, and a prize wheel where every spin wins. Book your party online.">
+<meta property="og:image" content="https://gamehaven.guru/birthday-lockup.png">
+<meta property="og:url" content="https://gamehaven.guru/birthday.html">
+<meta name="twitter:card" content="summary_large_image">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --forest: #2d5a3d; --forest-light: #3d7a54; --forest-deep: #1c3a26;
+    --gold: #c9973a; --gold-light: #e8b84b;
+    --cream: #faf6ee; --teal-dark: #0f4a56; --teal: #1f6f8b;
+    --dark: #1a1a12; --text: #2a2a1a; --maroon: #7a2431;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--cream); color:var(--text); font-family:'Lato',sans-serif; overflow-x:hidden; }
+  a { color:inherit; }
+
+  /* ---- top nav (matches homepage) ---- */
+  .corner-nav { position:sticky; top:0; z-index:300; display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap;
+    padding:9px 10px; background:linear-gradient(135deg,#1c3a26,#2d5a3d); box-shadow:0 2px 14px rgba(0,0,0,0.22); border-bottom:2px solid var(--gold); }
+  .corner-nav a { font-family:'Cinzel',serif; font-size:0.66rem; letter-spacing:0.08em; text-transform:uppercase; font-weight:700; text-decoration:none;
+    padding:8px 14px; border-radius:50px; white-space:nowrap; transition:transform 0.18s; }
+  .corner-nav a:hover { transform:translateY(-2px); }
+  .nav-home  { background:rgba(255,255,255,0.12); color:#f3ecd8; }
+  .nav-book  { background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); }
+  .nav-events{ background:linear-gradient(135deg,var(--forest),var(--forest-light)); color:#fff; }
+  @media(max-width:520px){ .corner-nav a{ font-size:0.56rem; padding:7px 10px; letter-spacing:0.04em; } }
+
+  /* ---- hero ---- */
+  .bday-hero { text-align:center; padding:44px 20px 34px; position:relative; overflow:hidden;
+    background:linear-gradient(160deg,#1c3a26 0%,#2d5a3d 55%,#0f4a56 100%); }
+  .bday-hero::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 80% 10%,rgba(201,151,58,0.16) 0%,transparent 55%); pointer-events:none; }
+  .bday-hero img { max-width:280px; width:62%; height:auto; margin:0 auto 14px; display:block; filter:drop-shadow(0 4px 14px rgba(0,0,0,0.35)); position:relative; }
+  .hero-eyebrow { font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.32em; text-transform:uppercase; color:var(--gold-light); margin-bottom:8px; position:relative; }
+  .hero-h1 { font-family:'Cinzel Decorative',serif; font-size:clamp(1.7rem,4.6vw,2.7rem); font-weight:900; color:#fff; line-height:1.1; position:relative; }
+  .hero-sub { font-size:0.95rem; color:rgba(255,255,255,0.85); max-width:660px; margin:12px auto 0; line-height:1.75; position:relative; }
+  .hero-sub strong { color:var(--gold-light); }
+
+  /* ---- form shell ---- */
+  .form-wrap { max-width:860px; margin:-16px auto 70px; padding:0 16px; position:relative; z-index:2; }
+  .step { background:#fff; border:2px solid var(--gold); border-radius:18px; box-shadow:0 10px 34px rgba(0,0,0,0.12); padding:26px 26px 30px; margin-top:22px; }
+  .step-label { font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.2em; text-transform:uppercase; color:var(--gold); margin-bottom:4px; }
+  .step-title { font-family:'Cinzel Decorative',serif; font-size:1.3rem; color:var(--forest); margin-bottom:14px; }
+  .step-note { font-size:0.86rem; color:#6a6a50; line-height:1.65; margin:-6px 0 16px; }
+
+  /* ---- package cards ---- */
+  .pkg-group-title { font-family:'Cinzel',serif; font-size:0.78rem; letter-spacing:0.14em; text-transform:uppercase; font-weight:700; margin:18px 0 10px; }
+  .pkg-group-title.kids { color:var(--forest); }
+  .pkg-group-title.adults { color:var(--teal-dark); }
+  .pkg-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; }
+  .pkg-card { position:relative; display:block; cursor:pointer; }
+  .pkg-card input { position:absolute; opacity:0; pointer-events:none; }
+  .pkg-inner { border:2px solid #e4ddc9; border-radius:14px; padding:14px 16px; background:#fdfbf5; transition:border-color 0.15s, box-shadow 0.15s, transform 0.15s; height:100%; }
+  .pkg-card:hover .pkg-inner { transform:translateY(-2px); }
+  .pkg-card input:checked + .pkg-inner { border-color:var(--gold); box-shadow:0 0 0 3px rgba(201,151,58,0.25); background:#fffdf6; }
+  .pkg-card input:focus-visible + .pkg-inner { outline:3px solid var(--teal); outline-offset:2px; }
+  .pkg-name { font-family:'Cinzel',serif; font-weight:700; font-size:0.92rem; color:var(--dark); }
+  .pkg-price { font-family:'Cinzel Decorative',serif; font-size:1.25rem; color:var(--gold); margin:2px 0 6px; }
+  .pkg-desc { font-size:0.8rem; color:#55553f; line-height:1.55; }
+  .pkg-badge { display:inline-block; font-size:0.64rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; border-radius:40px; padding:3px 9px; margin-bottom:6px; }
+  .pkg-badge.kids { background:#e3f0e6; color:var(--forest); }
+  .pkg-badge.adults { background:#e0eef3; color:var(--teal-dark); }
+
+  /* ---- fields ---- */
+  .field-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; }
+  .field { display:flex; flex-direction:column; }
+  .field.full { grid-column:1 / -1; }
+  .field label { font-family:'Cinzel',serif; font-size:0.7rem; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:var(--forest); margin-bottom:6px; }
+  .field label .req { color:var(--maroon); }
+  .field input, .field select, .field textarea { border:1.5px solid #d8d0ba; border-radius:10px; padding:11px 12px; font-family:'Lato',sans-serif; font-size:0.92rem; background:#fff; color:var(--text); }
+  .field input:focus, .field select:focus, .field textarea:focus { outline:2px solid var(--gold); border-color:var(--gold); }
+  .field textarea { min-height:84px; resize:vertical; }
+  .hint { font-size:0.74rem; color:#8a8a6a; margin-top:5px; line-height:1.5; }
+
+  /* ---- add-ons ---- */
+  .addon { display:flex; gap:12px; align-items:flex-start; border:1.5px solid #e4ddc9; border-radius:12px; padding:13px 15px; margin-bottom:10px; background:#fdfbf5; cursor:pointer; transition:border-color 0.15s; }
+  .addon:hover { border-color:var(--gold); }
+  .addon input { margin-top:3px; width:17px; height:17px; accent-color:var(--forest); flex-shrink:0; cursor:pointer; }
+  .addon-name { font-family:'Cinzel',serif; font-weight:700; font-size:0.84rem; color:var(--dark); }
+  .addon-price { font-size:0.78rem; color:var(--gold); font-weight:700; margin-left:6px; }
+  .addon-desc { font-size:0.79rem; color:#55553f; line-height:1.55; margin-top:3px; }
+  .addon.kids-only[hidden] { display:none; }
+  .included-strip { background:linear-gradient(90deg,rgba(201,151,58,0.14),rgba(232,184,75,0.24),rgba(201,151,58,0.14)); border:1px solid var(--gold); border-radius:10px; padding:12px 16px; margin-bottom:16px; }
+  .included-strip strong { font-family:'Cinzel',serif; font-size:0.7rem; letter-spacing:0.1em; text-transform:uppercase; color:#8a6a1e; display:block; margin-bottom:4px; }
+  .included-strip p { font-size:0.8rem; color:#4a4a35; line-height:1.6; }
+
+  /* ---- submit ---- */
+  .submit-row { text-align:center; margin-top:26px; }
+  .submit-btn { display:inline-block; border:none; cursor:pointer; font-family:'Cinzel',serif; font-size:0.92rem; letter-spacing:0.06em; font-weight:700; padding:16px 42px; border-radius:50px;
+    background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); box-shadow:0 6px 20px rgba(201,151,58,0.45); transition:transform 0.18s, opacity 0.18s; }
+  .submit-btn:hover { transform:translateY(-2px); }
+  .submit-btn:disabled { opacity:0.55; cursor:wait; transform:none; }
+  .submit-note { font-size:0.78rem; color:#6a6a50; margin-top:12px; line-height:1.6; }
+  .form-msg { display:none; margin-top:18px; padding:14px 18px; border-radius:12px; font-size:0.9rem; line-height:1.6; }
+  .form-msg.err { display:block; background:#fbeaea; border:1.5px solid #c05050; color:#7a2431; }
+  .success-panel { display:none; background:#fff; border:2px solid var(--forest); border-radius:18px; box-shadow:0 10px 34px rgba(0,0,0,0.12); padding:38px 28px; margin-top:22px; text-align:center; }
+  .success-panel h2 { font-family:'Cinzel Decorative',serif; color:var(--forest); font-size:1.5rem; margin-bottom:12px; }
+  .success-panel p { font-size:0.94rem; color:#4a4a35; line-height:1.75; max-width:560px; margin:0 auto 10px; }
+  .success-panel .quote { font-style:italic; color:#5a5a45; border-left:3px solid var(--gold); padding-left:12px; display:inline-block; margin-top:10px; text-align:left; }
+
+  @media(max-width:480px){ .step { padding:20px 16px 24px; } }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+
+<div class="corner-nav">
+  <a class="nav-home" href="index.html">⌂ Home</a>
+  <a class="nav-book" href="booking.html">🎲 Book a Play Space</a>
+  <a class="nav-events" href="events.html">📅 Events</a>
+</div>
+
+<header class="bday-hero">
+  <img src="birthday-lockup.png" alt="Birthdays at the Haven">
+  <div class="hero-eyebrow">Celebrate With Us</div>
+  <h1 class="hero-h1">Book a Birthday Party</h1>
+  <p class="hero-sub">Pick your party, tell us about your crew, and we'll take it from there. Parties book <strong>any day — even outside normal business hours</strong>, bringing your own cake is always welcome at no charge, and every party includes the <strong>Party Float Kit</strong>. A Guru will confirm your date and details, then send a secure payment link to lock it in.</p>
+</header>
+
+<main class="form-wrap">
+  <form id="bday-form" novalidate>
+
+    <!-- STEP 1: PACKAGE -->
+    <section class="step">
+      <div class="step-label">Step 1</div>
+      <h2 class="step-title">Pick Your Party</h2>
+
+      <div class="pkg-group-title kids">Stash's Birthday Raft — Kids, ages ~5–12</div>
+      <div class="pkg-grid">
+        <label class="pkg-card">
+          <input type="radio" name="package" value="Pup Party ($149)" data-aud="kids" required>
+          <span class="pkg-inner">
+            <span class="pkg-badge kids">Kids</span>
+            <span class="pkg-name" style="display:block;">Pup Party</span>
+            <span class="pkg-price">$149</span>
+            <span class="pkg-desc" style="display:block;">Up to 10 kids · 3 hours · The Holt. Games taught &amp; run by your own Game Guru, Prize Wheel spins for every guest.</span>
+          </span>
+        </label>
+        <label class="pkg-card">
+          <input type="radio" name="package" value="Raft Deluxe ($249)" data-aud="kids">
+          <span class="pkg-inner">
+            <span class="pkg-badge kids">Kids</span>
+            <span class="pkg-name" style="display:block;">Raft Deluxe</span>
+            <span class="pkg-price">$249</span>
+            <span class="pkg-desc" style="display:block;">Up to 14 kids · 4 hours · Two rooms: The Holt for tabletop + Stash's Den for big-screen video games on retro &amp; modern consoles.</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="pkg-group-title adults">The After Dark — Adults 21+</div>
+      <div class="pkg-grid">
+        <label class="pkg-card">
+          <input type="radio" name="package" value="Den Party ($179)" data-aud="adults">
+          <span class="pkg-inner">
+            <span class="pkg-badge adults">21+</span>
+            <span class="pkg-name" style="display:block;">Den Party</span>
+            <span class="pkg-price">$179</span>
+            <span class="pkg-desc" style="display:block;">Two rooms + the back deck. Stash's Den: big-screen video games, karaoke, and high-energy bar-height party games. Connected game room: 4-player table, your own custom premium Crokinole board with the full accessory kit — billiards discs &amp; cues plus card-game expansions — and a Mahjong set. Back deck: rocking chairs, 4-player tables, and river views.</span>
+          </span>
+        </label>
+        <label class="pkg-card">
+          <input type="radio" name="package" value="Dungeon Crawl ($199)" data-aud="adults">
+          <span class="pkg-inner">
+            <span class="pkg-badge adults">21+</span>
+            <span class="pkg-name" style="display:block;">Dungeon Crawl</span>
+            <span class="pkg-price">$199</span>
+            <span class="pkg-desc" style="display:block;">The Depths + The Holt. Underground dungeon with private bar and retro tournament brackets — The Holt keeps restrooms and the main level in reach even after hours.</span>
+          </span>
+        </label>
+        <label class="pkg-card">
+          <input type="radio" name="package" value="Birthday One-Shot ($249)" data-aud="adults">
+          <span class="pkg-inner">
+            <span class="pkg-badge adults">21+</span>
+            <span class="pkg-name" style="display:block;">Birthday One-Shot</span>
+            <span class="pkg-price">$249</span>
+            <span class="pkg-desc" style="display:block;">A Guru-run adventure one-shot at our premium table — where YOU are the hero of the story.</span>
+          </span>
+        </label>
+        <label class="pkg-card">
+          <input type="radio" name="package" value="Full Haven Takeover (from $449)" data-aud="adults">
+          <span class="pkg-inner">
+            <span class="pkg-badge adults">21+</span>
+            <span class="pkg-name" style="display:block;">Full Haven Takeover</span>
+            <span class="pkg-price">from $449</span>
+            <span class="pkg-desc" style="display:block;">The whole Haven: The Depths + The Holt + Stash's Den, plus an overnight suite upstairs. The ultimate takeover.</span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <!-- STEP 2: PARTY DETAILS -->
+    <section class="step">
+      <div class="step-label">Step 2</div>
+      <h2 class="step-title">Party Details</h2>
+      <div class="field-grid">
+        <div class="field">
+          <label for="f-date">Preferred date <span class="req">*</span></label>
+          <input type="date" id="f-date" name="date" required>
+        </div>
+        <div class="field">
+          <label for="f-time">Preferred start time <span class="req">*</span></label>
+          <input type="time" id="f-time" name="time" required>
+          <div class="hint">Any day works — even outside normal business hours.</div>
+        </div>
+        <div class="field">
+          <label for="f-guests">Estimated guest count <span class="req">*</span></label>
+          <input type="number" id="f-guests" name="guests" min="1" max="60" required>
+        </div>
+        <div class="field">
+          <label for="f-hero">Birthday hero's name</label>
+          <input type="text" id="f-hero" name="heroName" maxlength="80" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="f-age">Turning age</label>
+          <input type="number" id="f-age" name="heroAge" min="1" max="120">
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 3: ADD-ONS -->
+    <section class="step">
+      <div class="step-label">Step 3</div>
+      <h2 class="step-title">Add-Ons &amp; Extras</h2>
+
+      <div class="included-strip">
+        <strong>🍦 Included with every party</strong>
+        <p>Party Float Kit — root beer, a bucket of ice cream, and all the provisions. Raid the craft soda bar to invent your own custom float. BYO cake is always welcome at no charge.</p>
+      </div>
+
+      <label class="addon">
+        <input type="checkbox" name="addons" value="Karaoke equipment (included — no extra deposit)">
+        <span>
+          <span class="addon-name">Karaoke Equipment</span><span class="addon-price">Included</span>
+          <span class="addon-desc" style="display:block;">Full karaoke rig with mics. No extra deposit for birthday party reservations.</span>
+        </span>
+      </label>
+
+      <label class="addon">
+        <input type="checkbox" name="addons" value="Pro Photo Session ($50)">
+        <span>
+          <span class="addon-name">Pro Photo Session</span><span class="addon-price">$50</span>
+          <span class="addon-desc" style="display:block;">Professional photos of the party — digitals plus up to 10 pro-edited shots, including green-screen composites with Stash and fantasy backdrops.</span>
+        </span>
+      </label>
+
+      <label class="addon">
+        <input type="checkbox" name="addons" value="Fidget Forge upgrade ($10/person, birthday hero free with 8+ guests)">
+        <span>
+          <span class="addon-name">Fidget Forge Upgrade</span><span class="addon-price">$10/person · 50% off</span>
+          <span class="addon-desc" style="display:block;">Every guest builds their own custom clicker kit at The Fidget Forge. Birthday hero builds FREE with 8+ guests. Give us 3+ days notice and we'll pre-stock your custom colors.</span>
+        </span>
+      </label>
+
+      <label class="addon kids-only" id="addon-bounce">
+        <input type="checkbox" name="addons" value="FREE bounce house (weather permitting, ages ~12 and under)">
+        <span>
+          <span class="addon-name">Bounce House</span><span class="addon-price">FREE</span>
+          <span class="addon-desc" style="display:block;">Set up outside with a Guru supervising — weather permitting. Kids' parties only, ages ~12 and under.</span>
+        </span>
+      </label>
+
+      <label class="addon kids-only" id="addon-quest">
+        <input type="checkbox" name="addons" value="Scavenger Quest with Stash (included on request)">
+        <span>
+          <span class="addon-name">Scavenger Quest with Stash</span><span class="addon-price">Included</span>
+          <span class="addon-desc" style="display:block;">A clue trail through the whole Haven, ending at the Cache. Just ask and we'll run it.</span>
+        </span>
+      </label>
+
+      <label class="addon">
+        <input type="checkbox" name="addons" value="Interested in overnight stay (The Lodge / Adventurer's Rest — booked separately via VRBO)">
+        <span>
+          <span class="addon-name">Keep It Going Overnight</span><span class="addon-price">via VRBO</span>
+          <span class="addon-desc" style="display:block;">Interested in a stay in The Lodge or The Adventurer's Rest? Premium game room, full kitchen, fully-equipped private bar, and your own river deck. Booked separately through VRBO — check this box and we'll send you the details.</span>
+        </span>
+      </label>
+    </section>
+
+    <!-- STEP 4: GAME REQUESTS -->
+    <section class="step">
+      <div class="step-label">Step 4</div>
+      <h2 class="step-title">Game Requests</h2>
+      <p class="step-note">Tell us your favorites and we'll have them set up and ready when you arrive — pulled from 10,000+ titles across the board game library and the console vault.</p>
+      <div class="field-grid">
+        <div class="field full">
+          <label for="f-vg">Video game requests</label>
+          <textarea id="f-vg" name="videoGames" maxlength="600" placeholder="Specific titles, consoles, or eras — retro or modern."></textarea>
+        </div>
+        <div class="field full">
+          <label for="f-bg">Board &amp; tabletop game requests</label>
+          <textarea id="f-bg" name="boardGames" maxlength="600" placeholder="Specific board games, card games, or party games you'd love on the table."></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 5: CONTACT -->
+    <section class="step">
+      <div class="step-label">Step 5</div>
+      <h2 class="step-title">Your Info</h2>
+      <div class="field-grid">
+        <div class="field">
+          <label for="f-name">Your name <span class="req">*</span></label>
+          <input type="text" id="f-name" name="name" maxlength="120" required autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="f-email">Email <span class="req">*</span></label>
+          <input type="email" id="f-email" name="email" maxlength="160" required autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="f-phone">Phone</label>
+          <input type="tel" id="f-phone" name="phone" maxlength="30" autocomplete="tel">
+        </div>
+        <div class="field full">
+          <label for="f-notes">Anything else we should know?</label>
+          <textarea id="f-notes" name="notes" maxlength="1000" placeholder="Themes, allergies, surprises, custom Fidget Forge colors, timing quirks — anything at all."></textarea>
+        </div>
+      </div>
+      <!-- honeypot -->
+      <div style="position:absolute;left:-9999px;" aria-hidden="true">
+        <label>Leave this field empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+      </div>
+
+      <div class="submit-row">
+        <button type="submit" class="submit-btn" id="submit-btn">🎂 Request My Party</button>
+        <p class="submit-note">No payment due yet. We'll confirm availability and reply within one business day with a secure payment link to lock in your date.</p>
+      </div>
+      <div class="form-msg err" id="form-err" role="alert"></div>
+    </section>
+  </form>
+
+  <div class="success-panel" id="success-panel">
+    <h2>🎉 Request Received!</h2>
+    <p>Your party request is in the Guru queue. We'll confirm your date and details by email within one business day, along with a secure payment link to lock it in.</p>
+    <p>A confirmation copy is on its way to your inbox now.</p>
+    <p class="quote">"I never forget a birthday. Mostly because there's cake." — Stash the Otter</p>
+  </div>
+</main>
+
+<script>
+(function () {
+  var form = document.getElementById('bday-form');
+  var errBox = document.getElementById('form-err');
+  var btn = document.getElementById('submit-btn');
+  var kidsOnly = document.querySelectorAll('.addon.kids-only');
+
+  // Date can't be in the past.
+  var d = new Date();
+  var iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  document.getElementById('f-date').setAttribute('min', iso);
+
+  // Show kids-only add-ons only for kids packages (bounce house is ages ~12 & under — not for adult parties).
+  function syncAddons() {
+    var sel = form.querySelector('input[name="package"]:checked');
+    var isKids = !!sel && sel.getAttribute('data-aud') === 'kids';
+    kidsOnly.forEach(function (el) {
+      if (isKids) { el.removeAttribute('hidden'); }
+      else {
+        el.setAttribute('hidden', '');
+        var cb = el.querySelector('input[type="checkbox"]');
+        if (cb) cb.checked = false;
+      }
+    });
+  }
+  form.querySelectorAll('input[name="package"]').forEach(function (r) {
+    r.addEventListener('change', syncAddons);
+  });
+  syncAddons();
+
+  function showErr(msg) {
+    errBox.textContent = msg;
+    errBox.classList.add('err');
+    errBox.style.display = 'block';
+    errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    errBox.style.display = 'none';
+
+    var pkg = form.querySelector('input[name="package"]:checked');
+    if (!pkg) { showErr('Please pick a party package (Step 1).'); return; }
+
+    var required = [
+      ['f-date', 'Please choose a preferred date.'],
+      ['f-time', 'Please choose a preferred start time.'],
+      ['f-guests', 'Please estimate your guest count.'],
+      ['f-name', 'Please enter your name.'],
+      ['f-email', 'Please enter your email.']
+    ];
+    for (var i = 0; i < required.length; i++) {
+      var el = document.getElementById(required[i][0]);
+      if (!el.value || !el.checkValidity()) { showErr(required[i][1]); el.focus(); return; }
+    }
+
+    var addons = [];
+    form.querySelectorAll('input[name="addons"]:checked').forEach(function (cb) { addons.push(cb.value); });
+
+    var payload = {
+      package: pkg.value,
+      audience: pkg.getAttribute('data-aud'),
+      date: document.getElementById('f-date').value,
+      time: document.getElementById('f-time').value,
+      guests: document.getElementById('f-guests').value,
+      heroName: document.getElementById('f-hero').value.trim(),
+      heroAge: document.getElementById('f-age').value,
+      addons: addons,
+      videoGames: document.getElementById('f-vg').value.trim(),
+      boardGames: document.getElementById('f-bg').value.trim(),
+      name: document.getElementById('f-name').value.trim(),
+      email: document.getElementById('f-email').value.trim(),
+      phone: document.getElementById('f-phone').value.trim(),
+      notes: document.getElementById('f-notes').value.trim(),
+      website: form.querySelector('input[name="website"]').value  // honeypot
+    };
+
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    fetch('/api/birthday', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (res) {
+      if (!res.ok) return res.json().then(function (j) { throw new Error(j && j.error ? j.error : 'Request failed'); });
+      return res.json();
+    }).then(function () {
+      form.style.display = 'none';
+      var ok = document.getElementById('success-panel');
+      ok.style.display = 'block';
+      ok.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }).catch(function (err) {
+      btn.disabled = false;
+      btn.textContent = '🎂 Request My Party';
+      showErr('Something went wrong sending your request — please try again, or call/text us at 715-379-4946. (' + err.message + ')');
+    });
+  });
+})();
+</script>
+</body>
+</html>
