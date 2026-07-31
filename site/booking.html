@@ -1668,13 +1668,14 @@ async function approve(id){
       return;
     }
     if(_evCancel.length){
-      if(!confirm("🗓️ This request overlaps occurrence(s) of recurring NGH event(s):\n\n"+_evCancel.map(function(x){ return "• "+x.date+" · "+roomName(x.c.room)+": "+x.c.label+" ("+x.c.win+")"; }).join("\n")+"\n\nApprove the booking AND cancel those occurrence(s)?\n\nCanceled occurrences become series exceptions — review or restore them anytime via 🔁 Review instances on each event's card. No automatic emails are sent; if anyone registered for a canceled occurrence, handle them via View registrants.\n\nOK = approve & cancel occurrence(s) · Cancel = don't approve")) return;
+      if(!confirm("🗓️ This request overlaps occurrence(s) of recurring NGH event(s):\n\n"+_evCancel.map(function(x){ return "• "+x.date+" · "+roomName(x.c.room)+": "+x.c.label+" ("+x.c.win+")"; }).join("\n")+"\n\nApprove the booking AND cancel those occurrence(s)?\n\nCanceled occurrences become series exceptions — review or restore them anytime via 🔁 Review instances on each event's card. 📧 Anyone registered for a canceled occurrence is AUTOMATICALLY canceled, refunded (online payments), and emailed by the system; you'll get a summary email of who was affected.\n\nOK = approve & cancel occurrence(s) · Cancel = don't approve")) return;
       var _byP={};
       _evCancel.forEach(function(x){ var g=(_byP[x.p.id]=_byP[x.p.id]||{p:x.p,dates:[]}); if(g.dates.indexOf(x.date)<0) g.dates.push(x.date); });
       for(var _k in _byP){
         var _pe=_byP[_k].p, _pu=Object.assign({}, _pe);
         _pu.exceptions=(_pe.exceptions||[]).slice();
         _byP[_k].dates.forEach(function(d2){ if(_pu.exceptions.indexOf(d2)<0) _pu.exceptions.push(d2); });
+        _pu.__change={kind:"bump", dates:_byP[_k].dates.slice()};   // server auto-notifies + refunds registrants
         try{ await Store.saveEvent(_pu); }
         catch(_cerr){ alert("Couldn't cancel an occurrence of \""+(_pe.title||_pe.id)+"\": "+((_cerr&&_cerr.message)||_cerr)+"\n\nStopping — the booking was NOT approved. Resolve via 🧹 De-conflict and try again."); await refreshCache(); return; }
       }
@@ -2201,14 +2202,15 @@ function instancesHTML(id){
     }
     h+='</div>';
   });
-  h+='<p class="hint" style="margin:8px 0 0;">Canceling or changing a single date never touches the rest of the series. No automatic emails are sent — if people registered for a changed or canceled date, handle them from 👥 View registrants.</p></div>';
+  h+='<p class="hint" style="margin:8px 0 0;">Canceling or changing a single date never touches the rest of the series. 📧 The system automatically emails registrants on a canceled or changed date (cancel = auto-cancel + refund of online payments; change = "updated details" notice), and emails you a summary. Restoring a date invites previously-canceled registrants to re-register.</p></div>';
   return h;
 }
 async function cancelOccurrence(id, ds){
   var e=_evById(id); if(!e) return;
-  if(!confirm("Cancel ONLY "+ds+" of \""+(e.title||"this event")+"\"?\n\nThe rest of the series is untouched. No automatic email is sent — if anyone registered for this date, contact or refund them via View registrants.")) return;
+  if(!confirm("Cancel ONLY "+ds+" of \""+(e.title||"this event")+"\"?\n\nThe rest of the series is untouched. 📧 Anyone registered for this date is AUTOMATICALLY canceled, refunded (online payments), and emailed by the system — you'll get a summary email of who was affected.")) return;
   var upd=Object.assign({}, e); upd.exceptions=(e.exceptions||[]).slice();
   if(upd.exceptions.indexOf(ds)<0) upd.exceptions.push(ds);
+  upd.__change={kind:"cancel-occurrence", dates:[ds]};   // server auto-notifies + refunds registrants
   try{ await Store.saveEvent(upd); }catch(err){ alert("Couldn't cancel: "+((err&&err.message)||err)); return; }
   _refreshInstances(id);
 }
@@ -2217,6 +2219,7 @@ async function restoreOccurrence(id, ds){
   var clash=null; cache.events.forEach(function(x){ if(x.detachedFrom===id && x.date===ds) clash=x; });
   if(clash){ alert("This date was modified into its own event ("+clash.id+"). Delete that event first if you want the original series slot back."); return; }
   var upd=Object.assign({}, e); upd.exceptions=(e.exceptions||[]).filter(function(x){ return x!==ds; });
+  upd.__change={kind:"restore-occurrence", dates:[ds]};   // server invites prior registrants to re-register
   try{ await Store.saveEvent(upd); }catch(err){ alert("Couldn't restore: "+((err&&err.message)||err)); return; }
   _refreshInstances(id);
 }
@@ -2244,11 +2247,12 @@ async function occTimeApply(id, ds){
   var si=$("occts-"+id+"-"+ds), ei=$("occte-"+id+"-"+ds), di=$("occtd-"+id+"-"+ds);
   var ns=si?si.value:"", ne=ei?ei.value:"", nd=(di&&di.value)?di.value:ds;
   if(!ns||!ne){ alert("Set both a start and end time."); return; }
-  if(!confirm("Change ONLY "+ds+" to "+(nd!==ds?(nd+" · "):"")+fmtTime(timeToMins(ns))+" \u2013 "+fmtTime(timeToMins(ne))+"?\n\nThis date becomes its own event; the series keeps its normal time. If people already registered for this date, their registrations stay under the original event — check View registrants on both.")) return;
+  if(!confirm("Change ONLY "+ds+" to "+(nd!==ds?(nd+" · "):"")+fmtTime(timeToMins(ns))+" \u2013 "+fmtTime(timeToMins(ne))+"?\n\nThis date becomes its own event; the series keeps its normal time. 📧 Registrants on this date are automatically emailed the updated details (their registrations stay under the original event — check View registrants on both).")) return;
   var note=(e.occNotes||{})[ds];
   var parent=Object.assign({}, e);
   parent.exceptions=(e.exceptions||[]).slice();
   if(parent.exceptions.indexOf(ds)<0) parent.exceptions.push(ds);
+  parent.__change={kind:"detach", fromDate:ds, date:nd, start:ns, end:ne};   // server emails registrants the new details
   if(note){ parent.occNotes=Object.assign({}, e.occNotes); delete parent.occNotes[ds]; }
   var solo=Object.assign({}, e, { id:undefined, date:nd, start:ns, end:ne, recurrence:null, groupId:null, exceptions:[], detachedFrom:e.id });
   delete solo.occNotes;
@@ -2782,6 +2786,11 @@ async function saveEvent(){
   var offsite = !!($("ev-offsite") && $("ev-offsite").checked);
   var offsiteLocation = ($("ev-offsite-loc") && $("ev-offsite-loc").value.trim()) || "";
   if(offsite) rooms=[];   // offsite events never hold NGH rooms
+  // Room-holding trap guard (SOP §6.2): NO rooms checked = the WHOLE VENUE is
+  // held. Make that a deliberate choice, never an accident.
+  if(!offsite && rooms.length===0){
+    if(!confirm("🏠 WHOLE-VENUE HOLD — no rooms are checked, so this event will hold ALL rooms (The Holt, Stash's Den AND The Depths) for its entire window"+(($("ev-publish")&&$("ev-publish").checked)?"":" — drafts hold rooms too")+".\n\nIs a whole-venue hold what you intend?\n\nOK = yes, hold the whole venue · Cancel = go back and pick specific rooms")) return;
+  }
   var photo = $("ev-photo-url").value.trim() || evPhotoData || "";
   var tournament = {
     type:$("ev-ttype").value, rounds:$("ev-rounds").value, winsPerRound:$("ev-wins").value,
@@ -2826,7 +2835,7 @@ async function saveEvent(){
           alert("🔴 Can't save — this LIMITED event conflicts with "+(_hardLtd?"other limited event(s)":"item(s) that can't be auto-canceled (limited/one-time events, customer bookings)")+":\n\n"+_hard.map(function(c){ return "• "+c.date+" · "+roomName(c.room)+": "+c.label+" ("+c.win+")"; }).join("\n")+"\n\nDe-conflict those dates/times/rooms first (🧹 De-conflict in the calendar), then publish this event."+(_cancellable.length?"\n\nNothing was canceled — the recurring occurrence(s) in this conflict were left untouched.":""));
           return;
         }
-        if(!confirm("🔴 This limited event conflicts with occurrence(s) of recurring events:\n\n"+_redMsg+"\n\nCancel those occurrence(s) and save this event?\n\nCanceled occurrences become series exceptions — review or restore them anytime via 🔁 Review instances on each event's card. No automatic emails are sent; if anyone registered for a canceled occurrence, handle them via View registrants.\n\nOK = cancel those occurrences & save · Cancel = don't save")) return;
+        if(!confirm("🔴 This limited event conflicts with occurrence(s) of recurring events:\n\n"+_redMsg+"\n\nCancel those occurrence(s) and save this event?\n\nCanceled occurrences become series exceptions — review or restore them anytime via 🔁 Review instances on each event's card. 📧 Anyone registered for a canceled occurrence is AUTOMATICALLY canceled, refunded (online payments), and emailed by the system; you'll get a summary email of who was affected.\n\nOK = cancel those occurrences & save · Cancel = don't save")) return;
         var _byParent={};
         _cancellable.forEach(function(x){
           var _g=(_byParent[x.pid]=_byParent[x.pid]||{dates:[]});
@@ -2837,6 +2846,7 @@ async function saveEvent(){
           var _pu=Object.assign({}, _pe);
           _pu.exceptions=(_pe.exceptions||[]).slice();
           _byParent[_pid].dates.forEach(function(d2){ if(_pu.exceptions.indexOf(d2)<0) _pu.exceptions.push(d2); _canceledKeys[_pid+"|"+d2]=1; });
+          _pu.__change={kind:"bump", dates:_byParent[_pid].dates.slice()};   // server auto-notifies + refunds registrants
           try{ await Store.saveEvent(_pu); }
           catch(_cerr){ alert("Couldn't cancel an occurrence of \""+(_pe.title||_pid)+"\": "+((_cerr&&_cerr.message)||_cerr)+"\n\nStopping here — resolve manually (🧹 De-conflict) and try again."); await refreshCache(); return; }
         }
@@ -2904,6 +2914,7 @@ async function saveEvent(){
         ev.date = orig.date;                  // series anchor stays
         ev.groupId = orig.groupId || ("EVGRP-"+genId());
         ev.exceptions = (orig.exceptions||[]).concat((ev.exceptions||[]).filter(function(d){ return (orig.exceptions||[]).indexOf(d)<0; }));
+        if(_skipDates.length) ev.__change={kind:"cancel-occurrence", dates:_skipDates.slice()};   // server auto-notifies + refunds registrants on skipped dates
         await Store.saveEvent(ev);
       } else if(scope==="following"){
         // Split: truncate the original series to end before this occurrence,
@@ -2915,6 +2926,7 @@ async function saveEvent(){
         var origUpd = Object.assign({}, orig);
         if(keep.length<=1){ origUpd.recurrence=null; } // only the anchor remains
         else { origUpd.recurrence = { freq:orig.recurrence.freq, count:keep.length, mode:orig.recurrence.mode }; }
+        origUpd.__change={kind:"series-split", splitDate:splitDate};   // server notifies registrants from the split date on + emails you a follow-up list
         await Store.saveEvent(origUpd);
         // new series from split date onward
         var remaining = occ.filter(function(d){ return d >= splitDate; }).length;
@@ -2927,6 +2939,7 @@ async function saveEvent(){
         var parent = Object.assign({}, orig);
         parent.exceptions = (parent.exceptions||[]).slice();
         if(parent.exceptions.indexOf(ev.date)<0) parent.exceptions.push(ev.date);
+        parent.__change={kind:"detach", fromDate:ev.date, date:ev.date, start:ev.start, end:ev.end};   // server emails registrants the updated details
         await Store.saveEvent(parent);
         // standalone single occurrence with the edits
         ev.id=undefined; ev.recurrence=null; ev.groupId=null; ev.exceptions=[]; ev.detachedFrom=orig.id;
@@ -2982,7 +2995,7 @@ async function deleteEvent(id){
     try {
       var regs=await Store.registrations();
       var active=(regs||[]).filter(function(r){ return r.eventId===id && r.status!=="canceled"; });
-      if(active.length){ var _ppl=active.reduce(function(n,r){ return n+Math.max(1,parseInt(r.qty,10)||1); },0); warn="⚠️ \""+title+"\" has "+_ppl+" active registrant"+(_ppl>1?"s":"")+".\n\nDeleting it will remove the event and those people will NOT be automatically notified. Consider emailing them first.\n\nDelete anyway? This cannot be undone."; }
+      if(active.length){ var _ppl=active.reduce(function(n,r){ return n+Math.max(1,parseInt(r.qty,10)||1); },0); warn="⚠️ \""+title+"\" has "+_ppl+" active registrant"+(_ppl>1?"s":"")+".\n\n📧 Deleting it AUTOMATICALLY cancels every registration, refunds online payments, and emails each registrant that the event is canceled. You'll get a summary email of who was affected.\n\nDelete and auto-notify everyone? This cannot be undone."; }
     } catch(_){}
   }
   if(!confirm(warn)) return;
