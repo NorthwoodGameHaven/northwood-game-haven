@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>🦦 Guru Hub — Northwood Game Haven (staff)</title>
+<link rel="icon" href="logo.png">
+<style>
+  :root{ --forest:#2d5a3d; --deep:#1c3a26; --gold:#c79a3b; --ink:#22301f; --paper:#f4f1e8; --card:#ffffff; --red:#9a2b2b; --teal:#1488a6; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--paper); color:var(--ink); font-family:Georgia,'Times New Roman',serif; }
+  .wrap{ max-width:1100px; margin:0 auto; padding:18px 16px 60px; }
+  header.hub{ text-align:center; padding:18px 0 6px; }
+  header.hub .kicker{ letter-spacing:.35em; font-size:12px; color:var(--gold); text-transform:uppercase; }
+  header.hub h1{ margin:6px 0 4px; color:var(--forest); font-size:34px; }
+  header.hub p{ margin:0; color:#6b6b5a; font-size:14px; }
+  .card{ background:var(--card); border:1px solid #e2dcc8; border-radius:14px; padding:18px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+  /* login */
+  #login{ max-width:400px; margin:40px auto; text-align:center; }
+  #login input{ width:100%; padding:12px 14px; font-size:16px; border:1px solid #cfc9b4; border-radius:10px; margin:10px 0; font-family:inherit; }
+  .btn{ display:inline-block; cursor:pointer; border:0; border-radius:26px; padding:11px 22px; font-family:inherit; font-size:15px; font-weight:bold; background:var(--gold); color:#1a1a12; text-decoration:none; }
+  .btn.ghost{ background:#fff; color:var(--forest); border:2px solid #cfe0d4; }
+  .btn.small{ padding:6px 12px; font-size:13px; border-radius:18px; }
+  #login-err{ color:var(--red); font-size:14px; min-height:18px; }
+  /* stats */
+  .stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:16px 0; }
+  .stat{ background:var(--card); border:1px solid #e2dcc8; border-radius:14px; padding:14px; text-align:center; }
+  .stat .n{ font-size:30px; font-weight:bold; color:var(--forest); }
+  .stat .n.alert{ color:var(--red); }
+  .stat .l{ font-size:12.5px; color:#6b6b5a; margin-top:2px; }
+  /* tiles */
+  .tiles{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; margin:8px 0 26px; }
+  a.tile{ display:block; text-decoration:none; color:inherit; background:var(--card); border:1px solid #e2dcc8; border-left:5px solid var(--forest); border-radius:12px; padding:14px 16px; transition:transform .08s ease; }
+  a.tile:hover{ transform:translateY(-2px); }
+  a.tile .t{ font-weight:bold; color:var(--forest); font-size:16px; }
+  a.tile .d{ font-size:13px; color:#6b6b5a; margin-top:4px; line-height:1.45; }
+  h2.sec{ color:var(--forest); border-bottom:2px solid var(--gold); padding-bottom:6px; margin:30px 0 14px; font-size:22px; }
+  /* birthday cards */
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 16px; }
+  .chip{ cursor:pointer; border:1px solid #cfc9b4; background:#fff; border-radius:20px; padding:6px 14px; font-family:inherit; font-size:13.5px; }
+  .chip.on{ background:var(--forest); color:#fff; border-color:var(--forest); }
+  .bd{ margin-bottom:14px; border-left:5px solid var(--gold); }
+  .bd.st-new{ border-left-color:var(--red); }
+  .bd.st-contacted{ border-left-color:var(--gold); }
+  .bd.st-confirmed{ border-left-color:var(--forest); }
+  .bd.st-declined, .bd.st-archived{ border-left-color:#999; opacity:.8; }
+  .bd .head{ display:flex; flex-wrap:wrap; gap:8px; align-items:baseline; }
+  .bd .head b{ font-size:17px; color:var(--forest); }
+  .badge{ font-size:12px; padding:3px 10px; border-radius:14px; background:#eee; }
+  .badge.new{ background:#f6dcd7; color:var(--red); font-weight:bold; }
+  .badge.contacted{ background:#f3e8c8; color:#7a5a10; }
+  .badge.confirmed{ background:#dcebe0; color:var(--forest); font-weight:bold; }
+  .badge.declined,.badge.archived{ background:#e4e4e4; color:#666; }
+  .bd .meta{ font-size:14px; margin:8px 0; line-height:1.65; }
+  .bd .meta .lbl{ color:#8a8a75; }
+  .bd details{ font-size:13.5px; margin:6px 0; }
+  .bd textarea{ width:100%; min-height:54px; font-family:inherit; font-size:13.5px; border:1px solid #cfc9b4; border-radius:8px; padding:8px; }
+  .bd .actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; align-items:center; }
+  .muted{ color:#8a8a75; font-size:13px; }
+  #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hub">
+    <div class="kicker">Staff Only</div>
+    <h1>🦦 Guru Hub</h1>
+    <p>One login, every tool — bookings, events, schedules, radar, birthdays, and the door.</p>
+  </header>
+
+  <!-- ============ LOGIN ============ -->
+  <div id="login" class="card hidden">
+    <h2 style="color:var(--forest);margin:4px 0 2px;">Guru sign-in</h2>
+    <p class="muted">One sign-in works across every staff page for 12 hours.</p>
+    <input id="admin-code" type="password" placeholder="Admin code" autocomplete="current-password">
+    <div id="login-err"></div>
+    <button class="btn" onclick="doLogin()">Sign In</button>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div id="app" class="hidden">
+
+    <div class="stats" id="stats"></div>
+
+    <div class="tiles">
+      <a class="tile" href="booking.html?admin=1">
+        <div class="t">📋 Booking Console</div>
+        <div class="d">Review room requests · approve / hold / reject · payments, deposits, door codes, blackouts</div>
+      </a>
+      <a class="tile" href="booking.html?admin=1">
+        <div class="t">🎉 Public Events</div>
+        <div class="d">Create &amp; edit events (strategy scoring gate) · registrants · publish · share to social</div>
+      </a>
+      <a class="tile" href="guru-schedule.html">
+        <div class="t">📅 Guru Schedule</div>
+        <div class="d">Who hosts what · store shifts · unavailability · deconflict audit · calendar feeds</div>
+      </a>
+      <a class="tile" href="guru-radar.html">
+        <div class="t">🎯 Guru Radar</div>
+        <div class="d">External events of interest — watch, consider, commit, convert to an NGH event</div>
+      </a>
+      <a class="tile" href="#birthdays" onclick="document.getElementById('birthdays').scrollIntoView({behavior:'smooth'});return false;">
+        <div class="t">🎂 Birthday Requests</div>
+        <div class="d">Review party requests, track contact status, link them to bookings</div>
+      </a>
+      <a class="tile" href="checkin.html">
+        <div class="t">🎟️ Event Check-In</div>
+        <div class="d">Scan ticket QR codes at the door · walk-ins · paid / unpaid flags</div>
+      </a>
+      <a class="tile" href="events.html" target="_blank" rel="noopener">
+        <div class="t">🗓️ Public Calendar</div>
+        <div class="d">What customers see — event popups, registration, share links (opens in a new tab)</div>
+      </a>
+      <a class="tile" href="booking.html" target="_blank" rel="noopener">
+        <div class="t">🛏️ Customer Booking Page</div>
+        <div class="d">The public room-booking flow (opens in a new tab)</div>
+      </a>
+    </div>
+
+    <!-- ============ BIRTHDAY REQUESTS ============ -->
+    <h2 class="sec" id="birthdays">🎂 Birthday Requests</h2>
+    <p class="muted">Requests land here the moment the customer submits the form (they also still arrive by email).
+      Flow: <b>New → Contacted → Confirmed</b> (or Declined). Confirming a date? <b>Create the booking in the console too</b> — that is what actually holds the room; paste the booking ID back here so the two stay linked.</p>
+    <div class="chips" id="bd-chips"></div>
+    <div id="bd-list"><p class="muted">Loading…</p></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="guru-common.js"></script>
+<script>
+var API = "/.netlify/functions";
+var BD_STATUSES = ["new","contacted","confirmed","declined","archived"];
+var bdFilter = "active";  // active = new+contacted+confirmed
+var bdData = [];
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function toast(m){ var t=$("toast"); t.textContent=m; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(function(){t.style.display="none";},2400); }
+
+async function api(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({ "Content-Type":"application/json" }, GuruAuth.headers(), opts.headers||{});
+  var res = await fetch(API + path, opts);
+  if(res.status === 401){ GuruAuth.clear(); showLogin(); throw new Error("Session expired — sign in again."); }
+  if(!res.ok){ var e; try{ e=await res.json(); }catch(_){ e={}; } throw new Error(e.error || ("API "+res.status)); }
+  return res.status === 204 ? null : res.json();
+}
+
+/* ---------- auth ---------- */
+function showLogin(){ $("login").classList.remove("hidden"); $("app").classList.add("hidden"); }
+function showApp(){ $("login").classList.add("hidden"); $("app").classList.remove("hidden"); }
+async function doLogin(){
+  var code = $("admin-code").value.trim();
+  var err = $("login-err"); err.textContent = "";
+  if(!code){ err.textContent = "Enter the admin code."; return; }
+  try{
+    var r = await fetch(API + "/admin-login", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ code:code }) });
+    var j = await r.json().catch(function(){ return {}; });
+    if(j && j.token){ GuruAuth.set(j.token); $("admin-code").value=""; boot(); }
+    else{ err.textContent = "That code didn't work."; }
+  }catch(e){ err.textContent = "Login failed — try again."; }
+}
+$("admin-code").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
+
+/* ---------- dashboard counts ---------- */
+function stat(n, label, alert){
+  return '<div class="stat"><div class="n'+(alert?' alert':'')+'">'+n+'</div><div class="l">'+label+'</div></div>';
+}
+async function loadStats(){
+  var out = [];
+  try{
+    var bk = await api("/bookings");
+    var list = (bk && bk.bookings) || bk || [];
+    var pending = list.filter(function(b){ var s=(b.status||"").toLowerCase(); return s==="pending"||s==="hold"; }).length;
+    out.push(stat(pending, "Booking requests to review", pending>0));
+  }catch(e){ out.push(stat("–","Booking requests")); }
+  try{
+    var bd = await api("/birthday");
+    bdData = (bd && bd.requests) || [];
+    var fresh = bdData.filter(function(r){ return r.status==="new"; }).length;
+    out.push(stat(fresh, "New birthday requests", fresh>0));
+  }catch(e){ out.push(stat("–","Birthday requests")); }
+  try{
+    var ie = await api("/interest-events");
+    var items = (ie && ie.items) || ie || [];
+    var act = items.filter(function(i){ return i.status==="committed" || i.status==="considering"; }).length;
+    out.push(stat(act, "Radar: considering / committed"));
+  }catch(e){ out.push(stat("–","Radar items")); }
+  try{
+    var ev = await api("/events");
+    var evs = (ev && ev.events) || ev || [];
+    var live = evs.filter(function(e){ return e.status!=="draft"; }).length;
+    var drafts = evs.filter(function(e){ return e.status==="draft"; }).length;
+    out.push(stat(live, "Live events on calendar"));
+    out.push(stat(drafts, "Draft events (still hold rooms!)", drafts>0));
+  }catch(e){ out.push(stat("–","Events")); }
+  $("stats").innerHTML = out.join("");
+  renderBirthdays();
+}
+
+/* ---------- birthday review ---------- */
+function bdCounts(){
+  var c = { active:0 };
+  BD_STATUSES.forEach(function(s){ c[s]=0; });
+  bdData.forEach(function(r){
+    var s = r.status || "new"; c[s] = (c[s]||0)+1;
+    if(s==="new"||s==="contacted"||s==="confirmed") c.active++;
+  });
+  return c;
+}
+function renderChips(){
+  var c = bdCounts();
+  var defs = [["active","Active ("+c.active+")"],["new","🆕 New ("+c["new"]+")"],["contacted","📞 Contacted ("+c.contacted+")"],
+              ["confirmed","✅ Confirmed ("+c.confirmed+")"],["declined","🚫 Declined ("+c.declined+")"],
+              ["archived","🗄 Archived ("+c.archived+")"],["all","All ("+bdData.length+")"]];
+  $("bd-chips").innerHTML = defs.map(function(d){
+    return '<button class="chip'+(bdFilter===d[0]?' on':'')+'" onclick="setBdFilter(\''+d[0]+'\')">'+d[1]+'</button>';
+  }).join("");
+}
+function setBdFilter(f){ bdFilter=f; renderBirthdays(); }
+function fmtDate(s){ if(!s) return "?"; var p=String(s).split("-"); var d=new Date(+p[0],(+p[1]||1)-1,+p[2]||1);
+  return d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",year:"numeric"}); }
+
+function renderBirthdays(){
+  renderChips();
+  var rows = bdData.filter(function(r){
+    var s = r.status || "new";
+    if(bdFilter==="all") return true;
+    if(bdFilter==="active") return s==="new"||s==="contacted"||s==="confirmed";
+    return s===bdFilter;
+  });
+  if(!rows.length){ $("bd-list").innerHTML = '<p class="muted">Nothing here. New requests appear the moment the customer submits the birthday form.</p>'; return; }
+  $("bd-list").innerHTML = rows.map(function(r){
+    var s = r.status || "new";
+    var mailSub = encodeURIComponent("Your birthday party at Northwood Game Haven — " + (r.date||""));
+    var details =
+      (r.addons && r.addons.length ? "<div><b>Add-ons:</b> "+esc(r.addons.join("; "))+"</div>" : "") +
+      (r.videoGames ? "<div><b>Video games:</b> "+esc(r.videoGames)+"</div>" : "") +
+      (r.boardGames ? "<div><b>Board games:</b> "+esc(r.boardGames)+"</div>" : "") +
+      (r.notes ? "<div><b>Customer notes:</b> "+esc(r.notes)+"</div>" : "");
+    return '<div class="card bd st-'+s+'" id="bd-'+esc(r.id)+'">' +
+      '<div class="head"><b>'+esc(r.package||"?")+'</b>' +
+      '<span class="badge '+s+'">'+s.toUpperCase()+'</span>' +
+      '<span class="muted">'+esc(r.id)+' · submitted '+ (r.submitted? new Date(r.submitted).toLocaleString() : "?") +'</span></div>' +
+      '<div class="meta">' +
+        '<span class="lbl">When:</span> <b>'+fmtDate(r.date)+'</b> at '+esc(r.time||"?")+' · <span class="lbl">Guests:</span> '+esc(r.guests||"?") +
+        (r.heroName? ' · <span class="lbl">Hero:</span> '+esc(r.heroName)+(r.heroAge?' (turning '+esc(r.heroAge)+')':'') : '') + '<br>' +
+        '<span class="lbl">Contact:</span> '+esc(r.name||"?")+' · <a href="mailto:'+esc(r.email)+'?subject='+mailSub+'">'+esc(r.email||"")+'</a>' +
+        (r.phone? ' · <a href="tel:'+esc(r.phone)+'">'+esc(r.phone)+'</a>' : '') +
+        (r.linkedBookingId? '<br><span class="lbl">Linked booking:</span> <b>'+esc(r.linkedBookingId)+'</b>' : '') +
+      '</div>' +
+      (details? '<details><summary>Full request details</summary>'+details+'</details>' : '') +
+      '<textarea placeholder="Staff notes (saved when you click away)…" onblur="saveBdNotes(\''+esc(r.id)+'\', this.value)">'+esc(r.staffNotes||"")+'</textarea>' +
+      '<div class="actions">' +
+        btnFor(r,"contacted","📞 Mark contacted") + btnFor(r,"confirmed","✅ Mark confirmed") +
+        btnFor(r,"declined","🚫 Decline") + (s!=="archived" ? btnFor(r,"archived","🗄 Archive") : btnFor(r,"new","↩ Reopen")) +
+        '<a class="btn ghost small" href="mailto:'+esc(r.email)+'?subject='+mailSub+'">✉️ Reply</a>' +
+        '<button class="btn ghost small" onclick="copyBd(\''+esc(r.id)+'\')">📋 Copy details</button>' +
+        '<a class="btn ghost small" href="booking.html?admin=1" title="Create the booking that actually holds the room, then paste its ID here">➕ Create booking in console</a>' +
+        '<button class="btn ghost small" onclick="linkBooking(\''+esc(r.id)+'\')">🔗 Link booking ID</button>' +
+      '</div></div>';
+  }).join("");
+}
+function btnFor(r, st, label){
+  if((r.status||"new")===st) return "";
+  return '<button class="btn ghost small" onclick="setBdStatus(\''+esc(r.id)+'\',\''+st+'\')">'+label+'</button>';
+}
+async function setBdStatus(id, st){
+  try{
+    var j = await api("/birthday/"+encodeURIComponent(id), { method:"PATCH", body:JSON.stringify({ status:st }) });
+    var i = bdData.findIndex(function(r){ return r.id===id; });
+    if(i>=0) bdData[i] = j.request;
+    renderBirthdays(); toast("Marked "+st+".");
+    if(st==="confirmed") toast("Confirmed — now create the booking in the console so the room is actually held!");
+  }catch(e){ toast(e.message||"Update failed"); }
+}
+async function saveBdNotes(id, val){
+  var cur = bdData.find(function(r){ return r.id===id; });
+  if(cur && (cur.staffNotes||"") === val) return;
+  try{
+    var j = await api("/birthday/"+encodeURIComponent(id), { method:"PATCH", body:JSON.stringify({ staffNotes:val }) });
+    var i = bdData.findIndex(function(r){ return r.id===id; });
+    if(i>=0) bdData[i] = j.request;
+    toast("Notes saved.");
+  }catch(e){ toast(e.message||"Save failed"); }
+}
+async function linkBooking(id){
+  var v = window.prompt("Booking ID from the console (e.g. NGH-XXXXXX-123):","");
+  if(v===null) return;
+  try{
+    var j = await api("/birthday/"+encodeURIComponent(id), { method:"PATCH", body:JSON.stringify({ linkedBookingId:v.trim() }) });
+    var i = bdData.findIndex(function(r){ return r.id===id; });
+    if(i>=0) bdData[i] = j.request;
+    renderBirthdays(); toast(v.trim() ? "Linked to "+v.trim()+"." : "Link cleared.");
+  }catch(e){ toast(e.message||"Update failed"); }
+}
+function copyBd(id){
+  var r = bdData.find(function(x){ return x.id===id; });
+  if(!r) return;
+  var txt = [
+    "Birthday request "+r.id, "Package: "+(r.package||"")+" ("+(r.audience||"")+")",
+    "Date: "+(r.date||"")+" at "+(r.time||""), "Guests: "+(r.guests||""),
+    r.heroName? "Hero: "+r.heroName+(r.heroAge?" (turning "+r.heroAge+")":"") : "",
+    "Contact: "+(r.name||"")+" · "+(r.email||"")+(r.phone? " · "+r.phone:""),
+    r.addons && r.addons.length ? "Add-ons: "+r.addons.join("; ") : "",
+    r.notes? "Notes: "+r.notes : ""
+  ].filter(Boolean).join("\n");
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(
+    function(){ toast("Copied — paste into the console booking form."); },
+    function(){ window.prompt("Copy the details:", txt); }
+  );
+}
+
+/* ---------- boot ---------- */
+async function boot(){
+  showApp();
+  loadStats();
+  if(location.hash === "#birthdays"){ setTimeout(function(){ var el=$("birthdays"); el && el.scrollIntoView(); }, 250); }
+}
+if(GuruAuth.get()){ boot(); } else { showLogin(); }
+</script>
+</body>
+</html>

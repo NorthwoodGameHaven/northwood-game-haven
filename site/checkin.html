@@ -67,10 +67,11 @@
   <div id="result" class="card hidden"></div>
 </div>
 
+<script src="guru-common.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script>
 var API="/.netlify/functions";
-var token=sessionStorage.getItem("ngh_checkin_token")||"";
+var token=(window.GuruAuth ? GuruAuth.get() : sessionStorage.getItem("ngh_checkin_token"))||"";
 var stream=null, scanning=false, lastCode="", lastAt=0, current=null, currentCode="";
 
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
@@ -86,7 +87,7 @@ async function doLogin(){
     var r=await fetch(API+"/admin-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:code})});
     var d=await r.json().catch(function(){return{};});
     if(!r.ok||!d.token) throw new Error(d.error||"Incorrect code");
-    token=d.token; sessionStorage.setItem("ngh_checkin_token",token);
+    token=d.token; if(window.GuruAuth) GuruAuth.set(token); else sessionStorage.setItem("ngh_checkin_token",token);
     show("login",false); show("scanner",true);
   }catch(e){ lm.textContent=e.message||"Login failed"; }
 }
@@ -148,7 +149,7 @@ function onScan(raw){
 async function api(path,opts){
   opts=opts||{}; opts.headers=Object.assign({"Content-Type":"application/json","Authorization":"Bearer "+token},opts.headers||{});
   var r=await fetch(API+path,opts);
-  if(r.status===401){ sessionStorage.removeItem("ngh_checkin_token"); token=""; show("scanner",false); show("result",false); show("login",true); throw new Error("Session expired — sign in again."); }
+  if(r.status===401){ if(window.GuruAuth) GuruAuth.clear(); else sessionStorage.removeItem("ngh_checkin_token"); token=""; show("scanner",false); show("result",false); show("login",true); throw new Error("Session expired — sign in again."); }
   var d=await r.json().catch(function(){return{};});
   if(!r.ok) throw new Error(d.error||("Error "+r.status));
   return d;

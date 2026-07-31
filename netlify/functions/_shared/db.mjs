@@ -68,9 +68,8 @@ const CORS = {
 export function json(body, status = 200) {
   return new Response(body == null ? '' : JSON.stringify(body), { status, headers: CORS });
 }
-// 204 responses must have a NULL body — undici/modern runtimes throw on '' with 204.
-export function noContent() { return new Response(null, { status: 204, headers: CORS }); }
-export function preflight() { return new Response(null, { status: 204, headers: CORS }); }
+export function noContent() { return new Response('', { status: 204, headers: CORS }); }
+export function preflight() { return new Response('', { status: 204, headers: CORS }); }
 export function bad(msg, status = 400) { return json({ error: msg }, status); }
 
 // ---- admin auth (stateless HMAC token) ----

@@ -1,5 +1,10 @@
 # Northwood Game Haven — gamehaven.guru
 User-agent: *
 Allow: /
+# Staff-only tools (also carry noindex meta tags)
+Disallow: /guru.html
+Disallow: /guru-radar.html
+Disallow: /guru-schedule.html
+Disallow: /checkin.html
 
 Sitemap: https://gamehaven.guru/sitemap.xml

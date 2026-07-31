@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 2026-07-31f · Guru Radar — Events of Interest (Guru-only) -->
+<!-- NGH-BUILD 2026-07-31d · Guru Radar — Events of Interest (Guru-only) -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
 <script src="ngh-config.js"></script>
+<script src="guru-common.js"></script>
 <style>
   :root{
     --forest:#2d5a3d; --forest-dark:#1c3a26; --gold:#c9973a; --gold-light:#e7c15b;
@@ -123,8 +124,7 @@
   </div>
   <div class="tb-right" id="tb-right" style="display:none;">
     <button class="btn btn-gold" onclick="openEditor()">➕ Add Event of Interest</button>
-    <a class="btn btn-ghost" href="guru-schedule.html" style="text-decoration:none;">📅 Guru Schedule</a>
-    <a class="btn btn-ghost" href="booking.html?admin=1" style="text-decoration:none;">🎟️ Booking Admin</a>
+    <a class="btn btn-ghost" href="booking.html" style="text-decoration:none;">🎟️ Booking Admin</a>
     <button class="btn btn-ghost btn-sm" onclick="doLogout()">Log out</button>
   </div>
 </div>
@@ -291,7 +291,7 @@ var CAT_ICON  = { fair_festival:"🎡", craft_sale:"🧶", farmers_market:"🥕"
 var ST_LABEL  = { watching:"👀 Watching", considering:"🤔 Considering", committed:"✅ Committed", converted:"🔗 Converted", passed:"🚫 Passed" };
 var SUP_LABEL = { donation:"💵 Donation / prize support", vendor:"🏪 Vendor booth", host:"🎲 Host an event there", attend:"🦦 Attend as NGH", sponsor:"🤝 Sponsor / partner", promote:"📣 Cross-promote" };
 
-function token(){ return sessionStorage.getItem(TOKEN_KEY) || ""; }
+function token(){ return (window.GuruAuth ? GuruAuth.get() : sessionStorage.getItem(TOKEN_KEY)) || ""; }
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function toast(msg){ var t=document.getElementById("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display="none"; },2600); }
 function pad2(n){ return (n<10?"0":"")+n; }
@@ -319,11 +319,11 @@ async function doLogin(){
   try{
     var r = await fetch(API_BASE + "/admin-login", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ code:code }) });
     var j = await r.json();
-    if(j && j.token){ sessionStorage.setItem(TOKEN_KEY, j.token); document.getElementById("login-code").value=""; boot(); }
+    if(j && j.token){ if(window.GuruAuth) GuruAuth.set(j.token); else sessionStorage.setItem(TOKEN_KEY, j.token); document.getElementById("login-code").value=""; boot(); }
     else{ err.textContent="That code didn't work."; }
   }catch(e){ err.textContent="Login failed — try again."; }
 }
-function doLogout(){ sessionStorage.removeItem(TOKEN_KEY); showLogin(); }
+function doLogout(){ if(window.GuruAuth) GuruAuth.clear(); else sessionStorage.removeItem(TOKEN_KEY); showLogin(); }
 
 async function boot(){
   try{
