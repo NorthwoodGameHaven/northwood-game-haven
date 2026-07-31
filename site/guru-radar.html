@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<!-- NGH-BUILD 2026-07-31d · Guru Radar — Events of Interest (Guru-only) -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guru Radar — Northwood Game Haven</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;700&family=Lato:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+<script src="ngh-config.js"></script>
+<style>
+  :root{
+    --forest:#2d5a3d; --forest-dark:#1c3a26; --gold:#c9973a; --gold-light:#e7c15b;
+    --cream:#f6efdd; --dark:#26211A; --text:#3a3a2a; --maroon:#7a2431;
+    --st-watching:#5b7a99; --st-considering:#c9973a; --st-committed:#2d7a3d;
+    --st-converted:#7c3aed; --st-passed:#9a948a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--cream);color:var(--text);font-family:'Lato',sans-serif;min-height:100vh;}
+  .topbar{background:linear-gradient(135deg,var(--forest-dark),var(--forest));color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;box-shadow:0 3px 14px rgba(0,0,0,0.25);}
+  .topbar h1{font-family:'Cinzel Decorative',serif;font-size:clamp(1.1rem,3.4vw,1.6rem);font-weight:900;color:var(--gold-light);line-height:1.1;}
+  .topbar .sub{font-family:'Cinzel',serif;font-size:0.68rem;letter-spacing:0.24em;text-transform:uppercase;color:rgba(255,255,255,0.75);margin-top:3px;}
+  .topbar .tb-right{display:flex;gap:8px;align-items:center;}
+  .btn{border:none;cursor:pointer;font-family:'Cinzel',serif;font-weight:700;font-size:0.78rem;letter-spacing:0.05em;padding:10px 18px;border-radius:50px;transition:transform .15s, box-shadow .15s;}
+  .btn:hover{transform:translateY(-1px);}
+  .btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--dark);box-shadow:0 4px 14px rgba(201,151,58,0.4);}
+  .btn-ghost{background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.35);}
+  .btn-sm{padding:7px 13px;font-size:0.7rem;}
+  .btn-danger{background:var(--maroon);color:#fff;}
+  .btn[disabled]{opacity:0.45;cursor:not-allowed;transform:none!important;}
+
+  /* login */
+  #login-wrap{max-width:380px;margin:9vh auto;background:#fff;border:2px solid var(--gold);border-radius:16px;padding:30px 26px;box-shadow:0 14px 40px rgba(0,0,0,0.15);text-align:center;}
+  #login-wrap h2{font-family:'Cinzel',serif;color:var(--forest);margin-bottom:6px;}
+  #login-wrap p{font-size:0.85rem;color:#6a6a50;margin-bottom:16px;}
+  #login-code{width:100%;padding:12px;border:1.5px solid #cbb;border-radius:10px;font-size:1rem;margin-bottom:12px;text-align:center;}
+  #login-err{color:var(--maroon);font-size:0.8rem;min-height:18px;margin-bottom:6px;}
+
+  /* layers strip */
+  .layers{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 20px 0;max-width:1240px;margin:0 auto;}
+  .layer-chip{font-size:0.74rem;font-weight:700;padding:7px 14px;border-radius:50px;border:1.5px solid var(--forest);background:var(--forest);color:#fff;cursor:default;}
+  .layer-chip.soon{background:#fff;color:#9a948a;border-color:#d8d2c4;font-weight:400;}
+
+  /* controls */
+  .controls{max-width:1240px;margin:12px auto 0;padding:0 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+  .controls .spacer{flex:1;}
+  select,input[type=text],input[type=date],input[type=time],input[type=url],textarea{font-family:'Lato',sans-serif;font-size:0.88rem;padding:9px 11px;border:1.5px solid #cfc8b6;border-radius:9px;background:#fff;color:var(--text);}
+  .fchip{font-size:0.72rem;font-weight:700;padding:6px 12px;border-radius:50px;cursor:pointer;border:1.5px solid transparent;opacity:0.45;user-select:none;color:#fff;}
+  .fchip.on{opacity:1;box-shadow:0 2px 8px rgba(0,0,0,0.18);}
+  .fchip.watching{background:var(--st-watching);}
+  .fchip.considering{background:var(--st-considering);color:var(--dark);}
+  .fchip.committed{background:var(--st-committed);}
+  .fchip.converted{background:var(--st-converted);}
+  .fchip.passed{background:var(--st-passed);}
+
+  /* layout */
+  .main{max-width:1240px;margin:14px auto 60px;padding:0 20px;display:grid;grid-template-columns:1fr 330px;gap:20px;align-items:start;}
+  @media(max-width:980px){.main{grid-template-columns:1fr;}}
+
+  /* calendar */
+  .cal-box{background:#fff;border:2px solid var(--gold);border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.1);}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;background:var(--forest);color:#fff;padding:12px 16px;}
+  .cal-head h2{font-family:'Cinzel',serif;font-size:1.05rem;letter-spacing:0.05em;}
+  .cal-nav{display:flex;gap:6px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);}
+  .cal-dow{font-family:'Cinzel',serif;font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;text-align:center;padding:8px 2px;background:#efe8d5;color:var(--forest);border-bottom:1px solid #e0d8c2;}
+  .cal-cell{min-height:96px;border-bottom:1px solid #ece5d2;border-right:1px solid #ece5d2;padding:4px;position:relative;vertical-align:top;}
+  .cal-cell:nth-child(7n){border-right:none;}
+  .cal-cell.out{background:#faf6ec;color:#b9b2a0;}
+  .cal-cell.today{background:#fdf6e3;box-shadow:inset 0 0 0 2px var(--gold);}
+  .cal-daynum{font-size:0.72rem;font-weight:700;color:#7a745f;margin-bottom:3px;}
+  .cal-ev{display:block;font-size:0.66rem;font-weight:700;color:#fff;border-radius:5px;padding:2px 5px;margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cal-ev.considering{color:var(--dark);}
+  .cal-ev.passed{text-decoration:line-through;opacity:0.7;}
+  .cal-more{font-size:0.62rem;color:var(--forest);font-weight:700;cursor:pointer;}
+
+  /* upcoming list */
+  .list-box{background:#fff;border:2px solid var(--gold);border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.1);}
+  .list-box h3{font-family:'Cinzel',serif;background:var(--forest);color:#fff;font-size:0.95rem;padding:12px 16px;letter-spacing:0.05em;}
+  .list-scroll{max-height:640px;overflow-y:auto;}
+  .li-item{padding:11px 14px;border-bottom:1px solid #efe8d5;cursor:pointer;transition:background .12s;}
+  .li-item:hover{background:#faf5e7;}
+  .li-title{font-weight:700;font-size:0.88rem;color:var(--dark);}
+  .li-meta{font-size:0.74rem;color:#6a6a50;margin-top:2px;}
+  .pill{display:inline-block;font-size:0.6rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#fff;border-radius:50px;padding:2px 9px;margin-left:6px;vertical-align:1px;}
+  .pill.watching{background:var(--st-watching);} .pill.considering{background:var(--st-considering);color:var(--dark);}
+  .pill.committed{background:var(--st-committed);} .pill.converted{background:var(--st-converted);} .pill.passed{background:var(--st-passed);}
+  .empty{padding:22px 16px;font-size:0.85rem;color:#8a8470;text-align:center;}
+
+  /* modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(20,26,18,0.68);z-index:5000;display:none;align-items:flex-start;justify-content:center;padding:26px 14px;overflow-y:auto;}
+  .modal{background:#fff;border-radius:16px;border:2px solid var(--gold);max-width:640px;width:100%;box-shadow:0 24px 70px rgba(0,0,0,0.5);}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;background:var(--forest);color:#fff;padding:13px 18px;border-radius:13px 13px 0 0;}
+  .modal-head h3{font-family:'Cinzel',serif;font-size:1rem;}
+  .modal-x{background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;line-height:1;}
+  .modal-body{padding:18px;}
+  .frow{margin-bottom:12px;}
+  .frow label{display:block;font-size:0.72rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--forest);margin-bottom:4px;}
+  .frow input[type=text],.frow input[type=date],.frow input[type=time],.frow input[type=url],.frow select,.frow textarea{width:100%;}
+  .frow textarea{min-height:76px;resize:vertical;}
+  .frow-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:520px){.frow-2{grid-template-columns:1fr;}}
+  .check-line{display:flex;align-items:center;gap:8px;font-size:0.85rem;padding:6px 0;cursor:pointer;}
+  .support-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;}
+  @media(max-width:520px){.support-grid{grid-template-columns:1fr;}}
+  .modal-foot{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:0 18px 18px;}
+  .detail-kv{font-size:0.86rem;margin-bottom:7px;}
+  .detail-kv b{color:var(--forest);}
+  .detail-kv a{color:var(--forest);word-break:break-all;}
+  .hint{font-size:0.76rem;color:#6a6a50;margin-top:4px;}
+  .convert-note{background:#f3eefc;border:1px solid #d9c9f2;border-radius:10px;padding:11px 13px;font-size:0.82rem;color:#5b3a8a;margin-bottom:12px;}
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--forest-dark);color:#fff;padding:12px 22px;border-radius:50px;font-size:0.85rem;box-shadow:0 8px 26px rgba(0,0,0,0.4);display:none;z-index:9000;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>🦦 Guru Radar</h1>
+    <div class="sub">Events of Interest · Guru eyes only</div>
+  </div>
+  <div class="tb-right" id="tb-right" style="display:none;">
+    <button class="btn btn-gold" onclick="openEditor()">➕ Add Event of Interest</button>
+    <a class="btn btn-ghost" href="booking.html" style="text-decoration:none;">🎟️ Booking Admin</a>
+    <button class="btn btn-ghost btn-sm" onclick="doLogout()">Log out</button>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-wrap">
+  <h2>Guru Login</h2>
+  <p>This radar is for Northwood Gurus only. Enter the admin code to continue.</p>
+  <input type="password" id="login-code" placeholder="Admin code" onkeydown="if(event.key==='Enter')doLogin()">
+  <div id="login-err"></div>
+  <button class="btn btn-gold" style="width:100%;" onclick="doLogin()">Enter the Radar</button>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none;">
+  <div class="layers">
+    <span style="font-family:'Cinzel',serif;font-size:0.68rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--forest);font-weight:700;">Layers:</span>
+    <span class="layer-chip">🎪 Events of Interest</span>
+    <span class="layer-chip soon">🎴 TCG Releases — coming soon</span>
+    <span class="layer-chip soon">📦 Order Deadlines — coming soon</span>
+  </div>
+
+  <div class="controls">
+    <span class="fchip watching on" data-st="watching" onclick="toggleFilter(this)">👀 Watching</span>
+    <span class="fchip considering on" data-st="considering" onclick="toggleFilter(this)">🤔 Considering</span>
+    <span class="fchip committed on" data-st="committed" onclick="toggleFilter(this)">✅ Committed</span>
+    <span class="fchip converted on" data-st="converted" onclick="toggleFilter(this)">🔗 Converted</span>
+    <span class="fchip passed" data-st="passed" onclick="toggleFilter(this)">🚫 Passed</span>
+    <span class="spacer"></span>
+    <select id="cat-filter" onchange="render()">
+      <option value="">All categories</option>
+      <option value="fair_festival">Fair / Festival</option>
+      <option value="craft_sale">Craft Sale</option>
+      <option value="farmers_market">Farmers Market</option>
+      <option value="music">Music / Concert</option>
+      <option value="convention">Convention</option>
+      <option value="local_weekly">Local Weekly (winery, burger night…)</option>
+      <option value="expo">Expo / Show</option>
+      <option value="other">Other</option>
+    </select>
+  </div>
+
+  <div class="main">
+    <div class="cal-box">
+      <div class="cal-head">
+        <h2 id="cal-title">Month</h2>
+        <div class="cal-nav">
+          <button class="btn btn-ghost btn-sm" onclick="navMonth(-1)">◀</button>
+          <button class="btn btn-ghost btn-sm" onclick="navToday()">Today</button>
+          <button class="btn btn-ghost btn-sm" onclick="navMonth(1)">▶</button>
+        </div>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+
+    <div class="list-box">
+      <h3>📋 Upcoming Radar</h3>
+      <div class="list-scroll" id="up-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- EDITOR MODAL -->
+<div class="modal-bg" id="edit-bg">
+  <div class="modal">
+    <div class="modal-head"><h3 id="edit-title">Add Event of Interest</h3><button class="modal-x" onclick="closeModal('edit-bg')">×</button></div>
+    <div class="modal-body">
+      <div class="frow"><label>Title *</label><input type="text" id="f-title" placeholder="e.g. No Brand Con, Music in the Park, Winery Burger Night"></div>
+      <div class="frow-2">
+        <div class="frow"><label>Category</label>
+          <select id="f-category">
+            <option value="fair_festival">Fair / Festival</option>
+            <option value="craft_sale">Craft Sale</option>
+            <option value="farmers_market">Farmers Market</option>
+            <option value="music">Music / Concert</option>
+            <option value="convention">Convention</option>
+            <option value="local_weekly">Local Weekly (winery, burger night…)</option>
+            <option value="expo">Expo / Show</option>
+            <option value="other" selected>Other</option>
+          </select>
+        </div>
+        <div class="frow"><label>Status</label>
+          <select id="f-status">
+            <option value="watching">👀 Watching</option>
+            <option value="considering">🤔 Considering</option>
+            <option value="committed">✅ Committed</option>
+            <option value="passed">🚫 Passed</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow-2">
+        <div class="frow"><label>Start Date *</label><input type="date" id="f-date"></div>
+        <div class="frow"><label>End Date (multi-day)</label><input type="date" id="f-endDate"></div>
+      </div>
+      <label class="check-line"><input type="checkbox" id="f-allDay" checked onchange="toggleTimes()"> All-day / times TBD</label>
+      <div class="frow-2" id="time-row" style="display:none;">
+        <div class="frow"><label>Start Time</label><input type="time" id="f-start"></div>
+        <div class="frow"><label>End Time</label><input type="time" id="f-end"></div>
+      </div>
+      <div class="frow"><label>Repeats weekly until (optional)</label><input type="date" id="f-repeatWeeklyUntil">
+        <div class="hint">For standing events like burger nights or weekly markets — shows every week on the calendar through this date.</div></div>
+      <div class="frow"><label>Location</label><input type="text" id="f-location" placeholder="Venue, city"></div>
+      <div class="frow"><label>Source URL</label><input type="url" id="f-sourceUrl" placeholder="https://…"></div>
+      <div class="frow"><label>Contact</label><input type="text" id="f-contact" placeholder="Name · email · phone"></div>
+      <div class="frow"><label>How might NGH support it?</label>
+        <div class="support-grid">
+          <label class="check-line"><input type="checkbox" class="f-sup" value="donation"> 💵 Donation / prize support</label>
+          <label class="check-line"><input type="checkbox" class="f-sup" value="vendor"> 🏪 Vendor booth</label>
+          <label class="check-line"><input type="checkbox" class="f-sup" value="host"> 🎲 Host an event there</label>
+          <label class="check-line"><input type="checkbox" class="f-sup" value="attend"> 🦦 Attend as NGH</label>
+          <label class="check-line"><input type="checkbox" class="f-sup" value="sponsor"> 🤝 Sponsor / partner</label>
+          <label class="check-line"><input type="checkbox" class="f-sup" value="promote"> 📣 Cross-promote</label>
+        </div>
+        <input type="text" id="f-supportOther" placeholder="Other support idea…" style="margin-top:6px;">
+      </div>
+      <div class="frow"><label>Notes</label><textarea id="f-notes" placeholder="Costs, booth fees, dates history, who's on point…"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-danger btn-sm" id="edit-delete" style="margin-right:auto;display:none;" onclick="deleteItem()">🗑 Delete</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--forest);border-color:var(--forest);" onclick="closeModal('edit-bg')">Cancel</button>
+      <button class="btn btn-gold" onclick="saveItem()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-bg" id="detail-bg">
+  <div class="modal">
+    <div class="modal-head"><h3 id="detail-title">Event of Interest</h3><button class="modal-x" onclick="closeModal('detail-bg')">×</button></div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-foot" id="detail-foot"></div>
+  </div>
+</div>
+
+<!-- CONVERT MODAL -->
+<div class="modal-bg" id="convert-bg">
+  <div class="modal">
+    <div class="modal-head"><h3>Create NGH Event</h3><button class="modal-x" onclick="closeModal('convert-bg')">×</button></div>
+    <div class="modal-body">
+      <div class="convert-note">This spawns a <b>draft</b> on the public events calendar, linked to this Event of Interest and prefilled with its details. Drafts are hidden from customers — open Booking Admin to finish it (rooms, registration, photo) and hit <b>Publish</b> when it's ready.</div>
+      <div class="frow"><label>Event date</label><input type="date" id="cv-date"></div>
+      <label class="check-line"><input type="checkbox" id="cv-host"> We're hosting this <b>at NGH</b> (otherwise it's created as offsite at the listed location)</label>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost btn-sm" style="color:var(--forest);border-color:var(--forest);" onclick="closeModal('convert-bg')">Cancel</button>
+      <button class="btn btn-gold" id="cv-go" onclick="doConvert()">🔗 Create Draft Event</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+var API_BASE = window.NGH_API_BASE || "/.netlify/functions";
+var TOKEN_KEY = "ngh_admin_token"; // shared with booking.html admin console
+var items = [];
+var curMonth = new Date(); curMonth.setDate(1);
+var editingId = null;
+var convertId = null;
+
+var CAT_LABEL = { fair_festival:"Fair / Festival", craft_sale:"Craft Sale", farmers_market:"Farmers Market", music:"Music / Concert", convention:"Convention", local_weekly:"Local Weekly", expo:"Expo / Show", other:"Other" };
+var CAT_ICON  = { fair_festival:"🎡", craft_sale:"🧶", farmers_market:"🥕", music:"🎵", convention:"🎪", local_weekly:"🍔", expo:"🏟️", other:"📌" };
+var ST_LABEL  = { watching:"👀 Watching", considering:"🤔 Considering", committed:"✅ Committed", converted:"🔗 Converted", passed:"🚫 Passed" };
+var SUP_LABEL = { donation:"💵 Donation / prize support", vendor:"🏪 Vendor booth", host:"🎲 Host an event there", attend:"🦦 Attend as NGH", sponsor:"🤝 Sponsor / partner", promote:"📣 Cross-promote" };
+
+function token(){ return sessionStorage.getItem(TOKEN_KEY) || ""; }
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function toast(msg){ var t=document.getElementById("toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(function(){ t.style.display="none"; },2600); }
+function pad2(n){ return (n<10?"0":"")+n; }
+function ymd(d){ return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+function parseYmd(s){ var p=String(s||"").split("-"); return new Date(+p[0], (+p[1]||1)-1, +p[2]||1); }
+function fmtDate(s){ if(!s) return ""; var d=parseYmd(s); return d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",year:"numeric"}); }
+function fmtTime(t){ if(!t) return ""; var p=t.split(":"); var h=+p[0], m=p[1]; var ap=h>=12?"PM":"AM"; h=h%12; if(h===0)h=12; return h+":"+m+" "+ap; }
+
+async function api(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({ "Content-Type":"application/json", "Authorization":"Bearer "+token() }, opts.headers||{});
+  var res = await fetch(API_BASE + path, opts);
+  if(res.status === 401){ showLogin(); throw new Error("unauthorized"); }
+  if(!res.ok){ var e; try{ e=await res.json(); }catch(_){ e={}; } throw new Error(e.error || ("API "+res.status)); }
+  return res.status === 204 ? null : res.json();
+}
+
+/* ---------- auth ---------- */
+function showLogin(){ document.getElementById("login-wrap").style.display="block"; document.getElementById("app").style.display="none"; document.getElementById("tb-right").style.display="none"; }
+function showApp(){ document.getElementById("login-wrap").style.display="none"; document.getElementById("app").style.display="block"; document.getElementById("tb-right").style.display="flex"; }
+async function doLogin(){
+  var code = document.getElementById("login-code").value.trim();
+  var err = document.getElementById("login-err"); err.textContent="";
+  if(!code){ err.textContent="Enter the admin code."; return; }
+  try{
+    var r = await fetch(API_BASE + "/admin-login", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ code:code }) });
+    var j = await r.json();
+    if(j && j.token){ sessionStorage.setItem(TOKEN_KEY, j.token); document.getElementById("login-code").value=""; boot(); }
+    else{ err.textContent="That code didn't work."; }
+  }catch(e){ err.textContent="Login failed — try again."; }
+}
+function doLogout(){ sessionStorage.removeItem(TOKEN_KEY); showLogin(); }
+
+async function boot(){
+  try{
+    items = await api("/interest-events");
+    showApp();
+    render();
+  }catch(e){
+    if(e.message !== "unauthorized"){ toast("Load failed: "+e.message); }
+  }
+}
+
+/* ---------- filters ---------- */
+function toggleFilter(el){ el.classList.toggle("on"); render(); }
+function activeStatuses(){
+  var out={};
+  var chips=document.querySelectorAll(".fchip");
+  for(var i=0;i<chips.length;i++){ if(chips[i].classList.contains("on")) out[chips[i].getAttribute("data-st")]=true; }
+  return out;
+}
+function passesFilters(it){
+  var st = activeStatuses();
+  if(!st[it.status]) return false;
+  var cat = document.getElementById("cat-filter").value;
+  if(cat && it.category !== cat) return false;
+  return true;
+}
+
+/* ---------- occurrence expansion (multi-day + weekly repeats) ---------- */
+function occurrencesInRange(it, rangeStart, rangeEnd){
+  var occs = [];
+  if(!it.date) return occs;
+  var start = parseYmd(it.date);
+  var end = it.endDate ? parseYmd(it.endDate) : start;
+  if(end < start) end = start;
+  function pushSpan(s, e){
+    var d = new Date(s);
+    while(d <= e){
+      if(d >= rangeStart && d <= rangeEnd) occs.push(ymd(d));
+      d.setDate(d.getDate()+1);
+    }
+  }
+  pushSpan(start, end);
+  if(it.repeatWeeklyUntil){
+    var until = parseYmd(it.repeatWeeklyUntil);
+    var spanDays = Math.round((end - start) / 86400000);
+    var s = new Date(start);
+    var guard = 0;
+    while(guard++ < 400){
+      s.setDate(s.getDate()+7);
+      if(s > until) break;
+      var e2 = new Date(s); e2.setDate(e2.getDate()+spanDays);
+      pushSpan(s, e2);
+    }
+  }
+  return occs;
+}
+
+/* ---------- render ---------- */
+function render(){ renderCalendar(); renderList(); }
+
+function renderCalendar(){
+  var y=curMonth.getFullYear(), m=curMonth.getMonth();
+  document.getElementById("cal-title").textContent = curMonth.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  var grid=document.getElementById("cal-grid");
+  var dows=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var html="";
+  for(var i=0;i<7;i++) html+='<div class="cal-dow">'+dows[i]+'</div>';
+
+  var first=new Date(y,m,1), startDow=first.getDay();
+  var gridStart=new Date(y,m,1-startDow);
+  var cells=42;
+  var gridEnd=new Date(gridStart); gridEnd.setDate(gridEnd.getDate()+cells-1);
+
+  // bucket occurrences by day
+  var byDay={};
+  for(var i2=0;i2<items.length;i2++){
+    var it=items[i2];
+    if(!passesFilters(it)) continue;
+    var occs=occurrencesInRange(it, gridStart, gridEnd);
+    for(var j=0;j<occs.length;j++){ (byDay[occs[j]]=byDay[occs[j]]||[]).push(it); }
+  }
+
+  var todayStr=ymd(new Date());
+  var d=new Date(gridStart);
+  for(var c=0;c<cells;c++){
+    var ds=ymd(d);
+    var out = d.getMonth()!==m ? " out" : "";
+    var today = ds===todayStr ? " today" : "";
+    html+='<div class="cal-cell'+out+today+'"><div class="cal-daynum">'+d.getDate()+'</div>';
+    var evs=byDay[ds]||[];
+    var shown=Math.min(evs.length,3);
+    for(var k=0;k<shown;k++){
+      var it2=evs[k];
+      html+='<span class="cal-ev '+esc(it2.status)+'" style="background:var(--st-'+esc(it2.status)+');" onclick="openDetail(\''+esc(it2.id)+'\',\''+ds+'\')">'+(CAT_ICON[it2.category]||"📌")+' '+esc(it2.title)+'</span>';
+    }
+    if(evs.length>shown) html+='<span class="cal-more" onclick="openDayList(\''+ds+'\')">+'+(evs.length-shown)+' more</span>';
+    html+='</div>';
+    d.setDate(d.getDate()+1);
+  }
+  grid.innerHTML=html;
+}
+
+function openDayList(ds){
+  var list=[];
+  for(var i=0;i<items.length;i++){
+    var it=items[i];
+    if(!passesFilters(it)) continue;
+    var dd=parseYmd(ds);
+    if(occurrencesInRange(it, dd, dd).length) list.push(it);
+  }
+  var body='<div class="detail-kv"><b>'+esc(fmtDate(ds))+'</b></div>';
+  for(var j=0;j<list.length;j++){
+    body+='<div class="li-item" onclick="openDetail(\''+esc(list[j].id)+'\',\''+ds+'\')"><span class="li-title">'+(CAT_ICON[list[j].category]||"📌")+' '+esc(list[j].title)+'</span><span class="pill '+esc(list[j].status)+'">'+esc(list[j].status)+'</span></div>';
+  }
+  document.getElementById("detail-title").textContent="Radar — "+fmtDate(ds);
+  document.getElementById("detail-body").innerHTML=body;
+  document.getElementById("detail-foot").innerHTML='<button class="btn btn-ghost btn-sm" style="color:var(--forest);border-color:var(--forest);" onclick="closeModal(\'detail-bg\')">Close</button>';
+  document.getElementById("detail-bg").style.display="flex";
+}
+
+function renderList(){
+  var box=document.getElementById("up-list");
+  var todayStr=ymd(new Date());
+  var rows=items.filter(passesFilters).filter(function(it){
+    var last = it.repeatWeeklyUntil || it.endDate || it.date;
+    return last >= todayStr;
+  }).sort(function(a,b){ return (a.date||"").localeCompare(b.date||""); });
+  if(!rows.length){ box.innerHTML='<div class="empty">Nothing on the radar yet. Add local fairs, festivals, markets, cons, and weekly happenings worth supporting. 🦦</div>'; return; }
+  var html="";
+  for(var i=0;i<rows.length;i++){
+    var it=rows[i];
+    var when=fmtDate(it.date)+(it.endDate?(" → "+fmtDate(it.endDate)):"")+(it.repeatWeeklyUntil?(" · weekly thru "+fmtDate(it.repeatWeeklyUntil)):"");
+    html+='<div class="li-item" onclick="openDetail(\''+esc(it.id)+'\')">'+
+      '<span class="li-title">'+(CAT_ICON[it.category]||"📌")+' '+esc(it.title)+'</span><span class="pill '+esc(it.status)+'">'+esc(it.status)+'</span>'+
+      '<div class="li-meta">'+esc(when)+(it.location?(' · '+esc(it.location)):'')+'</div></div>';
+  }
+  box.innerHTML=html;
+}
+
+/* ---------- detail ---------- */
+function findItem(id){ for(var i=0;i<items.length;i++){ if(items[i].id===id) return items[i]; } return null; }
+function openDetail(id, occDate){
+  var it=findItem(id); if(!it) return;
+  document.getElementById("detail-title").textContent=(CAT_ICON[it.category]||"📌")+" "+it.title;
+  var sup=(it.supportTypes||[]).map(function(k){ return SUP_LABEL[k]||k; });
+  if(it.supportOther) sup.push(it.supportOther);
+  var when=fmtDate(it.date)+(it.endDate?(" → "+fmtDate(it.endDate)):"");
+  if(!it.allDay && it.start) when+=" · "+fmtTime(it.start)+(it.end?("–"+fmtTime(it.end)):"");
+  if(it.repeatWeeklyUntil) when+=" · repeats weekly thru "+fmtDate(it.repeatWeeklyUntil);
+  var body='';
+  body+='<div class="detail-kv"><b>Status:</b> '+esc(ST_LABEL[it.status]||it.status)+'</div>';
+  body+='<div class="detail-kv"><b>When:</b> '+esc(when)+'</div>';
+  body+='<div class="detail-kv"><b>Category:</b> '+esc(CAT_LABEL[it.category]||it.category)+'</div>';
+  if(it.location) body+='<div class="detail-kv"><b>Location:</b> '+esc(it.location)+'</div>';
+  if(it.sourceUrl) body+='<div class="detail-kv"><b>Source:</b> <a href="'+esc(it.sourceUrl)+'" target="_blank" rel="noopener">'+esc(it.sourceUrl)+'</a></div>';
+  if(it.contact) body+='<div class="detail-kv"><b>Contact:</b> '+esc(it.contact)+'</div>';
+  if(sup.length) body+='<div class="detail-kv"><b>Support plan:</b> '+esc(sup.join(", "))+'</div>';
+  if(it.notes) body+='<div class="detail-kv"><b>Notes:</b><br>'+esc(it.notes).replace(/\n/g,"<br>")+'</div>';
+  if(it.linkedEventId) body+='<div class="detail-kv" style="color:#5b3a8a;"><b>🔗 Linked NGH event:</b> '+esc(it.linkedEventId)+' — open Booking Admin → 🎉 Public Events to review/publish.</div>';
+  document.getElementById("detail-body").innerHTML=body;
+  var foot='';
+  foot+='<button class="btn btn-ghost btn-sm" style="margin-right:auto;color:var(--forest);border-color:var(--forest);" onclick="openEditor(\''+esc(it.id)+'\')">✏️ Edit</button>';
+  foot+='<button class="btn btn-ghost btn-sm" style="color:var(--forest);border-color:var(--forest);" onclick="closeModal(\'detail-bg\')">Close</button>';
+  foot+='<button class="btn btn-gold" onclick="openConvert(\''+esc(it.id)+'\',\''+esc(occDate||it.date)+'\')">➕ Create NGH Event</button>';
+  document.getElementById("detail-foot").innerHTML=foot;
+  document.getElementById("detail-bg").style.display="flex";
+}
+
+/* ---------- editor ---------- */
+function toggleTimes(){ document.getElementById("time-row").style.display = document.getElementById("f-allDay").checked ? "none" : "grid"; }
+function openEditor(id){
+  closeModal("detail-bg");
+  editingId = id || null;
+  document.getElementById("edit-title").textContent = id ? "Edit Event of Interest" : "Add Event of Interest";
+  document.getElementById("edit-delete").style.display = id ? "inline-block" : "none";
+  var it = id ? findItem(id) : {};
+  it = it || {};
+  document.getElementById("f-title").value = it.title||"";
+  document.getElementById("f-category").value = it.category||"other";
+  document.getElementById("f-status").value = (it.status && it.status!=="converted") ? it.status : (it.status==="converted"?"committed":"watching");
+  document.getElementById("f-date").value = it.date||"";
+  document.getElementById("f-endDate").value = it.endDate||"";
+  document.getElementById("f-allDay").checked = it.allDay!==false;
+  document.getElementById("f-start").value = it.start||"";
+  document.getElementById("f-end").value = it.end||"";
+  document.getElementById("f-repeatWeeklyUntil").value = it.repeatWeeklyUntil||"";
+  document.getElementById("f-location").value = it.location||"";
+  document.getElementById("f-sourceUrl").value = it.sourceUrl||"";
+  document.getElementById("f-contact").value = it.contact||"";
+  document.getElementById("f-supportOther").value = it.supportOther||"";
+  document.getElementById("f-notes").value = it.notes||"";
+  var sups=document.querySelectorAll(".f-sup");
+  for(var i=0;i<sups.length;i++){ sups[i].checked = !!(it.supportTypes && it.supportTypes.indexOf(sups[i].value)>=0); }
+  toggleTimes();
+  document.getElementById("edit-bg").style.display="flex";
+}
+async function saveItem(){
+  var payload={
+    title: document.getElementById("f-title").value.trim(),
+    category: document.getElementById("f-category").value,
+    status: document.getElementById("f-status").value,
+    date: document.getElementById("f-date").value,
+    endDate: document.getElementById("f-endDate").value,
+    allDay: document.getElementById("f-allDay").checked,
+    start: document.getElementById("f-start").value,
+    end: document.getElementById("f-end").value,
+    repeatWeeklyUntil: document.getElementById("f-repeatWeeklyUntil").value,
+    location: document.getElementById("f-location").value.trim(),
+    sourceUrl: document.getElementById("f-sourceUrl").value.trim(),
+    contact: document.getElementById("f-contact").value.trim(),
+    supportOther: document.getElementById("f-supportOther").value.trim(),
+    notes: document.getElementById("f-notes").value.trim(),
+    supportTypes: []
+  };
+  var sups=document.querySelectorAll(".f-sup");
+  for(var i=0;i<sups.length;i++){ if(sups[i].checked) payload.supportTypes.push(sups[i].value); }
+  if(!payload.title || !payload.date){ toast("Title and start date are required."); return; }
+  // keep converted status if it was converted and status untouched back to committed
+  var prev = editingId ? findItem(editingId) : null;
+  if(prev && prev.status==="converted" && payload.status==="committed" && prev.linkedEventId){ payload.status="converted"; }
+  try{
+    var saved;
+    if(editingId){ saved = await api("/interest-events/"+encodeURIComponent(editingId), { method:"PUT", body:JSON.stringify(payload) }); }
+    else{ saved = await api("/interest-events", { method:"POST", body:JSON.stringify(payload) }); }
+    var found=false;
+    for(var j=0;j<items.length;j++){ if(items[j].id===saved.id){ items[j]=saved; found=true; } }
+    if(!found) items.push(saved);
+    closeModal("edit-bg");
+    render();
+    toast("Saved. 🦦");
+  }catch(e){ toast("Save failed: "+e.message); }
+}
+async function deleteItem(){
+  if(!editingId) return;
+  if(!confirm("Delete this Event of Interest? This does NOT delete any linked NGH event.")) return;
+  try{
+    await api("/interest-events/"+encodeURIComponent(editingId), { method:"DELETE" });
+    items = items.filter(function(it){ return it.id!==editingId; });
+    editingId=null;
+    closeModal("edit-bg");
+    render();
+    toast("Deleted.");
+  }catch(e){ toast("Delete failed: "+e.message); }
+}
+
+/* ---------- convert ---------- */
+function openConvert(id, occDate){
+  convertId=id;
+  closeModal("detail-bg");
+  document.getElementById("cv-date").value = occDate || (findItem(id)||{}).date || "";
+  document.getElementById("cv-host").checked=false;
+  document.getElementById("convert-bg").style.display="flex";
+}
+async function doConvert(){
+  if(!convertId) return;
+  var btn=document.getElementById("cv-go"); btn.disabled=true;
+  try{
+    var r = await api("/interest-events/"+encodeURIComponent(convertId)+"/convert", {
+      method:"POST",
+      body:JSON.stringify({ occDate: document.getElementById("cv-date").value, hostAtNGH: document.getElementById("cv-host").checked })
+    });
+    for(var i=0;i<items.length;i++){ if(items[i].id===r.interest.id) items[i]=r.interest; }
+    closeModal("convert-bg");
+    render();
+    toast("Draft event "+r.event.id+" created — finish it in Booking Admin → 🎉 Public Events.");
+  }catch(e){ toast("Convert failed: "+e.message); }
+  btn.disabled=false;
+}
+
+/* ---------- misc ---------- */
+function closeModal(id){ document.getElementById(id).style.display="none"; }
+function navMonth(dir){ curMonth.setMonth(curMonth.getMonth()+dir); render(); }
+function navToday(){ curMonth=new Date(); curMonth.setDate(1); render(); }
+document.addEventListener("keydown", function(e){ if(e.key==="Escape"){ closeModal("edit-bg"); closeModal("detail-bg"); closeModal("convert-bg"); } });
+
+// auto-login if a booking-admin token is already in this session
+if(token()){ boot(); }
+</script>
+</body>
+</html>
