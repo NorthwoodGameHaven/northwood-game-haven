@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 2026-07-21j · nso-300 -->
+<!-- NGH-BUILD 2026-07-30a · nso-300 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -684,8 +684,173 @@
         <div class="service-name">Hosted Events &amp; Birthday Parties</div>
         <p class="service-desc">Weekly game nights, TCG tournaments, learn-to-play sessions, open play events, and more. Something happening every week — full calendar coming soon. And for that special celebration: <strong>birthday parties</strong> are a favorite here. Bring your birthday cake or celebration treat with any private room rental — it's on us! Want to go further? Ask about our <em>Bring Your Own Food add-on</em> for a fully personalized party experience. We've got multiple great options to make any birthday legendary.</p>
         <a href="#event-calendar" class="space-cta" style="background:linear-gradient(135deg,var(--teal-dark,#0f4a56),#1f6f8b);color:#fff;">📅 See the Event Calendar →</a>
+        <a href="#birthday-parties" class="space-cta" style="background:linear-gradient(135deg,var(--gold,#c9973a),var(--gold-light,#e8b84b));color:var(--dark,#1a1a12);">🎂 Birthday Party Packages →</a>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- BIRTHDAY PARTIES · NGH-BUILD 2026-07-30a -->
+<section id="birthday-parties" class="bday-section">
+  <style>
+    .bday-section { position:relative; padding:80px 20px; background:linear-gradient(160deg,#1c3a26 0%,#2d5a3d 55%,#0f4a56 100%); overflow:hidden; }
+    .bday-section::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 80% 10%,rgba(201,151,58,0.14) 0%,transparent 55%); pointer-events:none; }
+    .bday-inner { max-width:1120px; margin:0 auto; position:relative; z-index:1; }
+    .bday-head { text-align:center; margin-bottom:14px; }
+    .bday-lockup { max-width:340px; width:70%; height:auto; margin:0 auto 18px; display:block; filter:drop-shadow(0 4px 14px rgba(0,0,0,0.35)); }
+    .bday-head .section-label { color:var(--gold-light); }
+    .bday-head .section-title { color:#fff; }
+    .bday-lede { font-size:1.02rem; color:rgba(255,255,255,0.82); line-height:1.85; max-width:760px; margin:0 auto 40px; text-align:center; }
+    .bday-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:26px; }
+    .bday-card { background:var(--cream); border-radius:18px; border:2px solid var(--gold); box-shadow:0 10px 34px rgba(0,0,0,0.28); overflow:hidden; display:flex; flex-direction:column; }
+    .bday-card-head { padding:24px 26px 18px; text-align:center; }
+    .bday-card-head.kids { background:linear-gradient(135deg,#2d5a3d,#3d7a54); }
+    .bday-card-head.adults { background:linear-gradient(135deg,#0f4a56,#1f6f8b); }
+    .bday-hook { font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.22em; text-transform:uppercase; color:var(--gold-light); display:block; margin-bottom:8px; }
+    .bday-card-title { font-family:'Cinzel Decorative',serif; font-size:1.45rem; color:#fff; line-height:1.25; margin:0; }
+    .bday-card-sub { font-size:0.86rem; color:rgba(255,255,255,0.8); margin-top:8px; line-height:1.6; }
+    .bday-card-body { padding:24px 26px 28px; display:flex; flex-direction:column; flex:1; }
+    .bday-tiers { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+    .bday-tier { flex:1 1 130px; background:#fff; border:1px solid #e8e0d0; border-radius:12px; padding:12px 14px; text-align:center; }
+    .bday-tier-name { font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--forest); font-weight:700; }
+    .bday-tier-price { font-family:'Cinzel Decorative',serif; font-size:1.3rem; color:var(--gold); margin-top:4px; }
+    .bday-tier-note { font-size:0.72rem; color:#6a6a55; margin-top:4px; line-height:1.45; }
+    .bday-list { list-style:none; margin:0 0 18px; padding:0; }
+    .bday-list li { position:relative; padding-left:22px; margin-bottom:9px; font-size:0.9rem; color:#3a3a28; line-height:1.6; }
+    .bday-list li::before { content:'◆'; position:absolute; left:0; top:1px; color:var(--gold); font-size:0.7rem; }
+    .bday-replay { background:linear-gradient(90deg,rgba(201,151,58,0.18),rgba(232,184,75,0.28),rgba(201,151,58,0.18)); border:1px solid var(--gold); border-radius:10px; padding:12px 16px; margin-bottom:18px; }
+    .bday-replay strong { font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.1em; text-transform:uppercase; color:#8a6a1e; display:block; margin-bottom:4px; }
+    .bday-replay p { font-size:0.82rem; color:#4a4a35; line-height:1.6; margin:0; }
+    .bday-quote { font-style:italic; font-size:0.85rem; color:#5a5a45; border-left:3px solid var(--gold); padding-left:12px; margin-bottom:20px; line-height:1.6; }
+    .bday-cta-row { margin-top:auto; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    .bday-cta { display:inline-block; text-decoration:none; font-family:'Cinzel',serif; font-size:0.78rem; letter-spacing:0.06em; font-weight:700; padding:12px 24px; border-radius:50px; background:linear-gradient(135deg,var(--gold),var(--gold-light)); color:var(--dark); box-shadow:0 4px 14px rgba(201,151,58,0.4); transition:transform 0.18s,opacity 0.18s; }
+    .bday-cta:hover { transform:translateY(-2px); opacity:0.92; }
+    .bday-link { font-size:0.8rem; color:var(--forest); font-weight:700; text-decoration:none; }
+    .bday-link:hover { text-decoration:underline; }
+    .bday-addons { margin-top:36px; background:rgba(255,255,255,0.06); border:1px solid rgba(201,151,58,0.4); border-radius:16px; padding:24px 26px; }
+    .bday-addons h3 { font-family:'Cinzel',serif; font-size:0.8rem; letter-spacing:0.2em; text-transform:uppercase; color:var(--gold-light); text-align:center; margin:0 0 18px; }
+    .bday-addons-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; }
+    .bday-addon { text-align:center; padding:12px 10px; background:rgba(255,255,255,0.05); border-radius:12px; }
+    .bday-addon-icon { font-size:1.5rem; display:block; margin-bottom:6px; }
+    .bday-addon-name { font-family:'Cinzel',serif; font-size:0.68rem; letter-spacing:0.06em; text-transform:uppercase; color:#fff; font-weight:700; line-height:1.4; }
+    .bday-addon-price { font-size:0.72rem; color:var(--gold-light); margin-top:3px; }
+    .bday-overnight { margin-top:26px; text-align:center; font-size:0.9rem; color:rgba(255,255,255,0.85); line-height:1.75; max-width:820px; margin-left:auto; margin-right:auto; }
+    .bday-overnight strong { color:var(--gold-light); }
+    @media(max-width:430px){ .bday-section{ padding:60px 14px; } .bday-card-body{ padding:20px 18px 24px; } }
+  </style>
+  <div class="bday-inner">
+    <div class="bday-head reveal">
+      <img src="birthday-lockup.png" alt="Birthdays at the Haven" class="bday-lockup" loading="lazy">
+      <span class="section-label">Celebrate With Us</span>
+      <h2 class="section-title">Birthday Parties at the Haven</h2>
+    </div>
+    <p class="bday-lede reveal">Private party rooms, a real Game Guru running the show, and a prize wheel where every spin wins. Parties book <strong>any day — even outside normal business hours</strong> — and bringing your own cake is always welcome at no charge. Every party includes the <strong>Party Float Kit</strong>: root beer, a bucket of ice cream, and all the provisions — then raid the craft soda bar to invent your own custom float.</p>
+    <div class="bday-grid">
+
+      <!-- KIDS CARD -->
+      <div class="bday-card reveal">
+        <div class="bday-card-head kids">
+          <span class="bday-hook">best. birthday. ever.</span>
+          <h3 class="bday-card-title">Stash's Birthday Raft</h3>
+          <p class="bday-card-sub">Kids' parties, ages ~5–12 · Private rooms + your own Game Guru host</p>
+        </div>
+        <div class="bday-card-body">
+          <div class="bday-tiers">
+            <div class="bday-tier">
+              <div class="bday-tier-name">Pup Party</div>
+              <div class="bday-tier-price">$149</div>
+              <div class="bday-tier-note">Up to 10 kids · 3 hours · The Holt</div>
+            </div>
+            <div class="bday-tier">
+              <div class="bday-tier-name">Raft Deluxe</div>
+              <div class="bday-tier-price">$249</div>
+              <div class="bday-tier-note">Up to 14 kids · 4 hours · Two rooms: tabletop + video game room</div>
+            </div>
+          </div>
+          <ul class="bday-list">
+            <li>Games picked from our 1,000+ title library — taught &amp; run for you</li>
+            <li>Retro &amp; modern consoles on the big screen — checked out free</li>
+            <li>Prize Wheel spin for every guest — every spin wins</li>
+            <li>Party Float Kit + goodie bags from The Raft — BYO cake free</li>
+            <li>FREE bounce house — weather permitting</li>
+            <li>Scavenger Quest with Stash — clue trail through the whole Haven</li>
+          </ul>
+          <div class="bday-replay">
+            <strong>⭐ The Replay Program</strong>
+            <p>The birthday kid leaves with a Come Back &amp; Play voucher, a Half-Birthday prize pull, and a keepsake print mailed to your door.</p>
+          </div>
+          <p class="bday-quote">"I never forget a birthday. Mostly because there's cake." — Stash the Otter</p>
+          <div class="bday-cta-row">
+            <a href="booking.html" class="bday-cta">🎂 Book a Kids' Party</a>
+            <a href="board-game-library.html" class="bday-link">Browse the game library →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADULTS CARD -->
+      <div class="bday-card reveal">
+        <div class="bday-card-head adults">
+          <span class="bday-hook">your birthday. your dungeon.</span>
+          <h3 class="bday-card-title">The After Dark</h3>
+          <p class="bday-card-sub">21+ parties · Private bar rooms · After-hours bookings welcome</p>
+        </div>
+        <div class="bday-card-body">
+          <div class="bday-tiers">
+            <div class="bday-tier">
+              <div class="bday-tier-name">Den Party</div>
+              <div class="bday-tier-price">$179</div>
+              <div class="bday-tier-note">Stash's Den · karaoke + modern &amp; retro gaming</div>
+            </div>
+            <div class="bday-tier">
+              <div class="bday-tier-name">Dungeon Crawl</div>
+              <div class="bday-tier-price">$199</div>
+              <div class="bday-tier-note">The Depths · private bar + retro brackets</div>
+            </div>
+            <div class="bday-tier">
+              <div class="bday-tier-name">Birthday One-Shot</div>
+              <div class="bday-tier-price">$249</div>
+              <div class="bday-tier-note">Guru-run adventure one-shot where YOU are the hero</div>
+            </div>
+            <div class="bday-tier">
+              <div class="bday-tier-name">Full Haven Takeover</div>
+              <div class="bday-tier-price">from $449</div>
+              <div class="bday-tier-note">Party room + overnight suite upstairs</div>
+            </div>
+          </div>
+          <ul class="bday-list">
+            <li>The Depths — underground dungeon, private bar, retro tournament brackets</li>
+            <li>Stash's Den — karaoke, big-screen gaming, and the river deck</li>
+            <li>Board game vault + console library — delivered free to your room</li>
+            <li>After-hours private bookings — bring your own drinks</li>
+            <li>Party Float Kit included — improvise your own with the craft soda bar</li>
+          </ul>
+          <div class="bday-replay">
+            <strong>⭐ Birthday Hero Perks</strong>
+            <p>Birthday hero parties FREE with 8+ guests — plus a $40 replay room credit toward your next night at the Haven within 60 days.</p>
+          </div>
+          <p class="bday-quote">"Every otter deserves one loud night in the den." — Stash the Otter</p>
+          <div class="bday-cta-row">
+            <a href="booking.html" class="bday-cta">🐉 Book an Adult Party</a>
+            <a href="video-game-equipment.html" class="bday-link">See the console library →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD-ONS STRIP -->
+    <div class="bday-addons reveal">
+      <h3>Party Add-Ons</h3>
+      <div class="bday-addons-grid">
+        <div class="bday-addon"><span class="bday-addon-icon">📸</span><div class="bday-addon-name">Pro Photo Session</div><div class="bday-addon-price">$50 · digitals + edited shots</div></div>
+        <div class="bday-addon"><span class="bday-addon-icon">🔨</span><div class="bday-addon-name">Fidget Forge</div><div class="bday-addon-price">$10/person · 50% off · birthday hero free with 8+ guests</div></div>
+        <div class="bday-addon"><span class="bday-addon-icon">🦦</span><div class="bday-addon-name">Scavenger Quest with Stash</div><div class="bday-addon-price">Included on request</div></div>
+        <div class="bday-addon"><span class="bday-addon-icon">🎤</span><div class="bday-addon-name">Karaoke</div><div class="bday-addon-price">Included</div></div>
+        <div class="bday-addon"><span class="bday-addon-icon">🍦</span><div class="bday-addon-name">Party Float Kit</div><div class="bday-addon-price">Included · every party</div></div>
+        <div class="bday-addon"><span class="bday-addon-icon">🏰</span><div class="bday-addon-name">Bounce House</div><div class="bday-addon-price">FREE · weather permitting</div></div>
+      </div>
+    </div>
+
+    <p class="bday-overnight reveal">🌙 <strong>Keep it going overnight:</strong> upgrade with a stay in <strong>The Lodge</strong> or <strong>The Adventurer's Rest</strong> — premium game room, full kitchen, fully-equipped private bar, and your own river deck. Booked separately through VRBO. No drive home required.</p>
   </div>
 </section>
 
