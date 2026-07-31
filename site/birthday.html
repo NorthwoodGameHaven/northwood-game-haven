@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 2026-07-31c · pkg cards rebuilt as divs + gold BIRTHDAYS wordmark lockup -->
+<!-- NGH-BUILD 2026-07-31d · pricing/rooms rework + D&D one-shot add-on -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -144,16 +144,16 @@
             <div class="pkg-badge kids">Kids</div>
             <div class="pkg-name">Pup Party</div>
             <div class="pkg-price">$149</div>
-            <div class="pkg-desc">Up to 10 kids · 3 hours · The Holt. Games taught &amp; run by your own Game Guru, Prize Wheel spins for every guest.</div>
+            <div class="pkg-desc">Up to 10 kids · 4 hours · The Holt. Games taught &amp; run by your own Game Guru — Prize Wheel spin for every guest, karaoke and outdoor bounce house included.</div>
           </div>
         </label>
         <label class="pkg-card">
-          <input type="radio" name="package" value="Raft Deluxe ($249)" data-aud="kids">
+          <input type="radio" name="package" value="Raft Deluxe ($199)" data-aud="kids">
           <div class="pkg-inner">
             <div class="pkg-badge kids">Kids</div>
             <div class="pkg-name">Raft Deluxe</div>
-            <div class="pkg-price">$249</div>
-            <div class="pkg-desc">Up to 14 kids · 4 hours · Two rooms: The Holt for tabletop + Stash's Den for big-screen video games on retro &amp; modern consoles.</div>
+            <div class="pkg-price">$199</div>
+            <div class="pkg-desc">Up to 14 kids · 4 hours · Three rooms: The Holt for tabletop + both rooms of Stash's Den for big-screen video games on retro &amp; modern consoles. Prize Wheel spin for every guest, karaoke and outdoor bounce house included.</div>
           </div>
         </label>
       </div>
@@ -161,38 +161,29 @@
       <div class="pkg-group-title adults">The After Dark — Adults 21+</div>
       <div class="pkg-grid">
         <label class="pkg-card">
-          <input type="radio" name="package" value="Den Party ($179)" data-aud="adults">
+          <input type="radio" name="package" value="Den Party ($89)" data-aud="adults">
           <div class="pkg-inner">
             <div class="pkg-badge adults">21+</div>
             <div class="pkg-name">Den Party</div>
-            <div class="pkg-price">$179</div>
-            <div class="pkg-desc">Two rooms + the back deck. Stash's Den: big-screen video games, karaoke, and high-energy bar-height party games. Connected game room: 4-player table, your own custom premium Crokinole board with the full accessory kit — billiards discs &amp; cues plus card-game expansions — and a Mahjong set. Back deck: rocking chairs, 4-player tables, and river views.</div>
+            <div class="pkg-price">$89</div>
+            <div class="pkg-desc">Stash's Den — two rooms + the back deck. Main room: big-screen video games, karaoke, and high-energy bar-height party games. Connected game room: 4-player table, your own custom premium Crokinole board with the full accessory kit — billiards discs &amp; cues plus card-game expansions — and a Mahjong set. Back deck: rocking chairs, 4-player tables, and river views.</div>
           </div>
         </label>
         <label class="pkg-card">
-          <input type="radio" name="package" value="Dungeon Crawl ($199)" data-aud="adults">
+          <input type="radio" name="package" value="Dungeon Crawl ($129)" data-aud="adults">
           <div class="pkg-inner">
             <div class="pkg-badge adults">21+</div>
             <div class="pkg-name">Dungeon Crawl</div>
-            <div class="pkg-price">$199</div>
+            <div class="pkg-price">$129</div>
             <div class="pkg-desc">The Depths + The Holt. Underground dungeon with private bar and retro tournament brackets — The Holt keeps restrooms and the main level in reach even after hours.</div>
           </div>
         </label>
         <label class="pkg-card">
-          <input type="radio" name="package" value="Birthday One-Shot ($249)" data-aud="adults">
-          <div class="pkg-inner">
-            <div class="pkg-badge adults">21+</div>
-            <div class="pkg-name">Birthday One-Shot</div>
-            <div class="pkg-price">$249</div>
-            <div class="pkg-desc">A Guru-run adventure one-shot at our premium table — where YOU are the hero of the story.</div>
-          </div>
-        </label>
-        <label class="pkg-card">
-          <input type="radio" name="package" value="Full Haven Takeover (from $449)" data-aud="adults">
+          <input type="radio" name="package" value="Full Haven Takeover ($449)" data-aud="adults">
           <div class="pkg-inner">
             <div class="pkg-badge adults">21+</div>
             <div class="pkg-name">Full Haven Takeover</div>
-            <div class="pkg-price">from $449</div>
+            <div class="pkg-price">$449</div>
             <div class="pkg-desc">The whole Haven: The Depths + The Holt + Stash's Den, plus an overnight suite upstairs. The ultimate takeover.</div>
           </div>
         </label>
@@ -239,6 +230,14 @@
       </div>
 
       <label class="addon">
+        <input type="checkbox" name="addons" value="D&amp;D One-Shot (Guru-run — included)">
+        <span>
+          <span class="addon-name">D&amp;D One-Shot</span><span class="addon-price">Included</span>
+          <span class="addon-desc" style="display:block;">A Guru-run adventure one-shot at our premium table — where the birthday hero IS the hero of the story. Kids and adult parties alike.</span>
+        </span>
+      </label>
+
+      <label class="addon">
         <input type="checkbox" name="addons" value="Karaoke equipment (included — no extra deposit)">
         <span>
           <span class="addon-name">Karaoke Equipment</span><span class="addon-price">Included</span>
@@ -258,14 +257,14 @@
         <input type="checkbox" name="addons" value="Fidget Forge upgrade ($10/person, birthday hero free with 8+ guests)">
         <span>
           <span class="addon-name">Fidget Forge Upgrade</span><span class="addon-price">$10/person · 50% off</span>
-          <span class="addon-desc" style="display:block;">Every guest builds their own custom clicker kit at The Fidget Forge. Birthday hero builds FREE with 8+ guests. Give us 3+ days notice and we'll pre-stock your custom colors.</span>
+          <span class="addon-desc" style="display:block;">Every guest builds their own custom clicker kit at The Fidget Forge. The birthday hero always builds FREE. Give us 3+ days notice and we'll pre-stock your custom colors.</span>
         </span>
       </label>
 
       <label class="addon kids-only" id="addon-bounce">
         <input type="checkbox" name="addons" value="FREE bounce house (weather permitting, ages ~12 and under)">
         <span>
-          <span class="addon-name">Bounce House</span><span class="addon-price">FREE</span>
+          <span class="addon-name">Outdoor Bounce House</span><span class="addon-price">FREE</span>
           <span class="addon-desc" style="display:block;">Set up outside with a Guru supervising — weather permitting. Kids' parties only, ages ~12 and under.</span>
         </span>
       </label>
