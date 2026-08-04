@@ -187,7 +187,7 @@ async function notifyNewBooking(list) {
   // 2) Game Guru notification
   await sendBrandedMail(
     adminEmail,
-    'New booking request: ' + rooms + ' on ' + first.date,
+    (first.guruNotGuaranteed ? '\u26a0\ufe0f SHORT-NOTICE GURU \u2014 ' : '') + 'New booking request: ' + rooms + ' on ' + first.date,
     {
       heading: '📥 New Booking Request',
       bodyText:
@@ -201,7 +201,12 @@ async function notifyNewBooking(list) {
         'Duration: ' + first.hours + ' hour(s)\n' +
         (recurring ? ('Recurring: ' + list.length + ' occurrences\n') : '') +
         'Add-ons: ' + addonList + '\n' +
-        'Military / first-responder discount: ' + (first.milRequested ? 'REQUESTED (verify ID)' : 'no') + '\n\n' +
+        'Military / first-responder discount: ' + (first.milRequested ? 'REQUESTED (verify ID)' : 'no') + '\n' +
+        (first.guruNotGuaranteed
+          ? ('\n\u26a0\ufe0f PRIVATE GURU \u2014 NOT GUARANTEED (<2 days notice). Fee NOT collected online ($' + (Number(first.guruFeeIfHonored) || 0).toFixed(2) + ' + tax if honored).\n' +
+             'Coordinate staffing on the Guru Schedule FIRST, then Honor (emails guest a confirm + pay link) or Decline (notifies guest, no charge) from the Guru Console.\n')
+          : '') +
+        '\n' +
         'Review and approve in the Guru Console.',
       buttons: [{ label: 'Open Guru Console', url: SITE + '/booking.html?admin=1', primary: true }],
       replyTo: first.email || undefined

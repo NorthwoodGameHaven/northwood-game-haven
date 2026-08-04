@@ -69,7 +69,7 @@ export default async () => {
   console.log(`[auto-cancel] canceled ${canceled} unpaid booking(s)`);
 
   // ---------- DAILY OPS DIGEST ----------
-  try { await sendOpsDigest(now, canceledList); }
+  try { await sendOpsDigest(now, canceledList, chiToday); }
   catch (e) { console.error('[auto-cancel] ops digest failed', e); }
 
   return new Response(`canceled ${canceled}`, { status: 200 });
@@ -79,7 +79,7 @@ function ymd(d) { return d.toISOString().slice(0, 10); }
 function fmtT(t) { if (!t) return ''; const p = String(t).split(':'); let h = +p[0]; const m = p[1], ap = h >= 12 ? 'PM' : 'AM'; let hh = h % 12; if (hh === 0) hh = 12; return hh + ':' + m + ' ' + ap; }
 function regQty(d) { return Math.max(1, parseInt(d && d.qty, 10) || 1); }
 
-async function sendOpsDigest(now, canceledList) {
+async function sendOpsDigest(now, canceledList, chiToday) {
   const adminEmail = process.env.ADMIN_EMAIL || 'stash@northwoodgamehaven.com';
   const SITE = (process.env.SITE_URL || 'https://gamehaven.guru').replace(/\/$/, '');
   const sections = [];
@@ -157,6 +157,55 @@ async function sendOpsDigest(now, canceledList) {
     sections.push('🎟️ UNPAID SEATS — EVENT WITHIN 7 DAYS (' + unpaid.length + ')\n' + unpaid.join('\n') +
       '\n  → Chase with "Email payment link" per row (WI-105 §3). Releasing a seat is still a human decision — contact first, release second.');
   }
+
+  // ---- 5. Guru-not-guaranteed short-notice requests (2-day rule) ----
+  try {
+    const chiT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(now);
+    const gnb = [];
+    const bkRows = await sql`SELECT data FROM bookings WHERE status IN ('pending','approved')`;
+    for (const b of bkRows) {
+      const d = b.data;
+      if (!d || !d.guruNotGuaranteed || d.guruResolved) continue;
+      if (!d.date || d.date < chiT) continue;
+      gnb.push(`  • ${d.id} — ${d.name || '—'} · ${d.date} ${fmtT(d.start)} · ${(d.rooms || []).map(roomLabel).join(', ') || 'rooms?'} · Guru fee if honored: $${Number(d.guruFeeIfHonored || 0).toFixed(2)} (${d.email || 'no email'})`);
+    }
+    let bdayRows = [];
+    try { bdayRows = await sql`SELECT data FROM birthday_requests`; }
+    catch (e) { /* table may not exist until the first birthday request */ }
+    for (const b of bdayRows) {
+      const d = b.data;
+      if (!d || !d.guruNotGuaranteed) continue;
+      if (['closed', 'canceled', 'cancelled', 'rejected', 'declined'].includes(String(d.status || '').toLowerCase())) continue;
+      if (!d.date || d.date < chiT) continue;
+      gnb.push(`  • ${d.id} — 🎂 ${d.package || 'birthday party'} · ${d.date} ${d.time || ''} · ${d.name || '—'} (${d.email || 'no email'})`);
+    }
+    if (gnb.length) {
+      sections.push('🧙 PRIVATE GURU NOT GUARANTEED — SHORT-NOTICE (<2 DAYS) REQUESTS (' + gnb.length + ')\n' + gnb.join('\n') +
+        '\n  → Coordinate Guru staffing NOW (Guru Schedule). If honored: confirm with the guest and collect the Guru fee separately (POS or payment link). If it can\'t be staffed: tell the guest ASAP — a room booking still stands without the Guru.');
+    }
+  } catch (e) { console.warn('[auto-cancel] guru-not-guaranteed digest section failed', e); }
+
+  // ---- 5. short-notice Guru requests needing coordination / fee collection ----
+  try {
+    const bkRows = await sql`SELECT data FROM bookings WHERE status IN ('approved','pending')`;
+    const guruItems = [];
+    for (const r of bkRows) {
+      const b = r.data;
+      if (!b || !b.guruNotGuaranteed) continue;
+      if (!b.date || b.date < chiToday) continue;                 // past = moot
+      if (b.guruResolved === 'declined') continue;                // closed out
+      const fee = (Number(b.guruFeeIfHonored) || 0).toFixed(2);
+      if (b.guruResolved === 'honored') {
+        if (!b.guruFeePaid) guruItems.push(`  \u2022 ${b.id} \u2014 ${b.name || '\u2014'} \u00b7 ${b.date} \u00b7 HONORED, Guru fee $${fee} + tax still DUE (pay link or POS)`);
+      } else {
+        guruItems.push(`  \u2022 ${b.id} \u2014 ${b.name || '\u2014'} \u00b7 ${b.date} \u00b7 pending coordination \u00b7 fee if honored $${fee} + tax`);
+      }
+    }
+    if (guruItems.length) {
+      sections.push('\ud83e\uddd9 SHORT-NOTICE PRIVATE GURU (' + guruItems.length + ')\n' + guruItems.join('\n') +
+        '\n  \u2192 Check the Guru Schedule, then Honor (auto-emails confirm + pay link) or Decline (auto-notifies guest) in the Guru Console. Approval alone never promises the Guru.');
+    }
+  } catch (e) { console.warn('[auto-cancel] guru digest section failed', e); }
 
   if (!sections.length) { console.log('[auto-cancel] ops digest: nothing to report'); return; }
 
