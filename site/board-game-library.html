@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- NGH-BUILD 2026-08-03a · stashs-portage traveling library -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -45,6 +46,14 @@
   .vault-pending{background:#fff;border:1px dashed #c9973a;border-radius:15px;padding:30px 22px;text-align:center;color:#7a6a45;font-size:0.92rem;}
   .vault-pending strong{color:var(--forest);}
   .legend{font-size:0.82rem;color:#7a7a5a;margin-top:26px;text-align:center;line-height:1.7;}
+  /* Stash's Portage — traveling library */
+  .road-hero{background:linear-gradient(180deg,#1e3d2b,#12261b);border-radius:20px;padding:26px 18px 22px;text-align:center;margin:34px 0 0;box-shadow:0 12px 34px rgba(18,38,27,.3);}
+  .road-hero .eyebrow{font-family:'Cinzel',serif;font-size:0.66rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--gold-light);}
+  .road-hero h2{font-family:'Cinzel Decorative',serif;font-size:clamp(1.3rem,3.8vw,1.95rem);color:#fff;margin:4px 0;}
+  .road-hero p{font-size:0.9rem;color:#d8e6da;max-width:620px;margin:6px auto 0;}
+  .road-photo{width:100%;max-width:760px;border-radius:15px;margin:16px auto 4px;display:block;box-shadow:0 10px 30px rgba(0,0,0,.35);border:3px solid rgba(200,162,74,.55);}
+  .road-note{background:#fff7e8;border:1px solid #e7cf9b;border-radius:11px;padding:13px 16px;font-size:0.86rem;color:#7a5a1e;margin:16px 0 22px;text-align:center;}
+  .road-note strong{color:#8a5a14;}
   footer{background:var(--dark);color:rgba(255,255,255,0.6);text-align:center;padding:30px 24px;font-size:0.82rem;margin-top:40px;}
   footer a{color:var(--gold-light);text-decoration:none;}
 </style>
@@ -70,7 +79,7 @@
 <header class="pg">
   <div class="eyebrow">Included Free With Any Room Rental</div>
   <h1>Board Game Library</h1>
-  <p>Hundreds of titles, free to play with any reservation — from quick party games to deep strategy epics. Our Game Gurus will teach you anything in the collection. Browse what's <strong>available to play right now</strong>, or dig into <strong>the Vault</strong> — a deeper archive you can request ahead of your visit.</p>
+  <p>Hundreds of titles, free to play with any reservation — from quick party games to deep strategy epics. Our Game Gurus will teach you anything in the collection. Browse what's <strong>available to play right now</strong>, or dig into <strong>the Vault</strong> — a deeper archive you can request ahead of your visit. And when the Haven hits the road, look for <strong>Stash's Portage</strong> — our traveling library.</p>
   <a class="backlink" href="booking.html">← Back to booking</a>
 </header>
 
@@ -82,6 +91,7 @@
     <button class="viewbtn active" data-v="all" onclick="setView('all')">Everything</button>
     <button class="viewbtn" data-v="avail" onclick="setView('avail')">Available Now</button>
     <button class="viewbtn" data-v="vault" onclick="setView('vault')">From the Vault</button>
+    <button class="viewbtn" data-v="road" onclick="setView('road')">Stash's Portage</button>
   </div></div>
 
   <!-- ===================== AVAILABLE FOR PLAY ===================== -->
@@ -308,6 +318,40 @@
 
   </section>
 
+  <!-- ===================== STASH'S PORTAGE — TRAVELING LIBRARY ===================== -->
+  <section class="lib-section" id="road-section">
+    <div class="road-hero">
+      <div class="eyebrow">The Library That Leaves the Haven</div>
+      <h2>Stash's Portage</h2>
+      <p>Every good otter knows how to portage — pack up the stash, carry it overland, and set up on new waters. Stash's Portage is our fully stocked traveling game library: a rolling shelf of party favorites, classics, and modern hits that heads out to partner spots around the Chippewa Valley.</p>
+      <img class="road-photo" src="stashs-portage.jpg" alt="Stash's Portage traveling game library shelf at The Plus, with two guests playing a game at a table" loading="lazy">
+    </div>
+    <div class="road-note">🦦 <strong>Currently docked at The Plus</strong> in downtown Eau Claire — pull a game off the shelf and play free during your visit. The lineup rotates, so there's always something new on the cart.</div>
+
+    <div class="grid">
+      <div class="cat">
+        <h2>🧳 Riding the Portage Right Now</h2>
+        <ul>
+          <li>Catan (25th Anniversary Edition)</li><li>Catan: Cities &amp; Knights</li>
+          <li>Ticket to Ride</li><li>Splendor</li><li>Azul</li><li>Cascadia</li>
+          <li>Architects of the West Kingdom</li><li>Century</li><li>Equinox</li>
+          <li>Heat</li><li>Challengers!</li><li>Dixit</li><li>Kingdomino</li>
+          <li>Santorini</li><li>Camel Up</li><li>Captain Flip</li>
+        </ul>
+      </div>
+      <div class="cat">
+        <h2>🎉 Party &amp; Classics on Board</h2>
+        <ul>
+          <li>Stratego</li><li>Clue</li><li>Guess Who?</li><li>Rummikub</li>
+          <li>Big Boggle</li><li>Taboo</li><li>Pit</li><li>Telestrations</li>
+          <li>Poetry for Neanderthals</li><li>Happy Salmon</li>
+          <li>Cards Against Humanity</li><li>Best Chess Set Ever</li>
+          <li>…and more — the cart rotates with every trip</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <p class="legend">🦦 This is a living list pulled straight from our shelves — new games arrive all the time. If you don't see a favorite, ask a Game Guru or request it in the board-game checkout add-on when you <a href="booking.html">book a play space</a>.</p>
 </div>
 
@@ -341,8 +385,10 @@ function applyFilters(){
   var q=document.getElementById('bsearch').value.toLowerCase();
   var avail=document.getElementById('avail-section');
   var vault=document.getElementById('vault-section');
-  avail.style.display=(viewMode==='vault')?'none':'';
-  vault.style.display=(viewMode==='avail')?'none':'';
+  var road=document.getElementById('road-section');
+  avail.style.display=(viewMode==='vault'||viewMode==='road')?'none':'';
+  vault.style.display=(viewMode==='avail'||viewMode==='road')?'none':'';
+  road.style.display=(viewMode==='avail'||viewMode==='vault')?'none':'';
   var cats=document.querySelectorAll('.lib-section .cat');
   for(var i=0;i<cats.length;i++){
     var c=cats[i];
