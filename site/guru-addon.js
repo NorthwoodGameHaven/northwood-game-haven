@@ -1,3 +1,4 @@
+/* NGH-BUILD 2026-08-05a · sched-link anchored to view-events-btn (promos btn removed) */
 /* =================================================================
    NGH GURU ADD-ON v1.4  (site/guru-addon.js)
    Loaded into booking.html via Netlify snippet injection — the 2.4 MB
@@ -65,7 +66,7 @@
     }
 
     /* ---------- 1. toolbar link ---------- */
-    var promoBtn = gid("view-promos-btn");
+    var promoBtn = gid("view-events-btn");
     if (promoBtn && !gid("guru-sched-link")) {
       var a = document.createElement("a");
       a.id = "guru-sched-link"; a.className = "btn btn-sm btn-ghost";
@@ -484,7 +485,7 @@
        (or get re-rendered by code paths we haven't wrapped). Every second,
        make sure our UI is in place. Cheap no-op when everything's present. */
     function applyNow() {
-      var pb = gid("view-promos-btn");
+      var pb = gid("view-events-btn");
       if (pb && !gid("guru-sched-link")) {
         var a2 = document.createElement("a");
         a2.id = "guru-sched-link"; a2.className = "btn btn-sm btn-ghost";

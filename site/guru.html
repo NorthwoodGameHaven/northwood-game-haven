@@ -105,6 +105,10 @@
         <div class="t">🎂 Birthday Requests</div>
         <div class="d">Review party requests, track contact status, link them to bookings</div>
       </a>
+      <a class="tile" href="#promos" onclick="document.getElementById('promos').scrollIntoView({behavior:'smooth'});return false;">
+        <div class="t">🎁 Web Promotions</div>
+        <div class="d">Landing-page giveaways &amp; sign-ups — entry counts, lists, CSV export</div>
+      </a>
       <a class="tile" href="checkin.html">
         <div class="t">🎟️ Event Check-In</div>
         <div class="d">Scan ticket QR codes at the door · walk-ins · paid / unpaid flags</div>
@@ -121,10 +125,15 @@
 
     <!-- ============ BIRTHDAY REQUESTS ============ -->
     <h2 class="sec" id="birthdays">🎂 Birthday Requests</h2>
-    <p class="muted">Requests land here the moment the customer submits the form (they also still arrive by email).
-      Flow: <b>New → Contacted → Confirmed</b> (or Declined). Confirming a date? <b>Create the booking in the console too</b> — that is what actually holds the room; paste the booking ID back here so the two stay linked.</p>
+    <p class="muted">Requests land here the moment the customer submits the form (they also still arrive by email) — and the system auto-creates a linked <b>PENDING booking that already holds the room(s)</b> on the calendar.
+      Flow: <b>New → Contacted → Confirmed</b> (or Declined). Confirming a date? <b>Approve the linked booking in the console</b> — approval emails the customer their payment links. Declining here releases the calendar hold automatically.</p>
     <div class="chips" id="bd-chips"></div>
     <div id="bd-list"><p class="muted">Loading…</p></div>
+
+    <!-- ============ WEB PROMOTIONS ============ -->
+    <h2 class="sec" id="promos">🎁 Web Promotions</h2>
+    <p class="muted">Landing-page giveaways and sign-up promotions. Entry lists are admin-only; pages are unlisted (not linked from the site, not indexed).</p>
+    <div id="promo-list"><p class="muted">Loading…</p></div>
   </div>
 </div>
 <div id="toast"></div>
@@ -259,7 +268,7 @@ function renderBirthdays(){
         btnFor(r,"declined","🚫 Decline") + (s!=="archived" ? btnFor(r,"archived","🗄 Archive") : btnFor(r,"new","↩ Reopen")) +
         '<a class="btn ghost small" href="mailto:'+esc(r.email)+'?subject='+mailSub+'">✉️ Reply</a>' +
         '<button class="btn ghost small" onclick="copyBd(\''+esc(r.id)+'\')">📋 Copy details</button>' +
-        '<a class="btn ghost small" href="booking.html?admin=1" title="Create the booking that actually holds the room, then paste its ID here">➕ Create booking in console</a>' +
+        '<a class="btn ghost small" href="booking.html?admin=1" title="The linked PENDING booking already holds the room — approve it there to confirm (sends payment links)">📋 Open booking console</a>' +
         '<button class="btn ghost small" onclick="linkBooking(\''+esc(r.id)+'\')">🔗 Link booking ID</button>' +
       '</div></div>';
   }).join("");
@@ -274,7 +283,8 @@ async function setBdStatus(id, st){
     var i = bdData.findIndex(function(r){ return r.id===id; });
     if(i>=0) bdData[i] = j.request;
     renderBirthdays(); toast("Marked "+st+".");
-    if(st==="confirmed") toast("Confirmed — now create the booking in the console so the room is actually held!");
+    if(st==="confirmed") toast("Confirmed — now APPROVE the linked booking in the console (that sends the approval + payment links)!");
+    if((st==="declined"||st==="archived") && j.releasedBooking) toast("Calendar hold "+j.releasedBooking+" released.");
   }catch(e){ toast(e.message||"Update failed"); }
 }
 async function saveBdNotes(id, val){
@@ -314,13 +324,84 @@ function copyBd(id){
   );
 }
 
+/* ---------- web promotions ---------- */
+var WEB_PROMOTIONS = [
+  { id:"usa250", title:"USA 250 — $5 Store Cash Giveaway", emoji:"🎆",
+    page:"/USA250", endpoint:"/usa250", cap:50,
+    desc:"July 4th weekend giveaway. First 50 entrants receive $5 store credit (Lightspeed). Launched via Facebook Live." }
+];
+var promoData = {};   /* id -> {cap,count,entries} */
+var promoShow = {};   /* id -> entries table expanded */
+function renderPromos(){
+  var el = $("promo-list"); if(!el) return;
+  var h = "";
+  WEB_PROMOTIONS.forEach(function(p){
+    var d = promoData[p.id];
+    h += '<div class="card" style="margin-bottom:14px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
+        '<div><b style="color:var(--forest);">' + p.emoji + ' ' + esc(p.title) + '</b>' +
+        '<div class="muted" style="margin-top:3px;">' + esc(p.desc) + '</div></div>' +
+        '<span class="badge" style="white-space:nowrap;">' + (d ? (d.count + ' / ' + d.cap + ' entries') : '—') + '</span>' +
+      '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center;">' +
+        '<a class="btn ghost small" href="' + p.page + '" target="_blank" rel="noopener">🔗 Open page</a>' +
+        '<button class="btn small" onclick="loadPromo(\'' + p.id + '\',true)">👥 ' + (promoShow[p.id] ? 'Refresh entries' : 'View entries') + '</button>' +
+        '<button class="btn ghost small" onclick="exportPromoCSV(\'' + p.id + '\')"' + (d && d.entries.length ? '' : ' disabled') + '>📥 Download CSV</button>' +
+      '</div>' +
+      '<div style="margin-top:10px;overflow-x:auto;">' + (promoShow[p.id] && d ? promoTableHTML(p, d) : '') + '</div>' +
+    '</div>';
+  });
+  el.innerHTML = h || '<p class="muted">No promotions configured.</p>';
+}
+function promoTableHTML(p, d){
+  if(!d.entries.length) return '<p class="muted" style="margin:6px 0 0;">No entries yet.</p>';
+  var th = 'style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--forest);"';
+  var td = 'style="padding:5px 8px;border-bottom:1px solid #eef0ec;"';
+  var h = '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+    '<tr><th ' + th + '>#</th><th ' + th + '>Name</th><th ' + th + '>Phone</th><th ' + th + '>Email</th><th ' + th + '>Agreed</th><th ' + th + '>Submitted</th></tr>';
+  d.entries.forEach(function(e){
+    var over = e.seq > d.cap;
+    h += '<tr' + (over ? ' style="opacity:.55;"' : '') + '>' +
+      '<td ' + td + '>' + e.seq + (over ? ' <span class="muted">(past cap)</span>' : '') + '</td>' +
+      '<td ' + td + '>' + esc(e.name) + '</td>' +
+      '<td ' + td + '>' + esc(promoPhone(e.phone)) + '</td>' +
+      '<td ' + td + '>' + esc(e.email) + '</td>' +
+      '<td ' + td + '>' + (e.agreed ? '✓ Yes' : '✗ NO') + '</td>' +
+      '<td ' + td.slice(0,-1) + 'white-space:nowrap;"' + '>' + new Date(e.submitted).toLocaleString() + '</td></tr>';
+  });
+  return h + '</table>';
+}
+function promoPhone(p){ p = String(p||""); return p.length===10 ? "("+p.slice(0,3)+") "+p.slice(3,6)+"-"+p.slice(6) : p; }
+async function loadPromo(id, show){
+  var p = WEB_PROMOTIONS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
+  if(show) promoShow[id] = true;
+  try{
+    promoData[id] = await api(p.endpoint);
+    renderPromos();
+  }catch(e){ if(show) toast("Couldn't load entries: " + ((e && e.message) || e)); }
+}
+function exportPromoCSV(id){
+  var p = WEB_PROMOTIONS.filter(function(x){ return x.id===id; })[0], d = promoData[id];
+  if(!p || !d || !d.entries.length) return;
+  var rows = [["Entry #","Name","Phone","Email","Agreed to Terms","Submitted (local)","Submitted (ISO)"]];
+  d.entries.forEach(function(e){
+    rows.push([e.seq, e.name, promoPhone(e.phone), e.email, (e.agreed ? "Yes" : "No"), new Date(e.submitted).toLocaleString(), e.submitted]);
+  });
+  var csv = rows.map(function(r){ return r.map(function(v){ v = String(v==null?"":v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }).join(","); }).join("\r\n");
+  var blob = new Blob([csv], {type:"text/csv"});
+  var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = p.id + "-entries.csv"; a.click();
+}
+
 /* ---------- boot ---------- */
 async function boot(){
   showApp();
   loadStats();
+  renderPromos();
+  WEB_PROMOTIONS.forEach(function(p){ loadPromo(p.id, false); });
   if(location.hash === "#birthdays"){ setTimeout(function(){ var el=$("birthdays"); el && el.scrollIntoView(); }, 250); }
 }
 if(GuruAuth.get()){ boot(); } else { showLogin(); }
 </script>
+<!-- NGH-BUILD 2026-08-05a · Web Promotions console (moved from booking admin) -->
 </body>
 </html>
