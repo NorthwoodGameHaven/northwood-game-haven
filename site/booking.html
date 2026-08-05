@@ -539,7 +539,6 @@
         <button class="btn btn-sm" id="view-list-btn" onclick="setAdminView('list')">📋 Request List</button>
         <button class="btn btn-sm btn-ghost" id="view-cal-btn" onclick="setAdminView('calendar')">📅 Calendar</button>
         <button class="btn btn-sm btn-ghost" id="view-events-btn" onclick="setAdminView('events')">🎉 Public Events</button>
-        <button class="btn btn-sm btn-ghost" id="view-promos-btn" onclick="setAdminView('promos')">🎁 Web Promotions</button>
         <a class="btn btn-sm btn-ghost" id="guru-sched-link" href="guru-schedule.html" style="text-decoration:none;display:inline-flex;align-items:center;">🦦 Guru Schedule</a>
         <button class="btn btn-sm btn-ghost" id="view-deconf-btn" onclick="openDeconflict()">🧹 De-conflict Bookings</button>
         <button class="btn btn-sm btn-ghost" onclick="newEventQuick()" style="border-color:var(--gold);color:var(--gold);">➕ New Event</button>
@@ -604,8 +603,6 @@
       <!-- EVENTS VIEW -->
       <div id="events-view-wrap" style="display:none;"></div>
 
-      <!-- WEB PROMOTIONS VIEW -->
-      <div id="promos-view-wrap" style="display:none;"></div>
     </div>
   </div>
 </div>
@@ -1952,92 +1949,14 @@ function setAdminView(v){
   $("list-view-wrap").style.display = v==="list" ? "block" : "none";
   $("calendar-view-wrap").style.display = v==="calendar" ? "block" : "none";
   $("events-view-wrap").style.display = v==="events" ? "block" : "none";
-  $("promos-view-wrap").style.display = v==="promos" ? "block" : "none";
   $("view-list-btn").className = "btn btn-sm"+(v==="list"?"":" btn-ghost");
   $("view-cal-btn").className = "btn btn-sm"+(v==="calendar"?"":" btn-ghost");
   $("view-events-btn").className = "btn btn-sm"+(v==="events"?"":" btn-ghost");
-  $("view-promos-btn").className = "btn btn-sm"+(v==="promos"?"":" btn-ghost");
   if(v==="calendar") renderCalendar();
   else if(v==="events") renderEventsAdmin();
-  else if(v==="promos") renderPromosAdmin();
   else renderAdmin(adminFilter);
 }
 
-/* ================= WEB PROMOTIONS (admin) =================
-   Registry of web promotions / giveaways. To add a future promotion:
-   build its page + Netlify function (GET with admin Bearer -> {cap,count,entries}),
-   then add one line here. Entries table + CSV export come for free. */
-var WEB_PROMOTIONS=[
-  { id:"usa250", title:"USA 250 — $5 Store Cash Giveaway", emoji:"🎆",
-    page:"/USA250", endpoint:"/usa250", cap:50,
-    desc:"July 4th weekend giveaway. First 50 entrants receive $5 store credit (Lightspeed). Launched via Facebook Live." }
-];
-var _promoData={};   // id -> {cap,count,entries}
-function renderPromosAdmin(){
-  var h='<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;">🎁 Web Promotions</h2>'+
-    '<p class="hint" style="margin:0 0 14px;">Landing-page giveaways and sign-up promotions. Entry lists are admin-only; pages are unlisted (not linked from the site, not indexed).</p>';
-  WEB_PROMOTIONS.forEach(function(p){
-    var d=_promoData[p.id];
-    h+='<div class="card" style="margin-bottom:14px;">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">'+
-        '<div><b style="font-family:\'Cinzel\',serif;color:var(--forest);">'+p.emoji+' '+esc(p.title)+'</b>'+
-        '<div class="hint" style="margin-top:3px;">'+esc(p.desc)+'</div></div>'+
-        '<span class="pill" id="promo-count-'+p.id+'" style="white-space:nowrap;">'+(d?(d.count+' / '+d.cap+' entries'):'—')+'</span>'+
-      '</div>'+
-      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<a class="btn btn-sm btn-ghost" href="'+p.page+'" target="_blank" rel="noopener">🔗 Open page</a>'+
-        '<button class="btn btn-sm" onclick="loadPromo(\''+p.id+'\')">👥 '+(d?'Refresh entries':'View entries')+'</button>'+
-        '<button class="btn btn-sm btn-ghost" onclick="exportPromoCSV(\''+p.id+'\')" '+(d&&d.entries.length?'':'disabled')+'>📥 Download CSV</button>'+
-      '</div>'+
-      '<div id="promo-list-'+p.id+'" style="margin-top:10px;overflow-x:auto;">'+(d?promoTableHTML(p,d):'')+'</div>'+
-    '</div>';
-  });
-  $("promos-view-wrap").innerHTML=h;
-}
-function promoTableHTML(p,d){
-  if(!d.entries.length) return '<p class="hint" style="margin:6px 0 0;">No entries yet.</p>';
-  var h='<table style="width:100%;border-collapse:collapse;font-size:0.78rem;">'+
-    '<tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--forest);">#</th>'+
-    '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--forest);">Name</th>'+
-    '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--forest);">Phone</th>'+
-    '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--forest);">Email</th>'+
-    '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--forest);">Agreed</th>'+
-    '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--forest);">Submitted</th></tr>';
-  d.entries.forEach(function(e){
-    var over=e.seq>d.cap;
-    h+='<tr'+(over?' style="opacity:.55;"':'')+'>'+
-      '<td style="padding:5px 8px;border-bottom:1px solid #eef0ec;">'+e.seq+(over?' <span class="hint">(past cap)</span>':'')+'</td>'+
-      '<td style="padding:5px 8px;border-bottom:1px solid #eef0ec;">'+esc(e.name)+'</td>'+
-      '<td style="padding:5px 8px;border-bottom:1px solid #eef0ec;">'+esc(promoPhone(e.phone))+'</td>'+
-      '<td style="padding:5px 8px;border-bottom:1px solid #eef0ec;">'+esc(e.email)+'</td>'+
-      '<td style="padding:5px 8px;border-bottom:1px solid #eef0ec;">'+(e.agreed?'✓ Yes':'✗ NO')+'</td>'+
-      '<td style="padding:5px 8px;border-bottom:1px solid #eef0ec;white-space:nowrap;">'+new Date(e.submitted).toLocaleString()+'</td></tr>';
-  });
-  return h+'</table>';
-}
-function promoPhone(p){ p=String(p||""); return p.length===10 ? "("+p.slice(0,3)+") "+p.slice(3,6)+"-"+p.slice(6) : p; }
-async function loadPromo(id){
-  var p=WEB_PROMOTIONS.filter(function(x){return x.id===id;})[0]; if(!p) return;
-  if(!Store.apiMode()){ alert("Promotion entries require the live server."); return; }
-  try{
-    var r=await fetch(API_BASE+p.endpoint,{headers:{"Authorization":"Bearer "+Store._token()}});
-    if(r.status===401){ alert("Your admin session expired — log out and back in."); return; }
-    if(!r.ok){ var er=await r.json().catch(function(){return{};}); alert("Couldn't load entries: "+(er.error||r.status)); return; }
-    _promoData[id]=await r.json();
-    renderPromosAdmin();
-  }catch(e){ alert("Couldn't load entries: "+((e&&e.message)||e)); }
-}
-function exportPromoCSV(id){
-  var p=WEB_PROMOTIONS.filter(function(x){return x.id===id;})[0], d=_promoData[id];
-  if(!p||!d||!d.entries.length) return;
-  var rows=[["Entry #","Name","Phone","Email","Agreed to Terms","Submitted (local)","Submitted (ISO)"]];
-  d.entries.forEach(function(e){
-    rows.push([e.seq,e.name,promoPhone(e.phone),e.email,(e.agreed?"Yes":"No"),new Date(e.submitted).toLocaleString(),e.submitted]);
-  });
-  var csv=rows.map(function(r){return r.map(function(v){v=String(v==null?"":v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(",");}).join("\r\n");
-  var blob=new Blob([csv],{type:"text/csv"});
-  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=p.id+"-entries.csv"; a.click();
-}
 function showGroup(groupId){
   setAdminView('list'); adminFilter="all"; renderAdminTabs();
   var list=cache.bookings.filter(function(r){ return r.groupId===groupId; }).sort(function(a,b){ return a.recIndex-b.recIndex; });
@@ -2374,7 +2293,7 @@ function renderEventsAdmin(){
     '<div id="ev-photo-preview" style="margin-top:8px;"></div></div>'+
 
     // ---- Description ----
-    '<label class="fld">Public description</label><textarea id="ev-notes" placeholder="What is this event? Who is it for? Format, theme, etc."></textarea>'+
+    '<label class="fld">Public description</label><textarea id="ev-notes" style="min-height:220px;" placeholder="What is this event? Who is it for? Format, theme, etc. Use blank lines for paragraph breaks — they now display exactly as typed."></textarea>'+
 
     // ---- Tournament details ----
     '<div class="ev-section"><div class="ev-section-label">🏆 Tournament Details (optional)</div>'+
@@ -4212,5 +4131,7 @@ function custWeekDayHTML(isDay){
   </div>
 </div>
 <script src="guru-addon.js"></script>
+<!-- NGH-BUILD 2026-08-05a · Web Promotions moved to Guru Hub (guru.html) -->
+<!-- NGH-BUILD 2026-08-05b · taller Public Description textarea (min-height:220px) -->
 </body>
 </html>
