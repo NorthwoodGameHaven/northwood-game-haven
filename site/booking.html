@@ -2211,7 +2211,7 @@ function eventCardHTML(e){
       (inviteLink?('<div class="kv" style="margin-top:4px;"><b>🔗 Invite link</b> <a href="'+esc(inviteLink)+'" target="_blank" rel="noopener" style="word-break:break-all;color:var(--den);">'+esc(inviteLink)+'</a> <button class="btn btn-sm btn-ghost" style="margin-left:4px;" onclick="navigator.clipboard.writeText(\''+esc(inviteLink)+'\').then(function(){alert(\'Invite link copied — share it only with your invitees.\');})">📋 Copy</button></div>'):
         (e.private?'<div class="kv" style="color:#5b3a8a;"><b>🔒 Private</b> Enable registration (above) to generate an invite link guests can use to sign up.</div>':''))+
       (e.fbLink?'<div class="kv"><b>Facebook</b> <a href="'+esc(e.fbLink)+'" target="_blank" rel="noopener">event page ↗</a></div>':'')+
-      (e.notes?'<div class="kv"><b>Description</b> '+esc(e.notes)+'</div>':'')+
+      (e.notes?'<div class="kv" style="white-space:pre-wrap;"><b>Description</b> '+esc(e.notes)+'</div>':'')+
       (ttypeLabel?'<div class="kv"><b>Tournament</b> '+ttypeLabel+(t.rounds?(" · "+t.rounds+" rounds"):"")+(t.winsPerRound?(" · best-of/"+t.winsPerRound):"")+(t.estEnd?(" · est. end "+fmtTime(timeToMins(t.estEnd))):"")+'</div>':'')+
       (t.arrival?'<div class="kv"><b>Arrival</b> '+fmtTime(timeToMins(t.arrival))+'</div>':'')+
       (t.restrictions?'<div class="kv"><b>Restrictions</b> '+esc(t.restrictions)+'</div>':'')+
@@ -4133,5 +4133,6 @@ function custWeekDayHTML(isDay){
 <script src="guru-addon.js"></script>
 <!-- NGH-BUILD 2026-08-05a · Web Promotions moved to Guru Hub (guru.html) -->
 <!-- NGH-BUILD 2026-08-05b · taller Public Description textarea (min-height:220px) -->
+<!-- NGH-BUILD 2026-08-05c · admin event-list description shows paragraph breaks -->
 </body>
 </html>
