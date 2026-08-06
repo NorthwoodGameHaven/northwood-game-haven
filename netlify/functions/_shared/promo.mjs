@@ -84,6 +84,11 @@ export function dailyPostText(tomorrow, evs) {
     lines.push('• ' + e.title + (timesOf(e) ? (' — ' + timesOf(e)) : ''));
     lines.push(eventUrl(e, tomorrow));
   });
+  // Closing line AFTER the links: Facebook strips the preview-generating URL from
+  // the post body when it's the last thing in the message — trailing text keeps
+  // the links visible and clickable alongside the preview card.
+  lines.push('');
+  lines.push('🎲 115 W Spring St, Chippewa Falls — see you at the Haven!');
   return lines.join('\n');
 }
 export function countdownPostText(e, occDate, weeks) {
@@ -94,6 +99,9 @@ export function countdownPostText(e, occDate, weeks) {
   lines.push('');
   const reg = e.registration && e.registration.enabled;
   lines.push((reg ? 'Details & registration: ' : 'Details: ') + eventUrl(e, occDate));
+  // Trailing text keeps the URL clickable in the body (see dailyPostText note).
+  lines.push('');
+  lines.push('🎲 See you at the Haven!');
   return lines.join('\n');
 }
 
