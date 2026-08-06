@@ -91,7 +91,16 @@ export default async (req) => {
     let img = base + '/logo.png';
     if (e && e.photo) {
       if (/^https?:\/\//i.test(e.photo)) img = e.photo;
-      else if (/^data:image\//i.test(e.photo)) img = base + '/event/' + encodeURIComponent(id) + '/photo';
+      else if (/^data:image\//i.test(e.photo)) {
+        // Cache-busting fingerprint: Facebook and the CDN cache og:image by URL,
+        // so the URL must change whenever the stored photo changes (e.g. after
+        // the banner optimizer re-encodes it). Sampled rolling hash — cheap and
+        // stable for identical photos, different for any re-encode.
+        const s = e.photo; let sum = 0;
+        const step = Math.max(1, Math.floor(s.length / 512));
+        for (let i = 0; i < s.length; i += step) sum = ((sum * 31) + s.charCodeAt(i)) >>> 0;
+        img = base + '/event/' + encodeURIComponent(id) + '/photo?v=' + s.length.toString(36) + '-' + sum.toString(36);
+      }
     }
 
     const canonical = base + '/event/' + encodeURIComponent(id) + (ds ? ('?date=' + encodeURIComponent(ds)) : '');
