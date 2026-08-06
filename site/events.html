@@ -2,6 +2,7 @@
 <!-- NGH-BUILD 2026-07-21c · lightbox + registrant-qty + discord-refresh -->
 <!-- NGH-BUILD 2026-08-06a · week view vertical titles + tiled fill images -->
 <!-- NGH-BUILD 2026-08-06b · horizontal title-only week labels + export footer fix -->
+<!-- NGH-BUILD 2026-08-06c · responsive vertical labels + export override -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -109,6 +110,18 @@
   .tg-ev.allday { background:var(--gold); color:#3a2e15; }
   .tg-ev.overnight { border-bottom:2px dashed rgba(255,255,255,0.85); }
   .tg-ev-cont { display:block; margin-top:1px; font-size:0.52rem; font-weight:700; opacity:0.95; letter-spacing:0.2px; }
+  /* Responsive week-view labels: horizontal when there's room; vertical on narrow screens
+     (media query) or when the block shares its slot with another (.split). Title-only both ways.
+     Share export forces horizontal — html2canvas can't render vertical writing-mode. */
+  .tg-ev .vtxt { display:inline; }
+  .tg-ev.split { display:flex; justify-content:center; align-items:flex-start; padding:5px 1px; }
+  .tg-ev.split .vtxt { writing-mode:vertical-rl; -webkit-writing-mode:vertical-rl; font-size:0.7rem; line-height:1.2; max-height:100%; overflow:hidden; }
+  @media (max-width:760px){
+    .tg-ev.wk { display:flex; justify-content:center; align-items:flex-start; padding:5px 1px; }
+    .tg-ev.wk .vtxt { writing-mode:vertical-rl; -webkit-writing-mode:vertical-rl; font-size:0.7rem; line-height:1.2; max-height:100%; overflow:hidden; }
+  }
+  .share-export .tg-ev { display:block !important; padding:2px 5px !important; }
+  .share-export .tg-ev .vtxt { writing-mode:horizontal-tb !important; -webkit-writing-mode:horizontal-tb !important; font-size:0.6rem !important; }
   .tg-fill { position:absolute; left:3px; right:3px; border-radius:6px; background-size:100% auto; background-repeat:repeat-y; background-position:top center;
     opacity:0.42; z-index:1; cursor:pointer; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.45); transition:opacity 0.18s; }
   .tg-fill:hover { opacity:0.72; z-index:2; }
@@ -442,12 +455,15 @@
         // Label always shows the TRUE end time; never the midnight clamp.
         var trueEnd = (rawEn==null) ? s+120 : rawEn;
         var tm=fmtTime(s)+"–"+fmtTime(trueEnd)+(overnight?" +1":"");
-        // Week view: horizontal title-only — times are implied by block position and stay
-        // in the title attr, hover card, and modal. Day view keeps title+time (wide columns).
+        // Week view: title-only. Horizontal by default; goes vertical on narrow viewports
+        // (.wk + media query) or when lane-split with another event (.split), if tall enough.
+        // Times stay in the title attr, hover card, and modal. Day view keeps title+time.
+        var tall = height>=48;
+        var cls = isDay ? "" : ((tall?" wk":"")+((tall&&(e._lanes||1)>1)?" split":""));
         var inner = isDay
           ? '<span class="tt">'+esc(e.title)+'</span><br>'+tm+(overnight?'<span class="tg-ev-cont" title="Continues past midnight">▾ til '+fmtTime(trueEnd)+'</span>':'')
-          : '<span class="tt">'+esc(e.title)+'</span>'+(overnight?'<span class="tg-ev-cont" title="Continues past midnight">▾ til '+fmtTime(trueEnd)+'</span>':'');
-        h+='<div class="tg-ev'+(overnight?" overnight":"")+'" data-id="'+esc(e.id)+'" data-ds="'+ds+'" '+
+          : '<span class="vtxt"><span class="tt">'+esc(e.title)+'</span>'+(overnight?'<span class="tg-ev-cont" title="Continues past midnight">▾ til '+fmtTime(trueEnd)+'</span>':'')+'</span>';
+        h+='<div class="tg-ev'+(overnight?" overnight":"")+cls+'" data-id="'+esc(e.id)+'" data-ds="'+ds+'" '+
            'style="top:'+top+'px;height:'+height+'px;left:calc('+left+'% + 2px);width:calc('+w+'% - 4px);" '+
            'onclick="CAL.open(\''+esc(e.id)+'\',\''+ds+'\')" '+
            'onmouseenter="CAL.hover(event,\''+esc(e.id)+'\',\''+ds+'\')" onmouseleave="CAL.unhover()" '+
@@ -551,7 +567,7 @@
     h+='<div style="padding:24px 26px;">';
     h+='<h2 style="font-family:\'Cinzel Decorative\',serif;color:'+FOREST+';font-size:1.5rem;margin-bottom:6px;">'+esc(e.title)+'</h2>';
     h+='<div style="font-family:\'Cinzel\',serif;color:'+GOLD+';font-size:0.82rem;letter-spacing:0.04em;margin-bottom:14px;">'+esc(when)+'</div>';
-    if(e.notes) h+='<div style="font-size:0.92rem;color:#4a4a35;line-height:1.7;margin-bottom:16px;white-space:pre-wrap;max-height:44vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:6px;border-bottom:1px solid #eee2c8;">'+esc(e.notes)+'</div>';
+    if(e.notes) h+='<p style="font-size:0.92rem;color:#4a4a35;line-height:1.7;margin-bottom:16px;">'+esc(e.notes)+'</p>';
     var _on=(e.occNotes||{})[ds||e.date]; if(_on) h+='<div style="background:#fff7e8;border:1px solid #f0dcae;color:#7a5a14;border-radius:10px;padding:10px 14px;font-size:0.86rem;margin-bottom:16px;">📌 <b>This date:</b> '+esc(_on)+'</div>';
     if(ttypeLabel){
       h+='<div style="background:#f0f8f2;border-radius:10px;padding:12px 14px;margin-bottom:12px;"><div style="font-family:\'Cinzel\',serif;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:'+FOREST+';margin-bottom:5px;">🏆 Tournament</div>';
@@ -773,6 +789,7 @@
   }
   function exportNode(){
     var node=document.createElement('div');
+    node.className="share-export";   // forces horizontal labels — html2canvas can't render vertical text
     node.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;font-family:'Lato',sans-serif;";
     var viewLabel=view.charAt(0).toUpperCase()+view.slice(1);
     node.innerHTML=
@@ -890,7 +907,5 @@
   load();
 })();
 </script>
-<!-- NGH-BUILD 2026-08-05a · event descriptions keep line breaks -->
-<!-- NGH-BUILD 2026-08-05b · description scroll box + pre-wrap (preserves spaces too) -->
 </body>
 </html>
