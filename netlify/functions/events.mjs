@@ -70,6 +70,21 @@ const _handler = async (req) => {
   // everything below mutates -> admin only
   if (!requireAdmin(req)) return bad('unauthorized', 401);
 
+  // Photo-only fast path (admin image optimizer on guru-promo.html): swaps
+  // data.photo with NO conflict checks and NO registrant notifications —
+  // nothing about the schedule changes, so those guards would only produce
+  // false blocks (rooms booked since, guru availability, etc).
+  if (req.method === 'PATCH' && id) {
+    let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+    if (typeof b.photo !== 'string' || !b.photo) return bad('photo required');
+    if (b.photo.length > 500000) return bad('photo too large');
+    const rows = await sql`SELECT data FROM events WHERE id = ${id}`;
+    if (!rows.length) return bad('not found', 404);
+    const merged = { ...rows[0].data, photo: b.photo };
+    await sql`UPDATE events SET data = ${JSON.stringify(merged)}::jsonb WHERE id = ${id}`;
+    return json({ id, photoBytes: b.photo.length });
+  }
+
   if (req.method === 'POST') {
     let ev; try { ev = await req.json(); } catch { return bad('Invalid JSON'); }
     if (!ev.title || !ev.date) return bad('title and date required');

@@ -69,6 +69,17 @@
     </div>
     <div id="list"><p class="empty">Loading tasks…</p></div>
 
+    <div class="card" style="margin-top:26px;">
+      <b>🖼️ Image tools</b>
+      <p class="muted" style="margin:8px 0 12px;">Rebuilds every event photo as a 1200×630 Facebook-ready
+      banner (full artwork on a blurred backdrop — never cropped). Safe to re-run: already-optimized
+      photos are skipped, and nothing else about the events is touched (no conflict checks, no
+      registrant emails). Facebook caches link images it has already scraped — to refresh an
+      already-shared event, paste its link into Facebook's Sharing Debugger and hit "Scrape Again".</p>
+      <button class="btn" id="imgfix-btn" onclick="PROMO.imgFix()">Optimize all event photos</button>
+      <div id="imgfix-log" class="muted" style="margin-top:10px;white-space:pre-line;"></div>
+    </div>
+
     <div class="tips card">
       <b>How the buttons work:</b> Facebook won't let a website pre-fill a post, so each
       Facebook task copies the (editable) text above its button and opens facebook.com in a
@@ -196,6 +207,68 @@
     complete(id, false).then(function(){ toast("Task reopened"); load(ref); });
   }
 
+  /* ---------- image backfill: 1200×630 Facebook banner for every event photo ---------- */
+  // Same composite booking.html applies at upload time: full artwork contained
+  // (never cropped) over a blurred, darkened cover of itself.
+  function nghBannerize(img){
+    var W=1200,H=630,cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+    var x=cv.getContext("2d"), iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
+    if(!iw||!ih) return null;
+    var cs=Math.max(W/iw,H/ih), cw=iw*cs, ch=ih*cs;
+    try{ x.filter="blur(36px)"; }catch(e){}
+    x.drawImage(img,(W-cw)/2,(H-ch)/2,cw,ch);
+    try{ x.filter="none"; }catch(e){}
+    x.fillStyle="rgba(16,24,16,0.28)"; x.fillRect(0,0,W,H);
+    var fs=Math.min(W/iw,H/ih); if(fs>1.6) fs=1.6;
+    var fw=iw*fs, fh=ih*fs;
+    x.drawImage(img,(W-fw)/2,(H-fh)/2,fw,fh);
+    var out=null;
+    try{ out=cv.toDataURL("image/jpeg",0.82); }catch(e){ return null; }
+    if(out.length>190000){ try{ out=cv.toDataURL("image/jpeg",0.66); }catch(e){} }
+    if(out.length>190000){ try{ out=cv.toDataURL("image/jpeg",0.5); }catch(e){} }
+    return out;
+  }
+  function loadImg(src, cors){
+    return new Promise(function(res, rej){
+      var im=new Image();
+      if(cors) im.crossOrigin="anonymous";
+      im.onload=function(){ res(im); };
+      im.onerror=function(){ rej(new Error("image load failed")); };
+      im.src=src;
+    });
+  }
+  function imgLog(line){ var el=$("imgfix-log"); el.textContent += line + "\n"; }
+  async function imgFix(){
+    var btn=$("imgfix-btn"); btn.disabled=true; $("imgfix-log").textContent="";
+    var updated=0, skipped=0, failed=0;
+    try{
+      var r=await fetch(API_BASE+"/events", { headers: hdrs() });
+      var events=await r.json();
+      if(!Array.isArray(events)) throw new Error(events&&events.error||"couldn't load events");
+      var withPhoto=events.filter(function(e){ return e && e.photo; });
+      imgLog("Checking "+withPhoto.length+" event photo(s)…");
+      for(var i=0;i<withPhoto.length;i++){
+        var e=withPhoto[i], tag=(e.title||e.id);
+        try{
+          var isUrl=/^https?:\/\//i.test(e.photo);
+          var im=await loadImg(e.photo, isUrl);
+          if((im.naturalWidth===1200)&&(im.naturalHeight===630)){ skipped++; imgLog("• "+tag+" — already optimized, skipped"); continue; }
+          var out=nghBannerize(im);   // throws/returns null on CORS-tainted canvases
+          if(!out){ failed++; imgLog("• "+tag+" — couldn't re-encode (external image blocks reuse?) — skipped"); continue; }
+          var pr=await fetch(API_BASE+"/events/"+encodeURIComponent(e.id), {
+            method:"PATCH", headers:hdrs(), body: JSON.stringify({ photo: out }) });
+          if(!pr.ok){ var j=await pr.json().catch(function(){return{};}); throw new Error(j.error||("HTTP "+pr.status)); }
+          updated++; imgLog("• "+tag+" — optimized ✅ ("+Math.round(out.length/1024)+" KB)");
+        }catch(err){ failed++; imgLog("• "+tag+" — FAILED: "+(err&&err.message||err)); }
+        await new Promise(function(res){ setTimeout(res,150); });
+      }
+      imgLog("");
+      imgLog("Done — "+updated+" optimized, "+skipped+" already good, "+failed+" skipped/failed.");
+      if(updated) imgLog("New shares pick up the new images immediately. Already-shared links: Facebook Sharing Debugger → Scrape Again.");
+    }catch(err){ imgLog("Couldn't run: "+(err&&err.message||err)); }
+    btn.disabled=false;
+  }
+
   /* ---------- boot / gate ---------- */
   function gate(){ $("gate").classList.remove("hidden"); $("app").classList.add("hidden"); }
   function boot(){
@@ -207,7 +280,7 @@
     load: function(){ load(ref); },
     shift: function(n){ load(ymdShift(ref, n)); },
     today: function(){ load(null); },
-    go: go, copyGo: copyGo, voGo: voGo, undo: undo
+    go: go, copyGo: copyGo, voGo: voGo, undo: undo, imgFix: imgFix
   };
   boot();
 })();

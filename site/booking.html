@@ -2404,6 +2404,26 @@ function evPhotoPreview(){
   var src = url || evPhotoData;
   box.innerHTML = src ? '<img src="'+esc(src)+'" alt="preview" style="max-width:180px;max-height:120px;border-radius:8px;border:1px solid #d8e0d4;" onerror="this.style.display=\'none\';">' : '';
 }
+// 1200×630 Facebook-ready banner: full artwork contained (never cropped) over a
+// blurred, darkened cover of itself. 1200×630 is Facebook's link-card render size.
+function nghBannerize(img){
+  var W=1200,H=630,cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+  var x=cv.getContext("2d"), iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
+  if(!iw||!ih) return null;
+  var cs=Math.max(W/iw,H/ih), cw=iw*cs, ch=ih*cs;
+  try{ x.filter="blur(36px)"; }catch(e){}
+  x.drawImage(img,(W-cw)/2,(H-ch)/2,cw,ch);
+  try{ x.filter="none"; }catch(e){}
+  x.fillStyle="rgba(16,24,16,0.28)"; x.fillRect(0,0,W,H);
+  var fs=Math.min(W/iw,H/ih); if(fs>1.6) fs=1.6;   // modest upscale cap for tiny art
+  var fw=iw*fs, fh=ih*fs;
+  x.drawImage(img,(W-fw)/2,(H-fh)/2,fw,fh);
+  var out=null;
+  try{ out=cv.toDataURL("image/jpeg",0.82); }catch(e){ return null; }
+  if(out.length>190000){ try{ out=cv.toDataURL("image/jpeg",0.66); }catch(e){} }
+  if(out.length>190000){ try{ out=cv.toDataURL("image/jpeg",0.5); }catch(e){} }
+  return out;
+}
 function evPhotoUpload(){
   var f=$("ev-photo-file").files[0]; if(!f) return;
   if(!/^image\//.test(f.type)){ alert("Please choose an image file."); $("ev-photo-file").value=""; return; }
@@ -2413,14 +2433,10 @@ function evPhotoUpload(){
   rd.onload=function(){
     var img=new Image();
     img.onload=function(){
-      var maxDim=1000, w=img.width, h=img.height;
-      if(w>maxDim || h>maxDim){ if(w>=h){ h=Math.round(h*maxDim/w); w=maxDim; } else { w=Math.round(w*maxDim/h); h=maxDim; } }
-      var cv=document.createElement("canvas"); cv.width=w; cv.height=h;
-      cv.getContext("2d").drawImage(img,0,0,w,h);
-      try { evPhotoData=cv.toDataURL("image/jpeg",0.8); }
-      catch(e){ evPhotoData=rd.result; }
-      // If still big, step quality down
-      if(evPhotoData.length>180000){ try { evPhotoData=cv.toDataURL("image/jpeg",0.6); } catch(e){} }
+      // Composite to the 1200×630 Facebook banner (falls back to the raw file
+      // only if canvas export fails).
+      var out=nghBannerize(img);
+      evPhotoData = out || rd.result;
       $("ev-photo-url").value=""; evPhotoPreview();
     };
     img.onerror=function(){ alert("Couldn't read that image. Try a different file or paste a URL."); $("ev-photo-file").value=""; };
@@ -4135,4 +4151,5 @@ function custWeekDayHTML(isDay){
 <!-- NGH-BUILD 2026-08-05b · taller Public Description textarea (min-height:220px) -->
 <!-- NGH-BUILD 2026-08-05c · admin event-list description shows paragraph breaks -->
 </body>
+<!-- NGH-BUILD 2026-08-06f · photo pipeline -->
 </html>
