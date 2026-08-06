@@ -34,6 +34,10 @@
   from = "/api/events"
   to   = "/.netlify/functions/events"
   status = 200
+[[redirects]]
+  from = "/api/promo-tasks"
+  to   = "/.netlify/functions/promo-tasks"
+  status = 200
 
 [[redirects]]
   from = "/api/blackouts"
@@ -132,6 +136,10 @@
 # Nightly auto-cancel of unpaid approved bookings.
 [functions."auto-cancel"]
   schedule = "@daily"
+
+# Daily event-promotion task digest -> promo inbox (12:00 UTC = 6-7 AM Central).
+[functions."promo-digest"]
+  schedule = "0 12 * * *"
 
 # USA250 giveaway landing page (unlisted — linked only from Facebook Live)
 [[redirects]]

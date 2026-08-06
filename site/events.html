@@ -3,6 +3,7 @@
 <!-- NGH-BUILD 2026-08-06a · week view vertical titles + tiled fill images -->
 <!-- NGH-BUILD 2026-08-06b · horizontal title-only week labels + export footer fix -->
 <!-- NGH-BUILD 2026-08-06c · responsive vertical labels + export override -->
+<!-- NGH-BUILD 2026-08-06d · share=1 deep link -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -318,6 +319,9 @@
       var v=qs.get('view'); if(v==="week"||v==="day"||v==="month") view=v;
       var dt=qs.get('date'); if(dt) ref=new Date(dt+"T12:00:00");
       render();
+      // ?share=1 — deep link from the Guru promotion task list: open the
+      // share-image panel automatically once the view has rendered.
+      if(qs.get('share')==='1'){ setTimeout(function(){ shareImg(); }, 700); }
       var evId=qs.get('event');
       if(evId){ var ev=allEvents.filter(function(x){return x.id===evId;})[0]; if(ev){ if(!dt) ref=new Date(ev.date+"T12:00:00"); render(); openModal(evId, dt||ev.date); } }
     } catch(e){ render(); }
