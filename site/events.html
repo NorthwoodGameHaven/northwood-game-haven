@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <!-- NGH-BUILD 2026-07-21c · lightbox + registrant-qty + discord-refresh -->
 <!-- NGH-BUILD 2026-08-06a · week view vertical titles + tiled fill images -->
+<!-- NGH-BUILD 2026-08-06b · horizontal title-only week labels + export footer fix -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -108,10 +109,6 @@
   .tg-ev.allday { background:var(--gold); color:#3a2e15; }
   .tg-ev.overnight { border-bottom:2px dashed rgba(255,255,255,0.85); }
   .tg-ev-cont { display:block; margin-top:1px; font-size:0.52rem; font-weight:700; opacity:0.95; letter-spacing:0.2px; }
-  /* week view: vertical title-only labels (time = block position; details on hover/tap) */
-  .tg-ev.vert { display:flex; justify-content:center; align-items:flex-start; padding:5px 1px; }
-  .tg-ev.vert .vtxt { writing-mode:vertical-rl; -webkit-writing-mode:vertical-rl; font-size:0.7rem; line-height:1.2; max-height:100%; overflow:hidden; }
-  .tg-ev.vert .tg-ev-cont { margin:0 0 0 2px; font-size:0.58rem; }
   .tg-fill { position:absolute; left:3px; right:3px; border-radius:6px; background-size:100% auto; background-repeat:repeat-y; background-position:top center;
     opacity:0.42; z-index:1; cursor:pointer; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.45); transition:opacity 0.18s; }
   .tg-fill:hover { opacity:0.72; z-index:2; }
@@ -445,15 +442,12 @@
         // Label always shows the TRUE end time; never the midnight clamp.
         var trueEnd = (rawEn==null) ? s+120 : rawEn;
         var tm=fmtTime(s)+"–"+fmtTime(trueEnd)+(overnight?" +1":"");
-        // Week view: title-only, rotated vertical when the block is tall enough to read that way.
-        // Times are implied by block position; full times stay in the title attr, hover card, and modal.
-        var vert = !isDay && height>=48;
-        var inner = vert
-          ? '<span class="vtxt"><span class="tt">'+esc(e.title)+'</span>'+(overnight?'<span class="tg-ev-cont" title="Continues past midnight">▾ til '+fmtTime(trueEnd)+'</span>':'')+'</span>'
-          : (isDay
-              ? '<span class="tt">'+esc(e.title)+'</span><br>'+tm+(overnight?'<span class="tg-ev-cont" title="Continues past midnight">▾ til '+fmtTime(trueEnd)+'</span>':'')
-              : '<span class="tt">'+esc(e.title)+'</span>'+(overnight?'<span class="tg-ev-cont" title="Continues past midnight">▾ til '+fmtTime(trueEnd)+'</span>':''));
-        h+='<div class="tg-ev'+(overnight?" overnight":"")+(vert?" vert":"")+'" data-id="'+esc(e.id)+'" data-ds="'+ds+'" '+
+        // Week view: horizontal title-only — times are implied by block position and stay
+        // in the title attr, hover card, and modal. Day view keeps title+time (wide columns).
+        var inner = isDay
+          ? '<span class="tt">'+esc(e.title)+'</span><br>'+tm+(overnight?'<span class="tg-ev-cont" title="Continues past midnight">▾ til '+fmtTime(trueEnd)+'</span>':'')
+          : '<span class="tt">'+esc(e.title)+'</span>'+(overnight?'<span class="tg-ev-cont" title="Continues past midnight">▾ til '+fmtTime(trueEnd)+'</span>':'');
+        h+='<div class="tg-ev'+(overnight?" overnight":"")+'" data-id="'+esc(e.id)+'" data-ds="'+ds+'" '+
            'style="top:'+top+'px;height:'+height+'px;left:calc('+left+'% + 2px);width:calc('+w+'% - 4px);" '+
            'onclick="CAL.open(\''+esc(e.id)+'\',\''+ds+'\')" '+
            'onmouseenter="CAL.hover(event,\''+esc(e.id)+'\',\''+ds+'\')" onmouseleave="CAL.unhover()" '+
@@ -788,7 +782,7 @@
         '<div style="font-family:\'Cinzel\',serif;color:#cfe6d6;font-size:0.9rem;margin-top:6px;">'+esc(titleText())+'</div>'+
       '</div>'+
       '<div style="padding:18px 18px 10px;">'+document.getElementById("cal-body").innerHTML+'</div>'+
-      '<div style="background:#1a1a12;color:#e8b84b;text-align:center;padding:13px;font-family:\'Cinzel\',serif;font-size:0.82rem;letter-spacing:0.06em;">gamehaven.guru/events &nbsp;·&nbsp; Tap an event to register</div>';
+      '<div style="background:#1a1a12;color:#e8b84b;text-align:center;padding:13px;font-family:\'Cinzel\',serif;font-size:0.82rem;letter-spacing:0.06em;">gamehaven.guru/events</div>';
     return node;
   }
   function shareImg(){
