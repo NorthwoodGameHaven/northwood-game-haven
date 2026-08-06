@@ -4,6 +4,7 @@
 <!-- NGH-BUILD 2026-08-06b · horizontal title-only week labels + export footer fix -->
 <!-- NGH-BUILD 2026-08-06c · responsive vertical labels + export override -->
 <!-- NGH-BUILD 2026-08-06d · share=1 deep link -->
+<!-- NGH-BUILD 2026-08-06e · FB copy+composer share flow -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -838,7 +839,7 @@
       '<img class="share-preview" src="'+dataUrl+'" alt="Calendar preview">'+
       '<div class="share-primary"><button class="share-dl" onclick="CAL.shareDownload()">⬇ Download</button>'+native+'</div>'+
       '<div class="share-grid">'+grid+'</div>'+
-      '<p class="share-note">On your phone, <strong>“Share image…”</strong> posts the picture straight to any app (Facebook, Instagram, TikTok, Stories, Groups…). For Instagram, TikTok &amp; Snapchat the image downloads — then attach it in the app. The other buttons open a post with a link back to this calendar.</p>';
+      '<p class="share-note"><strong>Facebook:</strong> the image downloads and your caption (with the calendar link) is copied — paste it into a new post and attach the downloaded PNG; the link expands into a preview card. On your phone, <strong>“Share image…”</strong> posts the picture straight to any app (Facebook, Instagram, TikTok, Stories, Groups…). For Instagram, TikTok &amp; Snapchat the image downloads — then attach it in the app. The other buttons open a post with a link back to this calendar.</p>';
   }
   function shareDownload(){
     if(!_shareBlob) return;
@@ -853,11 +854,28 @@
       else await navigator.share({title:"Northwood Game Haven Events", text:_shareText, url:_shareUrl});
     } catch(e){}
   }
+  // Synchronous clipboard copy (execCommand while the page still has focus),
+  // with the async Clipboard API fired as a best-effort backup. Must run BEFORE
+  // any window.open — clipboard writes are rejected once focus moves away.
+  function nghCopy(text){
+    var ta=document.createElement("textarea"); ta.value=text;
+    ta.style.cssText="position:fixed;left:-9999px;top:0;"; document.body.appendChild(ta);
+    ta.select(); try{ document.execCommand("copy"); }catch(e){}
+    document.body.removeChild(ta);
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text); }catch(e){}
+  }
   function platform(key){
     shareDownload(); // grab the image so it can be attached where needed
+    if(key==="facebook"){
+      // sharer.php can't attach the image and its dialog often hangs on "Posting…".
+      // Copy the caption + calendar link, then open the composer: paste (the link
+      // auto-expands into a preview card) and attach the downloaded PNG.
+      nghCopy(_shareText+" "+_shareUrl);
+      window.open("https://www.facebook.com/","_blank","noopener");
+      return;
+    }
     var u=encodeURIComponent(_shareUrl), t=encodeURIComponent(_shareText);
     var map={
-      facebook:"https://www.facebook.com/sharer/sharer.php?u="+u,
       x:"https://twitter.com/intent/tweet?text="+t+"&url="+u,
       whatsapp:"https://wa.me/?text="+t+"%20"+u,
       reddit:"https://www.reddit.com/submit?url="+u+"&title="+t,

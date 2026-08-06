@@ -70,13 +70,17 @@
     <div id="list"><p class="empty">Loading tasks…</p></div>
 
     <div class="tips card">
-      <b>How the buttons work:</b> Facebook won't let a website pre-fill a post, so
-      "Copy text &amp; open Facebook" copies the (editable) text above the button to your
-      clipboard and opens Facebook in a new window — paste, tweak if you like, and share.
-      Countdown posts open Facebook's share dialog with the event link so the preview card
-      comes along; paste the copied text as your message. The weekly task opens the public
-      calendar with the share panel already open — hit Download / Share Image and post it.
-      Every open happens in a new window, so this list stays put and refreshes itself.
+      <b>How the buttons work:</b> Facebook won't let a website pre-fill a post, so each
+      Facebook task copies the (editable) text above its button and opens facebook.com in a
+      new tab — start a post, paste, tweak, share. The event links in the pasted text expand
+      into preview cards on their own. The weekly task opens the public calendar with the
+      share panel already open: hit the Facebook button there and it downloads the image and
+      copies a caption — paste the caption and attach the downloaded PNG. Volume One tasks
+      copy the full listing details and open two tabs (the event page and the VO submission
+      form); if your browser blocks the second tab, use the extra buttons and allow pop-ups
+      for gamehaven.guru. If Facebook's own dialog ever hangs on "Posting…", close it and
+      paste into a normal new post instead. Every open happens in a new tab, so this list
+      stays put and refreshes itself.
     </div>
   </div>
 </div>
@@ -119,8 +123,9 @@
       h+='<button class="btn" onclick="PROMO.copyGo(\''+esc(t.id)+'\',\''+esc(t.links.facebook)+'\')">📋 Copy text &amp; open FB share</button>'+
          '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
     } else if(t.kind==="vo"){
-      h+='<button class="btn" onclick="PROMO.go(\''+esc(t.id)+'\',\''+esc(t.links.details)+'\')">↗ Open event details (marks listed)</button>'+
-         '<a class="btn ghost small" href="'+esc(t.links.volumeone)+'" target="_blank" rel="noopener">Volume One calendar ↗</a>';
+      h+='<button class="btn" onclick="PROMO.voGo(\''+esc(t.id)+'\',\''+esc(t.links.details)+'\',\''+esc(t.links.volumeone)+'\')">📋 Copy details &amp; open event + Volume One</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>'+
+         '<a class="btn ghost small" href="'+esc(t.links.volumeone)+'" target="_blank" rel="noopener">VO submit form ↗</a>';
     }
     h+='</div></div>';
     return h;
@@ -152,22 +157,20 @@
       body: JSON.stringify({ id:id, done:done!==false, label:label||"" }) });
   }
 
-  /* ---------- clipboard (with execCommand fallback) ---------- */
+  /* ---------- clipboard ----------
+   * Copy SYNCHRONOUSLY (execCommand) before any window.open — the async Clipboard
+   * API rejects writes once the new tab steals focus, which is why copies were
+   * silently failing. The async API is fired too, as a best-effort backup. */
   function copyText(text){
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      return navigator.clipboard.writeText(text).catch(function(){ return legacyCopy(text); });
-    }
-    return Promise.resolve(legacyCopy(text));
-  }
-  function legacyCopy(text){
     var ta=document.createElement("textarea"); ta.value=text;
     ta.style.cssText="position:fixed;left:-9999px;top:0;";
     document.body.appendChild(ta); ta.select();
     try{ document.execCommand("copy"); }catch(e){}
     document.body.removeChild(ta);
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text); }catch(e){}
   }
 
-  /* ---------- actions (open FIRST, synchronously, so popups aren't blocked) ---------- */
+  /* ---------- actions (copy first, then open — all synchronous in the click) ---------- */
   function labelOf(id){ var el=document.querySelector("#task-"+CSS.escape(id)+" .lbl"); return el?el.textContent:""; }
   function go(id, url){
     window.open(url, "_blank", "noopener");
@@ -175,10 +178,19 @@
   }
   function copyGo(id, url){
     var ta=$("txt-"+id);
-    var text=ta?ta.value:"";
+    copyText(ta?ta.value:"");
     window.open(url, "_blank", "noopener");
-    copyText(text);
-    complete(id, true, labelOf(id)).then(function(){ toast("Text copied · task marked done ✅"); load(ref); });
+    complete(id, true, labelOf(id)).then(function(){ toast("Post copied 📋 — paste it into a new Facebook post"); load(ref); });
+  }
+  // Volume One: copy the listing details, then open BOTH tabs — the event details
+  // and the VO submission form (opened last so it has focus for pasting). Browsers
+  // sometimes allow only one popup per click; the extra buttons cover a blocked tab.
+  function voGo(id, detailsUrl, voUrl){
+    var ta=$("txt-"+id);
+    copyText(ta?ta.value:"");
+    window.open(detailsUrl, "_blank", "noopener");
+    window.open(voUrl, "_blank", "noopener");
+    complete(id, true, labelOf(id)).then(function(){ toast("Details copied 📋 — paste into the Volume One form"); load(ref); });
   }
   function undo(id){
     complete(id, false).then(function(){ toast("Task reopened"); load(ref); });
@@ -195,7 +207,7 @@
     load: function(){ load(ref); },
     shift: function(n){ load(ymdShift(ref, n)); },
     today: function(){ load(null); },
-    go: go, copyGo: copyGo, undo: undo
+    go: go, copyGo: copyGo, voGo: voGo, undo: undo
   };
   boot();
 })();

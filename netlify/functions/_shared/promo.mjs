@@ -97,6 +97,19 @@ export function countdownPostText(e, occDate, weeks) {
   return lines.join('\n');
 }
 
+export function voListingText(e, occDate) {
+  const L = [];
+  L.push(e.title);
+  L.push('Date: ' + human(occDate) + (e.recurrence ? '  (recurring — ' + e.recurrence.freq + ')' : ''));
+  L.push('Time: ' + (timesOf(e) || 'see listing'));
+  L.push('Location: Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI');
+  const ex = excerpt(e.notes, 600);
+  if (ex) { L.push(''); L.push(ex); }
+  L.push('');
+  L.push('More info' + (e.registration && e.registration.enabled ? ' & registration' : '') + ': ' + eventUrl(e, occDate));
+  return L.join('\n');
+}
+
 /* ---------- task computation ----------
  * Returns tasks relevant on `forDate` (YMD, America/Chicago):
  *   today[]    — tasks whose scheduled day is forDate
@@ -152,7 +165,10 @@ export async function computeTasks(sql, forDate) {
             label: e.title + ' — ' + k + '-week countdown post (event ' + human(date) + ')',
             text: countdownPostText(e, date, k),
             links: {
-              facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(eventUrl(e, date)),
+              // Composer, not sharer.php — the sharer dialog hangs on "Posting…" and
+              // can't take pasted text. Pasting the copied post (it contains the event
+              // link) into the composer auto-expands the preview card.
+              facebook: 'https://www.facebook.com/',
               details: eventUrl(e, date)
             },
             event: { id: e.id, title: e.title, occDate: date }
@@ -182,7 +198,8 @@ export async function computeTasks(sql, forDate) {
     standing.push({
       id, kind: 'vo', day: forDate,
       label: 'List "' + e.title + '" (' + human(date) + ') on the Volume One calendar',
-      links: { details: eventUrl(e, date), volumeone: 'https://volumeone.org/calendar' },
+      text: voListingText(e, date),
+      links: { details: eventUrl(e, date), volumeone: 'https://volumeone.org/events/submit' },
       event: { id: e.id, title: e.title, occDate: date },
       done: false
     });
