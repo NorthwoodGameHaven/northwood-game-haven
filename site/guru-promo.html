@@ -67,6 +67,32 @@
       <div class="cur" id="cur-date">Loading…</div>
       <button class="btn ghost small" onclick="PROMO.load()">↻ Refresh</button>
     </div>
+    <div class="card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;">
+      <label class="muted">Group by
+        <select id="f-group" onchange="PROMO.redraw()" style="font-family:inherit;padding:4px 8px;border-radius:8px;border:1px solid #cfc9b4;">
+          <option value="schedule">Schedule</option>
+          <option value="guru">Guru</option>
+          <option value="kind">Type</option>
+        </select>
+      </label>
+      <label class="muted">Guru
+        <select id="f-guru" onchange="PROMO.redraw()" style="font-family:inherit;padding:4px 8px;border-radius:8px;border:1px solid #cfc9b4;">
+          <option value="">All</option>
+        </select>
+      </label>
+      <label class="muted">Type
+        <select id="f-kind" onchange="PROMO.redraw()" style="font-family:inherit;padding:4px 8px;border-radius:8px;border:1px solid #cfc9b4;">
+          <option value="">All</option>
+          <option value="weekly">Weekly calendar</option>
+          <option value="daily">Tomorrow's events</option>
+          <option value="cd">Countdown</option>
+          <option value="vo">Volume One</option>
+          <option value="poster">Poster</option>
+          <option value="assign">Assign Guru</option>
+          <option value="extend">Extend series</option>
+        </select>
+      </label>
+    </div>
     <div id="list"><p class="empty">Loading tasks…</p></div>
 
     <div class="card" style="margin-top:26px;">
@@ -91,7 +117,10 @@
       form); if your browser blocks the second tab, use the extra buttons and allow pop-ups
       for gamehaven.guru. If Facebook's own dialog ever hangs on "Posting…", close it and
       paste into a normal new post instead. Every open happens in a new tab, so this list
-      stays put and refreshes itself.
+      stays put and refreshes itself. Tasks route to each event's assigned Guru(s) — Sarah owns
+      the weekly &amp; daily posts, unassigned events go to Dustin with an "assign a Guru" task
+      first. A task shared by multiple Gurus is completed for everyone the moment any one of
+      them clicks it, so the same post never goes out twice.
     </div>
   </div>
 </div>
@@ -114,12 +143,14 @@
   function human(ymd){ return new Date(ymd+"T12:00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"}); }
 
   /* ---------- rendering ---------- */
-  var KICON = { weekly:"🗓️", daily:"🦦", cd:"⏳", vo:"📰" };
-  var KNAME = { weekly:"Weekly calendar", daily:"Tomorrow's events", cd:"Countdown", vo:"Volume One" };
+  var KICON = { weekly:"🗓️", daily:"🦦", cd:"⏳", vo:"📰", poster:"🎨", assign:"🧭", extend:"🔁" };
+  var KNAME = { weekly:"Weekly calendar", daily:"Tomorrow's events", cd:"Countdown", vo:"Volume One", poster:"Poster", assign:"Assign Guru", extend:"Extend series" };
 
   function taskCard(t, overdue){
     var h='<div class="task card k-'+esc(t.kind)+(t.done?" done":"")+(overdue?" overdue":"")+'" id="task-'+esc(t.id)+'">';
-    h+='<div><span class="kbadge">'+KICON[t.kind]+" "+KNAME[t.kind]+'</span><span class="lbl">'+esc(t.label)+'</span></div>';
+    h+='<div><span class="kbadge">'+(KICON[t.kind]||"")+" "+(KNAME[t.kind]||t.kind)+'</span>'+
+       ((t.assignees&&t.assignees.length)?'<span class="kbadge" style="background:#e8f0e9;color:#2d5a3d;">👤 '+esc(t.assignees.join(" + "))+'</span>':'')+
+       '<span class="lbl">'+esc(t.label)+'</span></div>';
     h+='<div class="meta">'+(overdue?("⚠️ scheduled "+esc(t.day)+" · "):"")+"task id: "+esc(t.id)+'</div>';
     if(t.text) h+='<textarea id="txt-'+esc(t.id)+'" spellcheck="false">'+esc(t.text)+'</textarea>';
     h+='<div class="actions">';
@@ -132,6 +163,15 @@
       h+='<button class="btn" onclick="PROMO.copyGo(\''+esc(t.id)+'\',\''+esc(t.links.facebook)+'\')">📋 Copy text &amp; open Facebook</button>';
     } else if(t.kind==="cd"){
       h+='<button class="btn" onclick="PROMO.copyGo(\''+esc(t.id)+'\',\''+esc(t.links.facebook)+'\')">📋 Copy text &amp; open FB share</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
+    } else if(t.kind==="assign"){
+      h+='<button class="btn" onclick="PROMO.go(\''+esc(t.id)+'\',\''+esc(t.links.edit)+'\')">🧭 Open event editor → assign Guru</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
+    } else if(t.kind==="poster"){
+      h+='<button class="btn" onclick="PROMO.markDone(\''+esc(t.id)+'\')">✅ Poster designed, printed &amp; displayed</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
+    } else if(t.kind==="extend"){
+      h+='<button class="btn" onclick="PROMO.go(\''+esc(t.id)+'\',\''+esc(t.links.duplicate)+'\')">⧉ Duplicate event → extend the series</button>'+
          '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
     } else if(t.kind==="vo"){
       h+='<button class="btn" onclick="PROMO.voGo(\''+esc(t.id)+'\',\''+esc(t.links.details)+'\',\''+esc(t.links.volumeone)+'\')">📋 Copy details &amp; open event + Volume One</button>'+
@@ -146,13 +186,52 @@
     return '<h2 class="sec">'+title+' <span class="cnt">('+tasks.length+')</span></h2>'+
            tasks.map(function(t){ return taskCard(t, overdue); }).join("");
   }
+  var _last=null;
   function render(r){
-    ref = r.date;
+    _last=r; ref = r.date;
     $("cur-date").textContent = human(r.date);
-    var h = section("⚠️ Overdue — last 7 days", r.overdue, true)
-          + section("📣 Today's promotion tasks", r.today, false)
-          + section("📰 Volume One listings needed", r.standing, false);
-    $("list").innerHTML = h || '<p class="empty">🎉 Nothing to promote right now — every task is done.</p>';
+    // (re)populate the Guru filter, keeping the current selection
+    var fg=$("f-guru"), cur=fg.value, opts='<option value="">All</option>';
+    (r.gurus||[]).forEach(function(g){ opts+='<option value="'+esc(g)+'">'+esc(g)+'</option>'; });
+    fg.innerHTML=opts; if((r.gurus||[]).indexOf(cur)>=0) fg.value=cur;
+    redraw();
+  }
+  function taskMatches(t){
+    var g=$("f-guru").value, k=$("f-kind").value;
+    if(g && (!t.assignees || t.assignees.indexOf(g)<0)) return false;
+    if(k && t.kind!==k) return false;
+    return true;
+  }
+  function redraw(){
+    var r=_last; if(!r) return;
+    var mode=$("f-group").value;
+    var od=r.overdue.filter(taskMatches), td=r.today.filter(taskMatches), st=r.standing.filter(taskMatches);
+    var h="";
+    if(mode==="schedule"){
+      h = section("⚠️ Overdue — last 7 days", od, true)
+        + section("📣 Today's promotion tasks", td, false)
+        + section("📌 Standing tasks — until done", st, false);
+    } else {
+      // Flatten with an overdue flag; group by guru (a task appears under EACH
+      // of its Gurus — completing it anywhere completes it for all) or by type.
+      var all=[]; od.forEach(function(t){ all.push({t:t,o:true}); });
+      td.forEach(function(t){ all.push({t:t,o:false}); }); st.forEach(function(t){ all.push({t:t,o:false}); });
+      var groups={}, order=[];
+      all.forEach(function(x){
+        var keys = mode==="guru" ? (x.t.assignees&&x.t.assignees.length?x.t.assignees:["(unassigned)"]) : [KNAME[x.t.kind]||x.t.kind];
+        keys.forEach(function(key){
+          if(!groups[key]){ groups[key]=[]; order.push(key); }
+          groups[key].push(x);
+        });
+      });
+      order.sort();
+      order.forEach(function(key){
+        var icon = mode==="guru" ? "👤 " : "";
+        h+='<h2 class="sec">'+icon+esc(key)+' <span class="cnt">('+groups[key].length+')</span></h2>';
+        groups[key].forEach(function(x){ h+=taskCard(x.t, x.o); });
+      });
+    }
+    $("list").innerHTML = h || '<p class="empty">🎉 Nothing matches — try clearing the filters, or everything is done.</p>';
   }
 
   /* ---------- data ---------- */
@@ -202,6 +281,9 @@
     window.open(detailsUrl, "_blank", "noopener");
     window.open(voUrl, "_blank", "noopener");
     complete(id, true, labelOf(id)).then(function(){ toast("Details copied 📋 — paste into the Volume One form"); load(ref); });
+  }
+  function markDone(id){
+    complete(id, true, labelOf(id)).then(function(){ toast("Task marked done ✅"); load(ref); });
   }
   function undo(id){
     complete(id, false).then(function(){ toast("Task reopened"); load(ref); });
@@ -280,7 +362,7 @@
     load: function(){ load(ref); },
     shift: function(n){ load(ymdShift(ref, n)); },
     today: function(){ load(null); },
-    go: go, copyGo: copyGo, voGo: voGo, undo: undo, imgFix: imgFix
+    go: go, copyGo: copyGo, voGo: voGo, undo: undo, imgFix: imgFix, markDone: markDone, redraw: redraw
   };
   boot();
 })();

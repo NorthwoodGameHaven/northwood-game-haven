@@ -18,6 +18,17 @@ import { expandOccurrences } from './conflicts.mjs';
 
 export const BASE = (process.env.SITE_URL || 'https://gamehaven.guru').replace(/\/$/, '');
 
+/* Assignment routing (per the promotion SOP):
+ *   - weekly + daily posts       -> Sarah
+ *   - event-tied tasks           -> the event's assigned Guru(s)
+ *   - unassigned events          -> Dustin, plus an "assign a Guru" task
+ * Task ids never include the assignee, so when a multi-Guru event's task is
+ * completed by ANY of its Gurus it is complete for all of them. */
+export const PROMO_WEEKLY_DAILY_GURU = process.env.PROMO_WEEKLY_DAILY_GURU || 'Sarah';
+export const PROMO_FALLBACK_GURU = process.env.PROMO_FALLBACK_GURU || 'Dustin';
+// Poster tasks apply to NEW events only - those created on/after this date.
+export const POSTER_SINCE = process.env.PROMO_POSTER_SINCE || '2026-08-06';
+
 /* ---------- promo_tasks schema (local; same race-swallow pattern as db.mjs) ---------- */
 let _ready = false;
 function isAlreadyExists(e) { const c = e && e.code; return c === '23505' || c === '42P07' || c === '42710'; }
@@ -126,10 +137,36 @@ export function voListingText(e, occDate) {
  * Every task: { id, kind, day, label, text?, links:{...}, done, event? } */
 export async function computeTasks(sql, forDate) {
   await ensurePromoSchema(sql);
-  const evRows = await sql`SELECT data FROM events ORDER BY created_at ASC`;
-  const events = evRows.map(r => r.data).filter(isPromotable);
+  const evRows = await sql`SELECT data, created_at FROM events ORDER BY created_at ASC`;
+  const createdAt = {};
+  const events = evRows.map(r => {
+    if (r.data && r.data.id) createdAt[r.data.id] = String(r.created_at).slice(0, 10);
+    return r.data;
+  }).filter(isPromotable);
   const doneRows = await sql`SELECT id FROM promo_tasks`;
   const done = new Set(doneRows.map(r => r.id));
+
+  // Guru assignments (guru_data kind='assignment'): event-level row (date null)
+  // wins; otherwise the union of per-date rows. none:true = explicitly no Guru.
+  let asgRows = [];
+  try { asgRows = await sql`SELECT data FROM guru_data WHERE kind = 'assignment'`; } catch (e) { /* table may not exist yet */ }
+  const asgByEvent = {};
+  asgRows.map(r => r.data).forEach(a => {
+    if (!a || !a.eventId) return;
+    (asgByEvent[a.eventId] = asgByEvent[a.eventId] || []).push(a);
+  });
+  function gurusFor(eventId) {
+    const rows = asgByEvent[eventId] || [];
+    const evLevel = rows.find(a => a.date == null);
+    if (evLevel) return evLevel.none ? [] : (evLevel.gurus || []);
+    const set = [];
+    rows.forEach(a => { if (!a.none) (a.gurus || []).forEach(g => { if (set.indexOf(g) < 0) set.push(g); }); });
+    return set;
+  }
+  function assigneesFor(eventId) {
+    const g = gurusFor(eventId);
+    return g.length ? g : [PROMO_FALLBACK_GURU];
+  }
 
   // occurrence index: date -> events happening that date (horizon only)
   const horizonEnd = addDays(forDate, 62);
@@ -148,7 +185,7 @@ export async function computeTasks(sql, forDate) {
     // 1) Sunday — share this week's calendar image
     if (dow(day) === 0) {
       out.push({
-        id: 'weekly:' + day, kind: 'weekly', day,
+        id: 'weekly:' + day, kind: 'weekly', day, assignees: [PROMO_WEEKLY_DAILY_GURU],
         label: 'Share this week\'s event calendar (' + day + ' – ' + addDays(day, 6) + ') to Facebook',
         links: { open: BASE + '/events.html?view=week&date=' + day + '&share=1' }
       });
@@ -158,7 +195,7 @@ export async function computeTasks(sql, forDate) {
     const evs = (byDate[tomorrow] || []);
     if (evs.length) {
       out.push({
-        id: 'daily:' + day, kind: 'daily', day,
+        id: 'daily:' + day, kind: 'daily', day, assignees: [PROMO_WEEKLY_DAILY_GURU],
         label: 'Post tomorrow\'s events (' + human(tomorrow) + ') — ' + evs.length + ' event' + (evs.length > 1 ? 's' : ''),
         text: dailyPostText(tomorrow, evs),
         links: { facebook: 'https://www.facebook.com/' }
@@ -169,7 +206,7 @@ export async function computeTasks(sql, forDate) {
       for (let k = 1; k <= 4; k++) {
         if (addDays(date, -7 * k) === day) {
           out.push({
-            id: 'cd:' + e.id + ':' + date + ':' + k + 'w', kind: 'cd', day,
+            id: 'cd:' + e.id + ':' + date + ':' + k + 'w', kind: 'cd', day, assignees: assigneesFor(e.id),
             label: e.title + ' — ' + k + '-week countdown post (event ' + human(date) + ')',
             text: countdownPostText(e, date, k),
             links: {
@@ -204,7 +241,7 @@ export async function computeTasks(sql, forDate) {
     const id = 'vo:' + e.id;
     if (done.has(id)) continue;
     standing.push({
-      id, kind: 'vo', day: forDate,
+      id, kind: 'vo', day: forDate, assignees: assigneesFor(e.id),
       label: 'List "' + e.title + '" (' + human(date) + ') on the Volume One calendar',
       text: voListingText(e, date),
       links: { details: eventUrl(e, date), volumeone: 'https://volumeone.org/events/submit' },
@@ -213,13 +250,94 @@ export async function computeTasks(sql, forDate) {
     });
   }
 
-  return { date: forDate, today, overdue, standing };
+  // Per-event standing tasks: first upcoming occurrence drives the label/links.
+  const firstUpcoming = {};
+  for (const day in byDate) {
+    if (day < forDate) continue;
+    byDate[day].forEach(e => {
+      if (!firstUpcoming[e.id] || day < firstUpcoming[e.id]) firstUpcoming[e.id] = day;
+    });
+  }
+  events.forEach(e => {
+    const nextOcc = firstUpcoming[e.id];
+    if (!nextOcc) return;   // nothing upcoming in the horizon
+
+    // 1) Unassigned event -> Dustin's first task: assign a Guru. Auto-clears the
+    //    moment an assignment exists; can also be checked off manually.
+    if (!gurusFor(e.id).length) {
+      const aid = 'assign:' + e.id;
+      if (!done.has(aid)) {
+        standing.push({
+          id: aid, kind: 'assign', day: forDate, assignees: [PROMO_FALLBACK_GURU],
+          label: 'Assign a Guru to "' + e.title + '" (' + human(nextOcc) + ') - its promo tasks route to them',
+          links: { edit: BASE + '/booking.html?editEvent=' + encodeURIComponent(e.id), details: eventUrl(e, nextOcc) },
+          event: { id: e.id, title: e.title, occDate: nextOcc },
+          done: false
+        });
+      }
+    }
+
+    // 2) NEW events (created on/after POSTER_SINCE): design, print & display a poster.
+    if ((createdAt[e.id] || '') >= POSTER_SINCE) {
+      const pid = 'poster:' + e.id;
+      if (!done.has(pid)) {
+        standing.push({
+          id: pid, kind: 'poster', day: forDate, assignees: assigneesFor(e.id),
+          label: 'Design, print & display the poster for "' + e.title + '" (first: ' + human(nextOcc) + ')',
+          links: { details: eventUrl(e, nextOcc) },
+          event: { id: e.id, title: e.title, occDate: nextOcc },
+          done: false
+        });
+      }
+    }
+
+    // 3) Recurring series running low (<=4 upcoming occurrences): review & extend.
+    //    The duplicate deep link opens the event editor prefilled as a copy with
+    //    the start date set to the next date in the pattern AFTER the series
+    //    ends - tweak details/images and publish the follow-on series.
+    if (e.recurrence) {
+      // Count remaining occurrences from the FULL series expansion — the 62-day
+      // horizon index would under-count long monthly series and false-alarm.
+      let upcoming = [];
+      try { upcoming = expandOccurrences(e).map(o => o.date).filter(d => d >= forDate).sort(); } catch (err) { upcoming = []; }
+      if (upcoming.length > 0 && upcoming.length <= 4) {
+        const lastOcc = upcoming[upcoming.length - 1];
+        let nextStart = addDays(lastOcc, e.recurrence.freq === 'biweekly' ? 14 : 7);
+        try {
+          const e2 = { ...e, recurrence: { ...e.recurrence, count: (e.recurrence.count || 2) + 1 }, exceptions: [] };
+          const all = expandOccurrences(e2).map(o => o.date).sort();
+          const after = all.filter(d => d > lastOcc);
+          if (after.length) nextStart = after[0];
+        } catch (err) { /* fall back to the +7/+14 estimate */ }
+        const xid = 'extend:' + e.id + ':' + lastOcc;
+        if (!done.has(xid)) {
+          standing.push({
+            id: xid, kind: 'extend', day: forDate, assignees: assigneesFor(e.id),
+            label: 'ALERT: "' + e.title + '" has only ' + upcoming.length + ' occurrence' + (upcoming.length === 1 ? '' : 's') + ' left (last: ' + human(lastOcc) + ') - review & extend the series',
+            links: {
+              duplicate: BASE + '/booking.html?dupEvent=' + encodeURIComponent(e.id) + '&start=' + nextStart,
+              details: eventUrl(e, nextOcc)
+            },
+            event: { id: e.id, title: e.title, occDate: nextOcc, lastOcc: lastOcc, nextStart: nextStart },
+            done: false
+          });
+        }
+      }
+    }
+  });
+
+  // Distinct assignee list for the console's Guru filter.
+  const gurus = [];
+  [].concat(today, overdue, standing).forEach(t => (t.assignees || []).forEach(g => { if (gurus.indexOf(g) < 0) gurus.push(g); }));
+  gurus.sort();
+
+  return { date: forDate, today, overdue, standing, gurus };
 }
 
 /* ---------- plain-text digest body (daily email) ---------- */
 export function digestBody(result) {
   const L = [];
-  const line = t => '  • ' + t.label + (t.done ? '  ✅' : '');
+  const line = t => '  • ' + t.label + ((t.assignees && t.assignees.length) ? ('  [' + t.assignees.join(' + ') + ']') : '') + (t.done ? '  ✅' : '');
   if (result.overdue.length) {
     L.push('⚠️ OVERDUE (last 7 days, not yet done):');
     result.overdue.forEach(t => L.push(line(t)));
