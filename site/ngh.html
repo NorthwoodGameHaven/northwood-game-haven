@@ -1828,8 +1828,10 @@
     st.textContent='.nghc-ev .nghc-vtxt{display:inline;}'+
     '.nghc-ev{font-size:0.5rem;line-height:1.15;}'+
     '.nghc-ev.nghc-wk{font-size:0.66rem;line-height:1.25;}'+
+    '.nghc-img{width:100%;aspect-ratio:1200/630;background-size:contain;background-repeat:no-repeat;background-position:top center;border-radius:4px;margin-bottom:3px;cursor:pointer;opacity:0.9;box-shadow:0 1px 2px rgba(0,0,0,0.12);}'+
     '@media (max-width:760px){.nghc-ev.nghc-wk{display:flex;justify-content:center;align-items:flex-start;padding:3px 1px;font-size:0.6rem;}'+
-    '.nghc-ev.nghc-wk .nghc-vtxt{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;line-height:1.15;max-height:100%;max-width:100%;overflow:hidden;}}';
+    '.nghc-ev.nghc-wk .nghc-vtxt{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;line-height:1.15;max-height:100%;max-width:100%;overflow:hidden;}'+
+    '.nghc-img{aspect-ratio:auto;height:84px;background-size:cover;background-position:center;}}';
     document.head.appendChild(st); })();
   
   function fillBlankImages(dayEvents, timed, adBottom, gridH, h0, ROW, ds){
@@ -1847,7 +1849,7 @@
     if(!imgs.length || !region) return "";
     var out='<div style="position:absolute;left:2px;right:2px;top:'+(region.top+1)+'px;height:'+(region.h-2)+'px;overflow:hidden;">';
     imgs.forEach(function(e){
-      out+='<div onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+'" style="width:100%;aspect-ratio:1200/630;background-image:url(\''+imgCss(e.photo)+'\');background-size:contain;background-repeat:no-repeat;background-position:top center;border-radius:4px;margin-bottom:3px;cursor:pointer;opacity:0.9;box-shadow:0 1px 2px rgba(0,0,0,0.12);"></div>';
+      out+='<div class="nghc-img" onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+'" style="background-image:url(\''+imgCss(e.photo)+'\');"></div>';
     });
     out+='</div>';
     return out;
@@ -1945,8 +1947,10 @@
     var els=document.querySelectorAll(".nghc-ev.nghc-wk");
     for(var i=0;i<els.length;i++){
       var el=els[i]; el.style.fontSize="";
+      // Measure the element that actually clips (inner span on phones; block on desktop).
+      var v=el.querySelector(".nghc-vtxt"), mv=(v&&v.clientHeight>0)?v:el;
       var fs=parseFloat(window.getComputedStyle(el).fontSize)||10, g=0;
-      while(g++<16 && fs>8 && (el.scrollHeight>el.clientHeight+1 || el.scrollWidth>el.clientWidth+1)){
+      while(g++<16 && fs>8 && (mv.scrollHeight>mv.clientHeight+1 || mv.scrollWidth>mv.clientWidth+1)){
         fs-=0.75; el.style.fontSize=fs+"px";
       }
     }
@@ -2532,4 +2536,5 @@
 <!-- NGH-BUILD 2026-08-06c · embed tiled images + responsive labels -->
 <!-- NGH-BUILD 2026-08-06f · photo pipeline -->
 <!-- NGH-BUILD 2026-08-06g · single top images + horizontal-first labels -->
+<!-- NGH-BUILD 2026-08-06h · phone tiles + fit measurement fix -->
 </html>
