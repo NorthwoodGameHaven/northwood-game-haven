@@ -8,6 +8,7 @@
 <!-- NGH-BUILD 2026-08-06f · photo pipeline -->
 <!-- NGH-BUILD 2026-08-06g · single top images + horizontal-first labels -->
 <!-- NGH-BUILD 2026-08-06h · phone tiles + fit measurement fix -->
+<!-- NGH-BUILD 2026-08-06i · Range-based label fit -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -124,7 +125,7 @@
   /* Phone: vertical only where horizontal can't fit (tall blocks in skinny
      columns); fitLabels() then shrinks anything that still overflows. */
   @media (max-width:760px){
-    .tg-ev.wk { display:flex; justify-content:center; align-items:flex-start; padding:4px 1px; font-size:0.7rem; }
+    .tg-ev.wk { display:flex; justify-content:center; align-items:flex-start; padding:6px 1px 4px; font-size:0.7rem; }
     .tg-ev.wk .vtxt { writing-mode:vertical-rl; -webkit-writing-mode:vertical-rl; line-height:1.15; max-height:100%; max-width:100%; overflow:hidden; }
   }
   .share-export .tg-ev { display:block !important; padding:2px 5px !important; }
@@ -354,16 +355,26 @@
   }
   // Auto-size week labels: reset, then step the font down until the whole title
   // fits inside its block (floor 8px). Works for horizontal and vertical labels.
+  // Overflow test via Range glyph bounds: scrollWidth/Height miss content that
+  // spills past the START edge of a centered flex container (which is exactly
+  // what vertical text wrapping into a second column does), so measure the real
+  // laid-out text box instead.
+  function labelOverflows(el){
+    try{
+      var v=el.querySelector(".vtxt"), r=document.createRange();
+      r.selectNodeContents(v||el);
+      var b=r.getBoundingClientRect();
+      return b.height>el.clientHeight+1 || b.width>el.clientWidth+1;
+    }catch(e){
+      return el.scrollHeight>el.clientHeight+1 || el.scrollWidth>el.clientWidth+1;
+    }
+  }
   function fitLabels(){
     var els=document.querySelectorAll("#cal-body .tg-ev.wk");
     for(var i=0;i<els.length;i++){
       var el=els[i]; el.style.fontSize="";
-      // Measure whichever element actually clips: on phones the inner .vtxt span
-      // does the clipping (so the block never reports overflow); on desktop the
-      // span is inline (zero client box) and the block itself clips.
-      var v=el.querySelector(".vtxt"), mv=(v&&v.clientHeight>0)?v:el;
       var fs=parseFloat(window.getComputedStyle(el).fontSize)||12, g=0;
-      while(g++<16 && fs>8 && (mv.scrollHeight>mv.clientHeight+1 || mv.scrollWidth>mv.clientWidth+1)){
+      while(g++<16 && fs>8 && labelOverflows(el)){
         fs-=0.75; el.style.fontSize=fs+"px";
       }
     }
