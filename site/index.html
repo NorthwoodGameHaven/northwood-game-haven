@@ -1831,13 +1831,15 @@
   // Responsive embed labels: vertical on phones or when lane-split; horizontal otherwise.
   (function(){ if(document.getElementById('nghc-style')) return; var st=document.createElement('style'); st.id='nghc-style';
     st.textContent='.nghc-ev .nghc-vtxt{display:inline;}'+
-    '.nghc-ev.nghc-split{display:flex;justify-content:center;align-items:flex-start;}'+
-    '.nghc-ev.nghc-split .nghc-vtxt{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;font-size:0.62rem;line-height:1.2;max-height:100%;overflow:hidden;}'+
-    '@media (max-width:760px){.nghc-ev.nghc-wk{display:flex;justify-content:center;align-items:flex-start;}'+
-    '.nghc-ev.nghc-wk .nghc-vtxt{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;font-size:0.62rem;line-height:1.2;max-height:100%;overflow:hidden;}}';
+    '.nghc-ev{font-size:0.5rem;line-height:1.15;}'+
+    '.nghc-ev.nghc-wk{font-size:0.66rem;line-height:1.25;}'+
+    '@media (max-width:760px){.nghc-ev.nghc-wk{display:flex;justify-content:center;align-items:flex-start;padding:3px 1px;font-size:0.6rem;}'+
+    '.nghc-ev.nghc-wk .nghc-vtxt{writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;line-height:1.15;max-height:100%;max-width:100%;overflow:hidden;}}';
     document.head.appendChild(st); })();
   
   function fillBlankImages(dayEvents, timed, adBottom, gridH, h0, ROW, ds){
+    // One image per event, stacked at the TOP of the first usable gap; the
+    // container clips at the gap so images never overlap event blocks.
     var occ=[]; if(adBottom>0) occ.push([0, adBottom]);
     timed.forEach(function(e){ var s=t2m(e.start), en=t2m(e.end); if(en==null) en=s+120; else if(en<=s) en=1440;
       var top=(s-h0*60)/60*ROW, bot=top+Math.max(13,(en-s)/60*ROW); occ.push([Math.max(0,top), Math.min(gridH,bot)]); });
@@ -1845,18 +1847,14 @@
     var merged=[]; occ.forEach(function(iv){ var m=merged[merged.length-1]; if(m && iv[0]<=m[1]+1){ m[1]=Math.max(m[1], iv[1]); } else merged.push([iv[0], iv[1]]); });
     var free=[], cur=0; merged.forEach(function(iv){ if(iv[0]-cur>2) free.push({top:cur, h:iv[0]-cur}); cur=Math.max(cur, iv[1]); });
     if(gridH-cur>2) free.push({top:cur, h:gridH-cur});
-    var totalFree=free.reduce(function(a,f){ return a+f.h; },0);
-    var imgs=[]; dayEvents.forEach(function(e){ if(e.photo) imgs.push(e); });
-    if(!imgs.length || totalFree<30) return "";
-    var n=imgs.length, perImg=totalFree/n, cum=0; free.forEach(function(f){ f.cum=cum; cum+=f.h; });
-    var out="";
-    for(var k=0;k<n;k++){ var vS=k*perImg, vE=(k+1)*perImg, e=imgs[k], u=imgCss(e.photo);
-      free.forEach(function(f){ var oS=Math.max(vS, f.cum), oE=Math.min(vE, f.cum+f.h);
-        if(oE-oS>3){ var rTop=f.top+(oS-f.cum), rH=oE-oS-2;
-          out+='<div onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+'" style="position:absolute;left:2px;right:2px;top:'+rTop+'px;height:'+rH+'px;border-radius:4px;background-image:url(\''+u+'\');background-size:100% auto;background-repeat:repeat-y;background-position:top center;cursor:pointer;opacity:0.9;box-shadow:0 1px 2px rgba(0,0,0,0.12);"></div>';
-        }
-      });
-    }
+    var region=null; for(var i=0;i<free.length;i++){ if(free[i].h>=30){ region=free[i]; break; } }
+    var seen={}, imgs=[]; dayEvents.forEach(function(e){ if(e.photo && !seen[e.id]){ seen[e.id]=1; imgs.push(e); } });
+    if(!imgs.length || !region) return "";
+    var out='<div style="position:absolute;left:2px;right:2px;top:'+(region.top+1)+'px;height:'+(region.h-2)+'px;overflow:hidden;">';
+    imgs.forEach(function(e){
+      out+='<div onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+'" style="width:100%;aspect-ratio:1200/630;background-image:url(\''+imgCss(e.photo)+'\');background-size:contain;background-repeat:no-repeat;background-position:top center;border-radius:4px;margin-bottom:3px;cursor:pointer;opacity:0.9;box-shadow:0 1px 2px rgba(0,0,0,0.12);"></div>';
+    });
+    out+='</div>';
     return out;
   }
 
@@ -1935,8 +1933,8 @@
         var w=100/(e._n||1), lf=(e._lane||0)*w;
         var trueEnd=(rawEn==null)? s+120 : rawEn;
         var tm=fmtTime(s)+'–'+fmtTime(trueEnd)+(overnight?' +1':'');
-        var tall=height>=40, cls='nghc-ev'+(tall?' nghc-wk':'')+((tall&&(e._n||1)>1)?' nghc-split':'');
-        h+='<div class="'+cls+'" onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+' · '+tm+(overnight?' (continues past midnight)':'')+'" style="position:absolute;top:'+top+'px;height:'+height+'px;left:calc('+lf+'% + 1px);width:calc('+w+'% - 2px);background:'+TEAL+';color:#fff;border-radius:3px;padding:1px 3px;font-size:0.5rem;line-height:1.15;overflow:hidden;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.18);'+(overnight?'border-bottom:2px dashed rgba(255,255,255,0.85);':'')+'"><span class="nghc-vtxt">'+esc(e.title)+'</span></div>';
+        var tall=height>=40, cls='nghc-ev'+(tall?' nghc-wk':'');
+        h+='<div class="'+cls+'" onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+' · '+tm+(overnight?' (continues past midnight)':'')+'" style="position:absolute;top:'+top+'px;height:'+height+'px;left:calc('+lf+'% + 1px);width:calc('+w+'% - 2px);background:'+TEAL+';color:#fff;border-radius:3px;padding:1px 3px;overflow:hidden;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.18);'+(overnight?'border-bottom:2px dashed rgba(255,255,255,0.85);':'')+'"><span class="nghc-vtxt">'+esc(e.title)+'</span></div>';
       });
       var adTop=1;
       ad.forEach(function(e){ h+='<div onclick="NGHCAL.open(\''+esc(e.id)+'\',\''+ds+'\')" title="'+esc(e.title)+' · All day" style="position:absolute;top:'+adTop+'px;left:1px;right:1px;height:11px;background:'+GOLD+';color:#3a2e15;border-radius:3px;padding:0 3px;font-size:0.46rem;line-height:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;">'+esc(e.title)+'</div>'; adTop+=12; });
@@ -1945,7 +1943,21 @@
     h+='</div>';
     h+='<p style="text-align:center;font-size:0.74rem;color:#8a8a6a;margin-top:10px;">Showing this week · 8 AM–midnight. Tap an event for details, or open the <a href="events.html" style="color:'+FOREST+';">full calendar</a> for month &amp; day views.</p>';
     wrap.innerHTML=h;
+    nghcFit();
   }
+  // Auto-size embed labels so full titles stay visible (floor 8px); re-fit on resize.
+  function nghcFit(){
+    var els=document.querySelectorAll(".nghc-ev.nghc-wk");
+    for(var i=0;i<els.length;i++){
+      var el=els[i]; el.style.fontSize="";
+      var fs=parseFloat(window.getComputedStyle(el).fontSize)||10, g=0;
+      while(g++<16 && fs>8 && (el.scrollHeight>el.clientHeight+1 || el.scrollWidth>el.clientWidth+1)){
+        fs-=0.75; el.style.fontSize=fs+"px";
+      }
+    }
+  }
+  var _nghcFitT=null;
+  window.addEventListener("resize", function(){ clearTimeout(_nghcFitT); _nghcFitT=setTimeout(nghcFit,150); });
 
   function openModal(id, ds){
     var e = allEvents.filter(function(x){return x.id===id;})[0]; if(!e) return;
@@ -2524,4 +2536,5 @@
 </body>
 <!-- NGH-BUILD 2026-08-06c · embed tiled images + responsive labels -->
 <!-- NGH-BUILD 2026-08-06f · photo pipeline -->
+<!-- NGH-BUILD 2026-08-06g · single top images + horizontal-first labels -->
 </html>
