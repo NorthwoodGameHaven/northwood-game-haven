@@ -213,11 +213,30 @@
           var f = gid("ev-rec-freq") ? gid("ev-rec-freq").value : "weekly";
           var c = Math.max(2, Math.min(52, parseInt(gid("ev-rec-count") ? gid("ev-rec-count").value : "2", 10) || 2));
           dates = recDates(capDate, f, c);
+          // Subtract dates already skipped on the series (edit flow) — a date
+          // that's an exception can't conflict, so it must not block the save.
+          if (skipId && window.cache && window.cache.events) {
+            var _oe = window.cache.events.filter(function (x) { return x.id === skipId; })[0];
+            if (_oe && _oe.exceptions && _oe.exceptions.length)
+              dates = dates.filter(function (d) { return _oe.exceptions.indexOf(d) < 0; });
+          }
         }
         var res = checkConflicts(sel.gurus, dates, s, en, skipId);
         if (res.blocks.length) {
-          alert("⛔ Event NOT saved — a selected Guru is marked Unavailable:\n\n" + res.blocks.join("\n") + "\n\nRemove that Guru, pick someone else, or delete the unavailability entry in the Guru Schedule console.");
-          return;
+          // Partial-series Guru blocks get the same option room conflicts have:
+          // skip the conflicting dates and save the rest of the series.
+          var _bd = [];
+          res.blocks.forEach(function (b) { var m = b.match(/(\d{4}-\d{2}-\d{2})/); if (m && _bd.indexOf(m[1]) < 0) _bd.push(m[1]); });
+          var _isRec = gid("ev-recurring") && gid("ev-recurring").checked;
+          if (_isRec && _bd.length && _bd.length < dates.length) {
+            if (!confirm("⛔ A selected Guru is Unavailable on some dates of this series:\n\n" + res.blocks.join("\n") + "\n\nSkip the " + _bd.length + " conflicting date" + (_bd.length === 1 ? "" : "s") + " and save the rest of the series?\n\nSkipped dates become canceled instances — review or restore them anytime via 🔁 Review instances on this event's card.\n\nOK = skip those dates & save · Cancel = don't save")) return;
+            window._nghGuruSkipDates = _bd.slice();
+            var res2 = checkConflicts(sel.gurus, dates.filter(function (d) { return _bd.indexOf(d) < 0; }), s, en, skipId);
+            res = { warns: res2.warns, blocks: [] };
+          } else {
+            alert("⛔ Event NOT saved — a selected Guru is marked Unavailable:\n\n" + res.blocks.join("\n") + "\n\nRemove that Guru, pick someone else, or delete the unavailability entry in the Guru Schedule console.");
+            return;
+          }
         }
         if (res.warns.length) {
           if (!confirm("⚠️ Guru schedule conflicts found:\n\n" + res.warns.join("\n") + "\n\nOne Guru can run multiple things at once when it makes sense.\n\nProceed anyway?")) return;

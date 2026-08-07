@@ -1508,8 +1508,38 @@ async function checkAdmin(){
   try { ok = await Store.login($("admin-code").value); } catch(e){ ok=false; }
   if(ok){ await enterConsole(); } else { $("admin-err").classList.add("show"); }
 }
+/* Deep links from the Guru promo console:
+ *   ?editEvent=<id>                 -> open the event editor (assign-Guru task)
+ *   ?dupEvent=<id>&start=YYYY-MM-DD -> open a prefilled duplicate with the start
+ *                                      date set (extend-series task)
+ * Polls until the admin cache + editor functions are ready, then cleans the URL. */
+var _nghDeepDone=false;
+function _nghDeepLinkPoll(){
+  if(_nghDeepDone) return;
+  var qs=new URLSearchParams(location.search);
+  var ed=qs.get("editEvent"), du=qs.get("dupEvent");
+  if(!ed && !du){ _nghDeepDone=true; return; }
+  var tries=0;
+  (function tick(){
+    if(_nghDeepDone) return;
+    var ready = window.cache && cache.events && cache.events.length &&
+                typeof editEvent==="function" && typeof duplicateEvent==="function";
+    if(!ready){ if(++tries<80) return setTimeout(tick,250); return; }
+    _nghDeepDone=true;
+    try{
+      if(ed){ editEvent(ed); }
+      else if(du){
+        duplicateEvent(du);
+        var stq=qs.get("start");
+        if(stq && /^\d{4}-\d{2}-\d{2}$/.test(stq) && $("ev-date")) $("ev-date").value=stq;
+      }
+      history.replaceState(null,"",location.pathname+location.hash);
+    }catch(e){}
+  })();
+}
 /* Shared post-login entry — also used by the single-sign-on fast path. */
 async function enterConsole(){
+  _nghDeepLinkPoll();
   $("admin-err").classList.remove("show");
   $("admin-gate").style.display="none"; $("admin-panel").style.display="block";
   var mi=$("mode-indicator");
@@ -2734,6 +2764,12 @@ async function saveEvent(){
 
   // ---- room-conflict guard: red blocks the save; yellow asks to proceed ----
   var _evTight=false, _evPendOk=false, _skipDates=[], _canceledKeys={};
+  // Guru-block skips handed over by guru-addon.js ("skip conflicting dates & save
+  // the rest"): they join the skip list up front so they become series exceptions
+  // AND are excluded from the room-conflict scan below.
+  if(window._nghGuruSkipDates && window._nghGuruSkipDates.length){
+    _skipDates=window._nghGuruSkipDates.slice(); window._nghGuruSkipDates=null;
+  }
   if(!offsite && (allDay || (start&&end))){
     var _occ = $("ev-recurring").checked
       ? eventDates({ date:date, recurrence:{ freq:$("ev-rec-freq").value, count:Math.max(2,Math.min(52,parseInt($("ev-rec-count").value,10)||2)), mode:($("ev-rec-freq").value==="monthly"?evRecMode():undefined) }, exceptions:(editingEventId?(((cache.events.filter(function(x){return x.id===editingEventId;})[0])||{}).exceptions||[]):[]) })
@@ -2741,7 +2777,7 @@ async function saveEvent(){
     var _rooms = rooms.length ? rooms.slice() : ROOMS.map(function(x){ return x.id; });
     var _sm = allDay ? 0 : timeToMins(start);
     var _em = allDay ? 1440 : (timeToMins(end)<=timeToMins(start) ? 1440 : timeToMins(end));
-    var _chk = evConflictScan(_occ, _sm, _em, _rooms, editingEventId);
+    var _chk = evConflictScan(_occ.filter(function(d){ return _skipDates.indexOf(d)<0; }), _sm, _em, _rooms, editingEventId);
     // PENDING / on-hold booking REQUESTS aren't confirmed reservations: they
     // don't hard-block an event, but scheduling over one needs an explicit OK.
     // APPROVED bookings stay in the red list below — an absolute hard block.
@@ -4152,4 +4188,5 @@ function custWeekDayHTML(isDay){
 <!-- NGH-BUILD 2026-08-05c · admin event-list description shows paragraph breaks -->
 </body>
 <!-- NGH-BUILD 2026-08-06f · photo pipeline -->
+<!-- NGH-BUILD 2026-08-06j · promo deep links + guru-skip handoff -->
 </html>
