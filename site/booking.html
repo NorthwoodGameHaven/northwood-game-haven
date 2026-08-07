@@ -1534,9 +1534,18 @@ function _nghDeepLinkPoll(){
         if(stq && /^\d{4}-\d{2}-\d{2}$/.test(stq) && $("ev-date")) $("ev-date").value=stq;
       }
       history.replaceState(null,"",location.pathname+location.hash);
+      // editEvent()/duplicateEvent() scroll to the PAGE top (the public booking
+      // hero) — land the Guru on the actual event form instead.
+      setTimeout(function(){
+        var f=$("ev-form-title");
+        if(f) f.scrollIntoView({behavior:"smooth",block:"start"});
+      },400);
     }catch(e){}
   })();
 }
+// Backup arming: if the console is already open (SSO) or unlocks later, the
+// poll waits for readiness either way.
+document.addEventListener("DOMContentLoaded", function(){ _nghDeepLinkPoll(); });
 /* Shared post-login entry — also used by the single-sign-on fast path. */
 async function enterConsole(){
   _nghDeepLinkPoll();
@@ -4189,4 +4198,5 @@ function custWeekDayHTML(isDay){
 </body>
 <!-- NGH-BUILD 2026-08-06f · photo pipeline -->
 <!-- NGH-BUILD 2026-08-06j · promo deep links + guru-skip handoff -->
+<!-- NGH-BUILD 2026-08-06k · deep links scroll to editor -->
 </html>

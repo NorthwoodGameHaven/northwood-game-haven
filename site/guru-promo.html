@@ -244,8 +244,15 @@
   }
   function complete(id, done, label){
     return fetch(API_BASE+"/promo-tasks", { method:"POST", headers:hdrs(),
-      body: JSON.stringify({ id:id, done:done!==false, label:label||"" }) });
+      body: JSON.stringify({ id:id, done:done!==false, label:label||"" }) })
+      .then(function(r){
+        if(r.ok) return r;
+        return r.json().catch(function(){ return {}; }).then(function(j){
+          throw new Error(j.error || ("HTTP "+r.status));
+        });
+      });
   }
+  function completeFail(e){ toast("⚠️ Couldn't save the task: "+((e&&e.message)||e)); }
 
   /* ---------- clipboard ----------
    * Copy SYNCHRONOUSLY (execCommand) before any window.open — the async Clipboard
@@ -264,13 +271,13 @@
   function labelOf(id){ var el=document.querySelector("#task-"+CSS.escape(id)+" .lbl"); return el?el.textContent:""; }
   function go(id, url){
     window.open(url, "_blank", "noopener");
-    complete(id, true, labelOf(id)).then(function(){ toast("Task marked done ✅"); load(ref); });
+    complete(id, true, labelOf(id)).then(function(){ toast("Task marked done ✅"); load(ref); }).catch(completeFail);
   }
   function copyGo(id, url){
     var ta=$("txt-"+id);
     copyText(ta?ta.value:"");
     window.open(url, "_blank", "noopener");
-    complete(id, true, labelOf(id)).then(function(){ toast("Post copied 📋 — paste it into a new Facebook post"); load(ref); });
+    complete(id, true, labelOf(id)).then(function(){ toast("Post copied 📋 — paste it into a new Facebook post"); load(ref); }).catch(completeFail);
   }
   // Volume One: copy the listing details, then open BOTH tabs — the event details
   // and the VO submission form (opened last so it has focus for pasting). Browsers
@@ -280,13 +287,13 @@
     copyText(ta?ta.value:"");
     window.open(detailsUrl, "_blank", "noopener");
     window.open(voUrl, "_blank", "noopener");
-    complete(id, true, labelOf(id)).then(function(){ toast("Details copied 📋 — paste into the Volume One form"); load(ref); });
+    complete(id, true, labelOf(id)).then(function(){ toast("Details copied 📋 — paste into the Volume One form"); load(ref); }).catch(completeFail);
   }
   function markDone(id){
-    complete(id, true, labelOf(id)).then(function(){ toast("Task marked done ✅"); load(ref); });
+    complete(id, true, labelOf(id)).then(function(){ toast("Task marked done ✅"); load(ref); }).catch(completeFail);
   }
   function undo(id){
-    complete(id, false).then(function(){ toast("Task reopened"); load(ref); });
+    complete(id, false).then(function(){ toast("Task reopened"); load(ref); }).catch(completeFail);
   }
 
   /* ---------- image backfill: 1200×630 Facebook banner for every event photo ---------- */
