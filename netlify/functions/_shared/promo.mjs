@@ -83,11 +83,14 @@ function isPromotable(e) { return e && e.status !== 'draft' && !e.private; }
 export function eventUrl(e, occDate) {
   return BASE + '/event/' + encodeURIComponent(e.id) + (occDate ? ('?date=' + occDate) : '');
 }
+// Full event description, formatting preserved (trailing spaces trimmed, runs
+// of blank lines collapsed) — NO truncation: the Guru sees everything in the
+// editable box and trims what they don't want, instead of getting a mid-
+// sentence "…" they can't recover from. (n is ignored, kept for call sites.)
 function excerpt(s, n) {
-  const t = String(s || '').replace(/\s+/g, ' ').trim();
-  if (t.length <= n) return t;
-  const cut = t.slice(0, n);
-  return cut.slice(0, Math.max(cut.lastIndexOf(' '), n - 20)) + '…';
+  return String(s || '').replace(/\r\n?/g, '\n')
+    .split('\n').map(l => l.replace(/\s+$/, '')).join('\n')
+    .replace(/\n{3,}/g, '\n\n').trim();
 }
 export function dailyPostText(tomorrow, evs) {
   const lines = ['🦦 Check out what\'s happening tomorrow @ The Haven:', ''];
