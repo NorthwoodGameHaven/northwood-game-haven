@@ -2327,6 +2327,8 @@ function renderEventsAdmin(){
       '<b>Tip — use the Facebook event\u2019s image here too:</b> open your FB event, right-click its cover image → <i>Copy image address</i>, then paste it into the Photo URL box below. '+
       '<button type="button" class="btn btn-sm btn-ghost" style="margin-top:6px;" onclick="openFbForImage()">↗ Open this FB event to copy its image</button>'+
     '</div>'+
+    '<label class="fld">Discord channel(s) — promo &amp; discussion home for this event</label>'+
+    '<div id="ev-discord" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px 12px;margin:2px 0 12px;padding:10px 12px;background:#eef4fb;border:1px solid #cfe0f2;border-radius:9px;font-size:0.82rem;"></div>'+
     '<label class="fld">Photo URL (paste a link)</label><input type="text" id="ev-photo-url" placeholder="https://… (paste the Facebook cover image, or from your shop, Imgur, etc.)" onchange="evPhotoPreview()">'+
     '<label class="fld">…or upload an image</label><input type="file" id="ev-photo-file" accept="image/*" onchange="evPhotoUpload()">'+
     '<div id="ev-photo-preview" style="margin-top:8px;"></div></div>'+
@@ -2423,6 +2425,7 @@ function renderEventsAdmin(){
       '</div>'+
       '<p class="hint" style="margin:8px 0 0;">Filter to events set up for customer registration (online <em>or</em> admin-added). Search matches title, rooms, notes, and date.</p>'+
     '</div>'+list;
+  renderEvDiscord([]);
 }
 var evPhotoData = null;  // holds an uploaded image as a data URL until saved
 // Show the "grab the FB image" tip whenever a Facebook link is present, and
@@ -2665,7 +2668,7 @@ function resetStrategyInputs(){
   var cad=$("ev-str-cadence"); if(cad){ cad.value=""; cad.style.borderColor=""; }
   onStrategyCadenceChange();
 }
-function resetEventForm(){ editingEventId=null; evPhotoData=null; $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
+function resetEventForm(){ editingEventId=null; evPhotoData=null; renderEvDiscord([]); $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
   ["ev-title","ev-date","ev-start","ev-end","ev-notes","ev-photo-url","ev-fb","ev-rounds","ev-wins","ev-est-end","ev-arrival","ev-restrictions","ev-prizes-place","ev-prizes-part","ev-admin-notes"].forEach(function(id){ if($(id)) $(id).value=""; });
   if($("ev-ttype")) $("ev-ttype").value="";
   if(typeof resetStrategyInputs==="function") resetStrategyInputs();
@@ -2700,6 +2703,30 @@ function duplicateEvent(id){
   setTimeout(function(){ var d=$("ev-date"); if(d) d.focus(); }, 80);
 }
 // Shared form-population used by both edit and duplicate.
+// NGH Discord text channels (server: discord.gg/EP2f6npF). Names with spaces
+// are upcoming/display-named channels; kebab names render with a # prefix.
+var NGH_DISCORD_CHANNELS=[
+  "general-chat","pokemon","gundam","magic-modern","commander-night","one-piece",
+  "thursday-teach-and-play","M&M Night: MtG + Mahjong","saturday-teach-and-play",
+  "dnd","dungeon-crawler-carl","requests-for-shop","blood-on-the-clocktower",
+  "looking-to-play-a-game","looking-for-a-rgp-group","sunday-night-at-the-plus",
+  "private-events","Cookie Run","Speed Gaming Meet-up","Team Trivia","Mahjong",
+  "Chess","Trick-Taking Tuesday"
+];
+function renderEvDiscord(selected){
+  var box=$("ev-discord"); if(!box) return;
+  var sel=selected||[];
+  box.innerHTML=NGH_DISCORD_CHANNELS.map(function(c){
+    var label=c.indexOf(" ")<0 ? ("#"+c) : c;
+    return '<label style="display:flex;align-items:center;gap:6px;font-weight:600;color:#34506b;cursor:pointer;">'+
+           '<input type="checkbox" class="ev-dc" value="'+c.replace(/"/g,"&quot;")+'"'+(sel.indexOf(c)>=0?" checked":"")+'>'+label+'</label>';
+  }).join("");
+}
+function evDiscordSelected(){
+  var out=[], els=document.querySelectorAll("#ev-discord .ev-dc");
+  for(var i=0;i<els.length;i++){ if(els[i].checked) out.push(els[i].value); }
+  return out;
+}
 function _fillEventForm(e, blankDateTime){
   $("ev-title").value=e.title||"";
   $("ev-date").value = blankDateTime ? "" : (e.date||"");
@@ -2708,6 +2735,7 @@ function _fillEventForm(e, blankDateTime){
   else { setTimeSelect("ev-start", e.start||""); setTimeSelect("ev-end", e.end||""); }
   $("ev-notes").value=e.notes||"";
   $("ev-fb").value=e.fbLink||"";
+  renderEvDiscord(e.discordChannels||[]);
   if(e.photo && e.photo.indexOf("data:")===0){ evPhotoData=e.photo; $("ev-photo-url").value=""; }
   else { $("ev-photo-url").value=e.photo||""; }
   evPhotoPreview();
@@ -2849,6 +2877,7 @@ async function saveEvent(){
     id:editingEventId||undefined, title:title, date:date, allDay:allDay, start:start, end:end, rooms:rooms,
     offsite:offsite, offsiteLocation: offsite?offsiteLocation:"",
     notes:notes, photo:photo, fbLink:$("ev-fb").value.trim(),
+    discordChannels: evDiscordSelected(),
     tournament: hasTourney ? tournament : null,
     prizes: hasPrizes ? prizes : null,
     adminNotes:$("ev-admin-notes").value.trim(),
@@ -4199,4 +4228,5 @@ function custWeekDayHTML(isDay){
 <!-- NGH-BUILD 2026-08-06f · photo pipeline -->
 <!-- NGH-BUILD 2026-08-06j · promo deep links + guru-skip handoff -->
 <!-- NGH-BUILD 2026-08-06k · deep links scroll to editor -->
+<!-- NGH-BUILD 2026-08-06n · Discord channel picker -->
 </html>

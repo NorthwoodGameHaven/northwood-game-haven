@@ -26,6 +26,7 @@ export const BASE = (process.env.SITE_URL || 'https://gamehaven.guru').replace(/
  * completed by ANY of its Gurus it is complete for all of them. */
 export const PROMO_WEEKLY_DAILY_GURU = process.env.PROMO_WEEKLY_DAILY_GURU || 'Sarah';
 export const PROMO_FALLBACK_GURU = process.env.PROMO_FALLBACK_GURU || 'Dustin';
+export const DISCORD_URL = process.env.NGH_DISCORD_URL || 'https://discord.gg/EP2f6npF';
 // Poster tasks apply to NEW events only - those created on/after this date.
 export const POSTER_SINCE = process.env.PROMO_POSTER_SINCE || '2026-08-06';
 
@@ -132,6 +133,30 @@ export function voListingText(e, occDate) {
   return L.join('\n');
 }
 
+function chanList(e) {
+  const c = e.discordChannels || [];
+  return c.map(x => x.indexOf(' ') < 0 ? ('#' + x) : x).join(', ');
+}
+export function discordPostText(e, occDate, weeks) {
+  const when = weeks === 1 ? 'ONE WEEK out' : weeks + ' weeks out';
+  const L = ['@here ' + e.title + ' — ' + when + ': ' + human(occDate) + ' @ the Haven!'];
+  const ex = excerpt(e.notes, 0);
+  if (ex) { L.push(''); L.push(ex); }
+  L.push('');
+  L.push((e.registration && e.registration.enabled ? 'Details & registration: ' : 'Details: ') + eventUrl(e, occDate));
+  L.push('');
+  L.push('Questions, requests, or want a warm-up session before the big day? Drop it below 👇');
+  return L.join('\n');
+}
+export function discordDayBeforeText(e, occDate) {
+  const L = ['@here TOMORROW: ' + e.title + ' — ' + human(occDate) + (timesOf(e) ? (', ' + timesOf(e)) : '') + ' @ the Haven!'];
+  L.push('');
+  L.push((e.registration && e.registration.enabled ? 'Last call to register: ' : 'Details: ') + eventUrl(e, occDate));
+  L.push('');
+  L.push('See you there — bring a friend 🦦');
+  return L.join('\n');
+}
+
 /* ---------- task computation ----------
  * Returns tasks relevant on `forDate` (YMD, America/Chicago):
  *   today[]    — tasks whose scheduled day is forDate
@@ -224,6 +249,33 @@ export async function computeTasks(sql, forDate) {
         }
       }
     }
+    // 3b) Discord countdown posts — same 4/3/2/1-week cadence, posted to the
+    //     event's designated channel by the event's owner Guru. The task text
+    //     doubles as a discussion starter (guest requests, questions, and any
+    //     warm-up session — Teach & Play, practice night — the Guru deems fit).
+    for (const { e, date } of specialOccs) {
+      for (let k = 1; k <= 4; k++) {
+        if (addDays(date, -7 * k) === day) {
+          out.push({
+            id: 'dcd:' + e.id + ':' + date + ':' + k + 'w', kind: 'dcd', day, assignees: assigneesFor(e.id),
+            label: e.title + ' — ' + k + '-week Discord post' + (chanList(e) ? (' in ' + chanList(e)) : '') + ' (event ' + human(date) + ') — promote + spin up discussion / warm-up session if applicable',
+            text: discordPostText(e, date, k),
+            links: { discord: DISCORD_URL, details: eventUrl(e, date) },
+            event: { id: e.id, title: e.title, occDate: date }
+          });
+        }
+      }
+      // 3c) day-before Discord post in the same channel
+      if (addDays(date, -1) === day) {
+        out.push({
+          id: 'dpre:' + e.id + ':' + date, kind: 'dpre', day, assignees: assigneesFor(e.id),
+          label: e.title + ' — day-before Discord post' + (chanList(e) ? (' in ' + chanList(e)) : '') + ' (event tomorrow, ' + human(date) + ')',
+          text: discordDayBeforeText(e, date),
+          links: { discord: DISCORD_URL, details: eventUrl(e, date) },
+          event: { id: e.id, title: e.title, occDate: date }
+        });
+      }
+    }
     out.forEach(t => { t.done = done.has(t.id); });
     return out;
   }
@@ -277,6 +329,25 @@ export async function computeTasks(sql, forDate) {
           event: { id: e.id, title: e.title, occDate: nextOcc },
           done: false
         });
+      }
+    }
+
+    // 1b) NEW special events (created on/after POSTER_SINCE, and not a copy —
+    //     i.e. no earlier event shares its title, so extended series don't
+    //     re-trigger): identify the Discord channels for discussion & promotion.
+    if (isSpecial(e) && (createdAt[e.id] || '') >= POSTER_SINCE && !(e.discordChannels || []).length) {
+      const isCopy = events.some(x => x.id !== e.id && x.title === e.title && (createdAt[x.id] || '') < (createdAt[e.id] || ''));
+      if (!isCopy) {
+        const did = 'dchan:' + e.id;
+        if (!done.has(did)) {
+          standing.push({
+            id: did, kind: 'dchan', day: forDate, assignees: assigneesFor(e.id),
+            label: 'Set the Discord channel(s) for "' + e.title + '" — check them off in the event editor; this task clears itself once set',
+            links: { edit: BASE + '/booking.html?editEvent=' + encodeURIComponent(e.id), discord: DISCORD_URL, details: eventUrl(e, nextOcc) },
+            event: { id: e.id, title: e.title, occDate: nextOcc },
+            done: false
+          });
+        }
       }
     }
 
@@ -335,6 +406,13 @@ export async function computeTasks(sql, forDate) {
   gurus.sort();
 
   return { date: forDate, today, overdue, standing, gurus };
+}
+
+/* Per-Guru digest filtering: a result narrowed to tasks assigned to any of
+ * the given Gurus (used for the individual daily emails). */
+export function filterForGurus(result, gurus) {
+  const f = t => (t.assignees || []).some(g => gurus.indexOf(g) >= 0);
+  return { ...result, today: result.today.filter(f), overdue: result.overdue.filter(f), standing: result.standing.filter(f) };
 }
 
 /* ---------- plain-text digest body (daily email) ---------- */

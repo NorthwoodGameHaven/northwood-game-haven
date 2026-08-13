@@ -90,6 +90,9 @@
           <option value="poster">Poster</option>
           <option value="assign">Assign Guru</option>
           <option value="extend">Extend series</option>
+          <option value="dchan">Discord channels</option>
+          <option value="dcd">Discord countdown</option>
+          <option value="dpre">Discord day-before</option>
         </select>
       </label>
     </div>
@@ -143,8 +146,8 @@
   function human(ymd){ return new Date(ymd+"T12:00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"}); }
 
   /* ---------- rendering ---------- */
-  var KICON = { weekly:"🗓️", daily:"🦦", cd:"⏳", vo:"📰", poster:"🎨", assign:"🧭", extend:"🔁" };
-  var KNAME = { weekly:"Weekly calendar", daily:"Tomorrow's events", cd:"Countdown", vo:"Volume One", poster:"Poster", assign:"Assign Guru", extend:"Extend series" };
+  var KICON = { weekly:"🗓️", daily:"🦦", cd:"⏳", vo:"📰", poster:"🎨", assign:"🧭", extend:"🔁", dchan:"💬", dcd:"💬", dpre:"💬" };
+  var KNAME = { weekly:"Weekly calendar", daily:"Tomorrow's events", cd:"FB countdown", vo:"Volume One", poster:"Poster", assign:"Assign Guru", extend:"Extend series", dchan:"Discord channels", dcd:"Discord countdown", dpre:"Discord day-before" };
 
   function taskCard(t, overdue){
     var h='<div class="task card k-'+esc(t.kind)+(t.done?" done":"")+(overdue?" overdue":"")+'" id="task-'+esc(t.id)+'">';
@@ -163,6 +166,13 @@
       h+='<button class="btn" onclick="PROMO.copyGo(\''+esc(t.id)+'\',\''+esc(t.links.facebook)+'\')">📋 Copy text &amp; open Facebook</button>';
     } else if(t.kind==="cd"){
       h+='<button class="btn" onclick="PROMO.copyGo(\''+esc(t.id)+'\',\''+esc(t.links.facebook)+'\')">📋 Copy text &amp; open FB share</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
+    } else if(t.kind==="dcd"||t.kind==="dpre"){
+      h+='<button class="btn" onclick="PROMO.copyGo(\''+esc(t.id)+'\',\''+esc(t.links.discord)+'\')">📋 Copy post &amp; open Discord</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
+    } else if(t.kind==="dchan"){
+      h+='<button class="btn" onclick="PROMO.go(\''+esc(t.id)+'\',\''+esc(t.links.edit)+'\')">💬 Open event editor → set channels</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.discord)+'" target="_blank" rel="noopener">Open Discord ↗</a>'+
          '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
     } else if(t.kind==="assign"){
       h+='<button class="btn" onclick="PROMO.go(\''+esc(t.id)+'\',\''+esc(t.links.edit)+'\')">🧭 Open event editor → assign Guru</button>'+
