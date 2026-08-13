@@ -2717,7 +2717,7 @@ function renderEvDiscord(selected){
   var box=$("ev-discord"); if(!box) return;
   var sel=selected||[];
   box.innerHTML=NGH_DISCORD_CHANNELS.map(function(c){
-    var label=c.indexOf(" ")<0 ? ("#"+c) : c;
+    var label = c.charAt(0)==="#" ? c : ("#"+c);   // # on every option; stored value unchanged
     return '<label style="display:flex;align-items:center;gap:6px;font-weight:600;color:#34506b;cursor:pointer;">'+
            '<input type="checkbox" class="ev-dc" value="'+c.replace(/"/g,"&quot;")+'"'+(sel.indexOf(c)>=0?" checked":"")+'>'+label+'</label>';
   }).join("");
@@ -4229,4 +4229,5 @@ function custWeekDayHTML(isDay){
 <!-- NGH-BUILD 2026-08-06j · promo deep links + guru-skip handoff -->
 <!-- NGH-BUILD 2026-08-06k · deep links scroll to editor -->
 <!-- NGH-BUILD 2026-08-06n · Discord channel picker -->
+<!-- NGH-BUILD 2026-08-06o · # on all Discord options -->
 </html>

@@ -135,7 +135,7 @@ export function voListingText(e, occDate) {
 
 function chanList(e) {
   const c = e.discordChannels || [];
-  return c.map(x => x.indexOf(' ') < 0 ? ('#' + x) : x).join(', ');
+  return c.map(x => x.charAt(0) === '#' ? x : ('#' + x)).join(', ');
 }
 export function discordPostText(e, occDate, weeks) {
   const when = weeks === 1 ? 'ONE WEEK out' : weeks + ' weeks out';
