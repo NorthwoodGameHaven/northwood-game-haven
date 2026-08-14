@@ -1528,6 +1528,7 @@ function _nghDeepLinkPoll(){
     _nghDeepDone=true;
     try{
       if(vw && (vw==="events"||vw==="calendar"||vw==="list") && typeof setAdminView==="function"){
+        if(qs.get("drafts")==="1"){ evStatusFilter="drafts"; }
         setAdminView(vw);
         var pan=$("events-view-wrap")||$("list-view-wrap");
         if(pan) setTimeout(function(){ pan.scrollIntoView({behavior:"smooth",block:"start"}); },300);
@@ -2103,7 +2104,8 @@ function guessKind(title){
   if(t.indexOf("open")>=0) return "open";
   return "default";
 }
-var evSearch="", evRegOnly=false, evShowPast=false;
+var evSearch="", evRegOnly=false, evShowPast=false, evStatusFilter="all"; // all | drafts | live
+function setEvStatusFilter(v){ evStatusFilter=v; renderEventsAdmin(); }
 function evIsUpcoming(e){ var t=ymd(new Date()); var ds=eventDates(e); for(var i=0;i<ds.length;i++){ if(ds[i]>=t) return true; } return false; }
 function toggleEvPast(){
   evShowPast=!evShowPast;
@@ -2121,6 +2123,8 @@ function filterAdminEvents(arr){
     if(e.status!=="draft"){
       if(evShowPast ? evIsUpcoming(e) : !evIsUpcoming(e)) return false;
     }
+    if(evStatusFilter==="drafts" && e.status!=="draft") return false;
+    if(evStatusFilter==="live" && e.status==="draft") return false;
     if(evRegOnly && !(e.registration&&e.registration.enabled)) return false;
     if(!q) return true;
     var hay=[e.title,e.notes,e.offsiteLocation,(e.rooms||[]).map(roomName).join(" "),e.date,(e.private?"private invite-only":"")].join(" ").toLowerCase();
@@ -2425,7 +2429,7 @@ function renderEventsAdmin(){
     '<label class="check-line" style="margin-top:14px;padding:10px 12px;background:#f6faf4;border:1px solid #d8e8d6;border-radius:9px;"><input type="checkbox" id="ev-publish"><b>Publish now (make live)</b> — leave unchecked to save as a private draft. Drafts are hidden from customers but still hold their room(s).</label>'+
     '<div style="margin-top:14px;"><button class="btn btn-sm" id="ev-save-btn" onclick="saveEvent()">Save Event</button> <button class="btn btn-sm btn-ghost" onclick="resetEventForm()" id="ev-cancel-btn" style="display:none;">Cancel edit</button></div>'+
     '</div>'+
-    '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span id="ev-list-title">'+(evShowPast?"Past Public Events":"Current Public Events")+'</span> <span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-sm btn-ghost" id="ev-past-btn" onclick="toggleEvPast()" style="font-size:0.72rem;">'+(evShowPast?"\u2B06 Upcoming events":"\uD83D\uDD70\uFE0F Past events")+'</button><button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></span></h2>'+
+    '<h2 style="font-family:\'Cinzel\',serif;color:var(--forest);font-size:1rem;margin:8px 0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><span id="ev-list-title">'+(evShowPast?"Past Public Events":"Current Public Events")+'</span> <span style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-sm'+(evStatusFilter==="all"?"":" btn-ghost")+'" onclick="setEvStatusFilter(\'all\')" style="font-size:0.72rem;">All</button><button class="btn btn-sm'+(evStatusFilter==="drafts"?"":" btn-ghost")+'" onclick="setEvStatusFilter(\'drafts\')" style="font-size:0.72rem;">📝 Drafts</button><button class="btn btn-sm'+(evStatusFilter==="live"?"":" btn-ghost")+'" onclick="setEvStatusFilter(\'live\')" style="font-size:0.72rem;">🎉 Live</button><a class="btn btn-sm btn-ghost" href="guru-draft.html" style="font-size:0.72rem;text-decoration:none;">🔎 Draft Review ↗</a><button class="btn btn-sm btn-ghost" id="ev-past-btn" onclick="toggleEvPast()" style="font-size:0.72rem;">'+(evShowPast?"\u2B06 Upcoming events":"\uD83D\uDD70\uFE0F Past events")+'</button><button class="btn btn-sm btn-ghost" onclick="exportAllEvents()" style="font-size:0.72rem;">📥 Export ALL to Calendar (.ics)</button></span></h2>'+
     '<div class="card" style="padding:12px 14px;margin-bottom:10px;">'+
       '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">'+
       '<input type="search" id="ev-search-input" placeholder="🔎 Search events by title, room, date…" value="'+esc(evSearch)+'" oninput="evFilterChange()" style="flex:1 1 240px;min-width:200px;">'+
@@ -4250,4 +4254,5 @@ function custWeekDayHTML(isDay){
 <!-- NGH-BUILD 2026-08-06o · # on all Discord options -->
 <!-- NGH-BUILD 2026-08-06q · drafts always visible + view deep links -->
 <!-- NGH-BUILD 2026-08-06r · console landing -->
+<!-- NGH-BUILD 2026-08-06s · draft filter + review link -->
 </html>

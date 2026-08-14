@@ -210,7 +210,7 @@ async function loadStats(){
     var live = evs.filter(function(e){ return e.status!=="draft"; }).length;
     var drafts = evs.filter(function(e){ return e.status==="draft"; }).length;
     out.push(stat(live, "Live events on calendar", false, "booking.html?admin=1&view=events"));
-    out.push(stat(drafts, "Draft events (still hold rooms!)", drafts>0, "booking.html?admin=1&view=events"));
+    out.push(stat(drafts, "Draft events (still hold rooms!)", drafts>0, "booking.html?admin=1&view=events&drafts=1"));
   }catch(e){ out.push(stat("–","Events")); }
   $("stats").innerHTML = out.join("");
   renderBirthdays();
@@ -414,4 +414,5 @@ if(GuruAuth.get()){ boot(); } else { showLogin(); }
 <!-- NGH-BUILD 2026-08-06p · tile text v2.2 alignment -->
 <!-- NGH-BUILD 2026-08-06q · clickable stat tiles -->
 <!-- NGH-BUILD 2026-08-06r · admin=1 tile links -->
+<!-- NGH-BUILD 2026-08-06s · drafts tile filter link -->
 </html>

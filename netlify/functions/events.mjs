@@ -74,15 +74,40 @@ const _handler = async (req) => {
   // data.photo with NO conflict checks and NO registrant notifications —
   // nothing about the schedule changes, so those guards would only produce
   // false blocks (rooms booked since, guru availability, etc).
+  // Accepts: photo (image optimizer), promoPlan (Draft Review promotion plan),
+  // status 'live' (Draft Review publish — drafts already hold their rooms, so
+  // going live cannot create a room conflict; everything else still uses PUT).
   if (req.method === 'PATCH' && id) {
     let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
-    if (typeof b.photo !== 'string' || !b.photo) return bad('photo required');
-    if (b.photo.length > 500000) return bad('photo too large');
     const rows = await sql`SELECT data FROM events WHERE id = ${id}`;
     if (!rows.length) return bad('not found', 404);
-    const merged = { ...rows[0].data, photo: b.photo };
+    const cur = rows[0].data, merged = { ...cur };
+    let touched = false;
+    if (typeof b.photo === 'string' && b.photo) {
+      if (b.photo.length > 500000) return bad('photo too large');
+      merged.photo = b.photo; touched = true;
+    }
+    if (b.promoPlan && typeof b.promoPlan === 'object') {
+      const w = Array.isArray(b.promoPlan.countdownWeeks) ? b.promoPlan.countdownWeeks.map(Number).filter(x => x >= 1 && x <= 4) : undefined;
+      merged.promoPlan = {
+        facebook: b.promoPlan.facebook !== false,
+        discord: b.promoPlan.discord !== false,
+        dayBefore: b.promoPlan.dayBefore !== false,
+        volumeone: b.promoPlan.volumeone !== false,
+        poster: b.promoPlan.poster !== false,
+        ...(w && w.length ? { countdownWeeks: w } : {})
+      };
+      touched = true;
+    }
+    if (b.status === 'live') {
+      if (cur.status !== 'draft') return bad('only drafts can be published via PATCH');
+      merged.status = 'live'; touched = true;
+    } else if (b.status !== undefined) {
+      return bad('status may only be set to live');
+    }
+    if (!touched) return bad('nothing to update');
     await sql`UPDATE events SET data = ${JSON.stringify(merged)}::jsonb WHERE id = ${id}`;
-    return json({ id, photoBytes: b.photo.length });
+    return json({ id, updated: Object.keys(b) });
   }
 
   if (req.method === 'POST') {

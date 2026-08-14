@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>📝 Draft Event Review — Northwood Game Haven (staff)</title>
+<link rel="icon" href="logo.png">
+<style>
+  :root{ --forest:#2d5a3d; --deep:#1c3a26; --gold:#c79a3b; --ink:#22301f; --paper:#f4f1e8; --card:#fff; --red:#9a2b2b; --teal:#1488a6; --maroon:#7a2431; --purple:#6b4fa0; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--paper); color:var(--ink); font-family:Georgia,'Times New Roman',serif; }
+  .wrap{ max-width:1080px; margin:0 auto; padding:18px 16px 60px; }
+  header.hub{ text-align:center; padding:16px 0 4px; }
+  header.hub .kicker{ letter-spacing:.35em; font-size:12px; color:var(--gold); text-transform:uppercase; }
+  header.hub h1{ margin:6px 0 4px; color:var(--forest); font-size:30px; }
+  header.hub p{ margin:0 auto; color:#6b6b5a; font-size:14px; max-width:760px; }
+  .card{ background:var(--card); border:1px solid #e2dcc8; border-radius:14px; padding:14px 16px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+  .btn{ display:inline-block; cursor:pointer; border:0; border-radius:22px; padding:9px 18px; font-family:inherit; font-size:14px; font-weight:bold; background:var(--gold); color:#1a1a12; text-decoration:none; }
+  .btn.ghost{ background:#fff; color:var(--forest); border:2px solid #cfe0d4; }
+  .btn.small{ padding:5px 11px; font-size:12.5px; border-radius:16px; }
+  .btn.danger{ background:var(--maroon); color:#fff; }
+  .toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:14px 0 18px; }
+  select{ font-family:inherit; padding:5px 9px; border-radius:8px; border:1px solid #cfc9b4; font-size:13.5px; }
+  .muted{ color:#8a8a75; font-size:13px; }
+  /* draft cards */
+  .dr{ margin-bottom:14px; border-left:6px solid var(--maroon); }
+  .dr .top{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; }
+  .dr h3{ margin:0 0 3px; color:var(--forest); font-size:17px; }
+  .dr .meta{ font-size:12.5px; color:#8a8a75; }
+  .chip{ display:inline-block; font-size:11.5px; padding:2px 9px; border-radius:12px; background:#eee; color:#555; margin:2px 4px 0 0; }
+  .chip.type{ background:#e8e2f4; color:var(--purple); }
+  .chip.cad{ background:#dcebe0; color:var(--forest); }
+  .chip.guru{ background:#e8f0e9; color:var(--forest); }
+  .flag{ display:block; margin:4px 0; padding:6px 11px; border-radius:8px; font-size:12.8px; font-weight:bold; }
+  .flag.bad{ background:#fbe9e7; border:1.5px solid #d98070; color:#8a2418; }
+  .flag.warn{ background:#fdf1e3; border:1.5px solid #d9a444; color:#7a4a10; }
+  .flag.ok{ background:#eaf4ec; border:1.5px solid #9cc3a6; color:#1f4d2e; }
+  .flag.info{ background:#e9f2fb; border:1.5px solid #8fb4d9; color:#1e4d74; }
+  .factors{ width:100%; border-collapse:collapse; font-size:12.8px; margin-top:8px; }
+  .factors td{ padding:4px 8px; border-top:1px solid #efece0; vertical-align:top; }
+  .factors td:first-child{ font-weight:bold; white-space:nowrap; }
+  .score{ display:inline-block; min-width:22px; text-align:center; border-radius:6px; padding:1px 5px; font-weight:bold; background:#eee; }
+  .score.hi{ background:#f3d9a8; } .score.vhi{ background:#eab6a4; }
+  .detail{ display:none; margin-top:10px; border-top:2px dashed #e2dcc8; padding-top:10px; }
+  .dr.open .detail{ display:block; }
+  .notes{ background:#f7f4ea; border-radius:10px; padding:10px 12px; margin-top:8px; }
+  .note{ font-size:13px; margin:6px 0; }
+  .note b{ color:var(--forest); }
+  .note .ts{ color:#a09f8a; font-size:11px; }
+  textarea.nbox{ width:100%; min-height:54px; font-family:inherit; font-size:13px; border:1px solid #cfc9b4; border-radius:8px; padding:7px; }
+  /* calendar */
+  .cal{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal .dh{ text-align:center; font-size:11px; color:#8a8a75; font-weight:bold; padding:2px 0; }
+  .cal .cell{ background:#fff; border:1px solid #e6e1cf; border-radius:8px; min-height:86px; padding:3px 4px; font-size:10.5px; }
+  .cal .cell.other{ opacity:.45; }
+  .cal .dn{ font-weight:bold; color:#6b6b5a; font-size:11px; }
+  .ev{ display:block; margin:2px 0; padding:1px 5px; border-radius:5px; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ev.live{ background:var(--teal); color:#fff; }
+  .ev.draft{ background:#fff; border:1.5px dashed var(--maroon); color:var(--maroon); font-weight:bold; cursor:pointer; }
+  .ev.radar{ background:#f1ecfa; border:1px solid var(--purple); color:var(--purple); }
+  .ev.un{ color:var(--red); font-weight:bold; }
+  .ev.sh{ color:#8a8a75; }
+  /* modal */
+  .modalbg{ position:fixed; inset:0; background:rgba(20,30,22,.55); display:none; z-index:99990; align-items:flex-start; justify-content:center; overflow:auto; padding:30px 12px; }
+  .modalbg.on{ display:flex; }
+  .modal{ background:#fff; border-radius:14px; max-width:560px; width:100%; padding:18px 20px; }
+  .modal h3{ margin:0 0 8px; color:var(--forest); }
+  .pp label{ display:flex; align-items:center; gap:8px; font-size:14px; margin:7px 0; cursor:pointer; }
+  .hidden{ display:none !important; }
+  #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hub">
+    <div class="kicker">Staff Only</div>
+    <h1>📝 Draft Event Review</h1>
+    <p>Every draft is an event being planned. Review the pipeline weekly: spider-factor flags surface what
+    needs attention (lead-time runway, external anchors from the Radar, revenue setup, Guru capacity,
+    community channels), discuss inline, tune the promotion plan, and publish when it's ready.</p>
+  </header>
+
+  <div id="gate" class="card hidden" style="max-width:420px;margin:30px auto;text-align:center;">
+    <p>You're not signed in. Draft review is staff-only.</p>
+    <a class="btn" href="guru.html">Sign in at the Guru Hub →</a>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="toolbar card">
+      <button class="btn small" id="v-list" onclick="DR.view('list')">📋 Review list</button>
+      <button class="btn ghost small" id="v-cal" onclick="DR.view('cal')">🗓️ Calendar fit</button>
+      <span style="flex:1"></span>
+      <label class="muted">Sort
+        <select id="sortsel" onchange="DR.redraw()">
+          <option value="sev">Needs attention first</option>
+          <option value="date">Event date</option>
+          <option value="days">Days until event</option>
+          <option value="leadTime">Lead Time score</option>
+          <option value="external">External Dependency score</option>
+          <option value="revenue">Revenue score</option>
+          <option value="execution">Execution Effort score</option>
+          <option value="community">Community score</option>
+        </select>
+      </label>
+      <button class="btn ghost small" onclick="DR.load()">↻ Refresh</button>
+    </div>
+
+    <div id="listwrap"></div>
+
+    <div id="calwrap" class="hidden">
+      <div class="toolbar card" style="justify-content:center;">
+        <button class="btn ghost small" onclick="DR.calShift(-1)">‹</button>
+        <b id="cal-title" style="min-width:180px;text-align:center;color:var(--forest);"></b>
+        <button class="btn ghost small" onclick="DR.calShift(1)">›</button>
+        <span class="muted">🟦 live · <span style="color:var(--maroon);font-weight:bold;">▭ draft</span> · <span style="color:var(--purple);">▭ Radar</span> · <span style="color:var(--red);font-weight:bold;">⛔ unavailable</span> · <span style="color:#8a8a75;">🏪 shift</span></span>
+      </div>
+      <div class="card"><div class="cal" id="calgrid"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- promo plan modal -->
+<div class="modalbg" id="pp-bg" onclick="if(event.target===this)DR.ppClose()">
+  <div class="modal pp">
+    <h3>📣 Promotion plan — <span id="pp-title"></span></h3>
+    <p class="muted" style="margin-top:0;">Defaults run everything. Untick a venue to skip those tasks for
+    this event; pick which countdown beats fire. Weekly &amp; tomorrow posts are global and unaffected.</p>
+    <label><input type="checkbox" id="pp-facebook"> ⏳ Facebook countdown posts</label>
+    <div style="margin:2px 0 6px 26px;" id="pp-weeks">
+      <label style="display:inline-flex;margin-right:10px;"><input type="checkbox" value="4"> 4wk</label>
+      <label style="display:inline-flex;margin-right:10px;"><input type="checkbox" value="3"> 3wk</label>
+      <label style="display:inline-flex;margin-right:10px;"><input type="checkbox" value="2"> 2wk</label>
+      <label style="display:inline-flex;"><input type="checkbox" value="1"> 1wk</label>
+      <div class="muted">Applies to both Facebook and Discord countdowns.</div>
+    </div>
+    <label><input type="checkbox" id="pp-discord"> 💬 Discord countdown posts</label>
+    <label><input type="checkbox" id="pp-daybefore"> 💬 Discord day-before post</label>
+    <label><input type="checkbox" id="pp-volumeone"> 📰 Volume One listing</label>
+    <label><input type="checkbox" id="pp-poster"> 🎨 Poster task</label>
+    <div id="pp-ecwarn" class="flag warn hidden" style="margin-top:8px;"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn" onclick="DR.ppSave()">Save plan</button>
+      <button class="btn ghost" onclick="DR.ppClose()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="guru-common.js"></script>
+<script>
+(function(){
+  "use strict";
+  var API = window.NGH_API_BASE || "/.netlify/functions";
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function toast(m){ var t=$("toast"); t.textContent=m; t.style.display="block"; setTimeout(function(){ t.style.display="none"; },2800); }
+  function token(){ return (window.GuruAuth&&GuruAuth.get&&GuruAuth.get())||""; }
+  function hdrs(){ return { "Content-Type":"application/json", "Authorization":"Bearer "+token() }; }
+  function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+  function D(s){ return new Date(s+"T12:00:00"); }
+  function human(s){ return D(s).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}); }
+  var TODAY = ymd(new Date());
+
+  /* ================= flag engine (pure) ================= */
+  var AXES=[["community","Community Building"],["external","External Dependency"],["execution","Execution Effort"],["leadTime","Lead Time"],["revenue","Revenue Directness"]];
+  function scoresOf(e){ var s=(e.strategy&&(e.strategy.scores||e.strategy))||{}; var o={}; AXES.forEach(function(a){ o[a[0]]=Number(s[a[0]])||0; }); return o; }
+  function runwayWeeks(sc){ return sc>=9?10 : sc>=7?6 : sc>=4?3 : 1; }
+  function daysUntil(ds, today){ return Math.round((D(ds)-D(today))/86400000); }
+
+  function computeFlags(e, today, radar, guruData){
+    var f=[], sc=scoresOf(e);
+    if(!e.date) { f.push({lv:"bad", t:"No event date set — nothing else can be judged until it has one."}); return f; }
+    var du=daysUntil(e.date, today);
+    if(du<0) f.push({lv:"bad", t:"Event date is in the past ("+human(e.date)+") — re-date or delete."});
+    // Lead Time
+    var need=runwayWeeks(sc.leadTime), haveWk=du/7;
+    if(sc.leadTime>0){
+      if(du>=0 && haveWk<need) f.push({lv:"bad", t:"Lead Time "+sc.leadTime+"/10 needs ~"+need+" weeks of promotion runway — only "+Math.max(0,Math.floor(du))+" days remain. Push the date or accept a soft launch."});
+      else if(du>=0 && haveWk<need*1.4) f.push({lv:"warn", t:"Lead Time "+sc.leadTime+"/10: runway is tight ("+Math.floor(du)+" days vs ~"+need+" weeks ideal). Publish now to start the countdown clock."});
+      else if(du>=0) f.push({lv:"ok", t:"Lead-time runway fits: "+Math.floor(du)+" days for a ~"+need+"-week promotion need."});
+    }
+    // External Dependency ↔ Radar
+    if(sc.external>=6){
+      var near=(radar||[]).filter(function(r){ return r.date && r.status!=="passed" && Math.abs(daysUntil(r.date, e.date))<=14; });
+      if(near.length) f.push({lv:"info", t:"External "+sc.external+"/10 — Radar anchors nearby: "+near.map(function(r){ return r.title+" ("+human(r.date)+")"; }).join(", ")+". Confirm the date is deliberately tied."});
+      else f.push({lv:"warn", t:"External Dependency "+sc.external+"/10 but NO Radar event within 2 weeks of this date — verify what external anchor picked this date, or add it to the Radar."});
+    }
+    // Revenue directness
+    if(sc.revenue>=6 && !((e.registration&&e.registration.enabled)||(e.tournament&&e.tournament.fee))) f.push({lv:"warn", t:"Revenue "+sc.revenue+"/10 but no registration or entry fee is configured — wire up the money before publishing."});
+    // Execution Effort ↔ Guru capacity
+    var asg=(guruData.assignments||[]).filter(function(a){ return a.eventId===e.id && !a.none; });
+    var gs=[]; asg.forEach(function(a){ (a.gurus||[]).forEach(function(g){ if(gs.indexOf(g)<0) gs.push(g); }); });
+    if(sc.execution>=7 && !gs.length) f.push({lv:"warn", t:"Execution Effort "+sc.execution+"/10 with no Guru assigned — high-effort events need a named owner before go-live."});
+    if(gs.length && e.date){
+      var un=(guruData.unavail||[]).filter(function(u){ return u.date===e.date && gs.indexOf(u.guru)>=0; });
+      if(un.length) f.push({lv:"bad", t:"Assigned Guru unavailable on the event date: "+un.map(function(u){return u.guru;}).join(", ")+" — reassign or re-date."});
+    }
+    // Community Building ↔ Discord
+    if(sc.community>=6 && !((e.discordChannels||[]).length)) f.push({lv:"warn", t:"Community "+sc.community+"/10 with no Discord channel selected — community events live or die in their channel."});
+    // basics
+    if(!e.photo) f.push({lv:"warn", t:"No photo — shares and calendar art fall back to the logo."});
+    if(!(e.strategy&&(e.strategy.type))) f.push({lv:"warn", t:"No strategy type set — score it in the editor (Gate G1 expects it)."});
+    if(D(e.date).getDay()===5) f.push({lv:"info", t:"Friday event — promo tasks will carry the 🚫 Eau Claire Board Game Group flag."});
+    return f;
+  }
+  function sev(fl){ var s=0; fl.forEach(function(f){ s+= f.lv==="bad"?100 : f.lv==="warn"?10 : 0; }); return s; }
+
+  /* ================= state + data ================= */
+  var S={ events:[], drafts:[], radar:[], guru:{assignments:[],shifts:[],unavail:[]}, notes:{}, calRef:new Date(), curView:"list", pp:null };
+
+  function load(){
+    $("listwrap").innerHTML='<p class="muted" style="text-align:center;">Loading drafts…</p>';
+    Promise.all([
+      fetch(API+"/events",{headers:hdrs()}).then(function(r){ if(r.status===401) throw new Error("auth"); return r.json(); }),
+      fetch(API+"/interest-events",{headers:hdrs()}).then(function(r){ return r.ok?r.json():{items:[]}; }).catch(function(){ return {items:[]}; }),
+      fetch(API+"/gurus",{headers:hdrs()}).then(function(r){ return r.ok?r.json():{}; }).catch(function(){ return {}; })
+    ]).then(function(res){
+      var ev=res[0]; S.events=(ev&&ev.events)||ev||[];
+      S.drafts=S.events.filter(function(e){ return e.status==="draft"; });
+      var ie=res[1]; S.radar=(ie&&ie.items)||ie||[];
+      S.guru={ assignments:(res[2]&&res[2].assignments)||[], shifts:(res[2]&&res[2].shifts)||[], unavail:(res[2]&&res[2].unavail)||[] };
+      redraw(); renderCal();
+      // fetch notes for each draft (parallel, tolerant)
+      S.drafts.forEach(function(e){
+        fetch(API+"/draft-notes?eventId="+encodeURIComponent(e.id),{headers:hdrs()})
+          .then(function(r){ return r.ok?r.json():{notes:[]}; })
+          .then(function(j){ S.notes[e.id]=(j&&j.notes)||[]; var el=$("notes-"+e.id); if(el) el.innerHTML=notesHTML(e.id); })
+          .catch(function(){});
+      });
+    }).catch(function(e){
+      if(String(e.message)==="auth"){ gate(); return; }
+      $("listwrap").innerHTML='<p class="muted" style="text-align:center;">Couldn\'t load — '+esc(e.message||e)+'</p>';
+    });
+  }
+
+  /* ================= list view ================= */
+  function spider(e, size){
+    var sc=scoresOf(e), t=(e.strategy&&e.strategy.type)||null;
+    var prof=(t&&window._DRPROF&&window._DRPROF[t])||null;
+    var order=["community","external","execution","leadTime","revenue"];
+    var c=size/2, R=size/2-8;
+    function pts(vals){ return order.map(function(k,i){ var v=Math.max(0,Math.min(10,vals[i]))/10;
+      var a=-Math.PI/2 + i*2*Math.PI/5; return (c+Math.cos(a)*R*v).toFixed(1)+","+(c+Math.sin(a)*R*v).toFixed(1); }).join(" "); }
+    var grid=""; [0.33,0.66,1].forEach(function(g){ grid+='<polygon points="'+pts([10*g,10*g,10*g,10*g,10*g])+'" fill="none" stroke="#e4dfc9" stroke-width="1"/>'; });
+    var ref = prof ? '<polygon points="'+pts(prof)+'" fill="rgba(160,160,140,0.18)" stroke="#b8b49a" stroke-width="1"/>' : "";
+    var me='<polygon points="'+pts(order.map(function(k){return sc[k];}))+'" fill="rgba(122,36,49,0.25)" stroke="#7a2431" stroke-width="1.8"/>';
+    return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+grid+ref+me+'</svg>';
+  }
+  function scoreChip(v){ return '<span class="score'+(v>=8?" vhi":v>=6?" hi":"")+'">'+(v||"–")+'</span>'; }
+  function gurusFor(e){ var out=[]; (S.guru.assignments||[]).forEach(function(a){ if(a.eventId===e.id&&!a.none)(a.gurus||[]).forEach(function(g){ if(out.indexOf(g)<0) out.push(g); }); }); return out; }
+
+  function notesHTML(id){
+    var n=S.notes[id]||[];
+    var h=n.length? n.map(function(x){ return '<div class="note"><b>'+esc(x.guru||"Guru")+'</b> <span class="ts">'+esc((x.ts||"").slice(0,16).replace("T"," "))+'</span><br>'+esc(x.text)+'</div>'; }).join("")
+                  : '<div class="muted">No discussion yet — leave the first note.</div>';
+    h+='<textarea class="nbox" id="nb-'+id+'" placeholder="Add to the discussion — decisions, blockers, prize ideas…"></textarea>'+
+       '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;"><input id="ng-'+id+'" placeholder="Your name" style="font-family:inherit;padding:6px 9px;border:1px solid #cfc9b4;border-radius:8px;width:120px;font-size:13px;">'+
+       '<button class="btn small" onclick="DR.addNote(\''+id+'\')">💬 Post note</button></div>';
+    return h;
+  }
+
+  function card(e){
+    var fl=computeFlags(e, TODAY, S.radar, S.guru), sc=scoresOf(e);
+    var du=e.date?daysUntil(e.date,TODAY):null, gs=gurusFor(e);
+    var h='<div class="card dr" id="dr-'+esc(e.id)+'">';
+    h+='<div class="top"><div style="flex:1;min-width:240px;">';
+    h+='<h3>'+esc(e.title||"(untitled)")+'</h3>';
+    h+='<div class="meta">'+(e.date? human(e.date)+(e.start?(' · '+e.start+'–'+(e.end||"")):"")+' · '+(du>=0? du+" days out":"PAST") : "no date")+' · id '+esc(e.id)+'</div>';
+    h+='<div style="margin-top:5px;">'
+       +(e.strategy&&e.strategy.type?'<span class="chip type">'+esc(e.strategy.type)+'</span>':'')
+       +(e.strategy&&e.strategy.cadence?'<span class="chip cad">'+esc(e.strategy.cadence)+'</span>':'')
+       +(gs.length?'<span class="chip guru">👤 '+esc(gs.join(" + "))+'</span>':'<span class="chip" style="background:#fbe9e7;color:#8a2418;">no Guru</span>')
+       +((e.discordChannels||[]).length?'<span class="chip">💬 '+e.discordChannels.length+' ch</span>':'')
+       +(e.promoPlan?'<span class="chip" style="background:#e9f2fb;color:#1e4d74;">📣 custom plan</span>':'')
+       +'</div>';
+    var top=fl.filter(function(f){return f.lv==="bad"||f.lv==="warn";}).slice(0,2);
+    top.forEach(function(f){ h+='<span class="flag '+f.lv+'">'+esc(f.t)+'</span>'; });
+    h+='</div><div style="text-align:center;">'+spider(e,120)+'<div class="muted" style="font-size:10.5px;">draft vs '+esc((e.strategy&&e.strategy.type)||"?")+' profile</div></div></div>';
+    h+='<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'
+      +'<button class="btn ghost small" onclick="DR.toggle(\''+esc(e.id)+'\')">🔎 Review details</button>'
+      +'<a class="btn ghost small" href="booking.html?admin=1&editEvent='+encodeURIComponent(e.id)+'" target="_blank" rel="noopener">✏️ Open in editor ↗</a>'
+      +'<button class="btn ghost small" onclick="DR.ppOpen(\''+esc(e.id)+'\')">📣 Promotion plan</button>'
+      +'<button class="btn small" onclick="DR.publish(\''+esc(e.id)+'\')">🚀 Publish — go live</button>'
+      +'</div>';
+    // detail
+    h+='<div class="detail">';
+    h+='<table class="factors">';
+    AXES.forEach(function(a){
+      var v=sc[a[0]], note={
+        leadTime:"Runway needed ≈ "+runwayWeeks(v)+" wk at this score"+(e.date?(" · have "+Math.max(0,du)+" days"):""),
+        external:"6+ should pin to a Radar anchor (fair, release, festival)",
+        revenue:"6+ expects registration or an entry fee wired up",
+        execution:"7+ needs a named Guru with real capacity that week",
+        community:"6+ lives in its Discord channel — pick one"
+      }[a[0]];
+      h+='<tr><td>'+a[1]+'</td><td>'+scoreChip(v)+'</td><td class="muted">'+note+'</td></tr>';
+    });
+    h+='</table>';
+    fl.forEach(function(f){ h+='<span class="flag '+f.lv+'">'+esc(f.t)+'</span>'; });
+    if(e.notes) h+='<div class="muted" style="margin-top:8px;white-space:pre-line;">'+esc(String(e.notes).slice(0,500))+(String(e.notes).length>500?"…":"")+'</div>';
+    h+='<div class="notes"><b style="color:var(--forest);">💬 Review discussion</b><div id="notes-'+esc(e.id)+'">'+notesHTML(e.id)+'</div></div>';
+    h+='</div></div>';
+    return h;
+  }
+
+  function redraw(){
+    var mode=$("sortsel").value, list=S.drafts.slice();
+    var flc={}; list.forEach(function(e){ flc[e.id]=sev(computeFlags(e,TODAY,S.radar,S.guru)); });
+    list.sort(function(a,b){
+      if(mode==="sev") return (flc[b.id]-flc[a.id]) || String(a.date||"9999").localeCompare(String(b.date||"9999"));
+      if(mode==="date") return String(a.date||"9999").localeCompare(String(b.date||"9999"));
+      if(mode==="days") return (a.date?daysUntil(a.date,TODAY):9e9)-(b.date?daysUntil(b.date,TODAY):9e9);
+      return (scoresOf(b)[mode]||0)-(scoresOf(a)[mode]||0);
+    });
+    $("listwrap").innerHTML = list.length
+      ? '<p class="muted" style="text-align:center;">'+list.length+' draft'+(list.length>1?"s":"")+' in the pipeline — highest attention first when sorted by default.</p>'+list.map(card).join("")
+      : '<p class="muted" style="text-align:center;padding:26px;">🎉 No drafts — the pipeline is clear.</p>';
+  }
+
+  /* ================= calendar view ================= */
+  function renderCal(){
+    var ref=S.calRef, y=ref.getFullYear(), m=ref.getMonth();
+    $("cal-title").textContent = ref.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+    var first=new Date(y,m,1), start=new Date(first); start.setDate(1-first.getDay());
+    var byDate={};
+    function add(ds,item){ (byDate[ds]=byDate[ds]||[]).push(item); }
+    S.events.forEach(function(e){ if(!e.date) return;
+      // single occurrence display only (recurring expansion is server business; the anchor date is the review anchor)
+      add(e.date,{k:e.status==="draft"?"draft":"live", t:e.title, id:e.id});
+    });
+    S.radar.forEach(function(r){ if(r.date&&r.status!=="passed") add(r.date,{k:"radar", t:r.title}); });
+    (S.guru.unavail||[]).forEach(function(u){ if(u.date) add(u.date,{k:"un", t:"⛔ "+u.guru}); });
+    (S.guru.shifts||[]).forEach(function(s){ if(s.date) add(s.date,{k:"sh", t:"🏪 "+s.guru}); });
+    var h='<div class="dh">Sun</div><div class="dh">Mon</div><div class="dh">Tue</div><div class="dh">Wed</div><div class="dh">Thu</div><div class="dh">Fri</div><div class="dh">Sat</div>';
+    for(var i=0;i<42;i++){
+      var d=new Date(start); d.setDate(start.getDate()+i);
+      var ds=ymd(d), other=d.getMonth()!==m;
+      h+='<div class="cell'+(other?" other":"")+'"><div class="dn">'+d.getDate()+'</div>';
+      (byDate[ds]||[]).sort(function(a,b){ var o={draft:0,live:1,radar:2,un:3,sh:4}; return o[a.k]-o[b.k]; }).slice(0,6).forEach(function(it){
+        h+='<span class="ev '+it.k+'"'+(it.k==="draft"?' onclick="DR.jump(\''+esc(it.id)+'\')" title="'+esc(it.t)+' (draft — click to review)"':' title="'+esc(it.t)+'"')+'>'+esc(it.t)+'</span>';
+      });
+      var extra=(byDate[ds]||[]).length-6; if(extra>0) h+='<span class="muted">+'+extra+' more</span>';
+      h+='</div>';
+    }
+    $("calgrid").innerHTML=h;
+  }
+
+  /* ================= actions ================= */
+  function toggle(id){ var el=$("dr-"+id); if(el) el.classList.toggle("open"); }
+  function jump(id){ view("list"); var el=$("dr-"+id); if(el){ el.classList.add("open"); el.scrollIntoView({behavior:"smooth",block:"start"}); } }
+  function view(v){ S.curView=v;
+    $("listwrap").classList.toggle("hidden", v!=="list"); $("calwrap").classList.toggle("hidden", v!=="cal");
+    $("v-list").className="btn "+(v==="list"?"":"ghost ")+"small"; $("v-cal").className="btn "+(v==="cal"?"":"ghost ")+"small";
+    if(v==="cal") renderCal();
+  }
+  function calShift(n){ S.calRef=new Date(S.calRef.getFullYear(), S.calRef.getMonth()+n, 1); renderCal(); }
+
+  function addNote(id){
+    var t=$("nb-"+id), g=$("ng-"+id);
+    var text=(t&&t.value||"").trim(), guru=(g&&g.value||"").trim()||"Guru";
+    if(!text){ toast("Write the note first"); return; }
+    fetch(API+"/draft-notes",{method:"POST",headers:hdrs(),body:JSON.stringify({eventId:id,guru:guru,text:text})})
+      .then(function(r){ if(!r.ok) throw new Error("save failed"); return r.json(); })
+      .then(function(){ return fetch(API+"/draft-notes?eventId="+encodeURIComponent(id),{headers:hdrs()}).then(function(r){return r.json();}); })
+      .then(function(j){ S.notes[id]=(j&&j.notes)||[]; $("notes-"+id).innerHTML=notesHTML(id); toast("Note posted 💬"); })
+      .catch(function(e){ toast("⚠️ "+(e.message||e)); });
+  }
+
+  /* promo plan */
+  function ppOpen(id){
+    var e=S.drafts.filter(function(x){return x.id===id;})[0]; if(!e) return;
+    S.pp=id; var p=e.promoPlan||{};
+    $("pp-title").textContent=e.title||id;
+    $("pp-facebook").checked = p.facebook!==false;
+    $("pp-discord").checked = p.discord!==false;
+    $("pp-daybefore").checked = p.dayBefore!==false;
+    $("pp-volumeone").checked = p.volumeone!==false;
+    $("pp-poster").checked = p.poster!==false;
+    var wks=p.countdownWeeks||[4,3,2,1];
+    Array.prototype.forEach.call(document.querySelectorAll("#pp-weeks input"),function(cb){ cb.checked=wks.indexOf(Number(cb.value))>=0; });
+    var ec=$("pp-ecwarn");
+    if(e.date && D(e.date).getDay()===5){ ec.classList.remove("hidden"); ec.textContent="🚫 Friday event — every Facebook post for it carries the Eau Claire Board Game Group exclusion flag automatically."; }
+    else ec.classList.add("hidden");
+    $("pp-bg").classList.add("on");
+  }
+  function ppClose(){ $("pp-bg").classList.remove("on"); S.pp=null; }
+  function ppSave(){
+    var id=S.pp; if(!id) return;
+    var wks=[]; Array.prototype.forEach.call(document.querySelectorAll("#pp-weeks input"),function(cb){ if(cb.checked) wks.push(Number(cb.value)); });
+    wks.sort(function(a,b){return b-a;});
+    var plan={ facebook:$("pp-facebook").checked, discord:$("pp-discord").checked, dayBefore:$("pp-daybefore").checked,
+               volumeone:$("pp-volumeone").checked, poster:$("pp-poster").checked, countdownWeeks:wks };
+    fetch(API+"/events/"+encodeURIComponent(id),{method:"PATCH",headers:hdrs(),body:JSON.stringify({promoPlan:plan})})
+      .then(function(r){ if(!r.ok) return r.json().then(function(j){ throw new Error(j.error||("HTTP "+r.status)); }); return r.json(); })
+      .then(function(){ toast("Promotion plan saved 📣"); ppClose(); load(); })
+      .catch(function(e){ toast("⚠️ "+(e.message||e)); });
+  }
+
+  function publish(id){
+    var e=S.drafts.filter(function(x){return x.id===id;})[0]; if(!e) return;
+    var fl=computeFlags(e,TODAY,S.radar,S.guru), bad=fl.filter(function(f){return f.lv==="bad";});
+    var msg="Publish \""+(e.title||id)+"\" — it goes live on the public calendar and the promotion task engine picks it up immediately.";
+    if(bad.length) msg+="\n\n⛔ UNRESOLVED RED FLAGS:\n• "+bad.map(function(f){return f.t;}).join("\n• ")+"\n";
+    msg+="\n(The draft already holds its rooms, so publishing can't create a room conflict.)\n\nGo live?";
+    if(!confirm(msg)) return;
+    fetch(API+"/events/"+encodeURIComponent(id),{method:"PATCH",headers:hdrs(),body:JSON.stringify({status:"live"})})
+      .then(function(r){ if(!r.ok) return r.json().then(function(j){ throw new Error(j.error||("HTTP "+r.status)); }); return r.json(); })
+      .then(function(){ toast("🚀 Published — it's live"); load(); })
+      .catch(function(e){ toast("⚠️ "+(e.message||e)); });
+  }
+
+  function gate(){ $("gate").classList.remove("hidden"); $("app").classList.add("hidden"); }
+  function boot(){ if(!token()){ gate(); return; } $("app").classList.remove("hidden"); load(); }
+  window.DR={ load:load, redraw:redraw, toggle:toggle, jump:jump, view:view, calShift:calShift,
+              addNote:addNote, ppOpen:ppOpen, ppClose:ppClose, ppSave:ppSave, publish:publish };
+  boot();
+})();
+</script>
+</body>
+</html>

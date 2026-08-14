@@ -76,6 +76,16 @@ function timesOf(e) {
   return fmtTime(e.start) + (e.end ? '–' + fmtTime(e.end) : '');
 }
 
+/* ---------- per-event promotion plan (set in Draft Review) ----------
+ * e.promoPlan: { facebook, discord, dayBefore, volumeone, poster: bool (default true),
+ *                countdownWeeks: [4,3,2,1] subset } — absent plan = all defaults. */
+function plan(e) { return (e && e.promoPlan) || {}; }
+function planOn(e, key) { return plan(e)[key] !== false; }
+function planWeeks(e) {
+  const w = plan(e).countdownWeeks;
+  return (Array.isArray(w) && w.length) ? w : [1, 2, 3, 4];
+}
+
 /* ---------- classification ---------- */
 export function isSpecial(e) {
   if (!e || e.status === 'draft' || e.private) return false;
@@ -239,7 +249,8 @@ export async function computeTasks(sql, forDate) {
     }
     // 3) countdown posts — k weeks before each special occurrence
     for (const { e, date } of specialOccs) {
-      for (let k = 1; k <= 4; k++) {
+      if (!planOn(e, 'facebook')) continue;
+      for (const k of planWeeks(e)) {
         if (addDays(date, -7 * k) === day) {
           out.push({
             id: 'cd:' + e.id + ':' + date + ':' + k + 'w', kind: 'cd', day, assignees: assigneesFor(e.id),
@@ -263,7 +274,7 @@ export async function computeTasks(sql, forDate) {
     //     doubles as a discussion starter (guest requests, questions, and any
     //     warm-up session — Teach & Play, practice night — the Guru deems fit).
     for (const { e, date } of specialOccs) {
-      for (let k = 1; k <= 4; k++) {
+      if (planOn(e, 'discord')) for (const k of planWeeks(e)) {
         if (addDays(date, -7 * k) === day) {
           out.push({
             id: 'dcd:' + e.id + ':' + date + ':' + k + 'w', kind: 'dcd', day, assignees: assigneesFor(e.id),
@@ -275,7 +286,7 @@ export async function computeTasks(sql, forDate) {
         }
       }
       // 3c) day-before Discord post in the same channel
-      if (addDays(date, -1) === day) {
+      if (planOn(e, 'dayBefore') && addDays(date, -1) === day) {
         out.push({
           id: 'dpre:' + e.id + ':' + date, kind: 'dpre', day, assignees: assigneesFor(e.id),
           label: e.title + ' — day-before Discord post' + (chanList(e) ? (' in ' + chanList(e)) : '') + ' (event tomorrow, ' + human(date) + ')',
@@ -302,6 +313,7 @@ export async function computeTasks(sql, forDate) {
   for (const { e, date } of specialOccs.sort((a, b) => a.date < b.date ? -1 : 1)) {
     if (date < forDate || seen.has(e.id)) continue;
     seen.add(e.id);
+    if (!planOn(e, 'volumeone')) continue;
     const id = 'vo:' + e.id;
     if (done.has(id)) continue;
     standing.push({
@@ -361,7 +373,7 @@ export async function computeTasks(sql, forDate) {
     }
 
     // 2) NEW events (created on/after POSTER_SINCE): design, print & display a poster.
-    if ((createdAt[e.id] || '') >= POSTER_SINCE) {
+    if ((createdAt[e.id] || '') >= POSTER_SINCE && planOn(e, 'poster')) {
       const pid = 'poster:' + e.id;
       if (!done.has(pid)) {
         standing.push({
