@@ -56,6 +56,11 @@ function ymd(dt) {
 }
 export function addDays(ymdStr, n) { const x = d(ymdStr); x.setDate(x.getDate() + n); return ymd(x); }
 function dow(ymdStr) { return d(ymdStr).getDay(); }               // 0 = Sunday
+// Courtesy rule: the Eau Claire Board Game Group runs its own main event every
+// Friday — NGH posts about FRIDAY-OCCURRING events must never be shared there.
+// Posting ON a Friday about other days is fine; it's the event's day that matters.
+const EC_FLAG = '🚫 Do NOT share to the Eau Claire Board Game Group — this covers a FRIDAY event (their main event night).';
+const EC_FLAG_WEEK = '⚠️ This week includes Friday events — don\'t share the calendar to the Eau Claire Board Game Group (their main event night).';
 function human(ymdStr) {
   return d(ymdStr).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
@@ -212,9 +217,11 @@ export async function computeTasks(sql, forDate) {
     const out = [];
     // 1) Sunday — share this week's calendar image
     if (dow(day) === 0) {
+      const fri = addDays(day, 5);
       out.push({
         id: 'weekly:' + day, kind: 'weekly', day, assignees: [PROMO_WEEKLY_DAILY_GURU],
         label: 'Share this week\'s event calendar (' + day + ' – ' + addDays(day, 6) + ') to Facebook',
+        flag: (byDate[fri] && byDate[fri].length) ? EC_FLAG_WEEK : undefined,
         links: { open: BASE + '/events.html?view=week&date=' + day + '&share=1' }
       });
     }
@@ -225,6 +232,7 @@ export async function computeTasks(sql, forDate) {
       out.push({
         id: 'daily:' + day, kind: 'daily', day, assignees: [PROMO_WEEKLY_DAILY_GURU],
         label: 'Post tomorrow\'s events (' + human(tomorrow) + ') — ' + evs.length + ' event' + (evs.length > 1 ? 's' : ''),
+        flag: dow(tomorrow) === 5 ? EC_FLAG : undefined,
         text: dailyPostText(tomorrow, evs),
         links: { facebook: 'https://www.facebook.com/' }
       });
@@ -235,6 +243,7 @@ export async function computeTasks(sql, forDate) {
         if (addDays(date, -7 * k) === day) {
           out.push({
             id: 'cd:' + e.id + ':' + date + ':' + k + 'w', kind: 'cd', day, assignees: assigneesFor(e.id),
+            flag: dow(date) === 5 ? EC_FLAG : undefined,
             label: e.title + ' — ' + k + '-week countdown post (event ' + human(date) + ')',
             text: countdownPostText(e, date, k),
             links: {
@@ -418,7 +427,7 @@ export function filterForGurus(result, gurus) {
 /* ---------- plain-text digest body (daily email) ---------- */
 export function digestBody(result) {
   const L = [];
-  const line = t => '  • ' + t.label + ((t.assignees && t.assignees.length) ? ('  [' + t.assignees.join(' + ') + ']') : '') + (t.done ? '  ✅' : '');
+  const line = t => '  • ' + t.label + ((t.assignees && t.assignees.length) ? ('  [' + t.assignees.join(' + ') + ']') : '') + (t.flag ? '  · 🚫 no EC Board Game Group' : '') + (t.done ? '  ✅' : '');
   if (result.overdue.length) {
     L.push('⚠️ OVERDUE (last 7 days, not yet done):');
     result.overdue.forEach(t => L.push(line(t)));
