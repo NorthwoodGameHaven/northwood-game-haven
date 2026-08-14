@@ -4203,13 +4203,21 @@ function custWeekDayHTML(isDay){
   if($("bk-start-wrap")) $("bk-start-wrap").innerHTML = timeSelectHTML("bk-start", "onDateTimeChange()", 15);
   try { await refreshCache(); } catch(e){ /* offline/demo */ }
   checkConflicts();
-  if(location.search.indexOf("admin=1")>=0){
+  // Staff intent = admin=1 OR any console deep-link param. Previously only
+  // admin=1 opened the console, so ?view=... links switched views inside a
+  // HIDDEN panel while the visitor stared at the public booking hero.
+  if(/admin=1|[?&](view|editEvent|dupEvent)=/.test(location.search)){
     openAdmin();
     // Single sign-on: already signed in on another Guru page? Skip the gate.
     if(Store.apiMode() && window.GuruAuth && GuruAuth.get()){
       try { await enterConsole(); }
       catch(e){ if(window.GuruAuth) GuruAuth.clear(); $("admin-panel").style.display="none"; $("admin-gate").style.display="block"; }
     }
+    // Land ON the console (or its login gate), not the public hero.
+    setTimeout(function(){
+      var t = ($("admin-panel") && $("admin-panel").style.display!=="none") ? $("admin-panel") : $("admin-gate");
+      if(t) t.scrollIntoView({block:"start"});
+    }, 60);
   }
 })();
 </script>
@@ -4241,4 +4249,5 @@ function custWeekDayHTML(isDay){
 <!-- NGH-BUILD 2026-08-06n · Discord channel picker -->
 <!-- NGH-BUILD 2026-08-06o · # on all Discord options -->
 <!-- NGH-BUILD 2026-08-06q · drafts always visible + view deep links -->
+<!-- NGH-BUILD 2026-08-06r · console landing -->
 </html>

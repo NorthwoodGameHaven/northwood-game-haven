@@ -190,13 +190,13 @@ async function loadStats(){
     var bk = await api("/bookings");
     var list = (bk && bk.bookings) || bk || [];
     var pending = list.filter(function(b){ var s=(b.status||"").toLowerCase(); return s==="pending"||s==="hold"; }).length;
-    out.push(stat(pending, "Booking requests to review", pending>0, "booking.html?view=list"));
+    out.push(stat(pending, "Booking requests to review", pending>0, "booking.html?admin=1&view=list"));
   }catch(e){ out.push(stat("–","Booking requests")); }
   try{
     var bd = await api("/birthday");
     bdData = (bd && bd.requests) || [];
     var fresh = bdData.filter(function(r){ return r.status==="new"; }).length;
-    out.push(stat(fresh, "New birthday requests", fresh>0, "booking.html?view=list"));
+    out.push(stat(fresh, "New birthday requests", fresh>0, "booking.html?admin=1&view=list"));
   }catch(e){ out.push(stat("–","Birthday requests")); }
   try{
     var ie = await api("/interest-events");
@@ -209,8 +209,8 @@ async function loadStats(){
     var evs = (ev && ev.events) || ev || [];
     var live = evs.filter(function(e){ return e.status!=="draft"; }).length;
     var drafts = evs.filter(function(e){ return e.status==="draft"; }).length;
-    out.push(stat(live, "Live events on calendar", false, "booking.html?view=events"));
-    out.push(stat(drafts, "Draft events (still hold rooms!)", drafts>0, "booking.html?view=events"));
+    out.push(stat(live, "Live events on calendar", false, "booking.html?admin=1&view=events"));
+    out.push(stat(drafts, "Draft events (still hold rooms!)", drafts>0, "booking.html?admin=1&view=events"));
   }catch(e){ out.push(stat("–","Events")); }
   $("stats").innerHTML = out.join("");
   renderBirthdays();
@@ -413,4 +413,5 @@ if(GuruAuth.get()){ boot(); } else { showLogin(); }
 <!-- NGH-BUILD 2026-08-06d · promotion tile -->
 <!-- NGH-BUILD 2026-08-06p · tile text v2.2 alignment -->
 <!-- NGH-BUILD 2026-08-06q · clickable stat tiles -->
+<!-- NGH-BUILD 2026-08-06r · admin=1 tile links -->
 </html>
