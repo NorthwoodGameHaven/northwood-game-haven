@@ -1517,8 +1517,8 @@ var _nghDeepDone=false;
 function _nghDeepLinkPoll(){
   if(_nghDeepDone) return;
   var qs=new URLSearchParams(location.search);
-  var ed=qs.get("editEvent"), du=qs.get("dupEvent");
-  if(!ed && !du){ _nghDeepDone=true; return; }
+  var ed=qs.get("editEvent"), du=qs.get("dupEvent"), vw=qs.get("view");
+  if(!ed && !du && !vw){ _nghDeepDone=true; return; }
   var tries=0;
   (function tick(){
     if(_nghDeepDone) return;
@@ -1527,6 +1527,11 @@ function _nghDeepLinkPoll(){
     if(!ready){ if(++tries<80) return setTimeout(tick,250); return; }
     _nghDeepDone=true;
     try{
+      if(vw && (vw==="events"||vw==="calendar"||vw==="list") && typeof setAdminView==="function"){
+        setAdminView(vw);
+        var pan=$("events-view-wrap")||$("list-view-wrap");
+        if(pan) setTimeout(function(){ pan.scrollIntoView({behavior:"smooth",block:"start"}); },300);
+      }
       if(ed){ editEvent(ed); }
       else if(du){
         duplicateEvent(du);
@@ -2110,7 +2115,12 @@ function adminEvFilterActive(){ return !!((evSearch&&evSearch.trim())||evRegOnly
 function filterAdminEvents(arr){
   var q=(evSearch||"").trim().toLowerCase();
   return arr.filter(function(e){
-    if(evShowPast ? evIsUpcoming(e) : !evIsUpcoming(e)) return false;
+    // Drafts are ALWAYS listed, upcoming or past — they hold rooms, so they
+    // must never be filterable out of sight (zombie-draft digest items were
+    // pointing at events the default upcoming-only view hid).
+    if(e.status!=="draft"){
+      if(evShowPast ? evIsUpcoming(e) : !evIsUpcoming(e)) return false;
+    }
     if(evRegOnly && !(e.registration&&e.registration.enabled)) return false;
     if(!q) return true;
     var hay=[e.title,e.notes,e.offsiteLocation,(e.rooms||[]).map(roomName).join(" "),e.date,(e.private?"private invite-only":"")].join(" ").toLowerCase();
@@ -4230,4 +4240,5 @@ function custWeekDayHTML(isDay){
 <!-- NGH-BUILD 2026-08-06k · deep links scroll to editor -->
 <!-- NGH-BUILD 2026-08-06n · Discord channel picker -->
 <!-- NGH-BUILD 2026-08-06o · # on all Discord options -->
+<!-- NGH-BUILD 2026-08-06q · drafts always visible + view deep links -->
 </html>
