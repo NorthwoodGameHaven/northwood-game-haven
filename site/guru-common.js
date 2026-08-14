@@ -74,6 +74,7 @@
   var LINKS = [
     { href: "guru.html",              label: "🦦 Hub" },
     { href: "booking.html?admin=1",   label: "📋 Console" },
+    { href: "guru-promo.html",        label: "📣 Promotion" },
     { href: "guru-schedule.html",     label: "📅 Schedule" },
     { href: "guru-radar.html",        label: "🎯 Radar" },
     { href: "guru.html#birthdays",    label: "🎂 Birthdays" },
@@ -85,8 +86,11 @@
 
   function isStaffContext() {
     var f = pageFile();
-    if (f === "guru.html" || f === "guru-schedule.html" || f === "guru-radar.html" || f === "checkin.html") return true;
-    if (f === "booking.html") return /[?&]admin=1/.test(location.search);
+    if (f === "guru.html" || f === "guru-schedule.html" || f === "guru-radar.html" || f === "checkin.html" || f === "guru-promo.html") return true;
+    // booking.html: the bar shows whenever a valid staff token exists (the
+    // injectNav token gate already keeps it off public visitors' screens) —
+    // requiring ?admin=1 hid it from every SSO entry path.
+    if (f === "booking.html") return true;
     return false;
   }
 
