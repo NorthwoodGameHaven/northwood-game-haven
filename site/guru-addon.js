@@ -46,7 +46,7 @@
     var t2m = window.timeToMins || function (t) { if (!t) return 0; var p = String(t).split(":"); return (+p[0]) * 60 + (+p[1] || 0); };
     function evDatesOf(e) { try { return (typeof window.eventDates === "function") ? window.eventDates(e) : [e.date]; } catch (_) { return [e.date]; } }
     function recDates(d, f, c, mode) { try { return (typeof window.recurrenceDates === "function") ? window.recurrenceDates(d, f, c, mode) : [d]; } catch (_) { return [d]; } }
-    function shiftDatesOf(s) { return s.recurrence ? recDates(s.date, s.recurrence.freq, s.recurrence.count) : [s.date]; }
+    function shiftDatesOf(s) { return s.recurrence ? recDates(s.date, s.recurrence.freq, s.recurrence.count, s.recurrence.mode) : [s.date]; }
     function overlap(a, b, c, d) { return a < d && c < b; }
     function inSpan(d, from, to) { return d >= from && d <= (to || from); }
 
@@ -212,7 +212,10 @@
         if (gid("ev-recurring") && gid("ev-recurring").checked) {
           var f = gid("ev-rec-freq") ? gid("ev-rec-freq").value : "weekly";
           var c = Math.max(2, Math.min(52, parseInt(gid("ev-rec-count") ? gid("ev-rec-count").value : "2", 10) || 2));
-          dates = recDates(capDate, f, c);
+          // Pass the form's monthly pattern — omitting it made the engine fall
+          // back to day-of-month math and check the WRONG dates for
+          // first-Thursday-style series (phantom Tuesday conflicts).
+          dates = recDates(capDate, f, c, (f === "monthly" && typeof window.evRecMode === "function") ? window.evRecMode() : null);
           // Subtract dates already skipped on the series (edit flow) — a date
           // that's an exception can't conflict, so it must not block the save.
           if (skipId && window.cache && window.cache.events) {

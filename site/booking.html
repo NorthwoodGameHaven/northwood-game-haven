@@ -2926,11 +2926,19 @@ async function saveEvent(){
     var sb=$("ev-save-btn"); if(sb){ sb.disabled=true; sb.textContent="Saving…"; }
     try {
       if(scope==="all"){
-        // keep groupId + recurrence anchor date as original's first date
         ev.recurrence = ev.recurrence || orig.recurrence;
-        ev.date = orig.date;                  // series anchor stays
+        // A changed date on "apply to all" is a deliberate re-anchor of the
+        // whole series — honor it. (It was previously discarded silently,
+        // reverting the Guru's edit AND storing an anchor the conflict scan
+        // above never validated.) Unchanged date = anchor stays, as before.
+        if(!ev.date) ev.date = orig.date;
         ev.groupId = orig.groupId || ("EVGRP-"+genId());
         ev.exceptions = (orig.exceptions||[]).concat((ev.exceptions||[]).filter(function(d){ return (orig.exceptions||[]).indexOf(d)<0; }));
+        if(ev.date !== orig.date){
+          // re-anchored: keep only exceptions that exist in the new pattern
+          var _reOcc = eventDates(ev);
+          ev.exceptions = (ev.exceptions||[]).filter(function(d){ return _reOcc.indexOf(d)>=0; });
+        }
         await Store.saveEvent(ev);
       } else if(scope==="following"){
         // Split: truncate the original series to end before this occurrence,
@@ -4255,4 +4263,5 @@ function custWeekDayHTML(isDay){
 <!-- NGH-BUILD 2026-08-06q · drafts always visible + view deep links -->
 <!-- NGH-BUILD 2026-08-06r · console landing -->
 <!-- NGH-BUILD 2026-08-06s · draft filter + review link -->
+<!-- NGH-BUILD 2026-08-06u · scope-all honors changed date -->
 </html>
