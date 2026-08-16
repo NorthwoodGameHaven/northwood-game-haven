@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<!-- NGH-BUILD 07a -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH Trivia Display</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --forest:#2d5a3d; --forest-dk:#1c3a26; --gold:#e7c15b; --gold-dk:#c9973a;
+    --cream:#f6efdd; --maroon:#7a2e2e; --red:#c0392b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--forest-dk);color:var(--cream);
+    font-family:'Nunito',sans-serif;cursor:none}
+  #stage{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:4vmin}
+  .brand{font-family:'Alfa Slab One',serif;color:var(--gold);letter-spacing:.02em}
+  .sub{font-family:'Caveat',cursive;color:var(--cream);opacity:.9}
+  #roundTag{position:fixed;top:2.2vmin;left:2.6vmin;font-weight:800;font-size:3vmin;
+    color:var(--gold);text-transform:uppercase;letter-spacing:.08em;display:none}
+  #wagerTag{position:fixed;top:2.2vmin;right:2.6vmin;font-family:'Alfa Slab One',serif;
+    font-size:3.2vmin;color:var(--red);background:var(--cream);padding:.6vmin 1.8vmin;
+    border-radius:2vmin;display:none;transform:rotate(2deg)}
+  #timer{position:fixed;bottom:2.4vmin;right:3vmin;font-family:'Alfa Slab One',serif;
+    font-size:7vmin;color:var(--gold);display:none}
+  #timer.hot{color:var(--red)}
+  .prompt{font-size:6.2vmin;font-weight:800;line-height:1.25;max-width:88vw}
+  .choices{display:grid;grid-template-columns:1fr 1fr;gap:2.4vmin;margin-top:4.5vmin;max-width:88vw}
+  .choice{background:var(--forest);border:.45vmin solid var(--gold);border-radius:2vmin;
+    padding:2.6vmin 3vmin;font-size:4.2vmin;font-weight:800;text-align:left}
+  .choice b{color:var(--gold);margin-right:1.4vmin}
+  .choice.win{background:var(--gold);color:var(--forest-dk)}
+  video,audio{max-width:88vw;max-height:62vh;border:.5vmin solid var(--gold);border-radius:1.6vmin;background:#000}
+  img.clue{max-width:80vw;max-height:60vh;border:.5vmin solid var(--gold);border-radius:1.6vmin}
+  #overlay{position:fixed;inset:0;background:rgba(20,34,24,.96);display:none;
+    flex-direction:column;align-items:center;justify-content:center;z-index:50;text-align:center}
+  #overlay .brand{font-size:7vmin}
+  #overlay .msg{font-size:4vmin;margin-top:2.5vmin;font-weight:700}
+  #fsBtn{position:fixed;inset:0;background:transparent;border:0;z-index:60;cursor:pointer;display:none}
+  table.board{border-collapse:collapse;font-size:4.4vmin;min-width:60vw}
+  table.board td,table.board th{padding:1.4vmin 3vmin;border-bottom:.3vmin solid rgba(231,193,91,.35);text-align:left}
+  table.board td:last-child{text-align:right;font-family:'Alfa Slab One',serif;color:var(--gold)}
+  table.board tr.gold td{color:var(--gold)}
+  #qrBox{background:#fff;padding:2vmin;border-radius:2vmin;margin-top:4vmin}
+  .small{font-size:2.6vmin;opacity:.75;margin-top:2vmin}
+</style>
+</head>
+<body>
+<div id="roundTag"></div>
+<div id="wagerTag"></div>
+<div id="stage"></div>
+<div id="timer"></div>
+<div id="overlay">
+  <div class="brand">NORTHWOOD GAME HAVEN</div>
+  <div class="msg" id="overlayMsg">Reconnecting…</div>
+</div>
+<button id="fsBtn" aria-label="fullscreen"></button>
+
+<script>
+/* =====================================================================
+   NGH TRIVIA DISPLAY — NGH-BUILD 07a
+   Dumb, resilient TV client.
+   URL: trivia-display.html?game=GAME-XXXX&display=Retail
+   - Server clock offset: median of ping samples against /api/trivia/time
+   - Polls /api/trivia/games/:id/state?v=N every 1s (tiny "unchanged" reply)
+   - PRELOAD phase: fetches media into Cache Storage, heartbeats ready ✓
+   - LIVE phase: media playback scheduled at state.startAt (server epoch ms)
+     with post-start drift correction against the shared clock
+   - Heartbeat every 5s; obeys remote refresh command
+   - Media plays MUTED by default (audio rides the host mixer chain);
+     game setting tvAudio=true unmutes for TV-speaker fallback mode
+   ===================================================================== */
+(function () {
+  "use strict";
+  var API = "/api/trivia";
+  var params = new URLSearchParams(location.search);
+  var GAME = params.get("game") || "";
+  var DISPLAY = params.get("display") || ("TV-" + Math.floor(Math.random() * 1000));
+
+  var stage = document.getElementById("stage");
+  var overlay = document.getElementById("overlay");
+  var overlayMsg = document.getElementById("overlayMsg");
+  var roundTag = document.getElementById("roundTag");
+  var wagerTag = document.getElementById("wagerTag");
+  var timerEl = document.getElementById("timer");
+  var fsBtn = document.getElementById("fsBtn");
+
+  if (!GAME) {
+    stage.innerHTML = '<div class="brand" style="font-size:6vmin">Missing ?game= parameter</div>';
+    return;
+  }
+
+  /* ------------------ clock sync ------------------ */
+  var offsets = [];        // serverNow - localMidpoint samples
+  var clockOffset = 0;     // median
+  function median(a) {
+    if (!a.length) return 0;
+    var s = a.slice().sort(function (x, y) { return x - y; });
+    return s[Math.floor(s.length / 2)];
+  }
+  function pingOnce() {
+    var t0 = Date.now();
+    return fetch(API + "/time").then(function (r) { return r.json(); }).then(function (j) {
+      var t1 = Date.now();
+      if (t1 - t0 > 800) return; // discard slow samples
+      offsets.push(j.now - (t0 + t1) / 2);
+      if (offsets.length > 15) offsets.shift();
+      clockOffset = median(offsets);
+    }).catch(function () {});
+  }
+  function serverNow() { return Date.now() + clockOffset; }
+  function syncClock(n) {
+    var p = Promise.resolve();
+    for (var i = 0; i < n; i++) p = p.then(pingOnce);
+    return p;
+  }
+
+  /* ------------------ media cache ------------------ */
+  var CACHE = "ngh-trivia-v1";
+  var blobUrls = {}; // url -> objectURL
+  function preloadAsset(url) {
+    if (!url) return Promise.resolve(null);
+    if (blobUrls[url]) return Promise.resolve(blobUrls[url]);
+    function toBlobUrl(resp) {
+      return resp.blob().then(function (b) {
+        blobUrls[url] = URL.createObjectURL(b);
+        return blobUrls[url];
+      });
+    }
+    if (window.caches) {
+      return caches.open(CACHE).then(function (c) {
+        return c.match(url).then(function (hit) {
+          if (hit) return toBlobUrl(hit);
+          return fetch(url).then(function (resp) {
+            if (!resp.ok) throw new Error("fetch " + resp.status);
+            return c.put(url, resp.clone()).then(function () { return toBlobUrl(resp); });
+          });
+        });
+      }).catch(function () {
+        return fetch(url).then(toBlobUrl);
+      });
+    }
+    return fetch(url).then(toBlobUrl).catch(function () { return url; });
+  }
+
+  /* ------------------ state ------------------ */
+  var v = 0;                 // last seen version
+  var st = null;             // last state payload
+  var readyQKey = "";        // asset-preloaded question key
+  var lastCmdSeq = Number(localStorage.getItem("ngh_trivia_cmdseq_" + DISPLAY) || 0);
+  var failCount = 0;
+  var mediaEl = null;
+  var driftTimer = null;
+  var playTimeout = null;
+  var countdownTimer = null;
+
+  function setOverlay(show, msg) {
+    overlay.style.display = show ? "flex" : "none";
+    if (msg) overlayMsg.textContent = msg;
+  }
+
+  function poll() {
+    fetch(API + "/games/" + encodeURIComponent(GAME) + "/state?v=" + v)
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (j) {
+        failCount = 0;
+        setOverlay(false);
+        // opportunistic clock sample from every poll's serverNow is too noisy
+        // (payload timing varies); dedicated pings handle the clock.
+        if (j.unchanged) return;
+        v = j.v; st = j;
+        render();
+      })
+      .catch(function () {
+        failCount++;
+        if (failCount >= 3) setOverlay(true, "Reconnecting…");
+      });
+  }
+
+  function heartbeat() {
+    fetch(API + "/games/" + encodeURIComponent(GAME) + "/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        displayId: DISPLAY, name: DISPLAY,
+        ready: !!readyQKey && !!st && !!st.q && readyQKey === st.q.key,
+        qKeyReady: readyQKey, lastCmdSeq: lastCmdSeq
+      })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && j.cmd && j.cmd.seq > lastCmdSeq) {
+        lastCmdSeq = j.cmd.seq;
+        localStorage.setItem("ngh_trivia_cmdseq_" + DISPLAY, String(lastCmdSeq));
+        if (j.cmd.action === "refresh") location.reload();
+      }
+    }).catch(function () {});
+  }
+
+  /* ------------------ rendering ------------------ */
+  function clearTimers() {
+    if (driftTimer) { clearInterval(driftTimer); driftTimer = null; }
+    if (playTimeout) { clearTimeout(playTimeout); playTimeout = null; }
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    mediaEl = null;
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function tags() {
+    if (st.round && st.round.title && ["live", "answering", "locked", "reveal", "preload"].indexOf(st.phase) >= 0) {
+      roundTag.textContent = "Round " + (st.roundIdx + 1) + " · " + st.round.title +
+        " · Q" + (st.qIdx + 1) + "/" + st.round.qCount;
+      roundTag.style.display = "block";
+    } else roundTag.style.display = "none";
+    if (st.round && st.round.isWager && st.phase !== "lobby" && st.phase !== "scoreboard") {
+      wagerTag.textContent = "💰 " + st.wagerLabel;
+      wagerTag.style.display = "block";
+    } else wagerTag.style.display = "none";
+  }
+
+  function startCountdown() {
+    timerEl.style.display = "none";
+    if (!st.deadline) return;
+    countdownTimer = setInterval(function () {
+      var left = Math.ceil((Number(st.deadline) - serverNow()) / 1000);
+      if (left <= 0) {
+        timerEl.textContent = "0";
+        timerEl.classList.add("hot");
+        clearInterval(countdownTimer); countdownTimer = null;
+        return;
+      }
+      timerEl.textContent = String(left);
+      timerEl.classList.toggle("hot", left <= 10);
+      timerEl.style.display = "block";
+    }, 200);
+  }
+
+  function scheduleMedia(el, kind) {
+    // Play precisely at st.startAt (server epoch ms) on the shared clock,
+    // then correct drift so three rooms stay lip-sync tight.
+    el.muted = !(st.settings && st.settings.tvAudio);
+    var fire = function () {
+      var lateBy = (serverNow() - Number(st.startAt)) / 1000;
+      try { if (lateBy > 0.25) el.currentTime = lateBy; } catch (e) {}
+      el.play().catch(function () {});
+    };
+    var delay = Number(st.startAt) - serverNow();
+    if (delay > 30) playTimeout = setTimeout(fire, delay);
+    else fire();
+    if (kind !== "image") {
+      driftTimer = setInterval(function () {
+        if (!el.duration || el.paused) return;
+        var expected = (serverNow() - Number(st.startAt)) / 1000;
+        if (expected > el.duration) { clearInterval(driftTimer); driftTimer = null; return; }
+        if (Math.abs(el.currentTime - expected) > 0.15) {
+          try { el.currentTime = expected; } catch (e) {}
+        }
+      }, 3000);
+    }
+  }
+
+  function mediaBlock(q, ph) {
+    if (!q || !q.media || !q.media.url) return Promise.resolve("");
+    return preloadAsset(q.media.url).then(function (src) {
+      readyQKey = q.key;
+      if (ph === "preload") return "";
+      if (q.media.kind === "image") return '<img class="clue" id="clueMedia" src="' + src + '">';
+      if (q.media.kind === "audio") return '<audio id="clueMedia" src="' + src + '" preload="auto"></audio>' +
+        '<div class="brand" style="font-size:9vmin;margin:3vmin 0">🎵 LISTEN…</div>';
+      return '<video id="clueMedia" src="' + src + '" preload="auto" playsinline></video>';
+    });
+  }
+
+  function render() {
+    clearTimers();
+    timerEl.style.display = "none";
+    timerEl.classList.remove("hot");
+    tags();
+    var ph = st.phase;
+
+    if (ph === "lobby" || !st.q && (ph === "live" || ph === "answering")) {
+      var joinHtml = "";
+      stage.innerHTML =
+        '<div class="brand" style="font-size:9.5vmin">TEAM TRIVIA</div>' +
+        '<div class="sub" style="font-size:5.5vmin;margin-top:1.5vmin">' + esc(st.title) + '</div>' +
+        '<div class="small">Northwood Game Haven · Chippewa Falls</div>' +
+        (st.settings && st.settings.showJoinQR ? '<div id="qrBox"></div><div class="small">Scan to join on your phone</div>' : "");
+      if (st.settings && st.settings.showJoinQR && window.QRCode) {
+        new QRCode(document.getElementById("qrBox"), {
+          text: location.origin + "/trivia-play.html?game=" + encodeURIComponent(GAME),
+          width: 220, height: 220
+        });
+      }
+      return;
+    }
+
+    if (ph === "preload") {
+      stage.innerHTML =
+        '<div class="brand" style="font-size:7vmin">GET READY…</div>' +
+        (st.round ? '<div class="sub" style="font-size:6vmin;margin-top:2vmin">Round ' + (st.roundIdx + 1) + ": " + esc(st.round.title) + '</div>' : "");
+      if (st.q && st.q.media && st.q.media.url) {
+        mediaBlock(st.q, "preload"); // fetch+cache; heartbeat flips ready ✓
+      } else if (st.q) {
+        readyQKey = st.q.key; // nothing to fetch — instantly ready
+      }
+      return;
+    }
+
+    if (ph === "live" || ph === "answering" || ph === "locked") {
+      var q = st.q;
+      mediaBlock(q, ph).then(function (mediaHtml) {
+        var html = mediaHtml;
+        html += '<div class="prompt" style="margin-top:2.5vmin">' + esc(q.prompt) + "</div>";
+        if (q.choices && q.choices.length) {
+          html += '<div class="choices">';
+          for (var i = 0; i < q.choices.length; i++) {
+            html += '<div class="choice"><b>' + "ABCDEFGH"[i] + '</b>' + esc(q.choices[i]) + "</div>";
+          }
+          html += "</div>";
+        }
+        if (ph === "locked") html += '<div class="sub" style="font-size:5vmin;margin-top:3.5vmin">🔒 Answers locked</div>';
+        stage.innerHTML = html;
+        var el = document.getElementById("clueMedia");
+        if (el && el.tagName !== "IMG" && ph === "live" && st.startAt) scheduleMedia(el, q.media.kind);
+        if (ph !== "locked") startCountdown();
+      });
+      return;
+    }
+
+    if (ph === "reveal") {
+      var q2 = st.q;
+      var html2 = '<div class="prompt">' + esc(q2.prompt) + "</div>";
+      if (q2.choices && q2.choices.length) {
+        html2 += '<div class="choices">';
+        for (var j = 0; j < q2.choices.length; j++) {
+          var win = normalizeLite(q2.choices[j]) === normalizeLite(q2.answer);
+          html2 += '<div class="choice' + (win ? " win" : "") + '"><b>' + "ABCDEFGH"[j] + '</b>' + esc(q2.choices[j]) + "</div>";
+        }
+        html2 += "</div>";
+      } else {
+        html2 += '<div class="brand" style="font-size:7.5vmin;margin-top:4vmin;color:var(--gold)">' + esc(q2.answer) + "</div>";
+      }
+      stage.innerHTML = html2;
+      return;
+    }
+
+    if (ph === "scoreboard" || ph === "ended") {
+      var rows = st.scoreboard || [];
+      var t = '<div class="brand" style="font-size:7vmin;margin-bottom:3vmin">' +
+        (ph === "ended" ? "FINAL SCORES" : "SCOREBOARD") + "</div><table class='board'>";
+      for (var k = 0; k < Math.min(rows.length, 12); k++) {
+        t += "<tr" + (k === 0 ? ' class="gold"' : "") + "><td>" + (k + 1) + ".</td><td>" +
+          esc(rows[k].team) + "</td><td>" + rows[k].score + "</td></tr>";
+      }
+      t += "</table>";
+      if (!rows.length) t += '<div class="sub" style="font-size:5vmin">No scores yet</div>';
+      stage.innerHTML = t;
+      return;
+    }
+  }
+
+  function normalizeLite(s) {
+    return String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  /* ------------------ fullscreen kiosk ------------------ */
+  function tryFullscreen() {
+    var el = document.documentElement;
+    var f = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (f) { try { f.call(el); } catch (e) {} }
+    fsBtn.style.display = "none";
+  }
+  document.addEventListener("fullscreenchange", function () {
+    fsBtn.style.display = document.fullscreenElement ? "none" : "block";
+  });
+  fsBtn.addEventListener("click", tryFullscreen);
+  // Kiosk browsers (Fully Kiosk etc.) are already fullscreen; on a normal
+  // browser one tap anywhere enters fullscreen.
+  fsBtn.style.display = "block";
+
+  /* ------------------ boot ------------------ */
+  setOverlay(true, "Connecting…");
+  syncClock(5).then(function () {
+    setOverlay(false);
+    poll();
+    setInterval(poll, 1000);
+    heartbeat();
+    setInterval(heartbeat, 5000);
+    setInterval(function () { syncClock(2); }, 60000); // keep the clock fresh
+  });
+})();
+</script>
+</body>
+</html>

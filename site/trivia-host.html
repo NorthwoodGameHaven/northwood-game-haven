@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<!-- NGH-BUILD 07a -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH Trivia Host Console</title>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+<script src="guru-common.js"></script>
+<style>
+  :root{
+    --forest:#2d5a3d; --forest-dk:#1c3a26; --gold:#e7c15b; --gold-dk:#c9973a;
+    --cream:#f6efdd; --maroon:#7a2e2e; --red:#c0392b; --ink:#1a1a12;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#22301f;color:var(--cream);font-family:'Nunito',sans-serif;font-size:15px}
+  h1,h2,h3{font-family:'Alfa Slab One',serif;color:var(--gold);font-weight:normal;margin:.2em 0 .5em}
+  h1{font-size:26px} h2{font-size:20px} h3{font-size:16px}
+  .wrap{max-width:1200px;margin:0 auto;padding:16px}
+  .card{background:var(--forest-dk);border:2px solid var(--gold-dk);border-radius:12px;padding:14px;margin-bottom:14px}
+  button{background:var(--gold);color:var(--ink);border:0;border-radius:8px;padding:9px 14px;
+    font-family:'Nunito',sans-serif;font-weight:800;font-size:14px;cursor:pointer}
+  button.sec{background:var(--forest);color:var(--cream);border:1.5px solid var(--gold-dk)}
+  button.danger{background:var(--red);color:#fff}
+  button:disabled{opacity:.45;cursor:default}
+  input,select,textarea{background:#17281c;color:var(--cream);border:1.5px solid var(--gold-dk);
+    border-radius:8px;padding:8px 10px;font-family:'Nunito',sans-serif;font-size:14px;width:100%}
+  textarea{min-height:64px;resize:vertical}
+  label{display:block;font-weight:700;font-size:12.5px;margin:8px 0 3px;color:var(--gold)}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:140px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{padding:6px 12px;border-radius:16px;font-weight:800;font-size:13px;background:var(--maroon);color:#fff}
+  .chip.ok{background:#2f7a44}
+  .chip.warn{background:var(--gold-dk);color:var(--ink)}
+  .list-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid rgba(231,193,91,.2)}
+  .list-item:hover{background:rgba(231,193,91,.06)}
+  .grow{flex:1}
+  .muted{opacity:.65;font-size:12.5px}
+  .phase-btns{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  .phase-btns button{min-width:110px}
+  .big-phase{font-family:'Alfa Slab One',serif;font-size:22px;color:var(--gold);text-transform:uppercase}
+  .qgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:820px){.qgrid{grid-template-columns:1fr}}
+  .pill{display:inline-block;background:var(--forest);border:1px solid var(--gold-dk);
+    border-radius:12px;padding:2px 9px;font-size:12px;font-weight:800;margin-left:6px}
+  .wager-pill{background:var(--red);color:#fff;border-color:var(--red)}
+  #loginCard{max-width:380px;margin:80px auto}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  td,th{padding:7px 9px;border-bottom:1px solid rgba(231,193,91,.2);text-align:left}
+  .verdict-c{color:#7bd68b;font-weight:800}
+  .verdict-i{color:#e08a7d;font-weight:800}
+  .verdict-p{color:var(--gold);font-weight:800}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ LOGIN ============ -->
+  <div class="card" id="loginCard" style="display:none">
+    <h1>🧠 Trivia Console</h1>
+    <label>Guru admin code</label>
+    <input type="password" id="loginCode" autocomplete="current-password">
+    <div style="margin-top:10px"><button onclick="doLogin()">Log in</button></div>
+    <div class="muted" id="loginMsg" style="margin-top:8px"></div>
+  </div>
+
+  <!-- ============ MAIN ============ -->
+  <div id="main" style="display:none">
+    <h1>🧠 Team Trivia — Host Console</h1>
+
+    <!-- Games list -->
+    <div class="card" id="gamesCard">
+      <div class="row" style="align-items:center">
+        <h2 class="grow" style="margin:0">Games</h2>
+        <div style="flex:0"><button onclick="newGame()">＋ New game</button></div>
+      </div>
+      <div id="gamesList" class="muted" style="margin-top:8px">Loading…</div>
+    </div>
+
+    <!-- Editor -->
+    <div class="card" id="editorCard" style="display:none">
+      <div class="row" style="align-items:center">
+        <h2 class="grow" style="margin:0">Edit: <span id="edTitleLabel"></span></h2>
+        <div style="flex:0"><button class="sec" onclick="closeEditor()">Close</button></div>
+      </div>
+      <div class="row">
+        <div><label>Title</label><input id="gTitle"></div>
+        <div><label>Event ID (optional)</label><input id="gEventId" placeholder="EVT-…"></div>
+        <div><label>Occurrence date</label><input id="gOccDate" type="date"></div>
+      </div>
+      <div class="row">
+        <div><label>Wager round label</label><input id="gWagerLabel" placeholder="Stash or Splash"></div>
+        <div><label>Join PIN (blank = open)</label><input id="gJoinPin"></div>
+        <div>
+          <label>Options</label>
+          <div style="display:flex;gap:14px;padding-top:6px">
+            <label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--cream)">
+              <input type="checkbox" id="gTvAudio" style="width:auto"> TV speakers (audio fallback)</label>
+            <label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--cream)">
+              <input type="checkbox" id="gShowQR" style="width:auto"> Join QR on lobby screen</label>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:14px">Rounds</h3>
+      <div id="roundsBox"></div>
+      <div style="margin-top:8px"><button class="sec" onclick="addRound()">＋ Add round</button></div>
+
+      <div style="margin-top:14px;display:flex;gap:10px">
+        <button onclick="saveGame()">💾 Save game</button>
+        <button class="danger" onclick="deleteGame()" id="delBtn">🗑 Delete</button>
+      </div>
+      <div class="muted" id="edMsg" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Run console -->
+    <div class="card" id="runCard" style="display:none">
+      <div class="row" style="align-items:center">
+        <h2 class="grow" style="margin:0">Run: <span id="runTitleLabel"></span></h2>
+        <div style="flex:0"><button class="sec" onclick="closeRun()">Close</button></div>
+      </div>
+
+      <div class="row" style="align-items:center;margin-top:6px">
+        <div>
+          <span class="muted">Phase</span><br>
+          <span class="big-phase" id="runPhase">—</span>
+        </div>
+        <div>
+          <label>Round</label>
+          <select id="runRound" onchange="fillRunQ()"></select>
+        </div>
+        <div>
+          <label>Question</label>
+          <select id="runQ"></select>
+        </div>
+        <div>
+          <label>Answer time (sec)</label>
+          <input id="runSecs" type="number" value="45" min="5" max="600">
+        </div>
+      </div>
+
+      <div class="phase-btns">
+        <button class="sec" onclick="setPhase('lobby')">🦦 Lobby</button>
+        <button class="sec" onclick="setPhase('preload')">📦 Preload</button>
+        <button onclick="goLive()">▶ Go LIVE (+4s)</button>
+        <button class="sec" onclick="setPhase('answering')">⏱ Answer window</button>
+        <button class="sec" onclick="setPhase('locked')">🔒 Lock</button>
+        <button onclick="setPhase('reveal')">💡 Reveal</button>
+        <button class="sec" onclick="setPhase('scoreboard')">🏆 Scoreboard</button>
+        <button class="sec" onclick="nextQuestion()">⏭ Next Q</button>
+        <button class="danger" onclick="setPhase('ended')">🏁 End game</button>
+      </div>
+
+      <div class="qgrid" style="margin-top:10px">
+        <div>
+          <h3>Displays <button class="sec" style="padding:4px 10px;font-size:12px" onclick="cmdRefresh('all')">↻ Refresh all</button></h3>
+          <div id="displaysBox" class="muted">—</div>
+          <h3 style="margin-top:12px">Teams</h3>
+          <div id="teamsBox" class="muted">—</div>
+        </div>
+        <div>
+          <h3>Answers — current question</h3>
+          <div id="answersBox" class="muted">—</div>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:10px">
+        Display URL: <span id="dispUrl" style="user-select:all"></span> &nbsp;(set <code>&display=Retail</code> etc. per TV)
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   NGH TRIVIA HOST CONSOLE — NGH-BUILD 07a
+   Build games (rounds + questions inc. media clues + per-round wager
+   toggle) and run them live: phase machine, display health, answers
+   monitor. Adjudication queue + phone play client arrive in 07b;
+   Content Library console in 07d; event-page publishing in 07e.
+   ===================================================================== */
+"use strict";
+var API = "/api/trivia";
+
+function hdrs(extra) {
+  var h = (window.GuruAuth && GuruAuth.headers()) || {};
+  h["Content-Type"] = "application/json";
+  if (extra) for (var k in extra) h[k] = extra[k];
+  return h;
+}
+function api(path, opts) {
+  opts = opts || {};
+  opts.headers = hdrs(opts.headers);
+  return fetch(API + path, opts).then(function (r) {
+    if (r.status === 204) return null;
+    return r.json().then(function (j) {
+      if (!r.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
+      return j;
+    });
+  });
+}
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+/* ------------------ auth gate ------------------ */
+function boot() {
+  var t = window.GuruAuth ? GuruAuth.get() : "";
+  document.getElementById("loginCard").style.display = t ? "none" : "block";
+  document.getElementById("main").style.display = t ? "block" : "none";
+  if (t) loadGames();
+}
+function doLogin() {
+  var code = document.getElementById("loginCode").value;
+  fetch("/api/admin-login", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: code })
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.token) { GuruAuth.set(j.token); boot(); }
+    else document.getElementById("loginMsg").textContent = (j && j.error) || "Login failed";
+  }).catch(function () { document.getElementById("loginMsg").textContent = "Login failed"; });
+}
+
+/* ------------------ games list ------------------ */
+var games = [];
+function loadGames() {
+  api("/games").then(function (list) {
+    games = list;
+    var box = document.getElementById("gamesList");
+    if (!list.length) { box.textContent = "No games yet — create one."; return; }
+    box.innerHTML = list.map(function (g) {
+      return '<div class="list-item">' +
+        '<div class="grow"><b>' + esc(g.title) + "</b>" +
+        (g.occDate ? ' <span class="pill">' + esc(g.occDate) + "</span>" : "") +
+        ' <span class="pill">' + g.rounds + " rounds</span>" +
+        ' <span class="pill">' + esc(g.phase) + "</span></div>" +
+        '<button class="sec" onclick="openEditor(\'' + g.id + '\')">✏️ Edit</button>' +
+        '<button onclick="openRun(\'' + g.id + '\')">🎙 Run</button>' +
+        "</div>";
+    }).join("");
+  }).catch(function (e) {
+    document.getElementById("gamesList").textContent = "Error: " + e.message;
+  });
+}
+
+/* ------------------ editor ------------------ */
+var cur = null; // {game, v} being edited
+
+function blankQuestion() {
+  return { type: "mc", prompt: "", choices: ["", "", "", ""], answer: "", alternates: [], points: 10, media: null };
+}
+function newGame() {
+  cur = { game: { title: "New Trivia Night", wagerLabel: "Stash or Splash", settings: {}, rounds: [] }, isNew: true };
+  showEditor();
+}
+function openEditor(id) {
+  api("/games/" + id).then(function (j) { cur = { game: j.game, v: j.v }; showEditor(); })
+    .catch(function (e) { alert(e.message); });
+}
+function closeEditor() { document.getElementById("editorCard").style.display = "none"; cur = null; }
+
+function showEditor() {
+  var g = cur.game;
+  document.getElementById("editorCard").style.display = "block";
+  document.getElementById("runCard").style.display = "none";
+  document.getElementById("edTitleLabel").textContent = g.title || "(new)";
+  document.getElementById("gTitle").value = g.title || "";
+  document.getElementById("gEventId").value = g.eventId || "";
+  document.getElementById("gOccDate").value = g.occDate || "";
+  document.getElementById("gWagerLabel").value = g.wagerLabel || "Stash or Splash";
+  document.getElementById("gJoinPin").value = (g.settings && g.settings.joinPin) || "";
+  document.getElementById("gTvAudio").checked = !!(g.settings && g.settings.tvAudio);
+  document.getElementById("gShowQR").checked = !!(g.settings && g.settings.showJoinQR);
+  document.getElementById("delBtn").style.display = cur.isNew ? "none" : "inline-block";
+  renderRounds();
+  document.getElementById("editorCard").scrollIntoView({ behavior: "smooth" });
+}
+
+function renderRounds() {
+  var g = cur.game;
+  var box = document.getElementById("roundsBox");
+  box.innerHTML = "";
+  (g.rounds || []).forEach(function (r, ri) {
+    var div = document.createElement("div");
+    div.className = "card";
+    div.style.background = "#17281c";
+    var qHtml = (r.questions || []).map(function (q, qi) {
+      return '<div class="list-item">' +
+        '<div class="grow">Q' + (qi + 1) + ". " + esc(q.prompt || "(blank)") +
+        ' <span class="pill">' + esc(q.type) + "</span>" +
+        (q.media && q.media.url ? ' <span class="pill">' + esc(q.media.kind) + " clue</span>" : "") +
+        "</div>" +
+        '<button class="sec" onclick="editQ(' + ri + "," + qi + ')">✏️</button>' +
+        '<button class="danger" onclick="delQ(' + ri + "," + qi + ')">✕</button>' +
+        "</div>";
+    }).join("");
+    div.innerHTML =
+      '<div class="row" style="align-items:center">' +
+      '<div class="grow"><label>Round ' + (ri + 1) + ' title / theme</label>' +
+      '<input value="' + esc(r.title || "") + '" onchange="cur.game.rounds[' + ri + '].title=this.value"></div>' +
+      '<div style="flex:0;padding-top:22px;white-space:nowrap">' +
+      '<label style="display:inline-flex;gap:6px;align-items:center;margin:0;color:var(--cream)">' +
+      '<input type="checkbox" style="width:auto" ' + (r.isWager ? "checked" : "") +
+      ' onchange="setWager(' + ri + ',this.checked)"> 💰 Wager round' +
+      (r.isWager ? ' <span class="pill wager-pill">' + esc(cur.game.wagerLabel || "Stash or Splash") + "</span>" : "") +
+      "</label></div>" +
+      '<div style="flex:0;padding-top:16px"><button class="danger" onclick="delRound(' + ri + ')">✕ Round</button></div>' +
+      "</div>" +
+      qHtml +
+      '<div style="margin-top:6px"><button class="sec" onclick="addQ(' + ri + ')">＋ Question</button></div>' +
+      '<div id="qEditor-' + ri + '"></div>';
+    box.appendChild(div);
+  });
+}
+function addRound() {
+  cur.game.rounds = cur.game.rounds || [];
+  cur.game.rounds.push({ title: "Round " + (cur.game.rounds.length + 1), isWager: false, questions: [] });
+  renderRounds();
+}
+function delRound(ri) {
+  if (!confirm("Delete this round and its questions?")) return;
+  cur.game.rounds.splice(ri, 1); renderRounds();
+}
+function setWager(ri, on) {
+  // Any bundled round can be flipped into the wager round; only one at a time.
+  cur.game.rounds.forEach(function (r, i) { r.isWager = on && i === ri; });
+  renderRounds();
+}
+function addQ(ri) { cur.game.rounds[ri].questions.push(blankQuestion()); renderRounds(); editQ(ri, cur.game.rounds[ri].questions.length - 1); }
+function delQ(ri, qi) { cur.game.rounds[ri].questions.splice(qi, 1); renderRounds(); }
+
+function editQ(ri, qi) {
+  var q = cur.game.rounds[ri].questions[qi];
+  var box = document.getElementById("qEditor-" + ri);
+  box.innerHTML =
+    '<div class="card" style="background:#22301f;margin-top:8px">' +
+    "<h3>Edit Q" + (qi + 1) + "</h3>" +
+    '<div class="row">' +
+    '<div><label>Type</label><select id="qType">' +
+    '<option value="mc">Multiple choice</option>' +
+    '<option value="fill">Fill-in (typed)</option>' +
+    '<option value="media-mc">Media clue + multiple choice</option>' +
+    '<option value="media-fill">Media clue + fill-in</option>' +
+    "</select></div>" +
+    '<div><label>Points</label><input id="qPoints" type="number" value="' + (q.points || 10) + '"></div>' +
+    "</div>" +
+    '<label>Prompt</label><textarea id="qPrompt">' + esc(q.prompt) + "</textarea>" +
+    '<label>Choices (one per line — MC types only)</label>' +
+    '<textarea id="qChoices">' + esc((q.choices || []).join("\n")) + "</textarea>" +
+    '<div class="row">' +
+    '<div><label>Answer</label><input id="qAnswer" value="' + esc(q.answer) + '"></div>' +
+    '<div><label>Accepted alternates (comma-separated)</label><input id="qAlt" value="' + esc((q.alternates || []).join(", ")) + '"></div>' +
+    "</div>" +
+    '<div class="row">' +
+    '<div><label>Media kind</label><select id="qMediaKind">' +
+    '<option value="">— none —</option><option value="video">Video</option>' +
+    '<option value="audio">Audio</option><option value="image">Image</option>' +
+    "</select></div>" +
+    '<div style="flex:2"><label>Media URL (site-hosted preferred, e.g. /trivia-media/clip1.mp4)</label>' +
+    '<input id="qMediaUrl" value="' + esc(q.media ? q.media.url : "") + '"></div>' +
+    "</div>" +
+    '<div style="margin-top:10px;display:flex;gap:8px">' +
+    '<button onclick="saveQ(' + ri + "," + qi + ')">Apply</button>' +
+    '<button class="sec" onclick="renderRounds()">Cancel</button>' +
+    "</div></div>";
+  document.getElementById("qType").value = q.type || "mc";
+  document.getElementById("qMediaKind").value = q.media ? (q.media.kind || "video") : "";
+}
+function saveQ(ri, qi) {
+  var q = cur.game.rounds[ri].questions[qi];
+  q.type = document.getElementById("qType").value;
+  q.points = Number(document.getElementById("qPoints").value) || 10;
+  q.prompt = document.getElementById("qPrompt").value.trim();
+  q.choices = document.getElementById("qChoices").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
+  q.answer = document.getElementById("qAnswer").value.trim();
+  q.alternates = document.getElementById("qAlt").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+  var mk = document.getElementById("qMediaKind").value;
+  var mu = document.getElementById("qMediaUrl").value.trim();
+  q.media = (mk && mu) ? { kind: mk, url: mu } : null;
+  renderRounds();
+}
+
+function collectGame() {
+  var g = cur.game;
+  g.title = document.getElementById("gTitle").value.trim();
+  g.eventId = document.getElementById("gEventId").value.trim() || null;
+  g.occDate = document.getElementById("gOccDate").value || null;
+  g.wagerLabel = document.getElementById("gWagerLabel").value.trim() || "Stash or Splash";
+  g.settings = g.settings || {};
+  g.settings.joinPin = document.getElementById("gJoinPin").value.trim() || null;
+  g.settings.tvAudio = document.getElementById("gTvAudio").checked;
+  g.settings.showJoinQR = document.getElementById("gShowQR").checked;
+  return g;
+}
+function saveGame() {
+  var g = collectGame();
+  if (!g.title) { document.getElementById("edMsg").textContent = "Title required."; return; }
+  var p = cur.isNew
+    ? api("/games", { method: "POST", body: JSON.stringify(g) })
+    : api("/games/" + g.id, { method: "PUT", body: JSON.stringify(g) });
+  p.then(function (j) {
+    cur.game = j.game || j; cur.isNew = false;
+    document.getElementById("edMsg").textContent = "Saved ✓";
+    document.getElementById("edTitleLabel").textContent = cur.game.title;
+    loadGames();
+  }).catch(function (e) { document.getElementById("edMsg").textContent = "Error: " + e.message; });
+}
+function deleteGame() {
+  if (!cur || cur.isNew) return;
+  if (!confirm("Delete this game, its teams and answers?")) return;
+  api("/games/" + cur.game.id, { method: "DELETE" }).then(function () {
+    closeEditor(); loadGames();
+  }).catch(function (e) { alert(e.message); });
+}
+
+/* ------------------ run console ------------------ */
+var run = null;        // {game, v, state}
+var runTimers = [];
+function clearRunTimers() { runTimers.forEach(clearInterval); runTimers = []; }
+
+function openRun(id) {
+  api("/games/" + id).then(function (j) {
+    run = { game: j.game, state: j.state || {}, v: j.v };
+    document.getElementById("editorCard").style.display = "none";
+    document.getElementById("runCard").style.display = "block";
+    document.getElementById("runTitleLabel").textContent = run.game.title;
+    document.getElementById("dispUrl").textContent =
+      location.origin + "/trivia-display.html?game=" + run.game.id + "&display=Retail";
+    fillRunSelectors();
+    updRunPhase();
+    clearRunTimers();
+    runTimers.push(setInterval(pollRun, 2000));
+    runTimers.push(setInterval(pollDisplays, 5000));
+    runTimers.push(setInterval(pollTeams, 6000));
+    runTimers.push(setInterval(pollAnswers, 2500));
+    pollDisplays(); pollTeams(); pollAnswers();
+    document.getElementById("runCard").scrollIntoView({ behavior: "smooth" });
+  }).catch(function (e) { alert(e.message); });
+}
+function closeRun() { clearRunTimers(); run = null; document.getElementById("runCard").style.display = "none"; }
+
+function fillRunSelectors() {
+  var rSel = document.getElementById("runRound");
+  rSel.innerHTML = (run.game.rounds || []).map(function (r, i) {
+    return '<option value="' + i + '">' + (i + 1) + ". " + esc(r.title) + (r.isWager ? " 💰" : "") + "</option>";
+  }).join("");
+  rSel.value = String(run.state.roundIdx | 0);
+  fillRunQ();
+  document.getElementById("runQ").value = String(run.state.qIdx | 0);
+}
+function fillRunQ() {
+  var ri = Number(document.getElementById("runRound").value) || 0;
+  var qs = (run.game.rounds[ri] || {}).questions || [];
+  document.getElementById("runQ").innerHTML = qs.map(function (q, i) {
+    return '<option value="' + i + '">Q' + (i + 1) + ". " +
+      esc((q.prompt || "").slice(0, 40)) + "</option>";
+  }).join("");
+}
+function updRunPhase() {
+  document.getElementById("runPhase").textContent = (run.state.phase || "lobby").toUpperCase();
+}
+function pollRun() {
+  if (!run) return;
+  api("/games/" + run.game.id).then(function (j) {
+    run.game = j.game; run.state = j.state || {}; updRunPhase();
+  }).catch(function () {});
+}
+
+function setPhase(phase, extra) {
+  if (!run) return;
+  var body = Object.assign({
+    phase: phase,
+    roundIdx: Number(document.getElementById("runRound").value) || 0,
+    qIdx: Number(document.getElementById("runQ").value) || 0
+  }, extra || {});
+  if (phase === "answering") body.answerSecs = Number(document.getElementById("runSecs").value) || 45;
+  api("/games/" + run.game.id + "/state", { method: "POST", body: JSON.stringify(body) })
+    .then(function (j) { run.state = j.state; updRunPhase(); pollAnswers(); })
+    .catch(function (e) { alert(e.message); });
+}
+function goLive() {
+  setPhase("live", { leadMs: 4000, answerSecs: Number(document.getElementById("runSecs").value) || 0 });
+}
+function nextQuestion() {
+  var ri = Number(document.getElementById("runRound").value) || 0;
+  var qi = (Number(document.getElementById("runQ").value) || 0) + 1;
+  var rounds = run.game.rounds || [];
+  if (qi >= ((rounds[ri] || {}).questions || []).length) { ri++; qi = 0; }
+  if (ri >= rounds.length) { setPhase("scoreboard"); return; }
+  document.getElementById("runRound").value = String(ri);
+  fillRunQ();
+  document.getElementById("runQ").value = String(qi);
+  setPhase("preload");
+}
+
+function cmdRefresh(target) {
+  api("/games/" + run.game.id + "/command", { method: "POST", body: JSON.stringify({ target: target, action: "refresh" }) })
+    .then(function () {}).catch(function (e) { alert(e.message); });
+}
+function pollDisplays() {
+  if (!run) return;
+  api("/games/" + run.game.id + "/displays").then(function (list) {
+    var box = document.getElementById("displaysBox");
+    if (!list.length) { box.textContent = "No displays connected yet."; return; }
+    box.innerHTML = '<div class="chips">' + list.map(function (d) {
+      var cls = d.online ? (d.ready ? "ok" : "warn") : "";
+      var mark = d.online ? (d.ready ? "✓" : "…") : "✗";
+      return '<span class="chip ' + cls + '">' + esc(d.name) + " " + mark +
+        ' <a href="#" style="color:inherit" onclick="cmdRefresh(\'' + esc(d.displayId) + '\');return false">↻</a></span>';
+    }).join("") + "</div>";
+  }).catch(function () {});
+}
+function pollTeams() {
+  if (!run) return;
+  api("/games/" + run.game.id + "/teams").then(function (list) {
+    var box = document.getElementById("teamsBox");
+    if (!list.length) { box.textContent = "No teams yet."; return; }
+    box.innerHTML = "<table>" + list.map(function (t) {
+      return "<tr><td>" + esc(t.name) + "</td><td style='text-align:right'><b>" + t.score + "</b></td></tr>";
+    }).join("") + "</table>";
+  }).catch(function () {});
+}
+function currentQKey() {
+  var ri = run.state.roundIdx | 0, qi = run.state.qIdx | 0;
+  var q = ((run.game.rounds || [])[ri] || {}).questions;
+  q = q && q[qi];
+  return q ? q.key : null;
+}
+function pollAnswers() {
+  if (!run) return;
+  var qKey = currentQKey();
+  var box = document.getElementById("answersBox");
+  if (!qKey) { box.textContent = "—"; return; }
+  api("/games/" + run.game.id + "/answers?qKey=" + encodeURIComponent(qKey)).then(function (list) {
+    if (!list.length) { box.textContent = "No answers yet."; return; }
+    box.innerHTML = "<table><tr><th>Team</th><th>Answer</th><th>Wager</th><th>Verdict</th></tr>" +
+      list.map(function (a) {
+        var v = a.verdict === "correct" ? '<span class="verdict-c">✓ ' + (a.points || 0) + "</span>"
+          : a.verdict === "incorrect" ? '<span class="verdict-i">✗</span>'
+          : '<span class="verdict-p">pending</span>';
+        return "<tr><td>" + esc(a.team) + "</td><td>" + esc(a.answer) + "</td><td>" +
+          (a.wager == null ? "—" : a.wager) + "</td><td>" + v + "</td></tr>";
+      }).join("") + "</table>";
+  }).catch(function () {});
+}
+
+boot();
+</script>
+</body>
+</html>

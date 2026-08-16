@@ -82,6 +82,16 @@
   to   = "/.netlify/functions/checkin"
   status = 200
 
+# Team Trivia engine (NGH-BUILD 07a)
+[[redirects]]
+  from = "/api/trivia/*"
+  to   = "/.netlify/functions/trivia/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/trivia"
+  to   = "/.netlify/functions/trivia"
+  status = 200
+
 # Tickets: printable page, QR PNG, Google Wallet save link
 [[redirects]]
   from = "/ticket/*"
