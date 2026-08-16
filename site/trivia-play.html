@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<!-- NGH-BUILD 07b -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH Team Trivia</title>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --forest:#2d5a3d; --forest-dk:#1c3a26; --gold:#e7c15b; --gold-dk:#c9973a;
+    --cream:#f6efdd; --maroon:#7a2e2e; --red:#c0392b; --ink:#1a1a12;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--forest-dk);color:var(--cream);
+    font-family:'Nunito',sans-serif;font-size:16px;min-height:100vh}
+  .wrap{max-width:520px;margin:0 auto;padding:16px 16px 90px}
+  h1{font-family:'Alfa Slab One',serif;color:var(--gold);font-weight:normal;font-size:24px;margin:.3em 0}
+  .caveat{font-family:'Caveat',cursive;font-size:20px;opacity:.9}
+  .card{background:#17281c;border:2px solid var(--gold-dk);border-radius:14px;padding:16px;margin:12px 0}
+  input{width:100%;background:var(--forest-dk);color:var(--cream);border:1.5px solid var(--gold-dk);
+    border-radius:10px;padding:13px;font-size:17px;font-family:'Nunito',sans-serif}
+  label{display:block;font-weight:800;font-size:13px;color:var(--gold);margin:10px 0 4px}
+  button{width:100%;background:var(--gold);color:var(--ink);border:0;border-radius:10px;
+    padding:14px;font-size:17px;font-weight:800;font-family:'Nunito',sans-serif;margin-top:10px;cursor:pointer}
+  button:disabled{opacity:.5}
+  .choice-btn{background:var(--forest);color:var(--cream);border:2px solid var(--gold-dk);text-align:left}
+  .choice-btn.sel{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+  .banner{background:var(--maroon);color:#fff;font-weight:800;font-size:12.5px;text-align:center;
+    padding:8px 12px;border-radius:9px;margin:10px 0}
+  .phase-tag{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:14px;
+    text-transform:uppercase;letter-spacing:.1em}
+  .timer{font-family:'Alfa Slab One',serif;font-size:42px;color:var(--gold);text-align:center}
+  .timer.hot{color:var(--red)}
+  .prompt{font-size:19px;font-weight:800;line-height:1.35;margin:8px 0 4px}
+  .status{text-align:center;font-weight:800;margin-top:8px}
+  .ok{color:#7bd68b}.bad{color:#e08a7d}.pend{color:var(--gold)}
+  table{width:100%;border-collapse:collapse}
+  td{padding:8px 6px;border-bottom:1px solid rgba(231,193,91,.25)}
+  td:last-child{text-align:right;font-family:'Alfa Slab One',serif;color:var(--gold)}
+  tr.me td{color:var(--gold);font-weight:800}
+  .wagerbox{border:2px dashed var(--red);border-radius:10px;padding:10px;margin-top:10px}
+  .footer{position:fixed;bottom:0;left:0;right:0;background:var(--forest-dk);
+    border-top:2px solid var(--gold-dk);padding:8px 16px;text-align:center;font-size:13px;font-weight:800}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div class="footer" id="footer">Northwood Game Haven · Team Trivia</div>
+
+<script>
+/* =====================================================================
+   NGH TRIVIA PLAY — NGH-BUILD 07b
+   Team phone client. URL: trivia-play.html?game=GAME-XXXX
+   Join once (name + optional PIN) — team token persists in localStorage
+   so a dropped phone rejoins the same team automatically. Polls state
+   every 2s; renders per-type answer UI, wager entry on 💰 rounds,
+   verdict feedback at reveal, standings at intermission/scoreboard.
+   ===================================================================== */
+(function () {
+  "use strict";
+  var API = "/api/trivia";
+  var GAME = new URLSearchParams(location.search).get("game") || "";
+  var LS = "ngh_trivia_team_" + GAME;
+  var app = document.getElementById("app");
+
+  var team = null; // {teamId, teamName, token}
+  try { team = JSON.parse(localStorage.getItem(LS) || "null"); } catch (e) {}
+
+  var v = 0, st = null;
+  var clockOffset = 0, offsets = [];
+  var lastRenderKey = "";
+  var myAnswerCache = {};   // qKey -> {answered, verdict, ...}
+  var draftAnswer = null;   // selected MC choice text / typed value preserved across polls
+  var draftWager = null;
+  var countdownTimer = null;
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function serverNow() { return Date.now() + clockOffset; }
+  function ping() {
+    var t0 = Date.now();
+    return fetch(API + "/time").then(function (r) { return r.json(); }).then(function (j) {
+      var t1 = Date.now();
+      if (t1 - t0 > 1000) return;
+      offsets.push(j.now - (t0 + t1) / 2);
+      if (offsets.length > 9) offsets.shift();
+      var s = offsets.slice().sort(function (a, b) { return a - b; });
+      clockOffset = s[Math.floor(s.length / 2)];
+    }).catch(function () {});
+  }
+
+  if (!GAME) { app.innerHTML = '<div class="card">Missing game link — rescan the QR code.</div>'; return; }
+
+  /* ------------------ join ------------------ */
+  function renderJoin(msg) {
+    lastRenderKey = "join";
+    app.innerHTML =
+      '<h1>🦦 Team Trivia</h1>' +
+      '<div class="caveat">Grab a team name — make it a good one.</div>' +
+      '<div class="card">' +
+      '<label>Team name</label><input id="jName" maxlength="40" autocomplete="off">' +
+      '<label>PIN (if the host gave one)</label><input id="jPin" inputmode="numeric" autocomplete="off">' +
+      '<button id="jBtn">Join the game</button>' +
+      '<div class="status bad" id="jMsg">' + esc(msg || "") + "</div>" +
+      "</div>" +
+      '<div class="banner">📵 No devices for answer lookups during play — Stash is watching.</div>';
+    document.getElementById("jBtn").onclick = function () {
+      var name = document.getElementById("jName").value.trim();
+      var pin = document.getElementById("jPin").value.trim();
+      if (!name) { document.getElementById("jMsg").textContent = "Team name required."; return; }
+      fetch(API + "/games/" + encodeURIComponent(GAME) + "/join", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamName: name, pin: pin })
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) { renderJoin(res.j.error || "Could not join."); return; }
+          team = res.j;
+          localStorage.setItem(LS, JSON.stringify(team));
+          lastRenderKey = "";
+          poll();
+        }).catch(function () { renderJoin("Network error — try again."); });
+    };
+  }
+
+  /* ------------------ answering ------------------ */
+  function submitAnswer(qKey, answer, wager) {
+    return fetch(API + "/games/" + encodeURIComponent(GAME) + "/answer", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: team.token, qKey: qKey, answer: answer, wager: wager })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+  }
+  function fetchMyAnswer(qKey) {
+    return fetch(API + "/games/" + encodeURIComponent(GAME) + "/myanswer?token=" +
+      encodeURIComponent(team.token) + "&qKey=" + encodeURIComponent(qKey))
+      .then(function (r) { return r.json(); })
+      .then(function (j) { myAnswerCache[qKey] = j; return j; })
+      .catch(function () { return null; });
+  }
+
+  function startCountdown(sel) {
+    stopCountdown();
+    if (!st.deadline) return;
+    var el = document.getElementById(sel);
+    if (!el) return;
+    countdownTimer = setInterval(function () {
+      var left = Math.ceil((Number(st.deadline) - serverNow()) / 1000);
+      el.textContent = left > 0 ? left : "0";
+      el.classList.toggle("hot", left <= 10);
+      if (left <= 0) stopCountdown();
+    }, 250);
+  }
+  function stopCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
+
+  /* ------------------ render ------------------ */
+  function render() {
+    var ph = st.phase;
+    var key = ph + "|" + (st.q ? st.q.key : "") + "|" + v;
+    if (key === lastRenderKey) return;
+    lastRenderKey = key;
+    stopCountdown();
+
+    var head =
+      '<div class="phase-tag">' + esc(st.title) + "</div>" +
+      '<h1 style="font-size:20px;margin:2px 0 8px">Team: ' + esc(team.teamName) + "</h1>";
+
+    if (ph === "lobby" || ph === "preload") {
+      app.innerHTML = head +
+        '<div class="card"><div class="phase-tag">' +
+        (ph === "lobby" ? "Waiting for the host…" : "Next question coming up…") +
+        '</div><div class="caveat" style="margin-top:8px">Rally the team. Talk quietly. Trust no one.</div></div>' +
+        '<div class="banner">📵 No devices for answer lookups — Stash is watching.</div>';
+      return;
+    }
+
+    if ((ph === "live" || ph === "answering") && st.q) {
+      var q = st.q;
+      var mine = myAnswerCache[q.key];
+      var isWager = st.round && st.round.isWager;
+      var h = head +
+        '<div class="phase-tag">Round ' + (st.roundIdx + 1) + " · " + esc(st.round.title) +
+        (isWager ? " 💰 " + esc(st.wagerLabel) : "") + "</div>" +
+        (st.deadline ? '<div class="timer" id="pt"></div>' : "") +
+        '<div class="card"><div class="prompt">' + esc(q.prompt) + "</div>";
+      if (q.choices && q.choices.length) {
+        for (var i = 0; i < q.choices.length; i++) {
+          var selCls = draftAnswer === q.choices[i] ? " sel" : "";
+          h += '<button class="choice-btn' + selCls + '" data-c="' + esc(q.choices[i]) + '">' +
+            "<b>" + "ABCDEFGH"[i] + ".</b> " + esc(q.choices[i]) + "</button>";
+        }
+      } else {
+        h += '<label>Your answer</label><input id="fillIn" autocomplete="off" value="' + esc(draftAnswer || "") + '">';
+      }
+      if (isWager) {
+        h += '<div class="wagerbox"><label style="margin-top:0">💰 ' + esc(st.wagerLabel) +
+          ' — wager (points)</label><input id="wagerIn" type="number" inputmode="numeric" min="0" value="' +
+          esc(draftWager == null ? "" : draftWager) + '"></div>';
+      }
+      h += '<button id="sendBtn">Submit answer</button>' +
+        '<div class="status" id="sendMsg">' +
+        (mine && mine.answered ? '<span class="ok">Submitted: ' + esc(mine.answer) + " ✓ (you can change it until lock)</span>" : "") +
+        "</div></div>";
+      app.innerHTML = h;
+      startCountdown("pt");
+      Array.prototype.forEach.call(document.querySelectorAll(".choice-btn"), function (b) {
+        b.onclick = function () {
+          draftAnswer = b.getAttribute("data-c");
+          Array.prototype.forEach.call(document.querySelectorAll(".choice-btn"), function (x) { x.classList.remove("sel"); });
+          b.classList.add("sel");
+        };
+      });
+      document.getElementById("sendBtn").onclick = function () {
+        var ans = draftAnswer;
+        var fi = document.getElementById("fillIn");
+        if (fi) { ans = fi.value.trim(); draftAnswer = ans; }
+        var wg = null;
+        var wi = document.getElementById("wagerIn");
+        if (wi && wi.value !== "") { wg = Math.max(0, Number(wi.value) || 0); draftWager = wg; }
+        if (!ans) { document.getElementById("sendMsg").innerHTML = '<span class="bad">Pick or type an answer first.</span>'; return; }
+        document.getElementById("sendBtn").disabled = true;
+        submitAnswer(st.q.key, ans, wg).then(function (res) {
+          document.getElementById("sendBtn").disabled = false;
+          if (res.ok) {
+            myAnswerCache[st.q.key] = { answered: true, answer: ans, verdict: null };
+            document.getElementById("sendMsg").innerHTML = '<span class="ok">Submitted ✓ (you can change it until lock)</span>';
+          } else {
+            document.getElementById("sendMsg").innerHTML = '<span class="bad">' + esc(res.j.error || "Failed") + "</span>";
+          }
+        });
+      };
+      return;
+    }
+
+    if (ph === "locked" && st.q) {
+      var m2 = myAnswerCache[st.q.key];
+      app.innerHTML = head +
+        '<div class="card"><div class="phase-tag">🔒 Answers locked</div>' +
+        '<div class="prompt">' + esc(st.q.prompt) + "</div>" +
+        '<div class="status">' + (m2 && m2.answered
+          ? '<span class="pend">Your answer: ' + esc(m2.answer) + "</span>"
+          : '<span class="bad">No answer submitted</span>') + "</div></div>";
+      return;
+    }
+
+    if (ph === "reveal" && st.q) {
+      app.innerHTML = head +
+        '<div class="card"><div class="prompt">' + esc(st.q.prompt) + "</div>" +
+        '<div class="phase-tag" style="margin-top:8px">Answer</div>' +
+        '<h1 style="margin:4px 0">' + esc(st.q.answer) + "</h1>" +
+        '<div class="status" id="verdictBox"><span class="pend">Checking your answer…</span></div></div>';
+      draftAnswer = null; draftWager = null;
+      fetchMyAnswer(st.q.key).then(function (m) {
+        var box = document.getElementById("verdictBox");
+        if (!box) return;
+        if (!m || !m.answered) { box.innerHTML = '<span class="bad">No answer submitted.</span>'; return; }
+        if (m.verdict === "correct") box.innerHTML = '<span class="ok">✓ Correct! +' + (m.points || 0) + " pts — you said: " + esc(m.answer) + "</span>";
+        else if (m.verdict === "incorrect") box.innerHTML = '<span class="bad">✗ Not this time — you said: ' + esc(m.answer) + "</span>";
+        else box.innerHTML = '<span class="pend">You said: ' + esc(m.answer) + " — the host is reviewing spelling…</span>";
+      });
+      return;
+    }
+
+    if (ph === "intermission" || ph === "scoreboard" || ph === "ended") {
+      var rows = st.scoreboard || [];
+      var h3 = head + '<div class="card"><div class="phase-tag">' +
+        (ph === "intermission" ? "☕ Intermission" : ph === "ended" ? "🏁 Final scores" : "🏆 Scoreboard") + "</div>";
+      if (ph === "intermission" && st.next) {
+        h3 += '<div class="caveat" style="margin-top:6px">Up next: Round ' + (st.next.roundIdx + 1) +
+          " — " + esc(st.next.title) + (st.next.isWager ? " 💰 " + esc(st.wagerLabel) : "") + "</div>";
+      }
+      if (ph === "intermission" && st.deadline) h3 += '<div class="timer" id="pt"></div>';
+      h3 += "<table>";
+      for (var k2 = 0; k2 < rows.length; k2++) {
+        var meCls = team && rows[k2].teamId === team.teamId ? ' class="me"' : "";
+        h3 += "<tr" + meCls + "><td>" + (k2 + 1) + ". " + esc(rows[k2].team) + "</td><td>" + rows[k2].score + "</td></tr>";
+      }
+      h3 += "</table></div>" +
+        '<div class="banner">📵 No devices for answer lookups during play — Stash is watching.</div>';
+      app.innerHTML = h3;
+      if (ph === "intermission") startCountdown("pt");
+      return;
+    }
+
+    app.innerHTML = head + '<div class="card">Waiting…</div>';
+  }
+
+  /* ------------------ poll loop ------------------ */
+  function poll() {
+    if (!team) { renderJoin(); return; }
+    fetch(API + "/games/" + encodeURIComponent(GAME) + "/state?v=" + v)
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (j) {
+        if (j.unchanged) return;
+        v = j.v; st = j;
+        render();
+      })
+      .catch(function () {});
+  }
+
+  ping().then(ping).then(function () {
+    poll();
+    setInterval(poll, 2000);
+    setInterval(ping, 45000);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 07a -->
+<!-- NGH-BUILD 07b -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -139,6 +139,10 @@
           <label>Answer time (sec)</label>
           <input id="runSecs" type="number" value="45" min="5" max="600">
         </div>
+        <div>
+          <label>Break time (sec)</label>
+          <input id="runBreak" type="number" value="300" min="30" max="3600">
+        </div>
       </div>
 
       <div class="phase-btns">
@@ -148,6 +152,7 @@
         <button class="sec" onclick="setPhase('answering')">⏱ Answer window</button>
         <button class="sec" onclick="setPhase('locked')">🔒 Lock</button>
         <button onclick="setPhase('reveal')">💡 Reveal</button>
+        <button class="sec" onclick="startIntermission()">☕ Intermission</button>
         <button class="sec" onclick="setPhase('scoreboard')">🏆 Scoreboard</button>
         <button class="sec" onclick="nextQuestion()">⏭ Next Q</button>
         <button class="danger" onclick="setPhase('ended')">🏁 End game</button>
@@ -163,10 +168,13 @@
         <div>
           <h3>Answers — current question</h3>
           <div id="answersBox" class="muted">—</div>
+          <h3 style="margin-top:12px">⚖️ Adjudication queue <span class="pill" id="adjCount">0</span></h3>
+          <div id="adjBox" class="muted">Nothing pending.</div>
         </div>
       </div>
       <div class="muted" style="margin-top:10px">
-        Display URL: <span id="dispUrl" style="user-select:all"></span> &nbsp;(set <code>&display=Retail</code> etc. per TV)
+        Display URL: <span id="dispUrl" style="user-select:all"></span> &nbsp;(set <code>&display=Retail</code> etc. per TV)<br>
+        Team join URL: <span id="playUrl" style="user-select:all"></span>
       </div>
     </div>
 
@@ -175,11 +183,12 @@
 
 <script>
 /* =====================================================================
-   NGH TRIVIA HOST CONSOLE — NGH-BUILD 07a
+   NGH TRIVIA HOST CONSOLE — NGH-BUILD 07b
    Build games (rounds + questions inc. media clues + per-round wager
    toggle) and run them live: phase machine, display health, answers
-   monitor. Adjudication queue + phone play client arrive in 07b;
-   Content Library console in 07d; event-page publishing in 07e.
+   monitor, adjudication queue (fuzzy-match suggested verdicts, one-tap
+   rulings), intermission control. Content Library console arrives in 07d;
+   event-page publishing in 07e.
    ===================================================================== */
 "use strict";
 var API = "/api/trivia";
@@ -430,6 +439,8 @@ function openRun(id) {
     document.getElementById("runTitleLabel").textContent = run.game.title;
     document.getElementById("dispUrl").textContent =
       location.origin + "/trivia-display.html?game=" + run.game.id + "&display=Retail";
+    document.getElementById("playUrl").textContent =
+      location.origin + "/trivia-play.html?game=" + run.game.id;
     fillRunSelectors();
     updRunPhase();
     clearRunTimers();
@@ -485,6 +496,19 @@ function setPhase(phase, extra) {
 function goLive() {
   setPhase("live", { leadMs: 4000, answerSecs: Number(document.getElementById("runSecs").value) || 0 });
 }
+function startIntermission() {
+  // Next round = whatever is selected in the Round picker.
+  setPhase("intermission", {
+    breakSecs: Number(document.getElementById("runBreak").value) || 300,
+    nextRoundIdx: Number(document.getElementById("runRound").value) || 0
+  });
+}
+function adjudicate(answerId, verdict) {
+  api("/games/" + run.game.id + "/adjudicate", {
+    method: "POST", body: JSON.stringify({ answerId: answerId, verdict: verdict })
+  }).then(function () { pollAnswers(); pollTeams(); })
+    .catch(function (e) { alert(e.message); });
+}
 function nextQuestion() {
   var ri = Number(document.getElementById("runRound").value) || 0;
   var qi = (Number(document.getElementById("runQ").value) || 0) + 1;
@@ -536,15 +560,31 @@ function pollAnswers() {
   var box = document.getElementById("answersBox");
   if (!qKey) { box.textContent = "—"; return; }
   api("/games/" + run.game.id + "/answers?qKey=" + encodeURIComponent(qKey)).then(function (list) {
-    if (!list.length) { box.textContent = "No answers yet."; return; }
-    box.innerHTML = "<table><tr><th>Team</th><th>Answer</th><th>Wager</th><th>Verdict</th></tr>" +
-      list.map(function (a) {
-        var v = a.verdict === "correct" ? '<span class="verdict-c">✓ ' + (a.points || 0) + "</span>"
-          : a.verdict === "incorrect" ? '<span class="verdict-i">✗</span>'
-          : '<span class="verdict-p">pending</span>';
-        return "<tr><td>" + esc(a.team) + "</td><td>" + esc(a.answer) + "</td><td>" +
-          (a.wager == null ? "—" : a.wager) + "</td><td>" + v + "</td></tr>";
-      }).join("") + "</table>";
+    if (!list.length) { box.textContent = "No answers yet."; }
+    else {
+      box.innerHTML = "<table><tr><th>Team</th><th>Answer</th><th>Wager</th><th>Verdict</th></tr>" +
+        list.map(function (a) {
+          var v = a.verdict === "correct" ? '<span class="verdict-c">✓ ' + (a.points || 0) + "</span>"
+            : a.verdict === "incorrect" ? '<span class="verdict-i">✗</span>'
+            : '<span class="verdict-p">pending</span>';
+          return "<tr><td>" + esc(a.team) + "</td><td>" + esc(a.answer) + "</td><td>" +
+            (a.wager == null ? "—" : a.wager) + "</td><td>" + v + "</td></tr>";
+        }).join("") + "</table>";
+    }
+    // Adjudication queue: pending answers with a suggested verdict + one-tap rule.
+    var pend = list.filter(function (a) { return !a.verdict; });
+    document.getElementById("adjCount").textContent = String(pend.length);
+    var abox = document.getElementById("adjBox");
+    if (!pend.length) { abox.textContent = "Nothing pending."; return; }
+    abox.innerHTML = pend.map(function (a) {
+      var sug = a.suggest === "correct"
+        ? '<span class="verdict-c">suggest ✓</span>'
+        : '<span class="verdict-i">suggest ✗</span>';
+      return '<div class="list-item"><div class="grow"><b>' + esc(a.team) + "</b>: " +
+        esc(a.answer) + " &nbsp;" + sug + "</div>" +
+        '<button onclick="adjudicate(\'' + a.id + '\',\'correct\')">✓</button>' +
+        '<button class="danger" onclick="adjudicate(\'' + a.id + '\',\'incorrect\')">✗</button></div>';
+    }).join("");
   }).catch(function () {});
 }
 

@@ -1,5 +1,5 @@
 // netlify/functions/trivia.mjs
-// NGH-BUILD 07a — Team Trivia engine core.
+// NGH-BUILD 07b — Team Trivia engine core + adjudication, intermission, team feedback.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -116,7 +116,35 @@ function normalize(s) {
 }
 
 // ---- game helpers ----
-const PHASES = ['lobby', 'preload', 'live', 'answering', 'locked', 'reveal', 'scoreboard', 'ended'];
+const PHASES = ['lobby', 'preload', 'live', 'answering', 'locked', 'reveal', 'intermission', 'scoreboard', 'ended'];
+
+// Damerau-lite Levenshtein for adjudication suggestions.
+function levenshtein(a, b) {
+  a = String(a); b = String(b);
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+// Suggested verdict for a pending fill-in: near-miss spelling => 'correct',
+// clearly off => 'incorrect'. Host always has the final tap.
+function suggestVerdict(answer, q) {
+  const n = normalize(answer);
+  if (!n) return 'incorrect';
+  const pool = [q.answer].concat(Array.isArray(q.alternates) ? q.alternates : []).map(normalize).filter(Boolean);
+  let best = Infinity;
+  for (const p of pool) best = Math.min(best, levenshtein(n, p));
+  const tol = Math.max(1, Math.round(Math.min(...pool.map(p => p.length), 99) / 5));
+  return best <= tol ? 'correct' : 'incorrect';
+}
 
 function findQuestion(game, roundIdx, qIdx) {
   const r = (game.rounds || [])[roundIdx];
@@ -171,6 +199,10 @@ function publicState(game, st, version) {
     }
   }
   if (phase === 'scoreboard' || phase === 'ended') out.scoreboard = st.scoreboard || [];
+  if (phase === 'intermission') {
+    out.scoreboard = st.scoreboard || [];
+    out.next = st.next || null; // {roundIdx, title, isWager}
+  }
   return out;
 }
 
@@ -447,6 +479,15 @@ const _handler = async (req) => {
       if (phase === 'locked') { st.deadline = st.deadline && st.deadline < now ? st.deadline : now; }
       if (phase === 'reveal') { await autoScoreQuestion(gameId, q); }
       if (phase === 'scoreboard' || phase === 'ended') { st.scoreboard = await computeScoreboard(gameId); }
+      if (phase === 'intermission') {
+        const secs = Math.min(3600, Math.max(30, Number(b.breakSecs) || 300));
+        st.deadline = now + secs * 1000;
+        st.startAt = null;
+        st.scoreboard = await computeScoreboard(gameId);
+        const ni = (b.nextRoundIdx != null) ? Math.max(0, b.nextRoundIdx | 0) : (st.roundIdx | 0);
+        const nr = (game.rounds || [])[ni];
+        st.next = nr ? { roundIdx: ni, title: nr.title || '', isWager: !!nr.isWager } : null;
+      }
 
       const v = await bumpState(gameId, st);
       return json({ ok: true, v, state: st, serverNow: Date.now() });
@@ -492,6 +533,13 @@ const _handler = async (req) => {
     if (req.method === 'GET' && gameId && action === 'answers') {
       const qKey = url.searchParams.get('qKey') || '';
       if (!qKey) return bad('qKey required');
+      const g = await sql`SELECT data FROM trivia_games WHERE id = ${gameId}`;
+      let qDef = null;
+      if (g.length) {
+        for (const r of (g[0].data.rounds || [])) {
+          for (const q of (r.questions || [])) if (q.key === qKey) qDef = q;
+        }
+      }
       const rows = await sql`
         SELECT a.id, a.team_id, a.data, t.data AS team
         FROM trivia_answers a LEFT JOIN trivia_teams t ON t.id = a.team_id
@@ -501,8 +549,45 @@ const _handler = async (req) => {
         id: r.id, teamId: r.team_id, team: (r.team && r.team.name) || '?',
         answer: r.data.answer, wager: r.data.wager,
         verdict: r.data.verdict || null, points: r.data.points,
-        autoScored: !!r.data.autoScored, submittedAt: r.data.submittedAt
+        autoScored: !!r.data.autoScored, submittedAt: r.data.submittedAt,
+        suggest: (!r.data.verdict && qDef) ? suggestVerdict(r.data.answer, qDef) : null
       })));
+    }
+
+    // ----- ADMIN: adjudicate one answer (host taps ✓/✗ in the queue) -----
+    if (req.method === 'POST' && gameId && action === 'adjudicate') {
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const verdict = b.verdict === 'correct' ? 'correct' : b.verdict === 'incorrect' ? 'incorrect' : null;
+      if (!b.answerId || !verdict) return bad('answerId and verdict required');
+      const rows = await sql`SELECT id, q_key, data FROM trivia_answers WHERE id = ${b.answerId} AND game_id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const g = await sql`SELECT data FROM trivia_games WHERE id = ${gameId}`;
+      let pts = 10;
+      if (g.length) {
+        for (const r of (g[0].data.rounds || [])) {
+          for (const q of (r.questions || [])) if (q.key === rows[0].q_key) pts = Number(q.points) || 10;
+        }
+      }
+      const d = rows[0].data || {};
+      d.verdict = verdict;
+      d.points = verdict === 'correct' ? pts : 0;
+      d.autoScored = false;
+      d.adjudicatedAt = new Date().toISOString();
+      await sql`UPDATE trivia_answers SET data = ${JSON.stringify(d)}::jsonb WHERE id = ${rows[0].id}`;
+      return json({ ok: true, id: rows[0].id, verdict, points: d.points });
+    }
+
+    // ----- PUBLIC (team token): my answer + verdict for one question -----
+    if (req.method === 'GET' && gameId && action === 'myanswer') {
+      const teamId = verifyTeamToken(url.searchParams.get('token') || '');
+      if (!teamId) return bad('unauthorized', 401);
+      const qKey = url.searchParams.get('qKey') || '';
+      if (!qKey) return bad('qKey required');
+      const rows = await sql`SELECT data FROM trivia_answers
+        WHERE game_id = ${gameId} AND team_id = ${teamId} AND q_key = ${qKey}`;
+      if (!rows.length) return json({ answered: false });
+      const d = rows[0].data || {};
+      return json({ answered: true, answer: d.answer, wager: d.wager, verdict: d.verdict || null, points: d.points });
     }
 
     return bad('not found', 404);
