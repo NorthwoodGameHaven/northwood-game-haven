@@ -72,18 +72,27 @@
 
   /* ------------------------- Guru nav bar ------------------------- */
   var LINKS = [
-    { href: "guru.html",              label: "🦦 Hub" },
-    { href: "booking.html?admin=1",   label: "📋 Console" },
-    { href: "guru-promo.html",        label: "📣 Promotion" },
-    { href: "guru-draft.html",        label: "📝 Drafts" },
-    { href: "guru-schedule.html",     label: "📅 Schedule" },
-    { href: "guru-radar.html",        label: "🎯 Radar" },
-    { href: "guru.html#birthdays",    label: "🎂 Birthdays" },
-    { href: "checkin.html",           label: "🎟️ Check-In" },
-    { href: "events.html",            label: "🗓️ Public Cal" }
+    { href: "guru.html",                          label: "🦦 Hub" },
+    { href: "booking.html?admin=1&view=list",     label: "📥 Requests" },
+    { href: "booking.html?admin=1&view=calendar", label: "📅 Calendar" },
+    { href: "booking.html?admin=1&view=events",   label: "🎉 Events" },
+    { href: "guru-draft.html",                    label: "📝 Drafts" },
+    { href: "guru-promo.html",                    label: "📣 Promotion" },
+    { href: "guru-schedule.html",                 label: "🦦 Schedule" },
+    { href: "guru-radar.html",                    label: "🎯 Radar" },
+    { href: "guru.html#birthdays",                label: "🎂 Birthdays" },
+    { href: "checkin.html",                       label: "🎟️ Check-In" },
+    { href: "events.html",                        label: "🗓️ Public Cal" }
   ];
 
-  function pageFile() { return (location.pathname.split("/").pop() || "index.html").toLowerCase(); }
+  // NGH-BUILD 2026-08-06v
+  function pageFile() {
+    // Netlify pretty URLs serve /booking for booking.html — normalize so the
+    // staff-page checks and active-highlighting work on both forms.
+    var f = (location.pathname.split("/").pop() || "index.html").toLowerCase();
+    if (f && f.indexOf(".") < 0) f += ".html";
+    return f;
+  }
 
   function isStaffContext() {
     var f = pageFile();
@@ -118,11 +127,18 @@
                 : "color:#e9e4d2;") );
       return a;
     }
+    var curView = "";
+    try { curView = new URLSearchParams(location.search).get("view") || "list"; } catch (e) { curView = "list"; }
     for (var i = 0; i < LINKS.length; i++) {
       var l = LINKS[i];
       var lf = l.href.split(/[?#]/)[0].toLowerCase();
       var active = (lf === f) && !(f === "guru.html" && l.href.indexOf("#birthdays") >= 0 && location.hash !== "#birthdays");
       if (f === "guru.html" && location.hash === "#birthdays") active = l.href.indexOf("#birthdays") >= 0;
+      if (active && lf === "booking.html") {
+        // three links share booking.html — highlight the one matching ?view=
+        var lv = (l.href.match(/[?&]view=(\w+)/) || [])[1] || "list";
+        active = (lv === curView);
+      }
       bar.appendChild(mk(l.href, l.label, active));
     }
     var spacer = document.createElement("div");

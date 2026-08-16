@@ -86,13 +86,21 @@
     <div class="stats" id="stats"></div>
 
     <div class="tiles">
-      <a class="tile" href="booking.html?admin=1">
-        <div class="t">📋 Booking Console</div>
+      <a class="tile" href="booking.html?admin=1&view=list">
+        <div class="t">📥 Booking Requests</div>
         <div class="d">Review room requests · approve / hold / reject · payments, deposits, door codes, blackouts</div>
       </a>
-      <a class="tile" href="booking.html?admin=1">
+      <a class="tile" href="booking.html?admin=1&view=calendar">
+        <div class="t">📅 Guru Calendar</div>
+        <div class="d">Everything on one calendar — bookings, events, blackouts — month &amp; day views</div>
+      </a>
+      <a class="tile" href="booking.html?admin=1&view=events">
         <div class="t">🎉 Public Events</div>
         <div class="d">Create &amp; edit events (strategy scoring gate) · registrants · publish · share to social</div>
+      </a>
+      <a class="tile" href="guru-draft.html">
+        <div class="t">📝 Draft Review</div>
+        <div class="d">The weekly pipeline — score webs vs type ideals, calendar fit, factor flags, discussion, promo plans, publish</div>
       </a>
       <a class="tile" href="guru-schedule.html">
         <div class="t">📅 Guru Schedule</div>
@@ -415,4 +423,5 @@ if(GuruAuth.get()){ boot(); } else { showLogin(); }
 <!-- NGH-BUILD 2026-08-06q · clickable stat tiles -->
 <!-- NGH-BUILD 2026-08-06r · admin=1 tile links -->
 <!-- NGH-BUILD 2026-08-06s · drafts tile filter link -->
+<!-- NGH-BUILD 2026-08-06v · hub tiles rearchitected -->
 </html>
