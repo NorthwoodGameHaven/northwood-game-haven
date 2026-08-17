@@ -82,7 +82,7 @@
     { href: "guru-radar.html",                    label: "🎯 Radar" },
     { href: "guru.html#birthdays",                label: "🎂 Birthdays" },
     { href: "checkin.html",                       label: "🎟️ Check-In" },
-    { href: "trivia-host.html",                   label: "🧠 Trivia" }, /* NGH-BUILD 07a */
+    { href: "trivia-host.html",                   label: "🎬 Event Stream" }, /* NGH-BUILD 07d */
     { href: "events.html",                        label: "🗓️ Public Cal" }
   ];
 
