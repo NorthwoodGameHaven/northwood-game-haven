@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 07h -->
+<!-- NGH-BUILD 08a -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -162,7 +162,13 @@
           <div><label>Occurrence date</label><input id="tOccDate" type="date"></div>
           <div style="flex:2"><label>Custom image URL (optional — overrides event image)</label><input id="tCustomImg" placeholder="/trivia-media/bracket.png"></div>
         </div>
-        <div class="muted" style="margin-top:6px">The cast screen shows: NGH crest · event image · event title, date &amp; time · round label · big synced countdown. Round labels and durations are set live from the Run console.</div>
+
+        <h3 style="margin-top:14px">Round schedule</h3>
+        <div class="muted">Named rounds with their own durations and intermissions. The cast screen shows the full list, highlights the current round, and auto-rolls into the intermission countdown when a round ends.</div>
+        <div id="tSchedBox" style="margin-top:6px"></div>
+        <div style="margin-top:8px"><button class="sec" onclick="tAddSchedRow()">＋ Add round</button></div>
+
+        <div class="muted" style="margin-top:10px">The cast screen shows: NGH logo · live clock, date &amp; Chippewa Falls weather (with matching sky effects) · event image &amp; details · round schedule · big synced countdown.</div>
         <div style="margin-top:14px;display:flex;gap:10px">
           <button onclick="saveTimer()">💾 Save timer</button>
           <button class="danger" onclick="deleteGame()" id="tDelBtn">🗑 Delete</button>
@@ -244,11 +250,14 @@
             <span class="muted">Phase</span><br>
             <span class="big-phase" id="tRunPhase">—</span>
           </div>
-          <div style="flex:2"><label>Round label (shows on every screen)</label><input id="tRoundLabel" placeholder="Draft Round 2 of 3"></div>
+          <div style="flex:2"><label>Ad-hoc round label</label><input id="tRoundLabel" placeholder="Overtime / tiebreaker…"></div>
           <div><label>Minutes</label><input id="tMins" type="number" value="50" min="1" max="600"></div>
+          <div><label>Intermission (min)</label><input id="tIntMins" type="number" value="10" min="0" max="60"></div>
         </div>
+        <h3 style="margin-top:8px">Scheduled rounds</h3>
+        <div id="tSchedRun" class="muted">No schedule — add rounds in the editor, or run ad-hoc below.</div>
         <div class="phase-btns">
-          <button onclick="timerStart()">▶ Start round</button>
+          <button class="sec" onclick="timerStart()">▶ Start ad-hoc round</button>
           <button class="sec" onclick="timerPause()">⏸ Pause</button>
           <button class="sec" onclick="timerResume()">▶ Resume</button>
           <button class="sec" onclick="timerAdd(60)">＋1 min</button>
@@ -256,8 +265,18 @@
           <button class="sec" onclick="setPhase('lobby')">🦦 Idle screen</button>
           <button class="danger" onclick="setPhase('ended')">🏁 End</button>
         </div>
-        <h3>Displays <button class="sec" style="padding:4px 10px;font-size:12px" onclick="cmdRefresh('all')">↻ Refresh all</button></h3>
-        <div id="tDisplaysBox" class="muted">—</div>
+        <div class="qgrid" style="margin-top:8px">
+          <div>
+            <h3>Displays <button class="sec" style="padding:4px 10px;font-size:12px" onclick="cmdRefresh('all')">↻ Refresh all</button></h3>
+            <div id="tDisplaysBox" class="muted">—</div>
+          </div>
+          <div>
+            <h3>👥 Participants <span class="pill" id="rosterCount">0</span>
+              <button class="sec" style="padding:4px 10px;font-size:12px" onclick="addWalkin()">＋ Walk-in</button></h3>
+            <div class="muted" style="margin-bottom:4px">Bold = checked in · grey = registered online, not yet here. No payment linkage — POS / online registration handle money separately.</div>
+            <div id="rosterBox" class="muted">—</div>
+          </div>
+        </div>
         <div class="muted" style="margin-top:10px">
           Display URL: <span id="tDispUrl" style="user-select:all"></span>
         </div>
@@ -313,7 +332,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 07h
+   NGH EVENT STREAM HUB — NGH-BUILD 08a
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -509,6 +528,7 @@ function showTimerEditor() {
   document.getElementById("tOccDate").value = g.occDate || "";
   document.getElementById("tCustomImg").value = g.customImage || "";
   document.getElementById("tDelBtn").style.display = cur.isNew ? "none" : "inline-block";
+  renderSched();
   document.getElementById("timerEdCard").scrollIntoView({ behavior: "smooth" });
 }
 
@@ -805,6 +825,7 @@ function saveTimer() {
   g.title = document.getElementById("tTitle").value.trim();
   g.occDate = document.getElementById("tOccDate").value || null;
   g.customImage = document.getElementById("tCustomImg").value.trim() || null;
+  g.schedule = (g.schedule || []).map(function (r) { return { label: String(r.label||"").slice(0,120), secs: Math.max(60, Number(r.secs)||60), intermissionSecs: Math.max(0, Number(r.intermissionSecs)||0) }; });
   if (!g.title) { document.getElementById("tEdMsg").textContent = "Title required."; return; }
   persistGame(g, "tEdMsg", "tEdTitleLabel");
 }
@@ -876,10 +897,13 @@ function openTimerRun() {
     location.origin + "/trivia-display.html?game=" + run.game.id + "&display=Main";
   document.getElementById("tRoundLabel").value = run.state.timerLabel || "";
   updTimerPhase();
+  renderSchedRun();
   clearRunTimers();
   runTimers.push(setInterval(pollRun, 2000));
   runTimers.push(setInterval(pollDisplaysTimer, 5000));
+  runTimers.push(setInterval(pollRoster, 8000));
   pollDisplaysTimer();
+  pollRoster();
   document.getElementById("timerRunCard").scrollIntoView({ behavior: "smooth" });
 }
 function closeRun() { clearRunTimers(); run = null; hideAllPanels(); }
@@ -911,7 +935,7 @@ function pollRun() {
   if (!run) return;
   api("/games/" + run.game.id).then(function (j) {
     run.game = j.game; run.state = j.state || {};
-    if ((run.game.kind || "trivia") === "timer") updTimerPhase(); else updRunPhase();
+    if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else updRunPhase();
   }).catch(function () {});
 }
 
@@ -926,7 +950,7 @@ function setPhase(phase, extra) {
   api("/games/" + run.game.id + "/state", { method: "POST", body: JSON.stringify(body) })
     .then(function (j) {
       run.state = j.state;
-      if ((run.game.kind || "trivia") === "timer") updTimerPhase(); else { updRunPhase(); pollAnswers(); }
+      if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else { updRunPhase(); pollAnswers(); }
     })
     .catch(function (e) { alert(e.message); });
 }
@@ -970,16 +994,98 @@ function saveMinigame(qKey) {
   }).catch(function (e) { alert(e.message); });
 }
 
-/* ------------------ timer controls ------------------ */
+/* ------------------ timer controls (NGH-BUILD 08a) ------------------ */
+function tAddSchedRow() {
+  cur.game.schedule = cur.game.schedule || [];
+  cur.game.schedule.push({ label: "Round " + (cur.game.schedule.length + 1), secs: 3000, intermissionSecs: 600 });
+  renderSched();
+}
+function tDelSchedRow(i) { cur.game.schedule.splice(i, 1); renderSched(); }
+function tMoveSchedRow(i, dir) {
+  var s = cur.game.schedule, j = i + dir;
+  if (j < 0 || j >= s.length) return;
+  var t = s[i]; s[i] = s[j]; s[j] = t;
+  renderSched();
+}
+function renderSched() {
+  var box = document.getElementById("tSchedBox");
+  var s = cur.game.schedule || [];
+  if (!s.length) { box.innerHTML = '<p class="muted">No rounds yet — e.g. Deck-Building 45m, Draft Round 1 50m, Championship 60m.</p>'; return; }
+  box.innerHTML = s.map(function (r, i) {
+    return '<div class="row" style="align-items:flex-end;margin-bottom:4px">' +
+      '<div style="flex:0;padding-bottom:8px;font-weight:800;color:var(--gold)">' + (i + 1) + ".</div>" +
+      '<div style="flex:3"><label style="margin-top:0">Label</label><input value="' + esc(r.label || "") + '" onchange="cur.game.schedule[' + i + '].label=this.value"></div>' +
+      '<div><label style="margin-top:0">Minutes</label><input type="number" min="1" max="600" value="' + Math.round((r.secs || 0) / 60) + '" onchange="cur.game.schedule[' + i + '].secs=(Number(this.value)||1)*60"></div>' +
+      '<div><label style="margin-top:0">Intermission (min)</label><input type="number" min="0" max="60" value="' + Math.round((r.intermissionSecs || 0) / 60) + '" onchange="cur.game.schedule[' + i + '].intermissionSecs=(Number(this.value)||0)*60"></div>' +
+      '<div style="flex:0;white-space:nowrap;padding-bottom:2px">' +
+      '<button class="sec" onclick="tMoveSchedRow(' + i + ',-1)">↑</button>' +
+      '<button class="sec" onclick="tMoveSchedRow(' + i + ',1)">↓</button>' +
+      '<button class="danger" onclick="tDelSchedRow(' + i + ')">✕</button></div>' +
+      "</div>";
+  }).join("");
+}
 function timerStart() {
   setPhase("timer", {
-    label: document.getElementById("tRoundLabel").value.trim(),
-    secs: (Number(document.getElementById("tMins").value) || 50) * 60
+    label: document.getElementById("tRoundLabel").value.trim() || "Round",
+    secs: (Number(document.getElementById("tMins").value) || 50) * 60,
+    intermissionSecs: (Number(document.getElementById("tIntMins").value) || 0) * 60
   });
 }
+function timerStartSched(i) { setPhase("timer", { schedIdx: i }); }
 function timerPause() { setPhase("timer-paused"); }
-function timerResume() { setPhase("timer", { resume: true, label: document.getElementById("tRoundLabel").value.trim() }); }
-function timerAdd(secs) { setPhase("timer", { addSecs: secs }); }
+function timerResume() { setPhase("timer", { resume: true }); }
+function timerAdd(secs) { setPhase("timer", { addSecs: secs, keepSchedIdx: true }); }
+function renderSchedRun() {
+  var box = document.getElementById("tSchedRun");
+  var s = run.game.schedule || [];
+  if (!s.length) { box.textContent = "No schedule — add rounds in the editor, or run ad-hoc below."; return; }
+  var cur2 = run.state.schedIdx;
+  box.innerHTML = s.map(function (r, i) {
+    var isCur = cur2 === i && (run.state.phase === "timer" || run.state.phase === "timer-paused");
+    return '<div class="list-item"' + (isCur ? ' style="background:rgba(231,193,91,.12)"' : "") + '>' +
+      '<div class="grow">' + (i + 1) + ". <b>" + esc(r.label || ("Round " + (i + 1))) + "</b>" +
+      ' <span class="pill">' + Math.round((r.secs || 0) / 60) + " min</span>" +
+      ' <span class="pill">☕ ' + Math.round((r.intermissionSecs || 0) / 60) + " min</span>" +
+      (isCur ? ' <span class="pill wager-pill">LIVE</span>' : "") + "</div>" +
+      '<button onclick="timerStartSched(' + i + ')">▶ Start</button>' +
+      "</div>";
+  }).join("");
+}
+/* ------------------ roster / check-in ------------------ */
+function pollRoster() {
+  if (!run) return;
+  api("/games/" + run.game.id + "/roster").then(function (j) {
+    var list = (j && j.roster) || [];
+    document.getElementById("rosterCount").textContent =
+      list.filter(function (p) { return p.checkedIn; }).length + " / " + list.length;
+    var box = document.getElementById("rosterBox");
+    if (!list.length) { box.textContent = "No registrants yet. Link a public event with registration, or add walk-ins."; return; }
+    box.innerHTML = list.map(function (p) {
+      var style = p.checkedIn ? "font-weight:800" : "opacity:.5";
+      return '<div class="list-item"><div class="grow" style="' + style + '">' +
+        esc(p.name) + (p.qty > 1 ? " (+" + (p.qty - 1) + ")" : "") +
+        (p.walkin ? ' <span class="pill">walk-in</span>' : "") +
+        (p.table ? ' <span class="pill">Table ' + esc(String(p.table)) + "</span>" : "") + "</div>" +
+        (p.checkedIn
+          ? '<button class="sec" onclick="checkinAction(' + JSON.stringify(JSON.stringify({ regId: p.regId, participantId: p.participantId, name: p.name, checkedIn: false })) + ')">↩ Undo</button>'
+          : '<button onclick="checkinAction(' + JSON.stringify(JSON.stringify({ regId: p.regId, participantId: p.participantId, name: p.name, checkedIn: true })) + ')">✓ Check in</button>') +
+        "</div>";
+    }).join("");
+  }).catch(function () {});
+}
+function checkinAction(payloadStr) {
+  var body = JSON.parse(payloadStr);
+  api("/games/" + run.game.id + "/checkin", { method: "POST", body: JSON.stringify(body) })
+    .then(function () { pollRoster(); })
+    .catch(function (e) { alert(e.message); });
+}
+function addWalkin() {
+  var name = prompt("Walk-in participant name:");
+  if (!name || !name.trim()) return;
+  api("/games/" + run.game.id + "/checkin", { method: "POST", body: JSON.stringify({ name: name.trim() }) })
+    .then(function () { pollRoster(); })
+    .catch(function (e) { alert(e.message); });
+}
 
 /* ------------------ displays / teams / answers ------------------ */
 function cmdRefresh(target) {

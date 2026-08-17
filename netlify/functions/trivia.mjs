@@ -1,5 +1,5 @@
 // netlify/functions/trivia.mjs
-// NGH-BUILD 07f — Event Stream engine: + publish round themes to event pages, registrant notify.
+// NGH-BUILD 08a — Event Stream engine: + tournament round schedules, intermission windows, roster & check-in.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -73,6 +73,12 @@ async function ensureTriviaSchema() {
     data       JSONB NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (game_id, display_id)
+  )`);
+  await mk(sql`CREATE TABLE IF NOT EXISTS trivia_participants (
+    id         TEXT PRIMARY KEY,
+    game_id    TEXT NOT NULL,
+    data       JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
   )`);
   // Content Library (managed fully in build 07d; schema lands now so games
   // built later against the bank need no migration).
@@ -172,12 +178,20 @@ function publicState(game, st, version) {
   const phase = PHASES.includes(st.phase) ? st.phase : 'lobby';
   // ---- Tournament/round timer sessions (kind: 'timer') ----
   if ((game.kind || 'trivia') === 'timer') {
+    const sched = Array.isArray(game.schedule) ? game.schedule.map(r => ({
+      label: r.label || '', secs: Number(r.secs) || 0, intermissionSecs: Number(r.intermissionSecs) || 0
+    })) : [];
+    const si = (st.schedIdx == null) ? null : (st.schedIdx | 0);
     return {
       v: version, serverNow, kind: 'timer', phase,
       title: game.title || 'Tournament',
       timerLabel: st.timerLabel || '',
       deadline: st.deadline || null,
-      remainMs: st.remainMs || null,       // set while paused
+      remainMs: st.remainMs != null ? st.remainMs : null,   // set while paused (may be negative during intermission)
+      intMs: st.intMs || 0,                                  // intermission window after the current round's deadline
+      schedule: sched,
+      schedIdx: si,
+      nextLabel: (si != null && sched[si + 1]) ? sched[si + 1].label : null,
       event: {
         id: game.eventId || null,
         title: game.eventTitle || game.title || '',
@@ -446,6 +460,92 @@ const _handler = async (req) => {
       return json({ ok: true, cmd });
     }
 
+    // ----- PUBLIC: tournament roster (names only — for idle/cast screens) -----
+    if (req.method === 'GET' && gameId && action === 'roster') {
+      const g = await sql`SELECT data FROM trivia_games WHERE id = ${gameId}`;
+      if (!g.length) return bad('not found', 404);
+      const game = g[0].data;
+      const parts = await sql`SELECT id, data FROM trivia_participants WHERE game_id = ${gameId}`;
+      const byReg = {};
+      const walkins = [];
+      for (const p of parts) {
+        const d = p.data || {};
+        const entry = {
+          participantId: p.id, name: d.name || '?',
+          checkedIn: !!d.checkedIn, table: d.table || null, standing: d.standing || null,
+          walkin: !d.regId, regId: d.regId || null
+        };
+        if (d.regId) byReg[d.regId] = entry; else walkins.push(entry);
+      }
+      const out = [];
+      if (game.eventId) {
+        const regs = await sql`SELECT data, occ_date FROM registrations WHERE event_id = ${game.eventId}`;
+        const occ = game.occDate || null;
+        for (const r of regs) {
+          const reg = r.data || {};
+          if (reg.canceled || reg.status === 'canceled') continue;
+          if (occ && r.occ_date && String(r.occ_date).slice(0, 10) !== occ) continue;
+          const regId = reg.id || ('REGROW-' + (reg.email || reg.name || ''));
+          const p = byReg[regId];
+          const qty = Math.max(1, Number(reg.qty) || 1);
+          out.push({
+            participantId: p ? p.participantId : null,
+            name: reg.name || '?', qty,
+            checkedIn: p ? p.checkedIn : false,
+            table: p ? p.table : null, standing: p ? p.standing : null,
+            regId, walkin: false
+          });
+          delete byReg[regId];
+        }
+      }
+      // participants whose registration disappeared + walk-ins
+      for (const k of Object.keys(byReg)) out.push(Object.assign({ qty: 1 }, byReg[k]));
+      for (const w of walkins) out.push(Object.assign({ qty: 1 }, w));
+      out.sort((a, b2) => {
+        if (a.standing != null || b2.standing != null) {
+          if (a.standing == null) return 1;
+          if (b2.standing == null) return -1;
+          return a.standing - b2.standing;
+        }
+        return String(a.name).localeCompare(String(b2.name));
+      });
+      return json({ eventTitle: game.eventTitle || game.title || '', roster: out });
+    }
+
+    // ----- ADMIN: check-in / walk-in / undo -----
+    if (req.method === 'POST' && gameId && action === 'checkin') {
+      if (!requireAdmin(req)) return bad('unauthorized', 401);
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const checkedIn = b.checkedIn !== false;
+      if (b.regId) {
+        const rows = await sql`SELECT id, data FROM trivia_participants WHERE game_id = ${gameId}`;
+        const hit = rows.find(r => (r.data || {}).regId === b.regId);
+        if (hit) {
+          const d = hit.data; d.checkedIn = checkedIn;
+          if (b.name) d.name = String(b.name).slice(0, 80);
+          await sql`UPDATE trivia_participants SET data = ${JSON.stringify(d)}::jsonb WHERE id = ${hit.id}`;
+          return json({ ok: true, participantId: hit.id, checkedIn });
+        }
+        const d = { regId: b.regId, name: String(b.name || '?').slice(0, 80), checkedIn };
+        const id = newId('PTC');
+        await sql`INSERT INTO trivia_participants (id, game_id, data) VALUES (${id}, ${gameId}, ${JSON.stringify(d)}::jsonb)`;
+        return json({ ok: true, participantId: id, checkedIn }, 201);
+      }
+      if (b.participantId) {
+        const rows = await sql`SELECT id, data FROM trivia_participants WHERE id = ${b.participantId} AND game_id = ${gameId}`;
+        if (!rows.length) return bad('not found', 404);
+        const d = rows[0].data; d.checkedIn = checkedIn;
+        await sql`UPDATE trivia_participants SET data = ${JSON.stringify(d)}::jsonb WHERE id = ${rows[0].id}`;
+        return json({ ok: true, participantId: rows[0].id, checkedIn });
+      }
+      const name = String(b.name || '').trim().slice(0, 80);
+      if (!name) return bad('name required for walk-in');
+      const d = { name, checkedIn: true };
+      const id = newId('PTC');
+      await sql`INSERT INTO trivia_participants (id, game_id, data) VALUES (${id}, ${gameId}, ${JSON.stringify(d)}::jsonb)`;
+      return json({ ok: true, participantId: id, checkedIn: true }, 201);
+    }
+
     // ----- everything else on /games is admin -----
     if (!requireAdmin(req)) return bad('unauthorized', 401);
 
@@ -492,6 +592,7 @@ const _handler = async (req) => {
       await sql`DELETE FROM trivia_answers WHERE game_id = ${gameId}`;
       await sql`DELETE FROM trivia_teams WHERE game_id = ${gameId}`;
       await sql`DELETE FROM trivia_displays WHERE game_id = ${gameId}`;
+      await sql`DELETE FROM trivia_participants WHERE game_id = ${gameId}`;
       await sql`DELETE FROM trivia_games WHERE id = ${gameId}`;
       return noContent();
     }
@@ -537,23 +638,45 @@ const _handler = async (req) => {
       }
       // ---- timer sessions ----
       if (phase === 'timer') {
-        if (b.label != null) st.timerLabel = String(b.label).slice(0, 120);
-        if (b.addSecs) {
-          // extend a running (or just-expired) timer
+        const sched = Array.isArray(game.schedule) ? game.schedule : [];
+        if (b.schedIdx != null) {
+          // Start a scheduled round: label/duration/intermission from the schedule.
+          const si = Math.max(0, Math.min(sched.length - 1, b.schedIdx | 0));
+          const r = sched[si] || {};
+          st.schedIdx = si;
+          st.timerLabel = String(r.label || ('Round ' + (si + 1))).slice(0, 120);
+          st.intMs = Math.min(3600, Math.max(0, Number(r.intermissionSecs) || 0)) * 1000;
+          const secs = Math.min(86400, Math.max(5, Number(b.secs) || Number(r.secs) || 3000));
+          st.deadline = now + secs * 1000;
+          st.remainMs = null;
+          st.startAt = null;
+        } else if (b.addSecs) {
           const base = Math.max(Number(st.deadline) || now, now);
           st.deadline = base + Math.min(3600, Math.max(1, Number(b.addSecs) | 0)) * 1000;
+          st.remainMs = null;
         } else if (b.resume && st.remainMs != null) {
           st.deadline = now + Number(st.remainMs);
+          st.remainMs = null;
         } else {
+          // ad-hoc round (no schedule entry)
+          if (b.label != null) st.timerLabel = String(b.label).slice(0, 120);
+          if (b.intermissionSecs != null) st.intMs = Math.min(3600, Math.max(0, Number(b.intermissionSecs) || 0)) * 1000;
           const secs = Math.min(86400, Math.max(5, Number(b.secs) || 3000));
+          st.schedIdx = (b.keepSchedIdx && st.schedIdx != null) ? st.schedIdx : null;
           st.deadline = now + secs * 1000;
+          st.remainMs = null;
+          st.startAt = null;
         }
-        st.remainMs = null;
-        st.startAt = null;
       }
       if (phase === 'timer-paused') {
-        st.remainMs = Math.max(0, (Number(st.deadline) || now) - now);
+        // remainMs may go negative while paused inside the intermission window
+        const raw = (Number(st.deadline) || now) - now;
+        st.remainMs = Math.max(-(Number(st.intMs) || 0), raw);
         st.deadline = null;
+      }
+      if (phase === 'lobby' && (game.kind || 'trivia') === 'timer') {
+        // Idle screen: freeze everything, keep the schedule position for resume.
+        st.deadline = null; st.remainMs = null;
       }
 
       const v = await bumpState(gameId, st);

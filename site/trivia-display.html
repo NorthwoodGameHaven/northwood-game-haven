@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 07d -->
+<!-- NGH-BUILD 08a -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -51,23 +51,80 @@
   .small{font-size:2.6vmin;opacity:.75;margin-top:2vmin}
   .devban{background:var(--maroon);color:#fff;font-weight:800;font-size:2.8vmin;
     padding:1vmin 2.4vmin;border-radius:1.2vmin;letter-spacing:.02em;max-width:92vw}
-  /* ---- tournament timer layout (NGH-BUILD 07d) ---- */
-  #tHead{position:fixed;top:2.2vmin;left:0;right:0;display:flex;align-items:center;
-    justify-content:space-between;padding:0 3vmin;display:none}
-  #tHead img.crest{height:11vmin}
-  #tHead img.evimg{height:16vmin;max-width:28vw;object-fit:cover;border:.4vmin solid var(--gold);border-radius:1.4vmin}
-  .bigclock{font-family:'Alfa Slab One',serif;font-size:24vmin;color:var(--gold);line-height:1;letter-spacing:.02em}
+  /* ---- tournament timer layout (NGH-BUILD 08a) ---- */
+  body.wx{transition:background 2s}
+  body.wx-clear-day{background:linear-gradient(#3f7fc4 0%,#7db2df 55%,#284a33 100%)}
+  body.wx-clear-night{background:linear-gradient(#0a1026 0%,#141c3a 60%,#101b12 100%)}
+  body.wx-cloudy-day{background:linear-gradient(#6a7f90 0%,#93a3ad 55%,#2a4433 100%)}
+  body.wx-cloudy-night{background:linear-gradient(#141824 0%,#232a38 60%,#131d14 100%)}
+  body.wx-rain-day{background:linear-gradient(#4a5b68 0%,#697c88 55%,#233b2c 100%)}
+  body.wx-rain-night{background:linear-gradient(#0e1420 0%,#1b2430 60%,#111a12 100%)}
+  body.wx-snow-day{background:linear-gradient(#8ea3b5 0%,#c3d2dd 55%,#39543f 100%)}
+  body.wx-snow-night{background:linear-gradient(#131a2c 0%,#2a3446 60%,#16211a 100%)}
+  body.wx-storm-day{background:linear-gradient(#39434e 0%,#525f6b 55%,#1e3326 100%)}
+  body.wx-storm-night{background:linear-gradient(#0a0e16 0%,#161c26 60%,#0e150f 100%)}
+  #wxLayer{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+  #sunGlow{position:absolute;top:6vmin;right:10vmin;width:16vmin;height:16vmin;border-radius:50%;
+    background:radial-gradient(circle,#ffe9a3 0%,#f5c542 45%,rgba(245,197,66,0) 72%);display:none;
+    animation:sunpulse 6s ease-in-out infinite}
+  @keyframes sunpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+  #moon{position:absolute;top:7vmin;right:11vmin;width:9vmin;height:9vmin;border-radius:50%;
+    background:radial-gradient(circle at 35% 35%,#f4f1e0,#c9c6b4);box-shadow:0 0 4vmin rgba(244,241,224,.5);display:none}
+  .star{position:absolute;width:.4vmin;height:.4vmin;background:#fff;border-radius:50%;opacity:.8;
+    animation:twinkle 3s ease-in-out infinite}
+  @keyframes twinkle{0%,100%{opacity:.25}50%{opacity:.95}}
+  .cloud{position:absolute;background:rgba(255,255,255,.75);border-radius:50vmin;filter:blur(.6vmin);
+    animation:drift linear infinite}
+  .wx-night .cloud, body[class*="night"] .cloud{background:rgba(180,190,205,.35)}
+  @keyframes drift{from{transform:translateX(-30vw)}to{transform:translateX(130vw)}}
+  .drop{position:absolute;top:-6vmin;width:.28vmin;height:3.4vmin;background:linear-gradient(rgba(180,210,255,0),rgba(180,210,255,.85));
+    animation:fall linear infinite}
+  @keyframes fall{to{transform:translateY(115vh)}}
+  .flake{position:absolute;top:-4vmin;color:#fff;font-size:2vmin;opacity:.9;animation:snowfall linear infinite}
+  @keyframes snowfall{0%{transform:translateY(-5vh) translateX(0)}50%{transform:translateY(52vh) translateX(3vmin)}100%{transform:translateY(112vh) translateX(-2vmin)}}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:2}
+  #stage,#tHead,#roundTag,#wagerTag,#timer{z-index:1}
+  #stage{position:relative}
+  #tHead{position:fixed;top:1.6vmin;left:0;right:0;display:none;align-items:flex-start;
+    justify-content:space-between;padding:0 2.4vmin;z-index:1}
+  #tHead img.crest{height:22vmin;filter:drop-shadow(0 .5vmin 1vmin rgba(0,0,0,.45))}
+  #tHead .mid{text-align:center;padding-top:1vmin}
+  #tHead .clock{font-family:'Alfa Slab One',serif;font-size:4.6vmin;color:var(--cream);text-shadow:0 .3vmin .8vmin rgba(0,0,0,.5)}
+  #tHead .datewx{font-size:2.4vmin;font-weight:800;opacity:.92;margin-top:.4vmin;text-shadow:0 .2vmin .6vmin rgba(0,0,0,.5)}
+  #tHead img.evimg{height:16vmin;max-width:24vw;object-fit:cover;border:.4vmin solid var(--gold);border-radius:1.4vmin}
+  .bigclock{font-family:'Alfa Slab One',serif;font-size:21vmin;color:var(--gold);line-height:1;letter-spacing:.02em;
+    text-shadow:0 .6vmin 1.6vmin rgba(0,0,0,.55)}
   .bigclock.hot{color:var(--red)}
   .bigclock.paused{opacity:.55}
-  .tlabel{font-size:5.5vmin;font-weight:800;margin-top:1vmin}
-  .tev{font-family:'Caveat',cursive;font-size:4.2vmin;opacity:.85;margin-top:1.2vmin}
+  .tlabel{font-size:5.2vmin;font-weight:800;margin-top:1vmin;text-shadow:0 .3vmin .9vmin rgba(0,0,0,.5)}
+  .tev{font-family:'Caveat',cursive;font-size:4vmin;opacity:.9;margin-top:1vmin;text-shadow:0 .2vmin .6vmin rgba(0,0,0,.5)}
+  #schedPanel{position:fixed;right:2.4vmin;top:26vmin;width:26vw;max-height:60vh;overflow:hidden;z-index:1;
+    background:rgba(20,34,24,.72);border:.35vmin solid var(--gold-dk);border-radius:1.6vmin;padding:1.6vmin 1.8vmin;display:none}
+  #schedPanel h4{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:2.6vmin;margin:0 0 1vmin;font-weight:normal}
+  .schedRow{display:flex;justify-content:space-between;gap:1vmin;font-size:2.5vmin;font-weight:800;
+    padding:.7vmin .9vmin;border-radius:.9vmin;opacity:.65}
+  .schedRow .dur{font-family:'Alfa Slab One',serif;color:var(--gold)}
+  .schedRow.done{opacity:.35;text-decoration:line-through}
+  .schedRow.cur{opacity:1;background:var(--gold);color:var(--ink)}
+  .schedRow.cur .dur{color:var(--maroon)}
+  .rosterWrap{display:flex;flex-wrap:wrap;gap:1vmin 3vmin;justify-content:center;max-width:86vw;margin-top:2.5vmin}
+  .rosterName{font-size:3.1vmin;font-weight:800;text-shadow:0 .2vmin .6vmin rgba(0,0,0,.5)}
+  .rosterName.ghost{opacity:.38;font-weight:400}
+  .rosterName .tbl{color:var(--gold);font-size:2.2vmin;margin-left:.6vmin}
 </style>
 </head>
 <body>
+<div id="wxLayer"><div id="sunGlow"></div><div id="moon"></div></div>
+<div id="flash"></div>
 <div id="tHead">
-  <img class="crest" src="logo.png" alt="NGH">
+  <img class="crest" src="stream-logo.png" alt="Northwood Game Haven">
+  <div class="mid">
+    <div class="clock" id="tClock">--:--</div>
+    <div class="datewx" id="tDateWx"></div>
+  </div>
   <img class="evimg" id="tEvImg" src="" alt="" style="display:none">
 </div>
+<div id="schedPanel"></div>
 <div id="roundTag"></div>
 <div id="wagerTag"></div>
 <div id="stage"></div>
@@ -80,7 +137,7 @@
 
 <script>
 /* =====================================================================
-   NGH TRIVIA DISPLAY — NGH-BUILD 07d
+   NGH TRIVIA DISPLAY — NGH-BUILD 08a
    Dumb, resilient TV client.
    URL: trivia-display.html?game=GAME-XXXX&display=Retail
    - Server clock offset: median of ping samples against /api/trivia/time
@@ -296,53 +353,271 @@
     });
   }
 
+  /* ------------------ weather (Chippewa Falls, WI) — NGH-BUILD 08a ------------------ */
+  var wx = { cond: "clear", night: false, temp: null, desc: "" };
+  var wxBuiltFor = "";
+  function wxCondFromCode(c) {
+    if (c === 0 || c === 1) return "clear";
+    if (c === 2 || c === 3 || c === 45 || c === 48) return "cloudy";
+    if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return "rain";
+    if ((c >= 71 && c <= 77) || c === 85 || c === 86) return "snow";
+    if (c >= 95) return "storm";
+    return "cloudy";
+  }
+  function wxDesc(cond, night) {
+    return { clear: night ? "Clear night" : "Sunny", cloudy: "Cloudy", rain: "Rain", snow: "Snow", storm: "Thunderstorms" }[cond] || "";
+  }
+  function fetchWeather() {
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=44.937&longitude=-91.393&current=temperature_2m,weather_code,is_day&temperature_unit=fahrenheit")
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var c = j && j.current;
+        if (!c) return;
+        wx.cond = wxCondFromCode(Number(c.weather_code));
+        wx.night = !Number(c.is_day);
+        wx.temp = Math.round(Number(c.temperature_2m));
+        wx.desc = wxDesc(wx.cond, wx.night);
+        applyWeather();
+      }).catch(function () {});
+  }
+  function clearWxLayer() {
+    var layer = document.getElementById("wxLayer");
+    Array.prototype.slice.call(layer.querySelectorAll(".drop,.flake,.cloud,.star")).forEach(function (n) { n.remove(); });
+  }
+  function applyWeather() {
+    if (!st || st.kind !== "timer") return;
+    var key = wx.cond + (wx.night ? "-night" : "-day");
+    document.body.className = "wx wx-" + key;
+    document.getElementById("sunGlow").style.display = (wx.cond === "clear" && !wx.night) ? "block" : "none";
+    document.getElementById("moon").style.display = (wx.cond === "clear" && wx.night) ? "block" : "none";
+    if (wxBuiltFor === key) return;
+    wxBuiltFor = key;
+    clearWxLayer();
+    var layer = document.getElementById("wxLayer");
+    var i, el;
+    if (wx.night && (wx.cond === "clear" || wx.cond === "cloudy")) {
+      for (i = 0; i < 60; i++) {
+        el = document.createElement("div"); el.className = "star";
+        el.style.left = (Math.random() * 100) + "vw";
+        el.style.top = (Math.random() * 55) + "vh";
+        el.style.animationDelay = (Math.random() * 3) + "s";
+        layer.appendChild(el);
+      }
+    }
+    if (wx.cond === "cloudy" || wx.cond === "storm" || wx.cond === "rain") {
+      for (i = 0; i < 5; i++) {
+        el = document.createElement("div"); el.className = "cloud";
+        var w = 18 + Math.random() * 20;
+        el.style.width = w + "vmin"; el.style.height = (w * 0.34) + "vmin";
+        el.style.top = (3 + Math.random() * 22) + "vh";
+        el.style.animationDuration = (60 + Math.random() * 80) + "s";
+        el.style.animationDelay = (-Math.random() * 90) + "s";
+        layer.appendChild(el);
+      }
+    }
+    if (wx.cond === "rain" || wx.cond === "storm") {
+      for (i = 0; i < 90; i++) {
+        el = document.createElement("div"); el.className = "drop";
+        el.style.left = (Math.random() * 100) + "vw";
+        el.style.animationDuration = (0.55 + Math.random() * 0.5) + "s";
+        el.style.animationDelay = (Math.random() * 1.2) + "s";
+        layer.appendChild(el);
+      }
+    }
+    if (wx.cond === "snow") {
+      for (i = 0; i < 55; i++) {
+        el = document.createElement("div"); el.className = "flake"; el.textContent = "❄";
+        el.style.left = (Math.random() * 100) + "vw";
+        el.style.fontSize = (1 + Math.random() * 1.6) + "vmin";
+        el.style.animationDuration = (6 + Math.random() * 8) + "s";
+        el.style.animationDelay = (Math.random() * 8) + "s";
+        layer.appendChild(el);
+      }
+    }
+  }
+  var stormTimer = setInterval(function () {
+    if (wx.cond !== "storm" || !st || st.kind !== "timer") return;
+    if (Math.random() < 0.28) {
+      var f = document.getElementById("flash");
+      f.style.opacity = 0.75;
+      setTimeout(function () { f.style.opacity = 0; }, 90);
+      setTimeout(function () { f.style.opacity = 0.4; }, 200);
+      setTimeout(function () { f.style.opacity = 0; }, 290);
+    }
+  }, 5000);
+  function tickClock() {
+    if (!st || st.kind !== "timer") return;
+    var d = new Date();
+    var hh = d.getHours() % 12 || 12, mm = String(d.getMinutes()).padStart(2, "0");
+    document.getElementById("tClock").textContent = hh + ":" + mm + (d.getHours() >= 12 ? " PM" : " AM");
+    var days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    var mons = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    document.getElementById("tDateWx").textContent =
+      days[d.getDay()] + ", " + mons[d.getMonth()] + " " + d.getDate() +
+      (wx.temp != null ? ("  ·  " + wx.temp + "°F " + wx.desc) : "");
+  }
+  setInterval(tickClock, 1000);
+  setInterval(fetchWeather, 10 * 60 * 1000);
+  fetchWeather();
+
+  /* ------------------ roster (idle screen) ------------------ */
+  var roster = null, rosterTimer = null;
+  function pollRoster() {
+    fetch(API + "/games/" + encodeURIComponent(GAME) + "/roster")
+      .then(function (r) { return r.json(); })
+      .then(function (j) { roster = j; if (st && st.kind === "timer" && st.phase === "lobby") renderTimerMode(); })
+      .catch(function () {});
+  }
+
+  function fmtDur(secs) {
+    var m = Math.floor(secs / 60), s = secs % 60;
+    return m + ":" + String(s).padStart(2, "0");
+  }
+  function schedPanelHTML(doneThrough, curIdx) {
+    if (!st.schedule || !st.schedule.length) return "";
+    var h = "<h4>ROUND SCHEDULE</h4>";
+    st.schedule.forEach(function (r, i) {
+      var cls = i === curIdx ? "cur" : (doneThrough != null && i <= doneThrough ? "done" : "");
+      h += '<div class="schedRow ' + cls + '"><span>' + (i + 1) + ". " + esc(r.label || ("Round " + (i + 1))) + "</span>" +
+        '<span class="dur">' + fmtDur(r.secs) + "</span></div>";
+    });
+    return h;
+  }
+
+  function renderTimerMode() {
+    var tHead = document.getElementById("tHead");
+    var sp = document.getElementById("schedPanel");
+    roundTag.style.display = "none"; wagerTag.style.display = "none";
+    tHead.style.display = "flex";
+    applyWeather();
+    tickClock();
+    var img = document.getElementById("tEvImg");
+    var imgSrc = st.customImage || (st.event && st.event.photo) || "";
+    if (imgSrc && img.getAttribute("src") !== imgSrc) img.src = imgSrc;
+    img.style.display = imgSrc ? "block" : "none";
+    var evLine = "";
+    if (st.event && st.event.title) {
+      evLine = esc(st.event.title) +
+        (st.event.date ? " · " + esc(st.event.date) : "") +
+        (st.event.start ? " · " + esc(st.event.start) + (st.event.end ? "–" + esc(st.event.end) : "") : "");
+    }
+    function fmt(ms) {
+      var s = Math.max(0, Math.ceil(ms / 1000));
+      var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+      return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sec).padStart(2, "0");
+    }
+
+    // ---- IDLE screen ----
+    if (st.phase === "lobby" || st.phase === "ended") {
+      sp.style.display = (st.schedule && st.schedule.length) ? "block" : "none";
+      sp.innerHTML = schedPanelHTML(st.phase === "ended" ? (st.schedule || []).length - 1 : null,
+        st.phase === "ended" ? -1 : (st.schedIdx != null ? st.schedIdx : -1));
+      var names = "";
+      if (roster && roster.roster && roster.roster.length) {
+        names = '<div class="rosterWrap">' + roster.roster.map(function (p) {
+          return '<span class="rosterName' + (p.checkedIn ? "" : " ghost") + '">' +
+            (p.standing != null ? (p.standing + ". ") : "") + esc(p.name) +
+            (p.qty > 1 ? " (+" + (p.qty - 1) + ")" : "") +
+            (p.table ? '<span class="tbl">T' + esc(String(p.table)) + "</span>" : "") + "</span>";
+        }).join("") + "</div>" +
+        '<div class="small" style="margin-top:2vmin">Bold = checked in · Grey = registered, see a Guru to check in</div>';
+      }
+      stage.innerHTML =
+        '<div class="brand" style="font-size:8vmin">' + esc(st.title) + "</div>" +
+        (evLine ? '<div class="tev">' + evLine + "</div>" : "") +
+        (st.phase === "ended" ? '<div class="tlabel" style="color:var(--gold)">🏁 That\u2019s a wrap — thanks for playing!</div>' : "") +
+        names;
+      if (!rosterTimer) { pollRoster(); rosterTimer = setInterval(pollRoster, 10000); }
+      return;
+    }
+    if (rosterTimer) { clearInterval(rosterTimer); rosterTimer = null; }
+
+    // ---- PAUSED ----
+    var paused = st.phase === "timer-paused";
+    var curIdx = st.schedIdx != null ? st.schedIdx : -1;
+    sp.style.display = (st.schedule && st.schedule.length) ? "block" : "none";
+
+    if (paused) {
+      sp.innerHTML = schedPanelHTML(curIdx - 1, curIdx);
+      var rm = Number(st.remainMs) || 0;
+      var inInt = rm < 0;
+      stage.innerHTML =
+        '<div class="tlabel">' + esc(inInt ? "Intermission" : (st.timerLabel || st.title)) + "</div>" +
+        '<div class="bigclock paused">' + fmt(inInt ? (Number(st.intMs) + rm) : rm) + "</div>" +
+        '<div class="tlabel" style="color:var(--gold)">⏸ PAUSED</div>' +
+        (evLine ? '<div class="tev">' + evLine + "</div>" : "");
+      return;
+    }
+
+    if (!st.deadline) {
+      sp.innerHTML = schedPanelHTML(curIdx - 1, curIdx);
+      stage.innerHTML = '<div class="tlabel">' + esc(st.timerLabel || st.title) + '</div><div class="bigclock">--:--</div>' +
+        (evLine ? '<div class="tev">' + evLine + "</div>" : "");
+      return;
+    }
+
+    // ---- RUNNING: round → derived intermission → waiting (all off the shared clock) ----
+    stage.innerHTML =
+      '<div class="tlabel" id="tPhaseLabel"></div>' +
+      '<div class="bigclock" id="bigClock">--:--</div>' +
+      '<div class="tlabel" id="tSubLabel" style="display:none"></div>' +
+      (evLine ? '<div class="tev">' + evLine + "</div>" : "");
+    var bc = document.getElementById("bigClock");
+    var lbl = document.getElementById("tPhaseLabel");
+    var sub = document.getElementById("tSubLabel");
+    var lastMode = "";
+    countdownTimer = setInterval(function () {
+      var now = serverNow();
+      var dl = Number(st.deadline);
+      var intEnd = dl + (Number(st.intMs) || 0);
+      var mode = now < dl ? "round" : (now < intEnd ? "int" : "wait");
+      if (mode !== lastMode) {
+        lastMode = mode;
+        if (mode === "round") {
+          lbl.textContent = st.timerLabel || st.title;
+          sub.style.display = "none";
+          sp.innerHTML = schedPanelHTML(curIdx - 1, curIdx);
+        } else if (mode === "int") {
+          lbl.textContent = "☕ Intermission";
+          sub.style.display = "block";
+          sub.innerHTML = st.nextLabel ? ("Up next: <b style='color:var(--gold)'>" + esc(st.nextLabel) + "</b>") : "Next round soon";
+          sp.innerHTML = schedPanelHTML(curIdx, curIdx + (st.nextLabel ? 1 : 0));
+        } else {
+          lbl.textContent = st.nextLabel ? ("Next: " + st.nextLabel) : "Round complete";
+          sub.style.display = "block";
+          sub.textContent = "Waiting for the host…";
+          sp.innerHTML = schedPanelHTML(curIdx, st.nextLabel ? curIdx + 1 : -1);
+        }
+      }
+      if (mode === "round") {
+        var left = dl - now;
+        bc.textContent = fmt(left);
+        bc.classList.toggle("hot", left <= 60000);
+        bc.style.visibility = "visible";
+      } else if (mode === "int") {
+        bc.classList.remove("hot");
+        bc.textContent = fmt(intEnd - now);
+        bc.style.visibility = "visible";
+      } else {
+        bc.classList.remove("hot");
+        bc.textContent = "0:00";
+        bc.style.visibility = (Math.floor(Date.now() / 500) % 2) ? "hidden" : "visible";
+      }
+    }, 200);
+    return;
+  }
+
   function render() {
     clearTimers();
     timerEl.style.display = "none";
     timerEl.classList.remove("hot");
 
     // ---- tournament timer sessions ----
-    var tHead = document.getElementById("tHead");
-    if (st.kind === "timer") {
-      roundTag.style.display = "none"; wagerTag.style.display = "none";
-      tHead.style.display = "flex";
-      var img = document.getElementById("tEvImg");
-      var imgSrc = st.customImage || (st.event && st.event.photo) || "";
-      if (imgSrc && img.getAttribute("src") !== imgSrc) img.src = imgSrc;
-      img.style.display = imgSrc ? "block" : "none";
-      var evLine = "";
-      if (st.event && st.event.title) {
-        evLine = esc(st.event.title) +
-          (st.event.date ? " · " + esc(st.event.date) : "") +
-          (st.event.start ? " · " + esc(st.event.start) + (st.event.end ? "–" + esc(st.event.end) : "") : "");
-      }
-      var paused = st.phase === "timer-paused";
-      stage.innerHTML =
-        '<div class="tlabel">' + esc(st.timerLabel || st.title) + "</div>" +
-        '<div class="bigclock' + (paused ? " paused" : "") + '" id="bigClock">--:--</div>' +
-        (paused ? '<div class="tlabel" style="color:var(--gold)">⏸ PAUSED</div>' : "") +
-        (evLine ? '<div class="tev">' + evLine + "</div>" : "");
-      var bc = document.getElementById("bigClock");
-      function fmt(ms) {
-        var s = Math.max(0, Math.ceil(ms / 1000));
-        var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-        var mm = (h ? String(m).padStart(2, "0") : String(m));
-        return (h ? h + ":" : "") + mm + ":" + String(sec).padStart(2, "0");
-      }
-      if (paused) { bc.textContent = fmt(Number(st.remainMs) || 0); return; }
-      if (!st.deadline) { bc.textContent = "--:--"; return; }
-      countdownTimer = setInterval(function () {
-        var left = Number(st.deadline) - serverNow();
-        bc.textContent = fmt(left);
-        bc.classList.toggle("hot", left <= 60000);
-        if (left <= 0) {
-          bc.textContent = "0:00";
-          bc.style.visibility = (Math.floor(Date.now() / 500) % 2) ? "hidden" : "visible";
-        } else bc.style.visibility = "visible";
-      }, 200);
-      return;
-    }
-    tHead.style.display = "none";
+    if (st.kind === "timer") { renderTimerMode(); return; }
+    document.getElementById("tHead").style.display = "none";
+    document.getElementById("schedPanel").style.display = "none";
+    if (rosterTimer) { clearInterval(rosterTimer); rosterTimer = null; }
+    document.body.className = "";
     tags();
     var ph = st.phase;
 
