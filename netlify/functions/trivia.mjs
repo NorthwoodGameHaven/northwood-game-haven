@@ -1,5 +1,5 @@
 // netlify/functions/trivia.mjs
-// NGH-BUILD 08b — Event Stream engine: + brackets (Swiss/random/round-robin), results, standings w/ OMW.
+// NGH-BUILD 08c — Event Stream engine: + single-elim brackets, champion, custom table numbers, table moves.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -199,6 +199,7 @@ function publicState(game, st, version) {
           }))
         : [],
       standings: (st.standings || []).slice(0, 16),
+      champion: st.champion || null,
       event: {
         id: game.eventId || null,
         title: game.eventTitle || game.title || '',
@@ -386,6 +387,93 @@ function playedBefore(matches, x, y) {
     if ((m.a === x && m.b === y) || (m.a === y && m.b === x)) return true;
   }
   return false;
+}
+function parseTableLabels(v) {
+  // "3,4,7" or "1-6" or ["3","4"] -> ordered label list
+  if (Array.isArray(v)) return v.map(x => String(x).trim()).filter(Boolean);
+  const out = [];
+  String(v || '').split(',').map(s => s.trim()).filter(Boolean).forEach(part => {
+    const m = /^(\d+)\s*-\s*(\d+)$/.exec(part);
+    if (m) {
+      const a = parseInt(m[1], 10), b = parseInt(m[2], 10);
+      for (let i = a; i <= b && out.length < 200; i++) out.push(String(i));
+    } else out.push(part);
+  });
+  return out;
+}
+function applyTableLabels(tables, labels) {
+  let maxNum = 0;
+  labels.forEach(l => { const n = parseInt(l, 10); if (!isNaN(n) && n > maxNum) maxNum = n; });
+  let next = maxNum;
+  tables.forEach((t, i) => {
+    t.table = (labels[i] != null) ? labels[i] : String(++next);
+  });
+  return tables;
+}
+function lastRoundComplete(matches) {
+  if (!matches.length) return true;
+  const rd = matches[matches.length - 1];
+  return (rd.tables || []).every(m => m.b == null || m.result);
+}
+function elimWinners(rd) {
+  const w = [];
+  for (const m of (rd.tables || [])) {
+    if (m.b == null) { w.push({ id: m.a, name: m.aName }); continue; }
+    if (m.result === 'a') w.push({ id: m.a, name: m.aName });
+    else if (m.result === 'b') w.push({ id: m.b, name: m.bName });
+    // draws don't advance anyone — host must pick a winner in elimination
+  }
+  return w;
+}
+function genElim(players, matches, standings) {
+  const last = matches.length ? matches[matches.length - 1] : null;
+  if (last && last.mode === 'single-elim') {
+    const w = elimWinners(last);
+    if (w.length <= 1) return { champion: w[0] || null, tables: null };
+    const tables = [];
+    let t = 1;
+    for (let i = 0; i + 1 < w.length; i += 2) {
+      tables.push({ table: t++, a: w[i].id, b: w[i + 1].id, aName: w[i].name, bName: w[i + 1].name, result: null });
+    }
+    if (w.length % 2) {
+      const solo = w[w.length - 1];
+      tables.push({ table: t++, a: solo.id, b: null, aName: solo.name, bName: null, result: 'a' });
+    }
+    return { champion: null, tables };
+  }
+  // first elim round: seed by standings when available, else random
+  let seeds;
+  if (standings && standings.length) {
+    const rank = {}; standings.forEach(s => { rank[s.participantId] = s.standing; });
+    seeds = players.slice().sort((a, b) => (rank[a.id] || 999) - (rank[b.id] || 999));
+  } else seeds = shuffleArr(players.slice());
+  let p2 = 1; while (p2 < seeds.length) p2 *= 2;
+  const byes = p2 - seeds.length;
+  const tables = [];
+  let t = 1;
+  for (let i = 0; i < byes; i++) {
+    tables.push({ table: t++, a: seeds[i].id, b: null, aName: seeds[i].name, bName: null, result: 'a' });
+  }
+  const rest = seeds.slice(byes);
+  for (let i = 0; i < rest.length / 2; i++) {
+    const A = rest[i], B = rest[rest.length - 1 - i];
+    tables.push({ table: t++, a: A.id, b: B.id, aName: A.name, bName: B.name, result: null });
+  }
+  return { champion: null, tables };
+}
+function detectChampion(st) {
+  const m = st.matches || [];
+  if (!m.length) { st.champion = null; return; }
+  const last = m[m.length - 1];
+  if (last.mode !== 'single-elim') { st.champion = null; return; }
+  const real = (last.tables || []).filter(x => x.b != null);
+  if (real.length === 1 && (real[0].result === 'a' || real[0].result === 'b')) {
+    const w = real[0].result === 'a'
+      ? { participantId: real[0].a, name: real[0].aName }
+      : { participantId: real[0].b, name: real[0].bName };
+    if (!(last.tables || []).some(x => x.b == null)) { st.champion = w; return; }
+  }
+  st.champion = null;
 }
 function genPairings(mode, players, matches) {
   // players: [{id,name}] (checked-in). Returns tables array.
@@ -660,20 +748,37 @@ const _handler = async (req) => {
       if (b.mode === 'undo-last') {
         if (!st.matches.length) return bad('No rounds to undo.');
         st.matches.pop();
+        st.champion = null;
       } else {
-        const mode = ['swiss', 'random', 'roundrobin'].includes(b.mode) ? b.mode : 'swiss';
+        const mode = ['swiss', 'random', 'roundrobin', 'single-elim'].includes(b.mode) ? b.mode : 'swiss';
         const parts = await sql`SELECT id, data FROM trivia_participants WHERE game_id = ${gameId}`;
         const players = parts.filter(p => (p.data || {}).checkedIn)
           .map(p => ({ id: p.id, name: (p.data || {}).name || '?' }));
         if (players.length < 2) return bad('Need at least 2 checked-in participants.');
-        const tables = genPairings(mode, players, st.matches);
+        const labels = parseTableLabels(rows[0].data.tableNumbers);
+        let tables;
+        if (mode === 'single-elim') {
+          if (!lastRoundComplete(st.matches)) return bad('Enter every result for the current round first.');
+          const res = genElim(players, st.matches, st.standings);
+          if (res.champion) {
+            st.champion = res.champion;
+            const v0 = await bumpState(gameId, st);
+            return json({ ok: true, v: v0, round: st.matches.length, matches: st.matches, standings: st.standings || [], champion: st.champion });
+          }
+          tables = res.tables;
+        } else {
+          tables = genPairings(mode, players, st.matches);
+          st.champion = null;
+        }
+        if (labels.length) applyTableLabels(tables, labels);
         st.matches.push({ round: st.matches.length + 1, mode, tables });
       }
       const nameOf = {};
       for (const rd of st.matches) for (const m of rd.tables) { nameOf[m.a] = m.aName; if (m.b) nameOf[m.b] = m.bName; }
       st.standings = computeStandings(st.matches, pid => nameOf[pid] || '?');
+      detectChampion(st);
       const v = await bumpState(gameId, st);
-      return json({ ok: true, v, round: st.matches.length, matches: st.matches, standings: st.standings });
+      return json({ ok: true, v, round: st.matches.length, matches: st.matches, standings: st.standings, champion: st.champion || null });
     }
 
     // ----- ADMIN: record a match result -----
@@ -685,14 +790,20 @@ const _handler = async (req) => {
       const st = rows[0].state || {};
       const rd = (st.matches || []).find(r => r.round === (b.round | 0));
       if (!rd) return bad('round not found', 404);
-      const m = (rd.tables || []).find(t => t.table === (b.table | 0));
+      const m = (rd.tables || []).find(t => String(t.table) === String(b.table));
       if (!m) return bad('table not found', 404);
-      m.result = ['a', 'b', 'draw'].includes(b.result) ? b.result : null;
+      if (b.newTable != null) {
+        const nt = String(b.newTable).trim().slice(0, 12);
+        if (nt) m.table = nt;
+      } else {
+        m.result = ['a', 'b', 'draw'].includes(b.result) ? b.result : null;
+      }
       const nameOf = {};
       for (const rd2 of st.matches) for (const m2 of rd2.tables) { nameOf[m2.a] = m2.aName; if (m2.b) nameOf[m2.b] = m2.bName; }
       st.standings = computeStandings(st.matches, pid => nameOf[pid] || '?');
+      detectChampion(st);
       const v = await bumpState(gameId, st);
-      return json({ ok: true, v, standings: st.standings });
+      return json({ ok: true, v, standings: st.standings, champion: st.champion || null });
     }
 
     // ----- everything else on /games is admin -----

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 08b -->
+<!-- NGH-BUILD 08c -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -161,6 +161,7 @@
         <div class="row">
           <div><label>Occurrence date</label><input id="tOccDate" type="date"></div>
           <div style="flex:2"><label>Custom image URL (optional — overrides event image)</label><input id="tCustomImg" placeholder="/trivia-media/bracket.png"></div>
+          <div><label>Table numbers (optional)</label><input id="tTableNums" placeholder="1-6 or 3,4,7,8"></div>
         </div>
 
         <h3 style="margin-top:14px">Round schedule</h3>
@@ -281,6 +282,7 @@
                 <option value="swiss">Swiss (by points)</option>
                 <option value="random">Random</option>
                 <option value="roundrobin">Round robin</option>
+                <option value="single-elim">Single elimination</option>
               </select></div>
               <div style="flex:0;white-space:nowrap;display:flex;gap:6px">
                 <button onclick="genPairings()">⚔ Pair next round</button>
@@ -347,7 +349,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 08b
+   NGH EVENT STREAM HUB — NGH-BUILD 08c
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -542,6 +544,7 @@ function showTimerEditor() {
   fillEventPick("tEventPick", g.eventId || "");
   document.getElementById("tOccDate").value = g.occDate || "";
   document.getElementById("tCustomImg").value = g.customImage || "";
+  document.getElementById("tTableNums").value = g.tableNumbers || "";
   document.getElementById("tDelBtn").style.display = cur.isNew ? "none" : "inline-block";
   renderSched();
   document.getElementById("timerEdCard").scrollIntoView({ behavior: "smooth" });
@@ -840,6 +843,7 @@ function saveTimer() {
   g.title = document.getElementById("tTitle").value.trim();
   g.occDate = document.getElementById("tOccDate").value || null;
   g.customImage = document.getElementById("tCustomImg").value.trim() || null;
+  g.tableNumbers = document.getElementById("tTableNums").value.trim() || null;
   g.schedule = (g.schedule || []).map(function (r) { return { label: String(r.label||"").slice(0,120), secs: Math.max(60, Number(r.secs)||60), intermissionSecs: Math.max(0, Number(r.intermissionSecs)||0) }; });
   if (!g.title) { document.getElementById("tEdMsg").textContent = "Title required."; return; }
   persistGame(g, "tEdMsg", "tEdTitleLabel");
@@ -945,7 +949,9 @@ function updRunPhase() {
   document.getElementById("runPhase").textContent = (run.state.phase || "lobby").toUpperCase();
 }
 function updTimerPhase() {
-  document.getElementById("tRunPhase").textContent = (run.state.phase || "lobby").toUpperCase();
+  var ph = run.state.phase || "lobby";
+  var map = { timer: "▶ RUNNING", "timer-paused": "⏸ PAUSED", lobby: "🦦 IDLE", ended: "🏁 ENDED" };
+  document.getElementById("tRunPhase").textContent = map[ph] || ph.toUpperCase();
 }
 function pollRun() {
   if (!run) return;
@@ -1058,11 +1064,12 @@ function renderSchedRun() {
   var cur2 = run.state.schedIdx;
   box.innerHTML = s.map(function (r, i) {
     var isCur = cur2 === i && (run.state.phase === "timer" || run.state.phase === "timer-paused");
+    var curPill = run.state.phase === "timer-paused" ? "⏸ PAUSED" : "▶ RUNNING";
     return '<div class="list-item"' + (isCur ? ' style="background:rgba(231,193,91,.12)"' : "") + '>' +
       '<div class="grow">' + (i + 1) + ". <b>" + esc(r.label || ("Round " + (i + 1))) + "</b>" +
       ' <span class="pill">' + Math.round((r.secs || 0) / 60) + " min</span>" +
       ' <span class="pill">☕ ' + Math.round((r.intermissionSecs || 0) / 60) + " min</span>" +
-      (isCur ? ' <span class="pill wager-pill">LIVE</span>' : "") + "</div>" +
+      (isCur ? ' <span class="pill wager-pill">' + curPill + "</span>" : "") + "</div>" +
       '<button onclick="timerStartSched(' + i + ')">▶ Start</button>' +
       "</div>";
   }).join("");
@@ -1114,6 +1121,13 @@ function undoPairings() {
     .then(function (j) { renderBrackets(j.matches, j.standings); })
     .catch(function (e) { alert(e.message); });
 }
+function moveTable(round, table) {
+  var nt = prompt("Move table " + table + " to table #:", table);
+  if (nt == null || !String(nt).trim() || String(nt).trim() === String(table)) return;
+  api("/games/" + run.game.id + "/match-result", { method: "POST", body: JSON.stringify({ round: round, table: table, newTable: String(nt).trim() }) })
+    .then(function () { pollBrackets(); })
+    .catch(function (e) { alert(e.message); });
+}
 function setResult(round, table, result) {
   api("/games/" + run.game.id + "/match-result", { method: "POST", body: JSON.stringify({ round: round, table: table, result: result }) })
     .then(function () { pollBrackets(); })
@@ -1132,7 +1146,8 @@ function renderBrackets(matches, standings) {
   var standBox = document.getElementById("standBox");
   if (!brRound) return;
   matches = matches || [];
-  brRound.textContent = matches.length ? ("Round " + matches.length) : "no rounds";
+  var champ = run.state && run.state.champion;
+  brRound.textContent = champ && champ.name ? ("🏆 " + champ.name) : (matches.length ? ("Round " + matches.length) : "no rounds");
   if (!matches.length) { pairBox.textContent = "No pairings yet."; }
   else {
     var rd = matches[matches.length - 1];
@@ -1141,12 +1156,13 @@ function renderBrackets(matches, standings) {
         var rb = function (val, lab) {
           var on = m.result === val;
           return '<button class="' + (on ? "" : "sec") + '" style="padding:4px 8px;font-size:12px" onclick="setResult(' +
-            rd.round + "," + m.table + ",'" + val + "')\">" + lab + "</button>";
+            rd.round + ",'" + esc(String(m.table)) + "','" + val + "')\">" + lab + "</button>";
         };
+        var tCell = '<button class="sec" style="padding:2px 7px;font-size:11px" title="Move table" onclick="moveTable(' + rd.round + ",'" + esc(String(m.table)) + "')\">" + esc(String(m.table)) + " ↔</button>";
         if (m.bName == null) {
-          return "<tr><td>" + m.table + "</td><td><b>" + esc(m.aName) + '</b> <span class="pill">BYE — auto win</span></td><td>—</td></tr>';
+          return "<tr><td>" + tCell + "</td><td><b>" + esc(m.aName) + '</b> <span class="pill">BYE — auto win</span></td><td>—</td></tr>';
         }
-        return "<tr><td>" + m.table + "</td><td><b>" + esc(m.aName) + "</b> vs <b>" + esc(m.bName) + "</b></td><td>" +
+        return "<tr><td>" + tCell + "</td><td><b>" + esc(m.aName) + "</b> vs <b>" + esc(m.bName) + "</b></td><td>" +
           rb("a", esc(m.aName.split(" ")[0]) + " ✓") + " " + rb("b", esc(m.bName.split(" ")[0]) + " ✓") + " " + rb("draw", "Draw") +
           "</td></tr>";
       }).join("") + "</table>";
