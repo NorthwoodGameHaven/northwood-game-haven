@@ -1,5 +1,5 @@
 // netlify/functions/trivia.mjs
-// NGH-BUILD 08c — Event Stream engine: + single-elim brackets, champion, custom table numbers, table moves.
+// NGH-BUILD 09a — Event Stream engine: + buzzer rounds, minigame self-report entries, always-on standings.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -224,7 +224,8 @@ function publicState(game, st, version) {
       tvAudio: !!(game.settings && game.settings.tvAudio),
       showJoinQR: !!(game.settings && game.settings.showJoinQR)
     },
-    round: round ? { title: round.title || '', isWager: !!round.isWager, qCount: (round.questions || []).length } : null
+    round: round ? { title: round.title || '', isWager: !!round.isWager, qCount: (round.questions || []).length } : null,
+    standings: st.scoreboard || []
   };
   if (q) {
     if (phase === 'preload') {
@@ -235,8 +236,10 @@ function publicState(game, st, version) {
         key: q.key, type: q.type || 'mc', prompt: q.prompt || '',
         choices: (q.type === 'mc' || q.type === 'media-mc') ? (q.choices || []) : null,
         points: Number(q.points) || 10,
+        entryMode: (String(q.type || '').indexOf('minigame') === 0) ? (q.entryMode || 'none') : null,
         media: q.media && q.media.url ? { kind: q.media.kind || 'video', url: q.media.url } : null
       };
+      if (q.type === 'minigame-buzzer') out.buzzes = (st.buzzes || []).map(x => ({ teamId: x.teamId, name: x.name }));
       if (phase === 'reveal') out.q.answer = q.answer == null ? '' : String(q.answer);
     }
   }
@@ -566,6 +569,68 @@ const _handler = async (req) => {
     return json({ ok: true }, 201);
   }
 
+  // ================= media vault (Netlify Blobs) — NGH-BUILD 08d =================
+  // Images & audio ≤ 4.5 MB live in Blobs; video stays in repo site/trivia-media/.
+  if (head === 'media') {
+    const { getStore } = await import('@netlify/blobs');
+    const store = getStore('trivia-media');
+    const key = parts[1] ? decodeURIComponent(parts[1]) : null;
+
+    // PUBLIC: stream a blob
+    if (req.method === 'GET' && key) {
+      const res = await store.getWithMetadata(key, { type: 'arrayBuffer' });
+      if (!res || !res.data) return bad('not found', 404);
+      return new Response(res.data, {
+        status: 200,
+        headers: {
+          'Content-Type': (res.metadata && res.metadata.contentType) || 'application/octet-stream',
+          'Cache-Control': 'public, max-age=86400',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    if (!requireAdmin(req)) return bad('unauthorized', 401);
+
+    // ADMIN: list
+    if (req.method === 'GET') {
+      const out = [];
+      const listing = await store.list();
+      for (const b of (listing.blobs || [])) {
+        out.push({ key: b.key, url: '/api/trivia/media/' + encodeURIComponent(b.key) });
+      }
+      out.sort((a, b2) => a.key.localeCompare(b2.key));
+      return json(out);
+    }
+
+    // ADMIN: upload {filename, contentType, dataBase64} — overwrite allowed
+    if (req.method === 'POST' && !key) {
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const fname = String(b.filename || '').trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+      const ext = (fname.split('.').pop() || '');
+      const OK_EXT = ['mp3', 'm4a', 'wav', 'ogg', 'jpg', 'jpeg', 'png', 'webp', 'gif'];
+      if (!fname || !OK_EXT.includes(ext)) return bad('Allowed types: ' + OK_EXT.join(', ') + '. Video stays in repo site/trivia-media/.');
+      const ct = String(b.contentType || '').toLowerCase();
+      if (!/^(audio|image)\//.test(ct)) return bad('contentType must be audio/* or image/*');
+      const b64 = String(b.dataBase64 || '');
+      if (!b64) return bad('dataBase64 required');
+      if (b64.length > 6_300_000) return bad('File too large — 4.5 MB max. Larger files go in repo site/trivia-media/.');
+      let buf;
+      try { buf = Buffer.from(b64, 'base64'); } catch { return bad('Bad base64'); }
+      if (buf.length > 4.5 * 1024 * 1024) return bad('File too large — 4.5 MB max.');
+      if (!buf.length) return bad('Empty file');
+      await store.set(fname, buf, { metadata: { contentType: ct, size: buf.length, uploadedAt: new Date().toISOString() } });
+      return json({ ok: true, key: fname, url: '/api/trivia/media/' + encodeURIComponent(fname), size: buf.length }, 201);
+    }
+
+    // ADMIN: delete
+    if (req.method === 'DELETE' && key) {
+      await store.delete(key);
+      return noContent();
+    }
+    return bad('bad media request', 400);
+  }
+
   // ================= games =================
   if (head === 'games') {
     const gameId = parts[1] ? decodeURIComponent(parts[1]) : null;
@@ -615,6 +680,7 @@ const _handler = async (req) => {
       const d = {
         answer: String(b.answer == null ? '' : b.answer).slice(0, 300),
         wager: b.wager == null ? null : Math.max(0, Number(b.wager) || 0),
+        value: b.value == null ? null : Math.max(0, Math.min(9999, Number(b.value) || 0)),
         submittedAt: Date.now(),
         verdict: null, points: null
       };
@@ -625,6 +691,27 @@ const _handler = async (req) => {
           VALUES (${newId('ANS')}, ${gameId}, ${teamId}, ${q.key}, ${JSON.stringify(d)}::jsonb)`;
       }
       return json({ ok: true, qKey: q.key });
+    }
+
+    // ----- PUBLIC: buzzer (team token) — first-tap order, idempotent -----
+    if (req.method === 'POST' && gameId && action === 'buzz') {
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const teamId = verifyTeamToken(String(b.token || ''));
+      if (!teamId) return bad('unauthorized', 401);
+      const rows = await sql`SELECT data, state FROM trivia_games WHERE id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const game = rows[0].data, st = rows[0].state || {};
+      const { q } = findQuestion(game, st.roundIdx | 0, st.qIdx | 0);
+      if (!q || q.type !== 'minigame-buzzer') return bad('No buzzer round is live', 409);
+      if (!['live', 'answering'].includes(st.phase)) return bad('Buzzers are closed', 409);
+      st.buzzes = Array.isArray(st.buzzes) ? st.buzzes : [];
+      const already = st.buzzes.findIndex(x => x.teamId === teamId);
+      if (already >= 0) return json({ ok: true, position: already + 1, already: true });
+      const trow = await sql`SELECT data FROM trivia_teams WHERE id = ${teamId} AND game_id = ${gameId}`;
+      if (!trow.length) return bad('team not found', 404);
+      st.buzzes.push({ teamId, name: (trow[0].data || {}).name || '?', at: Date.now() });
+      await bumpState(gameId, st);
+      return json({ ok: true, position: st.buzzes.length });
     }
 
     // ----- PUBLIC: display heartbeat -----
@@ -866,8 +953,10 @@ const _handler = async (req) => {
       const st = rows[0].state || {};
       const phase = String(b.phase || st.phase || 'lobby');
       if (!PHASES.includes(phase)) return bad('bad phase');
-      if (b.roundIdx != null) st.roundIdx = Math.max(0, b.roundIdx | 0);
-      if (b.qIdx != null) st.qIdx = Math.max(0, b.qIdx | 0);
+      if (b.roundIdx != null) { st.roundIdx = Math.max(0, b.roundIdx | 0); st.buzzes = []; }
+      if (b.qIdx != null) { st.qIdx = Math.max(0, b.qIdx | 0); st.buzzes = []; }
+      if (phase === 'preload') st.buzzes = [];
+      if (b.clearBuzzes) st.buzzes = [];
       st.phase = phase;
       const now = Date.now();
       const { round, q } = findQuestion(game, st.roundIdx | 0, st.qIdx | 0);
@@ -997,7 +1086,7 @@ const _handler = async (req) => {
         ORDER BY (a.data->>'submittedAt')::bigint ASC NULLS LAST`;
       return json(rows.map(r => ({
         id: r.id, teamId: r.team_id, team: (r.team && r.team.name) || '?',
-        answer: r.data.answer, wager: r.data.wager,
+        answer: r.data.answer, wager: r.data.wager, value: r.data.value != null ? r.data.value : null,
         verdict: r.data.verdict || null, points: r.data.points,
         autoScored: !!r.data.autoScored, submittedAt: r.data.submittedAt,
         suggest: (!r.data.verdict && qDef) ? suggestVerdict(r.data.answer, qDef) : null

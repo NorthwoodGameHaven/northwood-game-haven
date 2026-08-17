@@ -1,80 +1,119 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 07e -->
+<!-- NGH TRIVIA PLAY — NGH-BUILD 09a -->
+<!-- Phone client: join via QR, answer + change anytime before lock, buzzer races,
+     minigame self-reporting, live standings tab, suggestion link. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="robots" content="noindex, nofollow">
-<title>NGH Team Trivia</title>
-<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<meta name="robots" content="noindex">
+<title>Play · NGH Event Stream</title>
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Caveat:wght@700&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --forest:#2d5a3d; --forest-dk:#1c3a26; --gold:#e7c15b; --gold-dk:#c9973a;
-    --cream:#f6efdd; --maroon:#7a2e2e; --red:#c0392b; --ink:#1a1a12;
-  }
+  :root{--forest:#1d3a26;--forest-dk:#142218;--panel:#17281c;--gold:#e7c15b;--gold-dk:#b8923a;
+    --cream:#f6efdc;--pink:#e07a9e;--maroon:#7a2b35;--red:#c0392b;--green:#2f7a44;--ink:#1a2416}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  body{margin:0;background:var(--forest-dk);color:var(--cream);
-    font-family:'Nunito',sans-serif;font-size:16px;min-height:100vh}
-  .wrap{max-width:520px;margin:0 auto;padding:16px 16px 90px}
-  h1{font-family:'Alfa Slab One',serif;color:var(--gold);font-weight:normal;font-size:24px;margin:.3em 0}
-  .caveat{font-family:'Caveat',cursive;font-size:20px;opacity:.9}
-  .card{background:#17281c;border:2px solid var(--gold-dk);border-radius:14px;padding:16px;margin:12px 0}
-  input{width:100%;background:var(--forest-dk);color:var(--cream);border:1.5px solid var(--gold-dk);
-    border-radius:10px;padding:13px;font-size:17px;font-family:'Nunito',sans-serif}
-  label{display:block;font-weight:800;font-size:13px;color:var(--gold);margin:10px 0 4px}
-  button{width:100%;background:var(--gold);color:var(--ink);border:0;border-radius:10px;
-    padding:14px;font-size:17px;font-weight:800;font-family:'Nunito',sans-serif;margin-top:10px;cursor:pointer}
-  button:disabled{opacity:.5}
-  .choice-btn{background:var(--forest);color:var(--cream);border:2px solid var(--gold-dk);text-align:left}
-  .choice-btn.sel{background:var(--gold);color:var(--ink);border-color:var(--gold)}
-  .banner{background:var(--maroon);color:#fff;font-weight:800;font-size:12.5px;text-align:center;
-    padding:8px 12px;border-radius:9px;margin:10px 0}
-  .phase-tag{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:14px;
-    text-transform:uppercase;letter-spacing:.1em}
-  .timer{font-family:'Alfa Slab One',serif;font-size:42px;color:var(--gold);text-align:center}
-  .timer.hot{color:var(--red)}
-  .prompt{font-size:19px;font-weight:800;line-height:1.35;margin:8px 0 4px}
-  .status{text-align:center;font-weight:800;margin-top:8px}
-  .ok{color:#7bd68b}.bad{color:#e08a7d}.pend{color:var(--gold)}
-  table{width:100%;border-collapse:collapse}
-  td{padding:8px 6px;border-bottom:1px solid rgba(231,193,91,.25)}
-  td:last-child{text-align:right;font-family:'Alfa Slab One',serif;color:var(--gold)}
-  tr.me td{color:var(--gold);font-weight:800}
-  .wagerbox{border:2px dashed var(--red);border-radius:10px;padding:10px;margin-top:10px}
-  .footer{position:fixed;bottom:0;left:0;right:0;background:var(--forest-dk);
-    border-top:2px solid var(--gold-dk);padding:8px 16px;text-align:center;font-size:13px;font-weight:800}
+  html,body{margin:0;height:100%}
+  body{background:linear-gradient(var(--forest-dk),var(--forest));color:var(--cream);
+    font-family:'Nunito',sans-serif;display:flex;flex-direction:column;min-height:100dvh}
+  header{position:sticky;top:0;z-index:5;background:rgba(20,34,24,.96);border-bottom:2px solid var(--gold-dk);
+    padding:10px 14px;display:flex;align-items:center;gap:10px}
+  header img{height:38px}
+  .teamline{flex:1;min-width:0}
+  .teamname{font-weight:800;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .teamsub{font-size:12px;opacity:.8}
+  .score{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:22px}
+  main{flex:1;padding:14px;padding-bottom:84px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .center{text-align:center}
+  h1{font-family:'Alfa Slab One',serif;font-weight:normal;color:var(--gold);font-size:26px;margin:8px 0}
+  .hook{font-family:'Caveat',cursive;color:var(--pink);font-size:24px;margin:2px 0}
+  .muted{opacity:.75;font-size:14px}
+  .card{background:var(--panel);border:2px solid var(--gold-dk);border-radius:14px;padding:14px;margin:10px 0}
+  label{display:block;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin:10px 0 4px}
+  input[type=text],input[type=number]{width:100%;padding:13px 12px;border-radius:10px;border:2px solid var(--gold-dk);
+    background:#0f1c13;color:var(--cream);font-size:17px;font-family:'Nunito',sans-serif}
+  button{border:none;border-radius:12px;font-family:'Nunito',sans-serif;font-weight:800;cursor:pointer}
+  .primary{width:100%;padding:15px;background:var(--gold);color:var(--ink);font-size:18px;margin-top:12px}
+  .primary:disabled{opacity:.55}
+  .choice{display:block;width:100%;text-align:left;margin:8px 0;padding:15px 14px;font-size:17px;
+    background:#0f1c13;color:var(--cream);border:2px solid var(--gold-dk);border-radius:12px;transition:transform .06s}
+  .choice:active{transform:scale(.985)}
+  .choice.sel{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+  .choice.correct{background:var(--green);color:#fff;border-color:var(--green)}
+  .choice.wrong{background:var(--maroon);color:#fff;border-color:var(--maroon)}
+  .pill{display:inline-block;background:#0f1c13;border:1px solid var(--gold-dk);border-radius:999px;
+    padding:3px 10px;font-size:12px;font-weight:800;margin:2px}
+  .pill.gold{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+  .statusbar{border-radius:10px;padding:10px 12px;font-weight:800;font-size:14px;margin-top:10px;text-align:center}
+  .st-open{background:rgba(47,122,68,.25);border:1px solid var(--green)}
+  .st-locked{background:rgba(122,43,53,.3);border:1px solid var(--maroon)}
+  .st-saved{background:rgba(231,193,91,.16);border:1px solid var(--gold-dk)}
+  .bigcount{font-family:'Alfa Slab One',serif;font-size:44px;color:var(--gold);text-align:center;margin:4px 0}
+  .bigcount.hot{color:#ff8f7a}
+  .qprompt{font-size:19px;font-weight:800;line-height:1.35;margin:6px 0 10px}
+  .buzzer{width:min(76vw,320px);height:min(76vw,320px);border-radius:50%;margin:18px auto;display:block;
+    background:radial-gradient(circle at 35% 30%,#e46a5a,var(--red) 65%,#7e211a);color:#fff;
+    font-family:'Alfa Slab One',serif;font-size:34px;letter-spacing:.04em;
+    border:10px solid #7e211a;box-shadow:0 12px 0 #58150f,0 18px 30px rgba(0,0,0,.5);transition:all .07s}
+  .buzzer:active{transform:translateY(8px);box-shadow:0 4px 0 #58150f,0 8px 16px rgba(0,0,0,.5)}
+  .buzzer:disabled{filter:grayscale(.6);opacity:.8;transform:none}
+  .buzzpos{font-family:'Alfa Slab One',serif;font-size:56px;color:var(--gold);text-align:center}
+  .standRow{display:flex;align-items:baseline;gap:10px;padding:9px 6px;border-bottom:1px solid rgba(231,193,91,.15)}
+  .standRow .pos{font-family:'Alfa Slab One',serif;color:var(--gold);min-width:34px}
+  .standRow .nm{flex:1;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .standRow .pts{font-family:'Alfa Slab One',serif;color:var(--gold)}
+  .standRow.me{background:rgba(231,193,91,.14);border-radius:8px}
+  nav{position:fixed;bottom:0;left:0;right:0;z-index:6;background:rgba(20,34,24,.97);
+    border-top:2px solid var(--gold-dk);display:flex;padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
+  nav button{flex:1;background:none;color:var(--cream);font-size:12px;font-weight:800;padding:7px 2px;border-radius:10px;opacity:.65}
+  nav button .ic{display:block;font-size:21px;margin-bottom:2px}
+  nav button.on{opacity:1;background:rgba(231,193,91,.15);color:var(--gold)}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:92px;z-index:9;background:var(--ink);
+    color:var(--cream);border:1px solid var(--gold-dk);border-radius:12px;padding:10px 16px;font-weight:800;
+    font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s;max-width:88vw;text-align:center}
+  .toast.show{opacity:1}
+  .offline{position:fixed;top:0;left:0;right:0;z-index:10;background:var(--maroon);color:#fff;
+    text-align:center;font-weight:800;font-size:13px;padding:4px;display:none}
+  .devban{background:var(--maroon);border-radius:10px;padding:10px;text-align:center;font-weight:800;margin-top:10px}
+  a{color:var(--gold)}
 </style>
 </head>
 <body>
-<div class="wrap" id="app"></div>
-<div class="footer" id="footer">Northwood Game Haven · Team Trivia</div>
+<div class="offline" id="offline">📶 Reconnecting…</div>
+<header id="hdr" style="display:none">
+  <img src="stream-logo.png" alt="NGH">
+  <div class="teamline">
+    <div class="teamname" id="hTeam">—</div>
+    <div class="teamsub" id="hSub"></div>
+  </div>
+  <div class="score" id="hScore"></div>
+</header>
+<main id="main"></main>
+<nav id="nav" style="display:none">
+  <button id="nav-play" class="on" onclick="showTab('play')"><span class="ic">🎮</span>Play</button>
+  <button id="nav-stand" onclick="showTab('stand')"><span class="ic">📊</span>Standings</button>
+  <button id="nav-more" onclick="showTab('more')"><span class="ic">🦦</span>More</button>
+</nav>
+<div class="toast" id="toast"></div>
 
 <script>
-/* =====================================================================
-   NGH TRIVIA PLAY — NGH-BUILD 07e
-   Team phone client. URL: trivia-play.html?game=GAME-XXXX
-   Join once (name + optional PIN) — team token persists in localStorage
-   so a dropped phone rejoins the same team automatically. Polls state
-   every 2s; renders per-type answer UI, wager entry on 💰 rounds,
-   verdict feedback at reveal, standings at intermission/scoreboard.
-   ===================================================================== */
 (function () {
-  "use strict";
   var API = "/api/trivia";
-  var GAME = new URLSearchParams(location.search).get("game") || "";
-  var LS = "ngh_trivia_team_" + GAME;
-  var app = document.getElementById("app");
-
-  var team = null; // {teamId, teamName, token}
+  var url = new URL(location.href);
+  var GAME = url.searchParams.get("game") || "";
+  var LS = "ngh-trivia-team-" + GAME;
+  var main = document.getElementById("main");
+  var team = null;
   try { team = JSON.parse(localStorage.getItem(LS) || "null"); } catch (e) {}
 
-  var v = 0, st = null;
+  var st = null, v = 0, tab = "play", countdownTimer = null;
   var clockOffset = 0, offsets = [];
-  var lastRenderKey = "";
-  var myAnswerCache = {};   // qKey -> {answered, verdict, ...}
-  var draftAnswer = null;   // selected MC choice text / typed value preserved across polls
-  var draftWager = null;
-  var countdownTimer = null;
+  var myAns = {};          // qKey -> {answer, wager, value, verdict} last confirmed by server
+  var pendingSel = {};     // qKey -> optimistic local selection
+  var buzzPos = {};        // qKey -> my buzz position
+  var failStreak = 0;
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -85,241 +124,471 @@
   function ping() {
     var t0 = Date.now();
     return fetch(API + "/time").then(function (r) { return r.json(); }).then(function (j) {
-      var t1 = Date.now();
-      if (t1 - t0 > 1000) return;
-      offsets.push(j.now - (t0 + t1) / 2);
-      if (offsets.length > 9) offsets.shift();
+      var rtt = Date.now() - t0;
+      offsets.push(j.now + rtt / 2 - Date.now());
       var s = offsets.slice().sort(function (a, b) { return a - b; });
       clockOffset = s[Math.floor(s.length / 2)];
     }).catch(function () {});
   }
+  function toast(msg) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._h);
+    t._h = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+  function haptic() { if (navigator.vibrate) try { navigator.vibrate(30); } catch (e) {} }
+  function ord(n) {
+    var s = ["th", "st", "nd", "rd"], vv = n % 100;
+    return n + (s[(vv - 20) % 10] || s[vv] || s[0]);
+  }
 
-  if (!GAME) { app.innerHTML = '<div class="card">Missing game link — rescan the QR code.</div>'; return; }
-
-  /* ------------------ join ------------------ */
+  /* ---------------- join ---------------- */
   function renderJoin(msg) {
-    lastRenderKey = "join";
-    app.innerHTML =
-      '<h1>🦦 Team Trivia</h1>' +
-      '<div class="caveat">Grab a team name — make it a good one.</div>' +
+    document.getElementById("hdr").style.display = "none";
+    document.getElementById("nav").style.display = "none";
+    main.innerHTML =
+      '<div class="center" style="padding-top:26px">' +
+      '<img src="stream-logo.png" style="height:120px" alt="NGH">' +
+      '<div class="hook">Pull up a chair, name your crew!</div>' +
+      '<h1>JOIN THE GAME</h1></div>' +
       '<div class="card">' +
-      '<label>Team name</label><input id="jName" maxlength="40" autocomplete="off">' +
-      '<label>PIN (if the host gave one)</label><input id="jPin" inputmode="numeric" autocomplete="off">' +
-      '<button id="jBtn">Join the game</button>' +
-      '<div class="status bad" id="jMsg">' + esc(msg || "") + "</div>" +
-      "</div>" +
-      '<div class="banner">📵 No devices for answer lookups during play — Stash is watching.</div>';
+      '<label>Team name</label><input type="text" id="jName" maxlength="40" placeholder="The Otter Nonsense" autocomplete="off">' +
+      '<label>Game PIN (if the host set one)</label><input type="text" id="jPin" maxlength="12" inputmode="numeric" autocomplete="off">' +
+      '<button class="primary" id="jBtn">🦦 Let\u2019s play</button>' +
+      '<div class="muted center" style="margin-top:10px;min-height:20px" id="jMsg">' + esc(msg || "") + "</div></div>";
     document.getElementById("jBtn").onclick = function () {
       var name = document.getElementById("jName").value.trim();
-      var pin = document.getElementById("jPin").value.trim();
-      if (!name) { document.getElementById("jMsg").textContent = "Team name required."; return; }
+      if (!name) { document.getElementById("jMsg").textContent = "Give your team a name first!"; return; }
+      this.disabled = true;
+      var self = this;
       fetch(API + "/games/" + encodeURIComponent(GAME) + "/join", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamName: name, pin: pin })
+        body: JSON.stringify({ teamName: name, pin: document.getElementById("jPin").value.trim() })
       }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
-          if (!res.ok) { renderJoin(res.j.error || "Could not join."); return; }
-          team = res.j;
+          if (!res.ok) { self.disabled = false; document.getElementById("jMsg").textContent = res.j.error || "Couldn\u2019t join."; return; }
+          team = { teamId: res.j.teamId, teamName: res.j.teamName || name, token: res.j.token };
           localStorage.setItem(LS, JSON.stringify(team));
-          lastRenderKey = "";
-          poll();
-        }).catch(function () { renderJoin("Network error — try again."); });
+          boot();
+        }).catch(function () { self.disabled = false; document.getElementById("jMsg").textContent = "Network error — try again."; });
     };
   }
 
-  /* ------------------ answering ------------------ */
-  function submitAnswer(qKey, answer, wager) {
+  /* ---------------- api helpers ---------------- */
+  function submitAnswer(qKey, payload) {
+    payload.token = team.token; payload.qKey = qKey;
     return fetch(API + "/games/" + encodeURIComponent(GAME) + "/answer", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: team.token, qKey: qKey, answer: answer, wager: wager })
+      body: JSON.stringify(payload)
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+  }
+  function buzz() {
+    return fetch(API + "/games/" + encodeURIComponent(GAME) + "/buzz", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: team.token })
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
   }
   function fetchMyAnswer(qKey) {
     return fetch(API + "/games/" + encodeURIComponent(GAME) + "/myanswer?token=" +
       encodeURIComponent(team.token) + "&qKey=" + encodeURIComponent(qKey))
       .then(function (r) { return r.json(); })
-      .then(function (j) { myAnswerCache[qKey] = j; return j; })
+      .then(function (j) { if (j && !j.error) myAns[qKey] = j; return j; })
       .catch(function () { return null; });
   }
 
-  function startCountdown(sel) {
+  /* ---------------- header / nav ---------------- */
+  function myStanding() {
+    if (!st) return null;
+    var rows = st.standings || st.scoreboard || [];
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].teamId === team.teamId || rows[i].name === team.teamName) {
+        return { rank: i + 1, score: rows[i].score != null ? rows[i].score : (rows[i].points || 0) };
+      }
+    }
+    return null;
+  }
+  function updHeader() {
+    document.getElementById("hdr").style.display = "flex";
+    document.getElementById("nav").style.display = "flex";
+    document.getElementById("hTeam").textContent = team.teamName;
+    var sub = "";
+    if (st && st.round && st.round.title && ["preload", "live", "answering", "locked", "reveal"].indexOf(st.phase) >= 0) {
+      sub = st.round.title;
+      if (st.q && st.round.qCount) sub += " · Q" + ((st.qIdx | 0) + 1) + "/" + st.round.qCount;
+      if (st.round.isWager) sub += " · 💰";
+    } else if (st) {
+      sub = ({ lobby: "Waiting to start", intermission: "Intermission", scoreboard: "Scores", ended: "Final" })[st.phase] || "";
+    }
+    document.getElementById("hSub").textContent = sub;
+    var mine = myStanding();
+    document.getElementById("hScore").textContent = mine ? mine.score + " pts" : "";
+  }
+  window.showTab = function (t) {
+    tab = t;
+    ["play", "stand", "more"].forEach(function (x) {
+      document.getElementById("nav-" + x).className = x === t ? "on" : "";
+    });
+    render();
+  };
+
+  /* ---------------- standings + more tabs ---------------- */
+  function standRowsHTML(rows) {
+    var medals = ["🥇", "🥈", "🥉"];
+    return '<div class="card">' + rows.map(function (s2, i) {
+      var isMe = s2.teamId === team.teamId || s2.name === team.teamName;
+      return '<div class="standRow' + (isMe ? " me" : "") + '"><span class="pos">' + (medals[i] || (i + 1) + ".") +
+        '</span><span class="nm">' + esc(s2.name) + (isMe ? " (you)" : "") + '</span><span class="pts">' +
+        (s2.score != null ? s2.score : (s2.points || 0)) + "</span></div>";
+    }).join("") + "</div>";
+  }
+  function renderStandings() {
+    var rows = (st && (st.standings && st.standings.length ? st.standings : st.scoreboard)) || [];
+    var h = '<h1 class="center">📊 Standings</h1>';
+    if (!rows.length) h += '<div class="card center muted">Scores post after the first reveal — hang tight!</div>';
+    else {
+      h += standRowsHTML(rows);
+      var mine = myStanding();
+      if (mine) h += '<div class="center muted">You\u2019re ' + ord(mine.rank) + " with " + mine.score + " points.</div>";
+    }
+    h += '<div class="center muted" style="margin-top:8px">Updates after each reveal.</div>';
+    main.innerHTML = h;
+  }
+  function renderMore() {
+    main.innerHTML =
+      '<h1 class="center">🦦 More</h1>' +
+      '<div class="card"><b>💡 Suggest a trivia theme</b>' +
+      '<div class="muted" style="margin:6px 0 10px">Got a topic that would stump the room? Send it to Stash — it might headline a future night.</div>' +
+      '<a href="/trivia-suggest.html" target="_blank" rel="noopener"><button class="primary" style="margin-top:0">Open the suggestion box →</button></a></div>' +
+      '<div class="card"><b>How answers work</b>' +
+      '<div class="muted" style="margin-top:6px">Tap a choice or type an answer any time while the question is open — change it as often as you like until the host locks it. Wager rounds let you stake points with your answer. On buzzer rounds, fastest tap wins the floor. Minigame rounds may ask your team to report points or your finish — the Guru confirms before anything posts.</div></div>' +
+      '<div class="card"><b>Team</b><div class="muted" style="margin-top:6px">' + esc(team.teamName) + "</div>" +
+      '<button class="primary" style="background:var(--maroon);color:#fff" onclick="leaveTeam()">Leave team on this device</button></div>' +
+      '<div class="center muted" style="margin-top:14px">Northwood Game Haven · gamehaven.guru</div>';
+  }
+  window.leaveTeam = function () {
+    if (!confirm("Leave " + team.teamName + " on this device? Your team\u2019s answers stay safe — rejoin any time with the same name.")) return;
+    localStorage.removeItem(LS);
+    location.reload();
+  };
+
+  /* ---------------- play tab ---------------- */
+  function startCountdown() {
     stopCountdown();
-    if (!st.deadline) return;
-    var el = document.getElementById(sel);
-    if (!el) return;
+    var el = document.getElementById("count");
+    if (!el || !st.deadline) return;
     countdownTimer = setInterval(function () {
-      var left = Math.ceil((Number(st.deadline) - serverNow()) / 1000);
-      el.textContent = left > 0 ? left : "0";
-      el.classList.toggle("hot", left <= 10);
-      if (left <= 0) stopCountdown();
-    }, 250);
+      var left = Number(st.deadline) - serverNow();
+      if (left <= 0) { el.textContent = "0"; el.classList.add("hot"); return; }
+      el.textContent = Math.ceil(left / 1000);
+      el.classList.toggle("hot", left <= 10000);
+    }, 200);
   }
   function stopCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
 
-  /* ------------------ render ------------------ */
-  function render() {
+  function statusBarHTML(qKey, locked) {
+    var mine = myAns[qKey] || {};
+    var sel = pendingSel[qKey];
+    if (locked) {
+      var txt = mine.answer ? "🔒 Locked in: \u201c" + esc(mine.answer) + "\u201d" : "🔒 Answers locked";
+      return '<div class="statusbar st-locked">' + txt + "</div>";
+    }
+    if (sel != null || mine.answer || mine.value != null) {
+      var shown = sel != null ? sel : (mine.answer != null && mine.answer !== "" ? mine.answer : mine.value);
+      return '<div class="statusbar st-saved">Saved ✓ \u201c' + esc(String(shown)) + '\u201d — you can change it until the lock</div>';
+    }
+    return '<div class="statusbar st-open">Answers open — pick or type, change any time</div>';
+  }
+
+  function renderPlay() {
     var ph = st.phase;
-    var key = ph + "|" + (st.q ? st.q.key : "") + "|" + v;
-    if (key === lastRenderKey) return;
-    lastRenderKey = key;
-    stopCountdown();
+    var h = "";
 
-    var head =
-      '<div class="phase-tag">' + esc(st.title) + "</div>" +
-      '<h1 style="font-size:20px;margin:2px 0 8px">Team: ' + esc(team.teamName) + "</h1>";
-
-    if (ph === "lobby" || ph === "preload") {
-      app.innerHTML = head +
-        '<div class="card"><div class="phase-tag">' +
-        (ph === "lobby" ? "Waiting for the host…" : "Next question coming up…") +
-        '</div><div class="caveat" style="margin-top:8px">Rally the team. Talk quietly. Trust no one.</div></div>' +
-        '<div class="banner">📵 No devices for answer lookups — Stash is watching.</div>';
+    if (ph === "lobby") {
+      main.innerHTML = '<div class="center" style="padding-top:20px"><img src="stream-logo.png" style="height:110px">' +
+        "<h1>" + esc(st.title) + "</h1>" +
+        '<div class="hook">You\u2019re in as ' + esc(team.teamName) + "!</div>" +
+        '<div class="muted">Waiting for the host to kick things off. Grab a float. 🥤</div></div>';
+      return;
+    }
+    if (ph === "preload") {
+      main.innerHTML = '<div class="center" style="padding-top:40px"><h1>Get ready…</h1>' +
+        '<div class="hook">' + esc((st.round && st.round.title) || "Next question") + "</div>" +
+        (st.round && st.round.isWager ? '<div class="pill gold">💰 ' + esc(st.wagerLabel) + " round</div>" : "") +
+        '<div class="devban">📵 Eyes up — the clue plays on the big screen!</div></div>';
+      return;
+    }
+    if (ph === "intermission") {
+      main.innerHTML = '<div class="center"><h1>☕ Intermission</h1>' +
+        (st.next ? '<div class="hook">Up next: ' + esc(st.next.title || "another round") +
+          (st.next.isWager ? " 💰" : "") + "</div>" : "") + "</div>";
+      renderScoresInline();
+      return;
+    }
+    if (ph === "scoreboard" || ph === "ended") {
+      main.innerHTML = '<div class="center"><h1>' + (ph === "ended" ? "🏁 Final scores" : "📊 Scores") + "</h1></div>";
+      renderScoresInline();
+      if (ph === "ended") main.innerHTML += '<div class="center hook" style="margin-top:14px">Thanks for playing — see you next time! 🦦</div>';
       return;
     }
 
-    if ((ph === "live" || ph === "answering") && st.q) {
-      var q = st.q;
-      if (String(q.type || "").indexOf("minigame") === 0) {
-        app.innerHTML = head +
-          '<div class="phase-tag">Round ' + (st.roundIdx + 1) + " · " + esc(st.round.title) + "</div>" +
-          (st.deadline ? '<div class="timer" id="pt"></div>' : "") +
-          '<div class="card"><div class="phase-tag">🎲 Minigame</div>' +
-          '<div class="prompt">' + esc(q.prompt) + "</div>" +
-          '<div class="status pend">Play it out — the host records the results.</div></div>';
-        startCountdown("pt");
-        return;
+    var q = st.q;
+    if (!q) { main.innerHTML = '<div class="center muted" style="padding-top:40px">Waiting for the host…</div>'; return; }
+    var qKey = q.key;
+    var answering = ph === "answering" || ph === "live";
+    var locked = ph === "locked";
+    var reveal = ph === "reveal";
+    var isBuzzer = q.type === "minigame-buzzer";
+    var isMini = String(q.type || "").indexOf("minigame") === 0 && !isBuzzer;
+    var isMC = q.type === "mc" || q.type === "media-mc";
+    var isMedia = String(q.type || "").indexOf("media") === 0;
+
+    h += '<div class="center">' + (st.deadline && answering ? '<div class="bigcount" id="count">–</div>' : "") + "</div>";
+    h += '<div class="qprompt">' + esc(q.prompt || "") + "</div>";
+    if (isMedia) h += '<div class="devban">📵 The clue is on the big screen / host audio!</div>';
+
+    /* ---- buzzer race ---- */
+    if (isBuzzer) {
+      var pos = buzzPos[qKey];
+      if (!pos && st.buzzes) {
+        for (var bi = 0; bi < st.buzzes.length; bi++) {
+          if (st.buzzes[bi].teamId === team.teamId) { pos = bi + 1; buzzPos[qKey] = pos; }
+        }
       }
-      var mine = myAnswerCache[q.key];
-      var isWager = st.round && st.round.isWager;
-      var h = head +
-        '<div class="phase-tag">Round ' + (st.roundIdx + 1) + " · " + esc(st.round.title) +
-        (isWager ? " 💰 " + esc(st.wagerLabel) : "") + "</div>" +
-        (st.deadline ? '<div class="timer" id="pt"></div>' : "") +
-        '<div class="card"><div class="prompt">' + esc(q.prompt) + "</div>";
-      if (q.choices && q.choices.length) {
-        for (var i = 0; i < q.choices.length; i++) {
-          var selCls = draftAnswer === q.choices[i] ? " sel" : "";
-          h += '<button class="choice-btn' + selCls + '" data-c="' + esc(q.choices[i]) + '">' +
-            "<b>" + "ABCDEFGH"[i] + ".</b> " + esc(q.choices[i]) + "</button>";
+      if (reveal || locked) {
+        h += pos ? '<div class="buzzpos">' + ord(pos) + "!</div><div class='center muted'>You hit the buzzer " + ord(pos) + ".</div>"
+                 : '<div class="center muted" style="margin-top:20px">🔒 Buzzers closed.</div>';
+      } else if (answering) {
+        if (pos) {
+          h += '<div class="buzzpos">' + ord(pos) + "!</div>" +
+            '<div class="center muted">' + (pos === 1 ? "You\u2019ve got the floor! 🎉" : "Buzzed in — wait for your shot.") + "</div>";
+          if (st.buzzes && st.buzzes.length) {
+            h += '<div class="card">' + st.buzzes.map(function (x, i) {
+              return '<div class="standRow' + (x.teamId === team.teamId ? " me" : "") + '"><span class="pos">' + (i + 1) +
+                '.</span><span class="nm">' + esc(x.name) + "</span></div>";
+            }).join("") + "</div>";
+          }
+        } else {
+          h += '<button class="buzzer" id="buzzBtn">BUZZ!</button>' +
+            '<div class="center muted">Fastest tap takes the floor.</div>';
         }
       } else {
-        h += '<label>Your answer</label><input id="fillIn" autocomplete="off" value="' + esc(draftAnswer || "") + '">';
+        h += '<div class="center muted" style="margin-top:20px">Hands ready…</div>';
       }
-      if (isWager) {
-        h += '<div class="wagerbox"><label style="margin-top:0">💰 ' + esc(st.wagerLabel) +
-          ' — wager (points)</label><input id="wagerIn" type="number" inputmode="numeric" min="0" value="' +
-          esc(draftWager == null ? "" : draftWager) + '">' +
-          '<div class="status pend" style="text-align:left;font-size:12.5px;margin-top:6px">Right = win your wager · Wrong = lose it. Capped at your score (every team can stake at least 10). Leave blank to play it safe for normal points.</div></div>';
-      }
-      h += '<button id="sendBtn">Submit answer</button>' +
-        '<div class="status" id="sendMsg">' +
-        (mine && mine.answered ? '<span class="ok">Submitted: ' + esc(mine.answer) + " ✓ (you can change it until lock)</span>" : "") +
-        "</div></div>";
-      app.innerHTML = h;
-      startCountdown("pt");
-      Array.prototype.forEach.call(document.querySelectorAll(".choice-btn"), function (b) {
-        b.onclick = function () {
-          draftAnswer = b.getAttribute("data-c");
-          Array.prototype.forEach.call(document.querySelectorAll(".choice-btn"), function (x) { x.classList.remove("sel"); });
-          b.classList.add("sel");
-        };
-      });
-      document.getElementById("sendBtn").onclick = function () {
-        var ans = draftAnswer;
-        var fi = document.getElementById("fillIn");
-        if (fi) { ans = fi.value.trim(); draftAnswer = ans; }
-        var wg = null;
-        var wi = document.getElementById("wagerIn");
-        if (wi && wi.value !== "") { wg = Math.max(0, Number(wi.value) || 0); draftWager = wg; }
-        if (!ans) { document.getElementById("sendMsg").innerHTML = '<span class="bad">Pick or type an answer first.</span>'; return; }
-        document.getElementById("sendBtn").disabled = true;
-        submitAnswer(st.q.key, ans, wg).then(function (res) {
-          document.getElementById("sendBtn").disabled = false;
-          if (res.ok) {
-            myAnswerCache[st.q.key] = { answered: true, answer: ans, verdict: null };
-            document.getElementById("sendMsg").innerHTML = '<span class="ok">Submitted ✓ (you can change it until lock)</span>';
-          } else {
-            document.getElementById("sendMsg").innerHTML = '<span class="bad">' + esc(res.j.error || "Failed") + "</span>";
-          }
-        });
+      main.innerHTML = h;
+      var bb = document.getElementById("buzzBtn");
+      if (bb) bb.onclick = function () {
+        bb.disabled = true; haptic();
+        buzz().then(function (res) {
+          if (res.ok) { buzzPos[qKey] = res.j.position; render(); toast("You\u2019re " + ord(res.j.position) + "!"); }
+          else { bb.disabled = false; toast(res.j.error || "Buzz failed — try again!"); }
+        }).catch(function () { bb.disabled = false; toast("Network hiccup — SLAM IT AGAIN!"); });
       };
+      startCountdown();
       return;
     }
 
-    if (ph === "locked" && st.q) {
-      var m2 = myAnswerCache[st.q.key];
-      app.innerHTML = head +
-        '<div class="card"><div class="phase-tag">🔒 Answers locked</div>' +
-        '<div class="prompt">' + esc(st.q.prompt) + "</div>" +
-        '<div class="status">' + (m2 && m2.answered
-          ? '<span class="pend">Your answer: ' + esc(m2.answer) + "</span>"
-          : '<span class="bad">No answer submitted</span>') + "</div></div>";
-      return;
-    }
-
-    if (ph === "reveal" && st.q) {
-      app.innerHTML = head +
-        '<div class="card"><div class="prompt">' + esc(st.q.prompt) + "</div>" +
-        '<div class="phase-tag" style="margin-top:8px">Answer</div>' +
-        '<h1 style="margin:4px 0">' + esc(st.q.answer) + "</h1>" +
-        '<div class="status" id="verdictBox"><span class="pend">Checking your answer…</span></div></div>';
-      draftAnswer = null; draftWager = null;
-      fetchMyAnswer(st.q.key).then(function (m) {
-        var box = document.getElementById("verdictBox");
-        if (!box) return;
-        if (!m || !m.answered) { box.innerHTML = '<span class="bad">No answer submitted.</span>'; return; }
-        if (m.verdict === "correct") box.innerHTML = '<span class="ok">✓ Correct! +' + (m.points || 0) + " pts — you said: " + esc(m.answer) + "</span>";
-        else if (m.verdict === "incorrect") {
-          var lost = (typeof m.points === "number" && m.points < 0) ? " (" + m.points + " pts — the Splash!)" : "";
-          box.innerHTML = '<span class="bad">✗ Not this time' + lost + " — you said: " + esc(m.answer) + "</span>";
-        }
-        else box.innerHTML = '<span class="pend">You said: ' + esc(m.answer) + " — the host is reviewing spelling…</span>";
-      });
-      return;
-    }
-
-    if (ph === "intermission" || ph === "scoreboard" || ph === "ended") {
-      var rows = st.scoreboard || [];
-      var h3 = head + '<div class="card"><div class="phase-tag">' +
-        (ph === "intermission" ? "☕ Intermission" : ph === "ended" ? "🏁 Final scores" : "🏆 Scoreboard") + "</div>";
-      if (ph === "intermission" && st.next) {
-        h3 += '<div class="caveat" style="margin-top:6px">Up next: Round ' + (st.next.roundIdx + 1) +
-          " — " + esc(st.next.title) + (st.next.isWager ? " 💰 " + esc(st.wagerLabel) : "") + "</div>";
+    /* ---- minigame self-report ---- */
+    if (isMini) {
+      var mode = q.entryMode || "none";
+      if (mode === "none") {
+        h += '<div class="card center"><div class="hook">Play it out at your table!</div>' +
+          '<div class="muted">The Guru scores this one — no entry needed.</div></div>';
+        main.innerHTML = h; startCountdown(); return;
       }
-      if (ph === "intermission" && st.deadline) h3 += '<div class="timer" id="pt"></div>';
-      h3 += "<table>";
-      for (var k2 = 0; k2 < rows.length; k2++) {
-        var meCls = team && rows[k2].teamId === team.teamId ? ' class="me"' : "";
-        h3 += "<tr" + meCls + "><td>" + (k2 + 1) + ". " + esc(rows[k2].team) + "</td><td>" + rows[k2].score + "</td></tr>";
+      var mineV = (pendingSel[qKey] != null) ? pendingSel[qKey]
+        : (myAns[qKey] && myAns[qKey].value != null ? myAns[qKey].value : "");
+      if (answering) {
+        h += '<div class="card"><label>' + (mode === "points" ? "Your team\u2019s points" : "Your finishing position (1 = first)") + "</label>" +
+          '<input type="number" id="mgVal" inputmode="numeric" min="0" max="9999" value="' + esc(String(mineV)) + '">' +
+          '<button class="primary" id="mgSave">💾 ' + (mineV !== "" ? "Update" : "Submit") + " entry</button></div>" +
+          statusBarHTML(qKey, false) +
+          '<div class="center muted" style="margin-top:8px">The Guru confirms all entries before points post.</div>';
+      } else {
+        h += statusBarHTML(qKey, true) +
+          (reveal ? '<div class="center muted" style="margin-top:8px">Waiting for the Guru\u2019s official scores…</div>' : "");
       }
-      h3 += "</table></div>" +
-        '<div class="banner">📵 No devices for answer lookups during play — Stash is watching.</div>';
-      app.innerHTML = h3;
-      if (ph === "intermission") startCountdown("pt");
+      main.innerHTML = h;
+      var ms = document.getElementById("mgSave");
+      if (ms) ms.onclick = function () {
+        var val = Number(document.getElementById("mgVal").value);
+        if (isNaN(val) || val < 0) { toast("Enter a number 0 or higher."); return; }
+        ms.disabled = true;
+        pendingSel[qKey] = val;
+        submitAnswer(qKey, { answer: String(val), value: val }).then(function (res) {
+          ms.disabled = false;
+          if (res.ok) { myAns[qKey] = { answer: String(val), value: val }; delete pendingSel[qKey]; render(); toast("Entry saved ✓ — updatable until lock"); }
+          else { delete pendingSel[qKey]; toast(res.j.error || "Couldn\u2019t save."); render(); }
+        }).catch(function () { ms.disabled = false; delete pendingSel[qKey]; toast("Network error — try again."); });
+      };
+      startCountdown();
       return;
     }
 
-    app.innerHTML = head + '<div class="card">Waiting…</div>';
+    /* ---- wager box (shared by MC + short answer) ---- */
+    var isWager = st.round && st.round.isWager;
+    var mine = myAns[qKey] || {};
+    var wagerBox = "";
+    if (isWager && answering) {
+      var wv = (pendingSel["w:" + qKey] != null) ? pendingSel["w:" + qKey] : (mine.wager != null ? mine.wager : "");
+      wagerBox = '<div class="card" style="border-color:var(--pink)"><label style="color:var(--pink)">💰 ' + esc(st.wagerLabel) +
+        " — stake your points</label>" +
+        '<input type="number" id="wagerVal" inputmode="numeric" min="0" placeholder="0 = play it safe" value="' + esc(String(wv)) + '">' +
+        '<div class="muted" style="margin-top:4px">Right = win the stake. Wrong = lose it (score floor 10). Saved with your answer.</div></div>';
+    }
+
+    /* ---- multiple choice ---- */
+    if (isMC) {
+      var chosen = (pendingSel[qKey] != null) ? pendingSel[qKey] : (mine.answer || null);
+      h += wagerBox;
+      h += (q.choices || []).map(function (c, i) {
+        var cls = "choice";
+        if (reveal) {
+          if (c === st.q.answer) cls += " correct";
+          else if (c === chosen) cls += " wrong";
+        } else if (c === chosen) cls += " sel";
+        return '<button class="' + cls + '" data-c="' + esc(c) + '"' + (answering ? "" : " disabled") + ">" +
+          "<b>" + String.fromCharCode(65 + i) + ".</b> " + esc(c) + "</button>";
+      }).join("");
+      if (!reveal) h += statusBarHTML(qKey, locked);
+      else {
+        var right = chosen != null && chosen === st.q.answer;
+        h += '<div class="statusbar ' + (right ? "st-open" : "st-locked") + '">' +
+          (chosen == null ? "No answer this round." : (right ? "✅ Nailed it!" : "❌ Not this time — it was \u201c" + esc(st.q.answer) + "\u201d")) + "</div>";
+      }
+      main.innerHTML = h;
+      if (answering) {
+        Array.prototype.forEach.call(document.querySelectorAll(".choice"), function (b) {
+          b.onclick = function () {
+            var c = b.getAttribute("data-c");
+            haptic();
+            pendingSel[qKey] = c;
+            var payload = { answer: c };
+            if (isWager) payload.wager = readWager(qKey);
+            renderPlay(); // instant highlight, keep countdown
+            startCountdown();
+            submitAnswer(qKey, payload).then(function (res) {
+              if (res.ok) { myAns[qKey] = { answer: c, wager: payload.wager }; delete pendingSel[qKey]; renderPlay(); startCountdown(); }
+              else { delete pendingSel[qKey]; toast(res.j.error || "Couldn\u2019t save — tap again."); renderPlay(); startCountdown(); }
+            }).catch(function () { delete pendingSel[qKey]; toast("Network error — tap again."); renderPlay(); startCountdown(); });
+          };
+        });
+        hookWager(qKey);
+      }
+      startCountdown();
+      return;
+    }
+
+    /* ---- short answer ---- */
+    var typed = (pendingSel[qKey] != null) ? pendingSel[qKey] : (mine.answer || "");
+    if (answering) {
+      h += wagerBox;
+      h += '<div class="card"><label>Your answer</label>' +
+        '<input type="text" id="fillVal" maxlength="120" autocomplete="off" value="' + esc(String(typed)) + '">' +
+        '<button class="primary" id="fillSave">' + (mine.answer ? "🔁 Update answer" : "💾 Save answer") + "</button></div>" +
+        statusBarHTML(qKey, false);
+    } else if (reveal) {
+      var vd = mine.verdict;
+      h += '<div class="statusbar ' + (vd === "correct" ? "st-open" : "st-locked") + '">' +
+        (mine.answer ? "You said: \u201c" + esc(mine.answer) + "\u201d" : "No answer this round.") +
+        (st.q.answer ? " · Correct: \u201c" + esc(st.q.answer) + "\u201d" : "") + "</div>";
+    } else {
+      h += statusBarHTML(qKey, true);
+    }
+    main.innerHTML = h;
+    if (answering) {
+      var fs2 = document.getElementById("fillSave");
+      var fillEl = document.getElementById("fillVal");
+      fillEl.oninput = function () { pendingSel[qKey] = fillEl.value; };
+      fs2.onclick = function () {
+        var val = fillEl.value.trim();
+        if (!val) { toast("Type an answer first."); return; }
+        fs2.disabled = true;
+        var payload = { answer: val };
+        if (isWager) payload.wager = readWager(qKey);
+        submitAnswer(qKey, payload).then(function (res) {
+          fs2.disabled = false;
+          if (res.ok) { myAns[qKey] = { answer: val, wager: payload.wager }; delete pendingSel[qKey]; renderPlay(); startCountdown(); toast("Saved ✓ — change it any time before lock"); }
+          else toast(res.j.error || "Couldn\u2019t save.");
+        }).catch(function () { fs2.disabled = false; toast("Network error — try again."); });
+      };
+      hookWager(qKey);
+    }
+    startCountdown();
   }
 
-  /* ------------------ poll loop ------------------ */
+  function readWager(qKey) {
+    var el = document.getElementById("wagerVal");
+    if (!el) return (myAns[qKey] && myAns[qKey].wager) || null;
+    return Math.max(0, Number(el.value) || 0);
+  }
+  function hookWager(qKey) {
+    var el = document.getElementById("wagerVal");
+    if (!el) return;
+    el.onchange = function () {
+      pendingSel["w:" + qKey] = el.value;
+      var mine = myAns[qKey];
+      if (mine && mine.answer) {
+        submitAnswer(qKey, { answer: mine.answer, wager: readWager(qKey) }).then(function (res) {
+          if (res.ok) { mine.wager = readWager(qKey); toast("Wager updated 💰"); }
+          else toast(res.j.error || "Wager not saved");
+        }).catch(function () { toast("Network error — wager not saved"); });
+      } else {
+        toast("Wager noted — it saves with your answer");
+      }
+    };
+  }
+
+  function renderScoresInline() {
+    var rows = (st.scoreboard && st.scoreboard.length ? st.scoreboard : st.standings) || [];
+    if (!rows.length) { main.innerHTML += '<div class="card center muted">Scores coming soon…</div>'; return; }
+    main.innerHTML += standRowsHTML(rows);
+  }
+
+  /* ---------------- render root ---------------- */
+  var lastQKey = null;
+  function render() {
+    stopCountdown();
+    if (!st) return;
+    updHeader();
+    if (st.q && st.q.key !== lastQKey) {
+      lastQKey = st.q.key;
+      // new question: refresh my answer from the server (reconnect / second-device safety)
+      fetchMyAnswer(st.q.key).then(function () { if (tab === "play") { renderPlay(); } });
+    }
+    if (tab === "stand") { renderStandings(); return; }
+    if (tab === "more") { renderMore(); return; }
+    renderPlay();
+  }
+
+  /* ---------------- polling ---------------- */
   function poll() {
-    if (!team) { renderJoin(); return; }
     fetch(API + "/games/" + encodeURIComponent(GAME) + "/state?v=" + v)
-      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (r) { return r.json(); })
       .then(function (j) {
-        if (j.unchanged) return;
-        v = j.v; st = j;
-        render();
+        failStreak = 0;
+        document.getElementById("offline").style.display = "none";
+        if (j && j.unchanged) return;
+        if (j && j.v != null) { v = j.v; st = j; render(); }
       })
-      .catch(function () {});
+      .catch(function () {
+        failStreak++;
+        if (failStreak >= 3) document.getElementById("offline").style.display = "block";
+      });
   }
 
-  ping().then(ping).then(function () {
+  function boot() {
+    if (!GAME) { main.innerHTML = '<div class="center muted" style="padding-top:60px">Missing game link — scan the QR on the big screen.</div>'; return; }
+    if (!team) { renderJoin(""); return; }
+    updHeader();
+    main.innerHTML = '<div class="center muted" style="padding-top:60px">Connecting…</div>';
+    ping().then(ping).then(ping);
     poll();
     setInterval(poll, 2000);
     setInterval(ping, 45000);
-  });
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { poll(); ping(); } });
+  }
+  boot();
 })();
 </script>
 </body>

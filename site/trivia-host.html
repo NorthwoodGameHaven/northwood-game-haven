@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 08c -->
+<!-- NGH-BUILD 09a -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -228,7 +228,12 @@
             <div id="teamsBox" class="muted">—</div>
           </div>
           <div>
-            <h3>Answers — current question</h3>
+            <div id="buzzBox" style="display:none;background:#17281c;border-radius:10px;padding:10px 12px;margin-bottom:8px">
+          <h3 style="margin:0 0 6px">🔔 Buzzer race <button class="sec" style="padding:4px 10px;font-size:12px" onclick="clearBuzzes()">↺ Clear</button></h3>
+          <div class="muted" style="margin-bottom:4px">Live tap order — award points via the minigame scoring panel.</div>
+          <div id="buzzList"></div>
+        </div>
+        <h3>Answers — current question</h3>
             <div id="answersBox" class="muted">—</div>
             <h3 style="margin-top:12px">⚖️ Adjudication queue <span class="pill" id="adjCount">0</span></h3>
             <div id="adjBox" class="muted">Nothing pending.</div>
@@ -339,6 +344,18 @@
       </div>
 
       <div class="card">
+        <h2 style="margin-top:0">📁 Media vault <button class="sec" style="padding:4px 10px;font-size:12px" onclick="loadMedia()">↻</button></h2>
+        <div class="muted">Audio &amp; image clue files up to 4.5 MB — uploads go live instantly at a stable URL you paste into a bank question's Media field. Video files stay in the repo at site/trivia-media/.</div>
+        <div class="row" style="align-items:flex-end;margin-top:6px">
+          <div style="flex:2"><label style="margin-top:0">Choose file (mp3, m4a, wav, ogg, jpg, png, webp, gif)</label>
+            <input type="file" id="mediaFile" accept="audio/*,image/png,image/jpeg,image/webp,image/gif"></div>
+          <div style="flex:0"><button onclick="uploadMedia()">⬆ Upload</button></div>
+        </div>
+        <div class="muted" id="mediaMsg" style="margin-top:6px"></div>
+        <div id="mediaList" class="muted" style="margin-top:6px">—</div>
+      </div>
+
+      <div class="card">
         <h2 style="margin-top:0">💡 Customer theme suggestions</h2>
         <div id="sugList" class="muted">Loading…</div>
       </div>
@@ -349,7 +366,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 08c
+   NGH EVENT STREAM HUB — NGH-BUILD 09a
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -387,7 +404,7 @@ function showTab(t) {
   document.getElementById("pane-library").style.display = t === "library" ? "block" : "none";
   document.getElementById("tab-sessions").className = t === "sessions" ? "on" : "sec";
   document.getElementById("tab-library").className = t === "library" ? "on" : "sec";
-  if (t === "library") loadLibrary();
+  if (t === "library") { loadLibrary(); loadMedia(); }
 }
 
 /* ------------------ auth gate ------------------ */
@@ -763,7 +780,8 @@ function moveQ(ri, qi, dir) {
 function qTypeOptions(sel) {
   var types = [["mc", "Multiple choice"], ["fill", "Short answer (typed)"],
     ["media-mc", "Media clue + multiple choice"], ["media-fill", "Media clue + short answer"],
-    ["minigame-app", "Minigame — app based"], ["minigame-tabletop", "Minigame — tabletop"]];
+    ["minigame-app", "Minigame — app based"], ["minigame-tabletop", "Minigame — tabletop"],
+    ["minigame-buzzer", "Minigame — buzzer race"]];
   return types.map(function (t) {
     return '<option value="' + t[0] + '"' + (sel === t[0] ? " selected" : "") + ">" + t[1] + "</option>";
   }).join("");
@@ -772,6 +790,10 @@ function qFormHTML(q, idPrefix) {
   return '<div class="row">' +
     '<div><label>Type</label><select id="' + idPrefix + 'Type">' + qTypeOptions(q.type || "mc") + "</select></div>" +
     '<div><label>Points</label><input id="' + idPrefix + 'Points" type="number" value="' + (q.points || 10) + '"></div>' +
+    '<div><label>Team entry (minigames)</label><select id="' + idPrefix + 'Entry">' +
+      [["none","None — Guru scores it"],["points","Teams report POINTS"],["position","Teams report FINISH POSITION"]].map(function(o){
+        return '<option value="' + o[0] + '"' + ((q.entryMode || "none") === o[0] ? " selected" : "") + '>' + o[1] + '</option>';
+      }).join("") + '</select></div>' +
     '<div><label>Difficulty (1–5)</label><select id="' + idPrefix + 'Diff">' + [1,2,3,4,5].map(function(n){ return '<option value="'+n+'"'+(diffOf(q)===n?' selected':'')+'>'+n+(n===1?' — easiest':n===5?' — hardest':'')+'</option>'; }).join('') + '</select></div>' +
     "</div>" +
     '<label>Prompt / instructions</label><textarea id="' + idPrefix + 'Prompt">' + esc(q.prompt) + "</textarea>" +
@@ -795,6 +817,7 @@ function qFormRead(idPrefix, q) {
   q.type = document.getElementById(idPrefix + "Type").value;
   q.points = Number(document.getElementById(idPrefix + "Points").value) || 10;
   q.difficulty = Math.max(1, Math.min(5, Number(document.getElementById(idPrefix + "Diff").value) || 3));
+  q.entryMode = document.getElementById(idPrefix + "Entry").value || "none";
   q.prompt = document.getElementById(idPrefix + "Prompt").value.trim();
   q.choices = document.getElementById(idPrefix + "Choices").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
   q.answer = document.getElementById(idPrefix + "Answer").value.trim();
@@ -957,7 +980,7 @@ function pollRun() {
   if (!run) return;
   api("/games/" + run.game.id).then(function (j) {
     run.game = j.game; run.state = j.state || {};
-    if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else updRunPhase();
+    if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else { updRunPhase(); renderBuzzes(); }
   }).catch(function () {});
 }
 
@@ -1223,6 +1246,25 @@ function currentQKey() {
   return q ? q.key : null;
 }
 var mgTeams = [];
+/* ------------------ buzzer race panel (NGH-BUILD 09a) ------------------ */
+function renderBuzzes() {
+  var box = document.getElementById("buzzBox");
+  if (!box) return;
+  var qNow = currentQ();
+  if (!qNow || qNow.type !== "minigame-buzzer") { box.style.display = "none"; return; }
+  box.style.display = "block";
+  var list = (run.state.buzzes || []);
+  var inner = document.getElementById("buzzList");
+  if (!list.length) { inner.innerHTML = '<span class="muted">No buzzes yet — waiting for the first slam…</span>'; return; }
+  var medals = ["🥇", "🥈", "🥉"];
+  inner.innerHTML = list.map(function (x, i) {
+    return '<div class="list-item"><div class="grow"><b>' + (medals[i] || (i + 1) + ".") + " " + esc(x.name) + "</b></div></div>";
+  }).join("");
+}
+function clearBuzzes() {
+  if (!confirm("Clear the buzz order for this question?")) return;
+  setPhase(run.state.phase, { clearBuzzes: true });
+}
 function pollAnswers() {
   if (!run || (run.game.kind || "trivia") === "timer") return;
   var q = currentQ();
@@ -1239,20 +1281,27 @@ function pollAnswers() {
       api("/games/" + run.game.id + "/answers?qKey=" + encodeURIComponent(qKey))
     ]).then(function (res) {
       mgTeams = res[0] || [];
-      var existing = {};
-      (res[1] || []).forEach(function (a) { existing[a.teamId] = a.points; });
+      var existing = {}, selfReported = {};
+      (res[1] || []).forEach(function (a) {
+        existing[a.teamId] = a.points;
+        if (a.value != null) selfReported[a.teamId] = a.value;
+      });
       var P = Number(q.points) || 10;
       var ladder = [P, Math.round(P * 0.6), Math.round(P * 0.4), Math.round(P * 0.2)];
       if (!mgTeams.length) { box.textContent = "No teams joined yet."; return; }
       // don't clobber in-progress typing: only rebuild when team set changes
-      if (box.getAttribute("data-mgkey") === qKey + ":" + mgTeams.length) return;
-      box.setAttribute("data-mgkey", qKey + ":" + mgTeams.length);
+      var mgSig = qKey + ":" + mgTeams.length + ":" + Object.keys(selfReported).map(function (k) { return k + "=" + selfReported[k]; }).sort().join(",");
+      if (box.getAttribute("data-mgkey") === mgSig) return;
+      box.setAttribute("data-mgkey", mgSig);
       box.innerHTML =
         '<div class="muted" style="margin-bottom:6px">🎲 Minigame scoring — suggested ladder: 1st ' +
         ladder[0] + " · 2nd " + ladder[1] + " · 3rd " + ladder[2] + " · rest " + ladder[3] + "</div>" +
-        "<table>" + mgTeams.map(function (t) {
+        "<table><tr><th>Team</th><th>Self-reported</th><th>Award pts</th></tr>" + mgTeams.map(function (t) {
           var v = existing[t.id] != null ? existing[t.id] : "";
-          return "<tr><td>" + esc(t.name) + '</td><td style="width:110px">' +
+          var rep = selfReported[t.id];
+          return "<tr><td>" + esc(t.name) + "</td><td>" +
+            (rep != null ? '<b style="color:var(--gold)">' + esc(String(rep)) + "</b>" : '<span class="muted">—</span>') +
+            '</td><td style="width:110px">' +
             '<input type="number" id="mg-' + esc(t.id) + '" value="' + esc(String(v)) + '" placeholder="0"></td></tr>';
         }).join("") + "</table>" +
         '<div style="margin-top:8px"><button onclick="saveMinigame(\'' + qKey + '\')">💾 Save minigame scores</button>' +
@@ -1295,6 +1344,49 @@ var themes = [], bank = [], sugs = [], libLoaded = false;
 function ensureLibraryLoaded() {
   if (libLoaded) return Promise.resolve();
   return loadLibrary();
+}
+/* ------------------ media vault (NGH-BUILD 08d) ------------------ */
+function loadMedia() {
+  api("/media").then(function (list) {
+    var box = document.getElementById("mediaList");
+    if (!list.length) { box.textContent = "No uploads yet."; return; }
+    box.innerHTML = list.map(function (m) {
+      return '<div class="list-item"><div class="grow" style="user-select:all">' + esc(m.url) + "</div>" +
+        '<button class="sec" onclick="copyMediaUrl(' + JSON.stringify(JSON.stringify(m.url)) + ')">📋 Copy</button>' +
+        '<a class="sec" style="text-decoration:none;padding:6px 10px" href="' + esc(m.url) + '" target="_blank">▶</a>' +
+        '<button class="danger" onclick="delMedia(' + JSON.stringify(JSON.stringify(m.key)) + ')">🗑</button>' +
+        "</div>";
+    }).join("");
+  }).catch(function (e) { document.getElementById("mediaList").textContent = "Error: " + e.message; });
+}
+function copyMediaUrl(str) {
+  var url = location.origin + JSON.parse(str);
+  navigator.clipboard.writeText(url).then(function () {
+    document.getElementById("mediaMsg").textContent = "Copied: " + url;
+  });
+}
+function uploadMedia() {
+  var f = document.getElementById("mediaFile").files[0];
+  var msg = document.getElementById("mediaMsg");
+  if (!f) { msg.textContent = "Pick a file first."; return; }
+  if (f.size > 4.5 * 1024 * 1024) { msg.textContent = "Too large (" + (f.size / 1048576).toFixed(1) + " MB) — 4.5 MB max. Commit big files to site/trivia-media/ instead."; return; }
+  msg.textContent = "Uploading " + f.name + "…";
+  var rd = new FileReader();
+  rd.onload = function () {
+    var b64 = String(rd.result).split(",")[1] || "";
+    api("/media", { method: "POST", body: JSON.stringify({ filename: f.name, contentType: f.type || "application/octet-stream", dataBase64: b64 }) })
+      .then(function (j) {
+        msg.textContent = "Uploaded ✓ — " + j.key + " (" + (j.size / 1024).toFixed(0) + " KB). Paste the URL into a question's Media field.";
+        document.getElementById("mediaFile").value = "";
+        loadMedia();
+      }).catch(function (e) { msg.textContent = "Error: " + e.message; });
+  };
+  rd.readAsDataURL(f);
+}
+function delMedia(str) {
+  var key = JSON.parse(str);
+  if (!confirm("Delete " + key + "? Questions pointing at it will lose their clue.")) return;
+  api("/media/" + encodeURIComponent(key), { method: "DELETE" }).then(loadMedia).catch(function (e) { alert(e.message); });
 }
 function loadLibrary() {
   return Promise.all([api("/themes"), api("/questions"), api("/suggestions")]).then(function (res) {
