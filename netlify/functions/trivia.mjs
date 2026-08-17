@@ -1,5 +1,5 @@
 // netlify/functions/trivia.mjs
-// NGH-BUILD 08a — Event Stream engine: + tournament round schedules, intermission windows, roster & check-in.
+// NGH-BUILD 08b — Event Stream engine: + brackets (Swiss/random/round-robin), results, standings w/ OMW.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -192,6 +192,13 @@ function publicState(game, st, version) {
       schedule: sched,
       schedIdx: si,
       nextLabel: (si != null && sched[si + 1]) ? sched[si + 1].label : null,
+      pairRound: (st.matches && st.matches.length) ? st.matches.length : 0,
+      pairings: (st.matches && st.matches.length)
+        ? st.matches[st.matches.length - 1].tables.map(m => ({
+            table: m.table, aName: m.aName, bName: m.bName, result: m.result || null
+          }))
+        : [],
+      standings: (st.standings || []).slice(0, 16),
       event: {
         id: game.eventId || null,
         title: game.eventTitle || game.title || '',
@@ -330,6 +337,102 @@ async function bumpState(gameId, st) {
     SET state = ${JSON.stringify(st)}::jsonb, version = version + 1
     WHERE id = ${gameId} RETURNING version`;
   return rows.length ? rows[0].version : null;
+}
+
+/* ---------- tournament brackets (NGH-BUILD 08b) ----------
+   Matches live in state: st.matches = [{round, tables:[{table,a,b,aName,bName,result}]}]
+   result: 'a' | 'b' | 'draw' | null · b === null => bye (auto-win for a).
+   Points: win 3 / draw 1 / loss 0. Tiebreak: opponents' match-win % (floor 1/3). */
+function tallyMatches(matches) {
+  const rec = {}; // pid -> {pts,w,l,d,played,opps:[]}
+  const R = pid => rec[pid] || (rec[pid] = { pts: 0, w: 0, l: 0, d: 0, played: 0, opps: [] });
+  for (const rd of (matches || [])) {
+    for (const m of (rd.tables || [])) {
+      if (!m.a) continue;
+      if (m.b == null) { const a = R(m.a); a.pts += 3; a.w++; a.played++; continue; } // bye
+      if (!m.result) { R(m.a).opps.push(m.b); R(m.b).opps.push(m.a); continue; }
+      const a = R(m.a), b = R(m.b);
+      a.opps.push(m.b); b.opps.push(m.a);
+      a.played++; b.played++;
+      if (m.result === 'a') { a.pts += 3; a.w++; b.l++; }
+      else if (m.result === 'b') { b.pts += 3; b.w++; a.l++; }
+      else if (m.result === 'draw') { a.pts++; b.pts++; a.d++; b.d++; }
+    }
+  }
+  return rec;
+}
+function computeStandings(matches, nameOf) {
+  const rec = tallyMatches(matches);
+  const ids = Object.keys(rec);
+  const mwp = pid => {
+    const r = rec[pid];
+    return r.played ? Math.max(1 / 3, (r.w + r.d * 0.5) / r.played) : 0;
+  };
+  const rows = ids.map(pid => {
+    const r = rec[pid];
+    const omw = r.opps.length ? r.opps.reduce((s, o) => s + mwp(o), 0) / r.opps.length : 0;
+    return { participantId: pid, name: nameOf(pid), pts: r.pts, w: r.w, l: r.l, d: r.d, omw: Math.round(omw * 1000) / 1000 };
+  });
+  rows.sort((x, y) => y.pts - x.pts || y.omw - x.omw || String(x.name).localeCompare(String(y.name)));
+  rows.forEach((r, i) => { r.standing = i + 1; });
+  return rows;
+}
+function shuffleArr(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+function playedBefore(matches, x, y) {
+  for (const rd of (matches || [])) for (const m of (rd.tables || [])) {
+    if ((m.a === x && m.b === y) || (m.a === y && m.b === x)) return true;
+  }
+  return false;
+}
+function genPairings(mode, players, matches) {
+  // players: [{id,name}] (checked-in). Returns tables array.
+  const tables = [];
+  let pool;
+  if (mode === 'swiss') {
+    const rec = tallyMatches(matches);
+    pool = shuffleArr(players.slice()).sort((a, b) =>
+      ((rec[b.id] && rec[b.id].pts) || 0) - ((rec[a.id] && rec[a.id].pts) || 0));
+  } else if (mode === 'roundrobin') {
+    // circle method on a stable alphabetical order
+    pool = players.slice().sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    const n = pool.length + (pool.length % 2 ? 1 : 0);
+    const roundNo = (matches || []).length; // 0-based next round
+    const idxs = [];
+    for (let i = 0; i < n; i++) idxs.push(i);
+    // rotate all but first
+    const rot = [idxs[0]].concat(idxs.slice(1).map((_, k) => idxs[1 + ((k + roundNo) % (n - 1))]));
+    let t = 1;
+    for (let i = 0; i < n / 2; i++) {
+      const A = pool[rot[i]], B = pool[rot[n - 1 - i]];
+      if (!A && !B) continue;
+      if (!A || !B) { const solo = A || B; tables.push({ table: t++, a: solo.id, b: null, aName: solo.name, bName: null, result: 'a' }); continue; }
+      tables.push({ table: t++, a: A.id, b: B.id, aName: A.name, bName: B.name, result: null });
+    }
+    return tables;
+  } else {
+    pool = shuffleArr(players.slice());
+  }
+  // pair adjacent, avoiding rematches when a swap can fix it
+  const list = pool.slice();
+  let t = 1;
+  while (list.length > 1) {
+    const A = list.shift();
+    let bi = 0;
+    if (playedBefore(matches, A.id, list[0].id)) {
+      const alt = list.findIndex(p => !playedBefore(matches, A.id, p.id));
+      if (alt > 0) bi = alt;
+    }
+    const B = list.splice(bi, 1)[0];
+    tables.push({ table: t++, a: A.id, b: B.id, aName: A.name, bName: B.name, result: null });
+  }
+  if (list.length === 1) {
+    const solo = list[0];
+    tables.push({ table: t++, a: solo.id, b: null, aName: solo.name, bName: null, result: 'a' }); // bye
+  }
+  return tables;
 }
 
 // ---- entry ----
@@ -544,6 +647,52 @@ const _handler = async (req) => {
       const id = newId('PTC');
       await sql`INSERT INTO trivia_participants (id, game_id, data) VALUES (${id}, ${gameId}, ${JSON.stringify(d)}::jsonb)`;
       return json({ ok: true, participantId: id, checkedIn: true }, 201);
+    }
+
+    // ----- ADMIN: generate next-round pairings -----
+    if (req.method === 'POST' && gameId && action === 'pairings') {
+      if (!requireAdmin(req)) return bad('unauthorized', 401);
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const rows = await sql`SELECT data, state FROM trivia_games WHERE id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const st = rows[0].state || {};
+      st.matches = Array.isArray(st.matches) ? st.matches : [];
+      if (b.mode === 'undo-last') {
+        if (!st.matches.length) return bad('No rounds to undo.');
+        st.matches.pop();
+      } else {
+        const mode = ['swiss', 'random', 'roundrobin'].includes(b.mode) ? b.mode : 'swiss';
+        const parts = await sql`SELECT id, data FROM trivia_participants WHERE game_id = ${gameId}`;
+        const players = parts.filter(p => (p.data || {}).checkedIn)
+          .map(p => ({ id: p.id, name: (p.data || {}).name || '?' }));
+        if (players.length < 2) return bad('Need at least 2 checked-in participants.');
+        const tables = genPairings(mode, players, st.matches);
+        st.matches.push({ round: st.matches.length + 1, mode, tables });
+      }
+      const nameOf = {};
+      for (const rd of st.matches) for (const m of rd.tables) { nameOf[m.a] = m.aName; if (m.b) nameOf[m.b] = m.bName; }
+      st.standings = computeStandings(st.matches, pid => nameOf[pid] || '?');
+      const v = await bumpState(gameId, st);
+      return json({ ok: true, v, round: st.matches.length, matches: st.matches, standings: st.standings });
+    }
+
+    // ----- ADMIN: record a match result -----
+    if (req.method === 'POST' && gameId && action === 'match-result') {
+      if (!requireAdmin(req)) return bad('unauthorized', 401);
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const rows = await sql`SELECT state FROM trivia_games WHERE id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const st = rows[0].state || {};
+      const rd = (st.matches || []).find(r => r.round === (b.round | 0));
+      if (!rd) return bad('round not found', 404);
+      const m = (rd.tables || []).find(t => t.table === (b.table | 0));
+      if (!m) return bad('table not found', 404);
+      m.result = ['a', 'b', 'draw'].includes(b.result) ? b.result : null;
+      const nameOf = {};
+      for (const rd2 of st.matches) for (const m2 of rd2.tables) { nameOf[m2.a] = m2.aName; if (m2.b) nameOf[m2.b] = m2.bName; }
+      st.standings = computeStandings(st.matches, pid => nameOf[pid] || '?');
+      const v = await bumpState(gameId, st);
+      return json({ ok: true, v, standings: st.standings });
     }
 
     // ----- everything else on /games is admin -----

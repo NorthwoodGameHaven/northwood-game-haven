@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 08a -->
+<!-- NGH-BUILD 08b -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -269,12 +269,27 @@
           <div>
             <h3>Displays <button class="sec" style="padding:4px 10px;font-size:12px" onclick="cmdRefresh('all')">↻ Refresh all</button></h3>
             <div id="tDisplaysBox" class="muted">—</div>
-          </div>
-          <div>
-            <h3>👥 Participants <span class="pill" id="rosterCount">0</span>
+            <h3 style="margin-top:12px">👥 Participants <span class="pill" id="rosterCount">0</span>
               <button class="sec" style="padding:4px 10px;font-size:12px" onclick="addWalkin()">＋ Walk-in</button></h3>
             <div class="muted" style="margin-bottom:4px">Bold = checked in · grey = registered online, not yet here. No payment linkage — POS / online registration handle money separately.</div>
             <div id="rosterBox" class="muted">—</div>
+          </div>
+          <div>
+            <h3>🏆 Brackets <span class="pill" id="brRound">no rounds</span></h3>
+            <div class="row" style="align-items:flex-end">
+              <div><label style="margin-top:0">Pairing mode</label><select id="brMode">
+                <option value="swiss">Swiss (by points)</option>
+                <option value="random">Random</option>
+                <option value="roundrobin">Round robin</option>
+              </select></div>
+              <div style="flex:0;white-space:nowrap;display:flex;gap:6px">
+                <button onclick="genPairings()">⚔ Pair next round</button>
+                <button class="danger" onclick="undoPairings()">↩ Undo round</button>
+              </div>
+            </div>
+            <div id="pairBox" class="muted" style="margin-top:6px">No pairings yet.</div>
+            <h3 style="margin-top:12px">📊 Standings</h3>
+            <div id="standBox" class="muted">—</div>
           </div>
         </div>
         <div class="muted" style="margin-top:10px">
@@ -332,7 +347,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 08a
+   NGH EVENT STREAM HUB — NGH-BUILD 08b
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -904,6 +919,7 @@ function openTimerRun() {
   runTimers.push(setInterval(pollRoster, 8000));
   pollDisplaysTimer();
   pollRoster();
+  pollBrackets();
   document.getElementById("timerRunCard").scrollIntoView({ behavior: "smooth" });
 }
 function closeRun() { clearRunTimers(); run = null; hideAllPanels(); }
@@ -1085,6 +1101,63 @@ function addWalkin() {
   api("/games/" + run.game.id + "/checkin", { method: "POST", body: JSON.stringify({ name: name.trim() }) })
     .then(function () { pollRoster(); })
     .catch(function (e) { alert(e.message); });
+}
+/* ------------------ brackets (NGH-BUILD 08b) ------------------ */
+function genPairings() {
+  api("/games/" + run.game.id + "/pairings", { method: "POST", body: JSON.stringify({ mode: document.getElementById("brMode").value }) })
+    .then(function (j) { renderBrackets(j.matches, j.standings); })
+    .catch(function (e) { alert(e.message); });
+}
+function undoPairings() {
+  if (!confirm("Remove the most recent round's pairings (and its results)?")) return;
+  api("/games/" + run.game.id + "/pairings", { method: "POST", body: JSON.stringify({ mode: "undo-last" }) })
+    .then(function (j) { renderBrackets(j.matches, j.standings); })
+    .catch(function (e) { alert(e.message); });
+}
+function setResult(round, table, result) {
+  api("/games/" + run.game.id + "/match-result", { method: "POST", body: JSON.stringify({ round: round, table: table, result: result }) })
+    .then(function () { pollBrackets(); })
+    .catch(function (e) { alert(e.message); });
+}
+function pollBrackets() {
+  if (!run) return;
+  api("/games/" + run.game.id).then(function (jj) {
+    run.state = jj.state || {};
+    renderBrackets(run.state.matches || [], run.state.standings || []);
+  }).catch(function () {});
+}
+function renderBrackets(matches, standings) {
+  var brRound = document.getElementById("brRound");
+  var pairBox = document.getElementById("pairBox");
+  var standBox = document.getElementById("standBox");
+  if (!brRound) return;
+  matches = matches || [];
+  brRound.textContent = matches.length ? ("Round " + matches.length) : "no rounds";
+  if (!matches.length) { pairBox.textContent = "No pairings yet."; }
+  else {
+    var rd = matches[matches.length - 1];
+    pairBox.innerHTML = "<table><tr><th>Table</th><th>Match</th><th>Result</th></tr>" +
+      rd.tables.map(function (m) {
+        var rb = function (val, lab) {
+          var on = m.result === val;
+          return '<button class="' + (on ? "" : "sec") + '" style="padding:4px 8px;font-size:12px" onclick="setResult(' +
+            rd.round + "," + m.table + ",'" + val + "')\">" + lab + "</button>";
+        };
+        if (m.bName == null) {
+          return "<tr><td>" + m.table + "</td><td><b>" + esc(m.aName) + '</b> <span class="pill">BYE — auto win</span></td><td>—</td></tr>';
+        }
+        return "<tr><td>" + m.table + "</td><td><b>" + esc(m.aName) + "</b> vs <b>" + esc(m.bName) + "</b></td><td>" +
+          rb("a", esc(m.aName.split(" ")[0]) + " ✓") + " " + rb("b", esc(m.bName.split(" ")[0]) + " ✓") + " " + rb("draw", "Draw") +
+          "</td></tr>";
+      }).join("") + "</table>";
+  }
+  standings = standings || [];
+  if (!standings.length) { standBox.textContent = "—"; return; }
+  standBox.innerHTML = "<table><tr><th>#</th><th>Name</th><th>Pts</th><th>W-L-D</th><th>OMW%</th></tr>" +
+    standings.map(function (s) {
+      return "<tr><td>" + s.standing + "</td><td>" + esc(s.name) + "</td><td><b>" + s.pts + "</b></td><td>" +
+        s.w + "-" + s.l + "-" + s.d + "</td><td>" + Math.round(s.omw * 100) + "%</td></tr>";
+    }).join("") + "</table>";
 }
 
 /* ------------------ displays / teams / answers ------------------ */
