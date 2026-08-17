@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 07f -->
+<!-- NGH-BUILD 07h -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -109,6 +109,7 @@
         <div class="row">
           <div><label>Wager round label</label><input id="gWagerLabel" placeholder="Stash or Splash"></div>
           <div><label>Join PIN (blank = open)</label><input id="gJoinPin"></div>
+          <div><label>Round difficulty target (Σ per round)</label><input id="gDiffTarget" type="number" min="1" max="250" placeholder="e.g. 30 = 10 questions × avg 3"></div>
           <div>
             <label>Options</label>
             <div style="display:flex;gap:14px;padding-top:6px">
@@ -312,7 +313,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 07f
+   NGH EVENT STREAM HUB — NGH-BUILD 07h
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -454,7 +455,7 @@ function loadGames() {
 var cur = null;
 
 function blankQuestion() {
-  return { type: "mc", prompt: "", choices: ["", "", "", ""], answer: "", alternates: [], points: 10, media: null };
+  return { type: "mc", prompt: "", choices: ["", "", "", ""], answer: "", alternates: [], points: 10, difficulty: 3, media: null };
 }
 function newGame() {
   cur = { game: { kind: "trivia", title: "New Trivia Night", wagerLabel: "Stash or Splash", settings: {}, rounds: [] }, isNew: true };
@@ -490,6 +491,7 @@ function showEditor() {
   fillEventPick("gEventPick", g.eventId || "");
   document.getElementById("gOccDate").value = g.occDate || "";
   document.getElementById("gWagerLabel").value = g.wagerLabel || "Stash or Splash";
+  document.getElementById("gDiffTarget").value = g.roundDifficultyTarget || "";
   document.getElementById("gJoinPin").value = (g.settings && g.settings.joinPin) || "";
   document.getElementById("gTvAudio").checked = !!(g.settings && g.settings.tvAudio);
   document.getElementById("gShowQR").checked = !!(g.settings && g.settings.showJoinQR);
@@ -511,6 +513,99 @@ function showTimerEditor() {
 }
 
 /* ------------------ trivia rounds + bank picker ------------------ */
+/* ------------------ difficulty (1–5) ------------------ */
+function diffOf(q) {
+  var d = Number(q && q.difficulty);
+  if (d >= 1 && d <= 5) return Math.round(d);
+  var s = String((q && q.difficulty) || "").toLowerCase();
+  if (s === "easy") return 2;
+  if (s === "hard") return 4;
+  return 3;
+}
+function roundDiffSum(r) {
+  return (r.questions || []).reduce(function (s, q) { return s + diffOf(q); }, 0);
+}
+function diffBadge(r) {
+  var sum = roundDiffSum(r);
+  var n = (r.questions || []).length;
+  var target = Number(cur.game.roundDifficultyTarget) || 0;
+  if (!n) return '<span class="pill">Σ diff 0</span>';
+  if (!target) return '<span class="pill">Σ diff ' + sum + " (avg " + (sum / n).toFixed(1) + ")</span>";
+  var tol = Math.max(3, Math.round(target * 0.1));
+  var ok = Math.abs(sum - target) <= tol;
+  var cls = ok ? "ok" : "used-pill";
+  var note = ok ? " ✓" : (sum < target ? " ⚠ under" : " ⚠ over");
+  return '<span class="pill ' + (ok ? "" : "wager-pill") + '" style="' + (ok ? "background:#2f7a44;color:#fff;border-color:#2f7a44" : "") + '">Σ diff ' + sum + " / " + target + note + "</span>";
+}
+// Pick `count` questions from candidates targeting Σ difficulty ≈ target.
+// Unused-first shuffle, then greedy swap passes to close the gap.
+function pickQuestions(cands, count, target) {
+  if (!cands.length) return { picked: [], sum: 0 };
+  var pool = cands.slice();
+  // unused first, shuffled within groups
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  var unused = shuffle(pool.filter(function (q) { return !(q.usage || []).length; }));
+  var used = shuffle(pool.filter(function (q) { return (q.usage || []).length; }));
+  pool = unused.concat(used);
+  var picked = pool.slice(0, Math.min(count, pool.length));
+  var rest = pool.slice(picked.length);
+  function sum(list) { return list.reduce(function (s, q) { return s + diffOf(q); }, 0); }
+  if (target > 0) {
+    for (var pass = 0; pass < 400; pass++) {
+      var gap = target - sum(picked);
+      if (gap === 0) break;
+      var best = null;
+      for (var i = 0; i < picked.length; i++) {
+        for (var j = 0; j < rest.length; j++) {
+          var delta = diffOf(rest[j]) - diffOf(picked[i]);
+          var newGap = Math.abs(gap - delta);
+          if (newGap < Math.abs(gap) && (!best || newGap < best.newGap)) best = { i: i, j: j, newGap: newGap };
+        }
+      }
+      if (!best) break;
+      var tmp = picked[best.i]; picked[best.i] = rest[best.j]; rest[best.j] = tmp;
+    }
+  }
+  return { picked: picked, sum: sum(picked) };
+}
+function autoGen(ri) {
+  var sel = document.getElementById("agTheme-" + ri);
+  var themeId = sel && sel.value;
+  if (!themeId) { alert("Pick a theme to generate from."); return; }
+  var count = Math.max(1, Math.min(30, Number(document.getElementById("agCount-" + ri).value) || 10));
+  var inSession = {};
+  cur.game.rounds.forEach(function (r2, i2) {
+    (r2.questions || []).forEach(function (q) { if (q.bankId && i2 !== ri) inSession[q.bankId] = true; });
+  });
+  var cands = bank.filter(function (q) {
+    return (q.themes || []).indexOf(themeId) >= 0 && !inSession[q.id];
+  });
+  if (cands.length < count) { alert("Only " + cands.length + " bank question(s) in that theme are available — add more to the vault or lower the count."); if (!cands.length) return; }
+  var target = Number(cur.game.roundDifficultyTarget) || 0;
+  var scaledTarget = target ? Math.round(target * (Math.min(count, cands.length) / 10) * 10) / 10 : 0;
+  // target is defined per 10-question round; scale proportionally for other counts
+  var effTarget = target ? Math.round(target * Math.min(count, cands.length) / 10) : 0;
+  var res = pickQuestions(cands, count, effTarget);
+  var r = cur.game.rounds[ri];
+  if ((r.questions || []).length && !confirm("Replace this round's " + r.questions.length + " question(s) with the generated set?")) return;
+  r.questions = res.picked.map(function (q) {
+    return {
+      type: q.type || "mc", prompt: q.prompt || "",
+      choices: (q.choices || []).slice(), answer: q.answer || "",
+      alternates: (q.alternates || []).slice(), points: Number(q.points) || 10,
+      difficulty: diffOf(q),
+      media: q.media ? { kind: q.media.kind, url: q.media.url } : null,
+      bankId: q.id
+    };
+  });
+  if (!r.title || /^Round \d+$/.test(r.title)) r.title = themeName(themeId);
+  renderRounds();
+  var tol = Math.max(3, Math.round((effTarget || 1) * 0.1));
+  var msg = "Generated " + res.picked.length + " questions · Σ diff " + res.sum +
+    (effTarget ? (" / target " + effTarget + (Math.abs(res.sum - effTarget) <= tol ? " ✓" : " ⚠ (closest achievable with current vault)")) : "");
+  document.getElementById("edMsg").textContent = msg;
+}
+
 function renderRounds() {
   var g = cur.game;
   var box = document.getElementById("roundsBox");
@@ -523,6 +618,7 @@ function renderRounds() {
       return '<div class="list-item">' +
         '<div class="grow">Q' + (qi + 1) + ". " + esc(q.prompt || "(blank)") +
         ' <span class="pill">' + esc(q.type) + "</span>" +
+        ' <span class="pill">diff ' + diffOf(q) + "</span>" +
         (q.bankId ? ' <span class="pill">bank</span>' : "") +
         (q.media && q.media.url ? ' <span class="pill">' + esc(q.media.kind) + " clue</span>" : "") +
         "</div>" +
@@ -534,9 +630,11 @@ function renderRounds() {
     }).join("");
     var themeOpts = '<option value="">— pick a theme to browse the bank —</option>' +
       themes.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + "</option>"; }).join("");
+    var agOpts = '<option value="">— theme —</option>' +
+      themes.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + "</option>"; }).join("");
     div.innerHTML =
       '<div class="row" style="align-items:center">' +
-      '<div class="grow"><label>Round ' + (ri + 1) + ' title / theme</label>' +
+      '<div class="grow"><label>Round ' + (ri + 1) + ' title / theme ' + diffBadge(r) + '</label>' +
       '<input value="' + esc(r.title || "") + '" onchange="cur.game.rounds[' + ri + '].title=this.value"></div>' +
       '<div style="flex:0;padding-top:22px;white-space:nowrap">' +
       '<label class="check-inline" style="display:inline-flex">' +
@@ -551,6 +649,12 @@ function renderRounds() {
       '<div style="flex:0"><button class="sec" onclick="addQ(' + ri + ')">＋ Question (write here)</button></div>' +
       '<div style="flex:2"><label style="margin-top:0">Add from bank</label>' +
       '<select onchange="browseBank(' + ri + ', this.value)">' + themeOpts + "</select></div>" +
+      "</div>" +
+      '<div class="row" style="align-items:flex-end;margin-top:6px;background:#0f1c13;border-radius:8px;padding:8px">' +
+      '<div style="flex:2"><label style="margin-top:0">⚡ Auto-generate from theme</label>' +
+      '<select id="agTheme-' + ri + '">' + agOpts + "</select></div>" +
+      '<div><label style="margin-top:0">Count</label><input id="agCount-' + ri + '" type="number" value="10" min="1" max="30"></div>' +
+      '<div style="flex:0"><button onclick="autoGen(' + ri + ')">⚡ Auto-generate</button></div>' +
       "</div>" +
       '<div id="bankPick-' + ri + '"></div>' +
       '<div id="qEditor-' + ri + '"></div>';
@@ -630,6 +734,7 @@ function qFormHTML(q, idPrefix) {
   return '<div class="row">' +
     '<div><label>Type</label><select id="' + idPrefix + 'Type">' + qTypeOptions(q.type || "mc") + "</select></div>" +
     '<div><label>Points</label><input id="' + idPrefix + 'Points" type="number" value="' + (q.points || 10) + '"></div>' +
+    '<div><label>Difficulty (1–5)</label><select id="' + idPrefix + 'Diff">' + [1,2,3,4,5].map(function(n){ return '<option value="'+n+'"'+(diffOf(q)===n?' selected':'')+'>'+n+(n===1?' — easiest':n===5?' — hardest':'')+'</option>'; }).join('') + '</select></div>' +
     "</div>" +
     '<label>Prompt / instructions</label><textarea id="' + idPrefix + 'Prompt">' + esc(q.prompt) + "</textarea>" +
     '<label>Choices (one per line — MC types only)</label>' +
@@ -651,6 +756,7 @@ function qFormHTML(q, idPrefix) {
 function qFormRead(idPrefix, q) {
   q.type = document.getElementById(idPrefix + "Type").value;
   q.points = Number(document.getElementById(idPrefix + "Points").value) || 10;
+  q.difficulty = Math.max(1, Math.min(5, Number(document.getElementById(idPrefix + "Diff").value) || 3));
   q.prompt = document.getElementById(idPrefix + "Prompt").value.trim();
   q.choices = document.getElementById(idPrefix + "Choices").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
   q.answer = document.getElementById(idPrefix + "Answer").value.trim();
@@ -681,6 +787,7 @@ function collectGame() {
   g.title = document.getElementById("gTitle").value.trim();
   g.occDate = document.getElementById("gOccDate").value || null;
   g.wagerLabel = document.getElementById("gWagerLabel").value.trim() || "Stash or Splash";
+  g.roundDifficultyTarget = Number(document.getElementById("gDiffTarget").value) || null;
   g.settings = g.settings || {};
   g.settings.joinPin = document.getElementById("gJoinPin").value.trim() || null;
   g.settings.tvAudio = document.getElementById("gTvAudio").checked;
@@ -1058,6 +1165,7 @@ function renderBank() {
     var lastUse = used ? q.usage[used - 1] : null;
     return '<div class="list-item"><div class="grow">' + esc(q.prompt || "(blank)") +
       ' <span class="pill">' + esc(q.type || "mc") + "</span>" +
+      ' <span class="pill">diff ' + diffOf(q) + "</span>" +
       (q.media && q.media.url ? ' <span class="pill">' + esc(q.media.kind) + " clue</span>" : "") +
       (q.themes || []).map(function (t) { return ' <span class="pill">' + esc(themeName(t)) + "</span>"; }).join("") +
       (used ? ' <span class="pill used-pill">used ' + used + "× · last " + esc((lastUse && lastUse.occDate) || (lastUse && lastUse.at || "").slice(0, 10)) + "</span>" : "") +
