@@ -86,9 +86,9 @@
     <div class="stats" id="stats"></div>
 
     <div class="tiles">
-      <a class="tile" href="booking.html?admin=1&view=list">
+      <a class="tile" href="#bookreqs" onclick="document.getElementById('bookreqs').scrollIntoView({behavior:'smooth'});return false;"><!-- NGH-BUILD 07c-hub -->
         <div class="t">📥 Booking Requests</div>
-        <div class="d">Review room requests · approve / hold / reject · payments, deposits, door codes, blackouts</div>
+        <div class="d">Review room requests right here — quick hold / reject triage, then approve in the console</div>
       </a>
       <a class="tile" href="booking.html?admin=1&view=calendar">
         <div class="t">📅 Guru Calendar</div>
@@ -118,7 +118,7 @@
         <div class="t">🎂 Birthday Requests</div>
         <div class="d">Review party requests, track contact status, link them to bookings</div>
       </a>
-      <a class="tile" href="#promos" onclick="document.getElementById('promos').scrollIntoView({behavior:'smooth'});return false;">
+      <a class="tile" href="guru-webpromos.html">
         <div class="t">🎁 Web Promotions</div>
         <div class="d">Landing-page giveaways &amp; sign-ups — entry counts, lists, CSV export</div>
       </a>
@@ -140,6 +140,12 @@
       </a>
     </div>
 
+    <!-- ============ BOOKING REQUESTS ============ -->
+    <h2 class="sec" id="bookreqs">📥 Booking Requests</h2>
+    <p class="muted">Room requests land here the moment the customer submits the booking form. <b>Approve in the console</b> — approval emails the customer their payment links. Hold / Reject here are quick triage; <b>rejecting here does not email the customer</b> (use the console if they should be notified).</p>
+    <div class="chips" id="bk-chips"></div>
+    <div id="bk-list"><p class="muted">Loading…</p></div>
+
     <!-- ============ BIRTHDAY REQUESTS ============ -->
     <h2 class="sec" id="birthdays">🎂 Birthday Requests</h2>
     <p class="muted">Requests land here the moment the customer submits the form (they also still arrive by email) — and the system auto-creates a linked <b>PENDING booking that already holds the room(s)</b> on the calendar.
@@ -147,10 +153,7 @@
     <div class="chips" id="bd-chips"></div>
     <div id="bd-list"><p class="muted">Loading…</p></div>
 
-    <!-- ============ WEB PROMOTIONS ============ -->
-    <h2 class="sec" id="promos">🎁 Web Promotions</h2>
-    <p class="muted">Landing-page giveaways and sign-up promotions. Entry lists are admin-only; pages are unlisted (not linked from the site, not indexed).</p>
-    <div id="promo-list"><p class="muted">Loading…</p></div>
+
   </div>
 </div>
 <div id="toast"></div>
@@ -202,7 +205,7 @@ async function loadStats(){
     var bk = await api("/bookings");
     var list = (bk && bk.bookings) || bk || [];
     var pending = list.filter(function(b){ var s=(b.status||"").toLowerCase(); return s==="pending"||s==="hold"; }).length;
-    out.push(stat(pending, "Booking requests to review", pending>0, "booking.html?admin=1&view=list"));
+    out.push(stat(pending, "Booking requests to review", pending>0, "#bookreqs"));
   }catch(e){ out.push(stat("–","Booking requests")); }
   try{
     var bd = await api("/birthday");
@@ -342,80 +345,103 @@ function copyBd(id){
   );
 }
 
-/* ---------- web promotions ---------- */
-var WEB_PROMOTIONS = [
-  { id:"usa250", title:"USA 250 — $5 Store Cash Giveaway", emoji:"🎆",
-    page:"/USA250", endpoint:"/usa250", cap:50,
-    desc:"July 4th weekend giveaway. First 50 entrants receive $5 store credit (Lightspeed). Launched via Facebook Live." }
-];
-var promoData = {};   /* id -> {cap,count,entries} */
-var promoShow = {};   /* id -> entries table expanded */
-function renderPromos(){
-  var el = $("promo-list"); if(!el) return;
-  var h = "";
-  WEB_PROMOTIONS.forEach(function(p){
-    var d = promoData[p.id];
-    h += '<div class="card" style="margin-bottom:14px;">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
-        '<div><b style="color:var(--forest);">' + p.emoji + ' ' + esc(p.title) + '</b>' +
-        '<div class="muted" style="margin-top:3px;">' + esc(p.desc) + '</div></div>' +
-        '<span class="badge" style="white-space:nowrap;">' + (d ? (d.count + ' / ' + d.cap + ' entries') : '—') + '</span>' +
-      '</div>' +
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center;">' +
-        '<a class="btn ghost small" href="' + p.page + '" target="_blank" rel="noopener">🔗 Open page</a>' +
-        '<button class="btn small" onclick="loadPromo(\'' + p.id + '\',true)">👥 ' + (promoShow[p.id] ? 'Refresh entries' : 'View entries') + '</button>' +
-        '<button class="btn ghost small" onclick="exportPromoCSV(\'' + p.id + '\')"' + (d && d.entries.length ? '' : ' disabled') + '>📥 Download CSV</button>' +
-      '</div>' +
-      '<div style="margin-top:10px;overflow-x:auto;">' + (promoShow[p.id] && d ? promoTableHTML(p, d) : '') + '</div>' +
-    '</div>';
+/* ---------- booking requests (inline hub queue · NGH-BUILD 07c-hub) ---------- */
+var bkData = [];        /* merged rows: one card per group (or lone booking) */
+var bkFilter = "action";
+function bkMerge(list){
+  var byKey = {}, order = [];
+  (list || []).forEach(function(b){
+    var key = b.groupId || b.id;
+    if(!byKey[key]){ byKey[key] = Object.assign({}, b, { rooms: [].concat(b.rooms||[]), ids: [b.id] }); order.push(key); }
+    else {
+      var m = byKey[key];
+      (b.rooms||[]).forEach(function(r){ if(m.rooms.indexOf(r)<0) m.rooms.push(r); });
+      m.ids.push(b.id);
+    }
   });
-  el.innerHTML = h || '<p class="muted">No promotions configured.</p>';
+  return order.map(function(k){ return byKey[k]; });
 }
-function promoTableHTML(p, d){
-  if(!d.entries.length) return '<p class="muted" style="margin:6px 0 0;">No entries yet.</p>';
-  var th = 'style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--forest);"';
-  var td = 'style="padding:5px 8px;border-bottom:1px solid #eef0ec;"';
-  var h = '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
-    '<tr><th ' + th + '>#</th><th ' + th + '>Name</th><th ' + th + '>Phone</th><th ' + th + '>Email</th><th ' + th + '>Agreed</th><th ' + th + '>Submitted</th></tr>';
-  d.entries.forEach(function(e){
-    var over = e.seq > d.cap;
-    h += '<tr' + (over ? ' style="opacity:.55;"' : '') + '>' +
-      '<td ' + td + '>' + e.seq + (over ? ' <span class="muted">(past cap)</span>' : '') + '</td>' +
-      '<td ' + td + '>' + esc(e.name) + '</td>' +
-      '<td ' + td + '>' + esc(promoPhone(e.phone)) + '</td>' +
-      '<td ' + td + '>' + esc(e.email) + '</td>' +
-      '<td ' + td + '>' + (e.agreed ? '✓ Yes' : '✗ NO') + '</td>' +
-      '<td ' + td.slice(0,-1) + 'white-space:nowrap;"' + '>' + new Date(e.submitted).toLocaleString() + '</td></tr>';
+function bkCounts(){
+  var c = { action:0, pending:0, hold:0, approved:0, rejected:0 };
+  bkData.forEach(function(b){
+    var s = (b.status||"pending").toLowerCase();
+    if(c[s] != null) c[s]++;
+    if(s==="pending"||s==="hold") c.action++;
   });
-  return h + '</table>';
+  return c;
 }
-function promoPhone(p){ p = String(p||""); return p.length===10 ? "("+p.slice(0,3)+") "+p.slice(3,6)+"-"+p.slice(6) : p; }
-async function loadPromo(id, show){
-  var p = WEB_PROMOTIONS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
-  if(show) promoShow[id] = true;
+function renderBkChips(){
+  var c = bkCounts();
+  var defs = [["action","⚡ Action needed ("+c.action+")"],["pending","🕐 Pending ("+c.pending+")"],
+              ["hold","⏸ On hold ("+c.hold+")"],["approved","✅ Approved ("+c.approved+")"],
+              ["rejected","🚫 Rejected ("+c.rejected+")"],["all","All ("+bkData.length+")"]];
+  $("bk-chips").innerHTML = defs.map(function(d){
+    return '<button class="chip'+(bkFilter===d[0]?' on':'')+'" onclick="setBkFilter(\''+d[0]+'\')">'+d[1]+'</button>';
+  }).join("");
+}
+function setBkFilter(f){ bkFilter=f; renderBookingReqs(); }
+async function loadBookingReqs(){
   try{
-    promoData[id] = await api(p.endpoint);
-    renderPromos();
-  }catch(e){ if(show) toast("Couldn't load entries: " + ((e && e.message) || e)); }
+    var list = await api("/bookings");
+    bkData = bkMerge((list && list.bookings) || list || []);
+  }catch(e){ $("bk-list").innerHTML = '<p class="muted">Couldn\u2019t load bookings: '+esc(e.message||e)+'</p>'; return; }
+  renderBookingReqs();
 }
-function exportPromoCSV(id){
-  var p = WEB_PROMOTIONS.filter(function(x){ return x.id===id; })[0], d = promoData[id];
-  if(!p || !d || !d.entries.length) return;
-  var rows = [["Entry #","Name","Phone","Email","Agreed to Terms","Submitted (local)","Submitted (ISO)"]];
-  d.entries.forEach(function(e){
-    rows.push([e.seq, e.name, promoPhone(e.phone), e.email, (e.agreed ? "Yes" : "No"), new Date(e.submitted).toLocaleString(), e.submitted]);
+function renderBookingReqs(){
+  renderBkChips();
+  var rows = bkData.filter(function(b){
+    var s = (b.status||"pending").toLowerCase();
+    if(bkFilter==="all") return true;
+    if(bkFilter==="action") return s==="pending"||s==="hold";
+    return s===bkFilter;
   });
-  var csv = rows.map(function(r){ return r.map(function(v){ v = String(v==null?"":v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }).join(","); }).join("\r\n");
-  var blob = new Blob([csv], {type:"text/csv"});
-  var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = p.id + "-entries.csv"; a.click();
+  /* newest requests first inside the queue */
+  rows = rows.slice().reverse();
+  if(!rows.length){ $("bk-list").innerHTML = '<p class="muted">Nothing here. New requests appear the moment a customer books.</p>'; return; }
+  $("bk-list").innerHTML = rows.map(function(b){
+    var s = (b.status||"pending").toLowerCase();
+    var cls = s==="pending" ? "st-new" : s==="hold" ? "st-contacted" : s==="approved" ? "st-confirmed" : "st-declined";
+    var badge = s==="pending" ? "new" : s==="hold" ? "contacted" : s==="approved" ? "confirmed" : "declined";
+    var mailSub = encodeURIComponent("Your room request at Northwood Game Haven — " + (b.date||""));
+    var when = fmtDate(b.date) + (b.start? " at "+esc(String(b.start)) : "") + (b.endLabel? " – "+esc(b.endLabel) : (b.hours? " · "+esc(b.hours)+" hr" : ""));
+    return '<div class="card bd '+cls+'">' +
+      '<div class="head"><b>'+esc((b.rooms&&b.rooms.length)? b.rooms.join(" + ") : "Room request")+'</b>' +
+      '<span class="badge '+badge+'">'+s.toUpperCase()+'</span>' +
+      '<span class="muted">'+esc(b.ids? b.ids.join(", ") : b.id)+(b.groupId? " · multi-room group" : "")+'</span></div>' +
+      '<div class="meta">' +
+        '<span class="lbl">When:</span> <b>'+when+'</b><br>' +
+        '<span class="lbl">Contact:</span> '+esc(b.name||"?") +
+        (b.email? ' · <a href="mailto:'+esc(b.email)+'?subject='+mailSub+'">'+esc(b.email)+'</a>' : '') +
+        (b.phone? ' · <a href="tel:'+esc(b.phone)+'">'+esc(b.phone)+'</a>' : '') +
+        (b.notes? '<br><span class="lbl">Customer notes:</span> '+esc(b.notes) : '') +
+      '</div>' +
+      '<div class="actions">' +
+        '<a class="btn small" href="booking.html?admin=1&view=list" title="Approving in the console emails the customer their payment links">✅ Approve in Console</a>' +
+        (s!=="hold" && s!=="rejected" ? '<button class="btn ghost small" onclick="setBkStatus(\''+esc(b.groupId||b.id)+'\','+(b.groupId? 'true':'false')+',\'hold\')">⏸ Hold</button>' : '') +
+        (s==="hold" || s==="rejected" ? '<button class="btn ghost small" onclick="setBkStatus(\''+esc(b.groupId||b.id)+'\','+(b.groupId? 'true':'false')+',\'pending\')">↩ Back to pending</button>' : '') +
+        (s!=="rejected" && s!=="approved" ? '<button class="btn ghost small" onclick="rejectBk(\''+esc(b.groupId||b.id)+'\','+(b.groupId? 'true':'false')+')">🚫 Reject</button>' : '') +
+        (b.email? '<a class="btn ghost small" href="mailto:'+esc(b.email)+'?subject='+mailSub+'">✉️ Reply</a>' : '') +
+      '</div></div>';
+  }).join("");
+}
+async function setBkStatus(key, isGroup, st){
+  try{
+    var path = isGroup ? "/bookings/group/"+encodeURIComponent(key) : "/bookings/"+encodeURIComponent(key);
+    await api(path, { method:"PATCH", body:JSON.stringify({ status:st }) });
+    toast("Updated → "+st);
+    loadBookingReqs(); loadStats();
+  }catch(e){ toast(e.message||"Update failed"); }
+}
+function rejectBk(key, isGroup){
+  if(!confirm("Reject this request WITHOUT emailing the customer?\n\nUse the booking console instead if they should be notified.")) return;
+  setBkStatus(key, isGroup, "rejected");
 }
 
 /* ---------- boot ---------- */
 async function boot(){
   showApp();
   loadStats();
-  renderPromos();
-  WEB_PROMOTIONS.forEach(function(p){ loadPromo(p.id, false); });
+  loadBookingReqs();
   if(location.hash === "#birthdays"){ setTimeout(function(){ var el=$("birthdays"); el && el.scrollIntoView(); }, 250); }
 }
 if(GuruAuth.get()){ boot(); } else { showLogin(); }

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>🎁 Web Promotions — Northwood Game Haven (staff)</title>
+<link rel="icon" href="logo.png">
+<!-- NGH-BUILD 07c-hub · Web Promotions console (moved off the Guru Hub) -->
+<style>
+  :root{ --forest:#2d5a3d; --deep:#1c3a26; --gold:#c79a3b; --ink:#22301f; --paper:#f4f1e8; --card:#ffffff; --red:#9a2b2b; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--paper); color:var(--ink); font-family:Georgia,'Times New Roman',serif; }
+  .wrap{ max-width:1100px; margin:0 auto; padding:18px 16px 60px; }
+  header.hub{ text-align:center; padding:18px 0 6px; }
+  header.hub .kicker{ letter-spacing:.35em; font-size:12px; color:var(--gold); text-transform:uppercase; }
+  header.hub h1{ margin:6px 0 4px; color:var(--forest); font-size:34px; }
+  header.hub p{ margin:0; color:#6b6b5a; font-size:14px; }
+  .card{ background:var(--card); border:1px solid #e2dcc8; border-radius:14px; padding:18px; box-shadow:0 2px 10px rgba(0,0,0,.06); }
+  #login{ max-width:400px; margin:40px auto; text-align:center; }
+  #login input{ width:100%; padding:12px 14px; font-size:16px; border:1px solid #cfc9b4; border-radius:10px; margin:10px 0; font-family:inherit; }
+  .btn{ display:inline-block; cursor:pointer; border:0; border-radius:26px; padding:11px 22px; font-family:inherit; font-size:15px; font-weight:bold; background:var(--gold); color:#1a1a12; text-decoration:none; }
+  .btn.ghost{ background:#fff; color:var(--forest); border:2px solid #cfe0d4; }
+  .btn.small{ padding:6px 12px; font-size:13px; border-radius:18px; }
+  #login-err{ color:var(--red); font-size:14px; min-height:18px; }
+  h2.sec{ color:var(--forest); border-bottom:2px solid var(--gold); padding-bottom:6px; margin:30px 0 14px; font-size:22px; }
+  .badge{ font-size:12px; padding:3px 10px; border-radius:14px; background:#eee; }
+  .muted{ color:#8a8a75; font-size:13px; }
+  #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hub">
+    <div class="kicker">Staff Only</div>
+    <h1>🎁 Web Promotions</h1>
+    <p>Landing-page giveaways and sign-up promotions — entry lists, caps, CSV export.</p>
+  </header>
+
+  <div id="login" class="card hidden">
+    <h2 style="color:var(--forest);margin:4px 0 2px;">Guru sign-in</h2>
+    <p class="muted">Same admin code as every staff tool.</p>
+    <input type="password" id="admin-code" placeholder="Admin code" autocomplete="current-password">
+    <div id="login-err"></div>
+    <button class="btn" onclick="doLogin()">Sign in</button>
+  </div>
+
+  <div id="app" class="hidden">
+    <p class="muted"><a href="guru.html">← Back to the Guru Hub</a> · Pages are unlisted (not linked from the site, not indexed); entry lists are admin-only.</p>
+    <div id="promo-list"><p class="muted">Loading…</p></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="guru-common.js"></script>
+<script>
+var API = "/.netlify/functions";
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function toast(m){ var t=$("toast"); t.textContent=m; t.style.display="block"; clearTimeout(t._h); t._h=setTimeout(function(){t.style.display="none";},2400); }
+
+async function api(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({ "Content-Type":"application/json" }, GuruAuth.headers(), opts.headers||{});
+  var res = await fetch(API + path, opts);
+  if(res.status === 401){ GuruAuth.clear(); showLogin(); throw new Error("Session expired — sign in again."); }
+  if(!res.ok){ var e; try{ e=await res.json(); }catch(_){ e={}; } throw new Error(e.error || ("API "+res.status)); }
+  return res.status === 204 ? null : res.json();
+}
+
+/* ---------- auth ---------- */
+function showLogin(){ $("login").classList.remove("hidden"); $("app").classList.add("hidden"); }
+function showApp(){ $("login").classList.add("hidden"); $("app").classList.remove("hidden"); }
+async function doLogin(){
+  var code = $("admin-code").value.trim();
+  var err = $("login-err"); err.textContent = "";
+  if(!code){ err.textContent = "Enter the admin code."; return; }
+  try{
+    var r = await fetch(API + "/admin-login", { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ code:code }) });
+    var j = await r.json().catch(function(){ return {}; });
+    if(j && j.token){ GuruAuth.set(j.token); $("admin-code").value=""; boot(); }
+    else{ err.textContent = "That code didn't work."; }
+  }catch(e){ err.textContent = "Login failed — try again."; }
+}
+$("admin-code").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
+
+/* ---------- web promotions (moved verbatim from the Guru Hub) ---------- */
+var WEB_PROMOTIONS = [
+  { id:"usa250", title:"USA 250 — $5 Store Cash Giveaway", emoji:"🎆",
+    page:"/USA250", endpoint:"/usa250", cap:50,
+    desc:"July 4th weekend giveaway. First 50 entrants receive $5 store credit (Lightspeed). Launched via Facebook Live." }
+];
+var promoData = {};   /* id -> {cap,count,entries} */
+var promoShow = {};   /* id -> entries table expanded */
+function renderPromos(){
+  var el = $("promo-list"); if(!el) return;
+  var h = "";
+  WEB_PROMOTIONS.forEach(function(p){
+    var d = promoData[p.id];
+    h += '<div class="card" style="margin-bottom:14px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
+        '<div><b style="color:var(--forest);">' + p.emoji + ' ' + esc(p.title) + '</b>' +
+        '<div class="muted" style="margin-top:3px;">' + esc(p.desc) + '</div></div>' +
+        '<span class="badge" style="white-space:nowrap;">' + (d ? (d.count + ' / ' + d.cap + ' entries') : '—') + '</span>' +
+      '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center;">' +
+        '<a class="btn ghost small" href="' + p.page + '" target="_blank" rel="noopener">🔗 Open page</a>' +
+        '<button class="btn small" onclick="loadPromo(\'' + p.id + '\',true)">👥 ' + (promoShow[p.id] ? 'Refresh entries' : 'View entries') + '</button>' +
+        '<button class="btn ghost small" onclick="exportPromoCSV(\'' + p.id + '\')"' + (d && d.entries.length ? '' : ' disabled') + '>📥 Download CSV</button>' +
+      '</div>' +
+      '<div style="margin-top:10px;overflow-x:auto;">' + (promoShow[p.id] && d ? promoTableHTML(p, d) : '') + '</div>' +
+    '</div>';
+  });
+  el.innerHTML = h || '<p class="muted">No promotions configured.</p>';
+}
+function promoTableHTML(p, d){
+  if(!d.entries.length) return '<p class="muted" style="margin:6px 0 0;">No entries yet.</p>';
+  var th = 'style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--forest);"';
+  var td = 'style="padding:5px 8px;border-bottom:1px solid #eef0ec;"';
+  var h = '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+    '<tr><th ' + th + '>#</th><th ' + th + '>Name</th><th ' + th + '>Phone</th><th ' + th + '>Email</th><th ' + th + '>Agreed</th><th ' + th + '>Submitted</th></tr>';
+  d.entries.forEach(function(e){
+    var over = e.seq > d.cap;
+    h += '<tr' + (over ? ' style="opacity:.55;"' : '') + '>' +
+      '<td ' + td + '>' + e.seq + (over ? ' <span class="muted">(past cap)</span>' : '') + '</td>' +
+      '<td ' + td + '>' + esc(e.name) + '</td>' +
+      '<td ' + td + '>' + esc(promoPhone(e.phone)) + '</td>' +
+      '<td ' + td + '>' + esc(e.email) + '</td>' +
+      '<td ' + td + '>' + (e.agreed ? '✓ Yes' : '✗ NO') + '</td>' +
+      '<td ' + td.slice(0,-1) + 'white-space:nowrap;"' + '>' + new Date(e.submitted).toLocaleString() + '</td></tr>';
+  });
+  return h + '</table>';
+}
+function promoPhone(p){ p = String(p||""); return p.length===10 ? "("+p.slice(0,3)+") "+p.slice(3,6)+"-"+p.slice(6) : p; }
+async function loadPromo(id, show){
+  var p = WEB_PROMOTIONS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
+  if(show) promoShow[id] = true;
+  try{
+    promoData[id] = await api(p.endpoint);
+    renderPromos();
+  }catch(e){ if(show) toast("Couldn't load entries: " + ((e && e.message) || e)); }
+}
+function exportPromoCSV(id){
+  var p = WEB_PROMOTIONS.filter(function(x){ return x.id===id; })[0], d = promoData[id];
+  if(!p || !d || !d.entries.length) return;
+  var rows = [["Entry #","Name","Phone","Email","Agreed to Terms","Submitted (local)","Submitted (ISO)"]];
+  d.entries.forEach(function(e){
+    rows.push([e.seq, e.name, promoPhone(e.phone), e.email, (e.agreed ? "Yes" : "No"), new Date(e.submitted).toLocaleString(), e.submitted]);
+  });
+  var csv = rows.map(function(r){ return r.map(function(v){ v = String(v==null?"":v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }).join(","); }).join("\r\n");
+  var blob = new Blob([csv], {type:"text/csv"});
+  var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = p.id + "-entries.csv"; a.click();
+}
+
+/* ---------- boot ---------- */
+async function boot(){
+  showApp();
+  renderPromos();
+  WEB_PROMOTIONS.forEach(function(p){ loadPromo(p.id, false); });
+}
+if(GuruAuth.get()){ boot(); } else { showLogin(); }
+</script>
+</body>
+</html>

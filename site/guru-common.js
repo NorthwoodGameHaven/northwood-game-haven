@@ -97,7 +97,7 @@
 
   function isStaffContext() {
     var f = pageFile();
-    if (f === "guru.html" || f === "guru-schedule.html" || f === "guru-radar.html" || f === "checkin.html" || f === "guru-promo.html" || f === "guru-draft.html" || f === "trivia-host.html") return true;
+    if (f === "guru.html" || f === "guru-schedule.html" || f === "guru-radar.html" || f === "checkin.html" || f === "guru-promo.html" || f === "guru-draft.html" || f === "trivia-host.html" || f === "guru-webpromos.html") return true;
     // booking.html: the bar shows whenever a valid staff token exists (the
     // injectNav token gate already keeps it off public visitors' screens) —
     // requiring ?admin=1 hid it from every SSO entry path.
