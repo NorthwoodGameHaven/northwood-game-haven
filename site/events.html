@@ -612,6 +612,16 @@
     h+='<div style="font-family:\'Cinzel\',serif;color:'+GOLD+';font-size:0.82rem;letter-spacing:0.04em;margin-bottom:14px;">'+esc(when)+'</div>';
     if(e.notes) h+='<p style="font-size:0.92rem;color:#4a4a35;line-height:1.7;margin-bottom:16px;">'+esc(e.notes)+'</p>';
     var _on=(e.occNotes||{})[ds||e.date]; if(_on) h+='<div style="background:#fff7e8;border:1px solid #f0dcae;color:#7a5a14;border-radius:10px;padding:10px 14px;font-size:0.86rem;margin-bottom:16px;">📌 <b>This date:</b> '+esc(_on)+'</div>';
+    /* NGH-BUILD 07f — published Trivia Night round themes */
+    var _tp=e.triviaPlan||null;
+    if(_tp && _tp.publish && _tp.rounds && _tp.rounds.length && (!_tp.occDate || _tp.occDate===(ds||e.date))){
+      h+='<div style="background:#f0f8f2;border-radius:10px;padding:12px 14px;margin-bottom:12px;"><div style="font-family:\'Cinzel\',serif;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:'+FOREST+';margin-bottom:5px;">\ud83e\udde0 Trivia Night \u2014 Round Themes</div>';
+      for(var _ti=0;_ti<_tp.rounds.length;_ti++){
+        var _tr=_tp.rounds[_ti]||{};
+        h+='<div style="font-size:0.86rem;color:#4a4a35;margin-bottom:3px;">'+(_ti+1)+'. '+esc(_tr.title||'???')+(_tr.isWager?' <b style="color:#9a2b2b;">\ud83d\udcb0 '+esc(_tp.wagerLabel||'Stash or Splash')+'</b>':'')+(_tr.minigame?' \ud83c\udfb2':'')+'</div>';
+      }
+      h+='<div style="font-size:0.78rem;color:#6a6a50;margin-top:6px;">\ud83c\udfb2 = minigame round \u00b7 themes may shuffle slightly on the night</div></div>';
+    }
     if(ttypeLabel){
       h+='<div style="background:#f0f8f2;border-radius:10px;padding:12px 14px;margin-bottom:12px;"><div style="font-family:\'Cinzel\',serif;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:'+FOREST+';margin-bottom:5px;">🏆 Tournament</div>';
       h+='<div style="font-size:0.86rem;color:#4a4a35;">'+ttypeLabel;

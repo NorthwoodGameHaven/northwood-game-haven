@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 07e -->
+<!-- NGH-BUILD 07f -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -87,7 +87,7 @@
       <div class="card" id="gamesCard">
         <div class="row" style="align-items:center">
           <h2 class="grow" style="margin:0">Sessions</h2>
-          <div style="flex:0;white-space:nowrap">
+          <div style="flex:0 0 auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
             <button onclick="newGame()">＋ Trivia night</button>
             <button class="sec" onclick="newTimer()">＋ Tournament timer</button>
           </div>
@@ -127,6 +127,24 @@
           <button class="danger" onclick="deleteGame()" id="delBtn">🗑 Delete</button>
         </div>
         <div class="muted" id="edMsg" style="margin-top:8px"></div>
+
+        <div class="card" style="background:#17281c;margin-top:12px" id="publishCard">
+          <h3 style="margin-top:0">📣 Publish round themes to the event page</h3>
+          <div class="muted">Shows the round list (and order) on this event's popup on the public calendar and homepage. Save the session first — publishing uses the saved rounds.</div>
+          <div class="row" style="align-items:flex-end;margin-top:6px">
+            <div><label>Wager round display</label><select id="pubWagerMode">
+              <option value="show">Show theme + 💰 label</option>
+              <option value="tease">Tease as "??? Mystery Round ???" 💰</option>
+              <option value="hide">Hide that it's the wager round</option>
+            </select></div>
+            <div style="flex:0;white-space:nowrap;display:flex;gap:8px;flex-wrap:wrap">
+              <button onclick="publishPlan(true,true)">📣 Publish + email registrants</button>
+              <button class="sec" onclick="publishPlan(true,false)">📣 Publish only</button>
+              <button class="sec" onclick="publishPlan(false,false)">🚫 Unpublish</button>
+            </div>
+          </div>
+          <div class="muted" id="pubMsg" style="margin-top:8px"></div>
+        </div>
       </div>
 
       <!-- Timer editor -->
@@ -294,7 +312,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 07e
+   NGH EVENT STREAM HUB — NGH-BUILD 07f
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -700,6 +718,21 @@ function deleteGame() {
   api("/games/" + cur.game.id, { method: "DELETE" }).then(function () {
     closeEditor(); loadGames();
   }).catch(function (e) { alert(e.message); });
+}
+function publishPlan(publish, notify) {
+  if (!cur || cur.isNew) { document.getElementById("pubMsg").textContent = "Save the session first."; return; }
+  if (publish && !cur.game.eventId) { document.getElementById("pubMsg").textContent = "Link a public event first (pick one above, then Save)."; return; }
+  if (notify && !confirm("Email every registrant of this occurrence with the round themes?")) return;
+  var msg = document.getElementById("pubMsg");
+  msg.textContent = "Working…";
+  api("/games/" + cur.game.id + "/publish-plan", {
+    method: "POST",
+    body: JSON.stringify({ publish: publish, notify: notify, wagerMode: document.getElementById("pubWagerMode").value })
+  }).then(function (j) {
+    msg.textContent = publish
+      ? ("Published " + j.rounds + " rounds ✓" + (notify ? (" · emailed " + j.notified + " registrant(s)") : ""))
+      : "Unpublished ✓ — themes removed from the event page.";
+  }).catch(function (e) { msg.textContent = "Error: " + e.message; });
 }
 
 /* ------------------ run consoles ------------------ */

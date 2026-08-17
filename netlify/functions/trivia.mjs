@@ -1,5 +1,5 @@
 // netlify/functions/trivia.mjs
-// NGH-BUILD 07e — Event Stream engine: + Stash or Splash wager scoring, minigame placement scoring.
+// NGH-BUILD 07f — Event Stream engine: + publish round themes to event pages, registrant notify.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -34,6 +34,7 @@
 //   the prompt itself stays hidden until 'live'.
 
 import { sql, json, bad, noContent, preflight, requireAdmin } from './_shared/db.mjs';
+import { sendBrandedMail } from './_shared/email.mjs';
 import crypto from 'node:crypto';
 
 const newId = (p = 'TRV') => p + '-' + crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -649,6 +650,83 @@ const _handler = async (req) => {
       d.adjudicatedAt = new Date().toISOString();
       await sql`UPDATE trivia_answers SET data = ${JSON.stringify(d)}::jsonb WHERE id = ${rows[0].id}`;
       return json({ ok: true, id: rows[0].id, verdict, points: d.points });
+    }
+
+    // ----- ADMIN: publish round themes to the public event page (+ notify) -----
+    if (req.method === 'POST' && gameId && action === 'publish-plan') {
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const rows = await sql`SELECT data FROM trivia_games WHERE id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const game = rows[0].data;
+      if (!game.eventId) return bad('Link this session to a public event first.');
+      const evRows = await sql`SELECT data FROM events WHERE id = ${game.eventId}`;
+      if (!evRows.length) return bad('Linked event not found on the calendar.', 404);
+      const ev = evRows[0].data;
+
+      const publish = !!b.publish;
+      const wagerMode = ['show', 'tease', 'hide'].includes(b.wagerMode) ? b.wagerMode : 'show';
+
+      if (!publish) {
+        delete ev.triviaPlan;
+        await sql`UPDATE events SET data = ${JSON.stringify(ev)}::jsonb WHERE id = ${game.eventId}`;
+        return json({ ok: true, published: false, notified: 0 });
+      }
+
+      const planRounds = (game.rounds || []).map(r => {
+        const minigame = (r.questions || []).some(q => String(q.type || '').indexOf('minigame') === 0);
+        if (r.isWager && wagerMode === 'hide') return { title: r.title || '', isWager: false, minigame };
+        if (r.isWager && wagerMode === 'tease') return { title: '??? Mystery Round ???', isWager: true, minigame };
+        return { title: r.title || '', isWager: !!r.isWager, minigame };
+      });
+      if (!planRounds.length) return bad('Add rounds before publishing.');
+
+      ev.triviaPlan = {
+        publish: true,
+        occDate: game.occDate || null,
+        wagerLabel: game.wagerLabel || 'Stash or Splash',
+        rounds: planRounds,
+        gameId: game.id,
+        updatedAt: new Date().toISOString()
+      };
+      await sql`UPDATE events SET data = ${JSON.stringify(ev)}::jsonb WHERE id = ${game.eventId}`;
+
+      // ---- notify registrants of this occurrence ----
+      let notified = 0;
+      if (b.notify) {
+        const base = (process.env.SITE_URL || 'https://gamehaven.guru').replace(/\/$/, '');
+        const regs = await sql`SELECT data, occ_date FROM registrations WHERE event_id = ${game.eventId}`;
+        const occ = game.occDate || null;
+        const lines = planRounds.map((r, i) =>
+          (i + 1) + '. ' + (r.title || '???') +
+          (r.isWager ? ' — 💰 ' + (game.wagerLabel || 'Stash or Splash') : '') +
+          (r.minigame ? ' (minigame!)' : '')).join('\n');
+        const bodyText =
+          'The round themes for ' + (ev.title || 'our trivia night') +
+          (occ ? (' on ' + occ) : '') + ' are locked in:\n\n' + lines +
+          '\n\nStudy up, rally your team, and we\'ll see you at the Haven! ' +
+          '(Themes can shuffle slightly on the night — Stash reserves showman\'s privilege.)';
+        const link = base + '/event/' + encodeURIComponent(game.eventId) + (occ ? ('?date=' + encodeURIComponent(occ)) : '');
+        for (const r of regs) {
+          const reg = r.data || {};
+          if (reg.canceled || reg.status === 'canceled') continue;
+          if (occ && r.occ_date) {
+            const rd = String(r.occ_date).slice(0, 10);
+            if (rd !== occ) continue;
+          }
+          if (!reg.email) continue;
+          try {
+            await sendBrandedMail(reg.email,
+              '🧠 Round themes revealed — ' + (ev.title || 'Trivia Night') + (occ ? (' · ' + occ) : ''),
+              {
+                heading: 'The themes are locked in! 🧠',
+                bodyText,
+                buttons: [{ label: 'View the event', url: link }]
+              });
+            notified++;
+          } catch (e) { console.error('[trivia] notify failed', reg.email, e && e.message); }
+        }
+      }
+      return json({ ok: true, published: true, rounds: planRounds.length, notified });
     }
 
     // ----- ADMIN: minigame placement scoring — host enters points per team -----
