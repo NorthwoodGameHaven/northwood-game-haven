@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 07b -->
+<!-- NGH-BUILD 07e -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -51,7 +51,7 @@
 
 <script>
 /* =====================================================================
-   NGH TRIVIA PLAY — NGH-BUILD 07b
+   NGH TRIVIA PLAY — NGH-BUILD 07e
    Team phone client. URL: trivia-play.html?game=GAME-XXXX
    Join once (name + optional PIN) — team token persists in localStorage
    so a dropped phone rejoins the same team automatically. Polls state
@@ -179,6 +179,16 @@
 
     if ((ph === "live" || ph === "answering") && st.q) {
       var q = st.q;
+      if (String(q.type || "").indexOf("minigame") === 0) {
+        app.innerHTML = head +
+          '<div class="phase-tag">Round ' + (st.roundIdx + 1) + " · " + esc(st.round.title) + "</div>" +
+          (st.deadline ? '<div class="timer" id="pt"></div>' : "") +
+          '<div class="card"><div class="phase-tag">🎲 Minigame</div>' +
+          '<div class="prompt">' + esc(q.prompt) + "</div>" +
+          '<div class="status pend">Play it out — the host records the results.</div></div>';
+        startCountdown("pt");
+        return;
+      }
       var mine = myAnswerCache[q.key];
       var isWager = st.round && st.round.isWager;
       var h = head +
@@ -198,7 +208,8 @@
       if (isWager) {
         h += '<div class="wagerbox"><label style="margin-top:0">💰 ' + esc(st.wagerLabel) +
           ' — wager (points)</label><input id="wagerIn" type="number" inputmode="numeric" min="0" value="' +
-          esc(draftWager == null ? "" : draftWager) + '"></div>';
+          esc(draftWager == null ? "" : draftWager) + '">' +
+          '<div class="status pend" style="text-align:left;font-size:12.5px;margin-top:6px">Right = win your wager · Wrong = lose it. Capped at your score (every team can stake at least 10). Leave blank to play it safe for normal points.</div></div>';
       }
       h += '<button id="sendBtn">Submit answer</button>' +
         '<div class="status" id="sendMsg">' +
@@ -258,7 +269,10 @@
         if (!box) return;
         if (!m || !m.answered) { box.innerHTML = '<span class="bad">No answer submitted.</span>'; return; }
         if (m.verdict === "correct") box.innerHTML = '<span class="ok">✓ Correct! +' + (m.points || 0) + " pts — you said: " + esc(m.answer) + "</span>";
-        else if (m.verdict === "incorrect") box.innerHTML = '<span class="bad">✗ Not this time — you said: ' + esc(m.answer) + "</span>";
+        else if (m.verdict === "incorrect") {
+          var lost = (typeof m.points === "number" && m.points < 0) ? " (" + m.points + " pts — the Splash!)" : "";
+          box.innerHTML = '<span class="bad">✗ Not this time' + lost + " — you said: " + esc(m.answer) + "</span>";
+        }
         else box.innerHTML = '<span class="pend">You said: ' + esc(m.answer) + " — the host is reviewing spelling…</span>";
       });
       return;

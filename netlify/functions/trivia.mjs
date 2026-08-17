@@ -1,5 +1,5 @@
 // netlify/functions/trivia.mjs
-// NGH-BUILD 07b — Team Trivia engine core + adjudication, intermission, team feedback.
+// NGH-BUILD 07e — Event Stream engine: + Stash or Splash wager scoring, minigame placement scoring.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -116,7 +116,7 @@ function normalize(s) {
 }
 
 // ---- game helpers ----
-const PHASES = ['lobby', 'preload', 'live', 'answering', 'locked', 'reveal', 'intermission', 'scoreboard', 'ended'];
+const PHASES = ['lobby', 'preload', 'live', 'answering', 'locked', 'reveal', 'intermission', 'scoreboard', 'ended', 'timer', 'timer-paused'];
 
 // Damerau-lite Levenshtein for adjudication suggestions.
 function levenshtein(a, b) {
@@ -169,6 +169,25 @@ function stampGame(g) {
 function publicState(game, st, version) {
   const serverNow = Date.now();
   const phase = PHASES.includes(st.phase) ? st.phase : 'lobby';
+  // ---- Tournament/round timer sessions (kind: 'timer') ----
+  if ((game.kind || 'trivia') === 'timer') {
+    return {
+      v: version, serverNow, kind: 'timer', phase,
+      title: game.title || 'Tournament',
+      timerLabel: st.timerLabel || '',
+      deadline: st.deadline || null,
+      remainMs: st.remainMs || null,       // set while paused
+      event: {
+        id: game.eventId || null,
+        title: game.eventTitle || game.title || '',
+        date: game.occDate || null,
+        start: game.eventStart || null,
+        end: game.eventEnd || null,
+        photo: game.eventPhoto || (game.eventId ? ('/event/' + encodeURIComponent(game.eventId) + '/photo') : null)
+      },
+      customImage: game.customImage || null
+    };
+  }
   const roundIdx = st.roundIdx | 0, qIdx = st.qIdx | 0;
   const { round, q } = findQuestion(game, roundIdx, qIdx);
   const out = {
@@ -217,12 +236,33 @@ async function computeScoreboard(gameId) {
     .sort((a, b) => b.score - a.score);
 }
 
+// A team's score across every OTHER question — the base for wager clamping.
+async function teamScoreExcluding(gameId, teamId, qKey) {
+  const rows = await sql`SELECT COALESCE(SUM((data->>'points')::int), 0) AS pts
+    FROM trivia_answers
+    WHERE game_id = ${gameId} AND team_id = ${teamId} AND q_key <> ${qKey}
+      AND data->>'points' IS NOT NULL`;
+  return rows.length ? (Number(rows[0].pts) || 0) : 0;
+}
+
+// Stash or Splash: correct = +wager, wrong = -wager. Wager is clamped to the
+// team's current score, with a floor of WAGER_FLOOR so a trailing team can
+// always stake something meaningful. No wager submitted => scored as a
+// normal question (base points, no penalty).
+const WAGER_FLOOR = 10;
+function wagerPoints(correct, wager, teamScore, basePts) {
+  if (wager == null) return correct ? basePts : 0;
+  const cap = Math.max(teamScore, WAGER_FLOOR);
+  const w = Math.min(Math.max(0, Math.round(Number(wager) || 0)), cap);
+  return correct ? w : -w;
+}
+
 // Auto-score answers of one question at reveal time.
 // MC: exact verdict. Fill-in: normalized exact match => correct; everything
-// else stays pending for the host adjudication queue (07b UI).
-async function autoScoreQuestion(gameId, q) {
+// else stays pending for the host adjudication queue.
+async function autoScoreQuestion(gameId, q, isWager) {
   if (!q) return;
-  const rows = await sql`SELECT id, data FROM trivia_answers WHERE game_id = ${gameId} AND q_key = ${q.key}`;
+  const rows = await sql`SELECT id, team_id, data FROM trivia_answers WHERE game_id = ${gameId} AND q_key = ${q.key}`;
   const pts = Number(q.points) || 10;
   for (const r of rows) {
     const d = r.data || {};
@@ -238,7 +278,13 @@ async function autoScoreQuestion(gameId, q) {
     }
     if (verdict) {
       d.verdict = verdict;
-      d.points = verdict === 'correct' ? pts : 0;
+      if (isWager) {
+        const score = await teamScoreExcluding(gameId, r.team_id, q.key);
+        d.points = wagerPoints(verdict === 'correct', d.wager, score, pts);
+        d.wagerApplied = d.wager != null;
+      } else {
+        d.points = verdict === 'correct' ? pts : 0;
+      }
       d.autoScored = true;
       await sql`UPDATE trivia_answers SET data = ${JSON.stringify(d)}::jsonb WHERE id = ${r.id}`;
     }
@@ -462,7 +508,7 @@ const _handler = async (req) => {
       if (b.qIdx != null) st.qIdx = Math.max(0, b.qIdx | 0);
       st.phase = phase;
       const now = Date.now();
-      const { q } = findQuestion(game, st.roundIdx | 0, st.qIdx | 0);
+      const { round, q } = findQuestion(game, st.roundIdx | 0, st.qIdx | 0);
 
       if (phase === 'preload') { st.startAt = null; st.deadline = null; }
       if (phase === 'live') {
@@ -477,7 +523,7 @@ const _handler = async (req) => {
         st.deadline = now + secs * 1000;
       }
       if (phase === 'locked') { st.deadline = st.deadline && st.deadline < now ? st.deadline : now; }
-      if (phase === 'reveal') { await autoScoreQuestion(gameId, q); }
+      if (phase === 'reveal') { await autoScoreQuestion(gameId, q, !!(round && round.isWager)); }
       if (phase === 'scoreboard' || phase === 'ended') { st.scoreboard = await computeScoreboard(gameId); }
       if (phase === 'intermission') {
         const secs = Math.min(3600, Math.max(30, Number(b.breakSecs) || 300));
@@ -487,6 +533,26 @@ const _handler = async (req) => {
         const ni = (b.nextRoundIdx != null) ? Math.max(0, b.nextRoundIdx | 0) : (st.roundIdx | 0);
         const nr = (game.rounds || [])[ni];
         st.next = nr ? { roundIdx: ni, title: nr.title || '', isWager: !!nr.isWager } : null;
+      }
+      // ---- timer sessions ----
+      if (phase === 'timer') {
+        if (b.label != null) st.timerLabel = String(b.label).slice(0, 120);
+        if (b.addSecs) {
+          // extend a running (or just-expired) timer
+          const base = Math.max(Number(st.deadline) || now, now);
+          st.deadline = base + Math.min(3600, Math.max(1, Number(b.addSecs) | 0)) * 1000;
+        } else if (b.resume && st.remainMs != null) {
+          st.deadline = now + Number(st.remainMs);
+        } else {
+          const secs = Math.min(86400, Math.max(5, Number(b.secs) || 3000));
+          st.deadline = now + secs * 1000;
+        }
+        st.remainMs = null;
+        st.startAt = null;
+      }
+      if (phase === 'timer-paused') {
+        st.remainMs = Math.max(0, (Number(st.deadline) || now) - now);
+        st.deadline = null;
       }
 
       const v = await bumpState(gameId, st);
@@ -559,22 +625,63 @@ const _handler = async (req) => {
       let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
       const verdict = b.verdict === 'correct' ? 'correct' : b.verdict === 'incorrect' ? 'incorrect' : null;
       if (!b.answerId || !verdict) return bad('answerId and verdict required');
-      const rows = await sql`SELECT id, q_key, data FROM trivia_answers WHERE id = ${b.answerId} AND game_id = ${gameId}`;
+      const rows = await sql`SELECT id, team_id, q_key, data FROM trivia_answers WHERE id = ${b.answerId} AND game_id = ${gameId}`;
       if (!rows.length) return bad('not found', 404);
       const g = await sql`SELECT data FROM trivia_games WHERE id = ${gameId}`;
-      let pts = 10;
+      let pts = 10, isWager = false;
       if (g.length) {
         for (const r of (g[0].data.rounds || [])) {
-          for (const q of (r.questions || [])) if (q.key === rows[0].q_key) pts = Number(q.points) || 10;
+          for (const q of (r.questions || [])) {
+            if (q.key === rows[0].q_key) { pts = Number(q.points) || 10; isWager = !!r.isWager; }
+          }
         }
       }
       const d = rows[0].data || {};
       d.verdict = verdict;
-      d.points = verdict === 'correct' ? pts : 0;
+      if (isWager) {
+        const score = await teamScoreExcluding(gameId, rows[0].team_id, rows[0].q_key);
+        d.points = wagerPoints(verdict === 'correct', d.wager, score, pts);
+        d.wagerApplied = d.wager != null;
+      } else {
+        d.points = verdict === 'correct' ? pts : 0;
+      }
       d.autoScored = false;
       d.adjudicatedAt = new Date().toISOString();
       await sql`UPDATE trivia_answers SET data = ${JSON.stringify(d)}::jsonb WHERE id = ${rows[0].id}`;
       return json({ ok: true, id: rows[0].id, verdict, points: d.points });
+    }
+
+    // ----- ADMIN: minigame placement scoring — host enters points per team -----
+    if (req.method === 'POST' && gameId && action === 'minigame-score') {
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const qKey = String(b.qKey || '');
+      if (!qKey || !Array.isArray(b.scores)) return bad('qKey and scores[] required');
+      let saved = 0;
+      for (const s of b.scores) {
+        if (!s || !s.teamId) continue;
+        const pts = Math.round(Number(s.points) || 0);
+        const existing = await sql`SELECT id, data FROM trivia_answers
+          WHERE game_id = ${gameId} AND team_id = ${s.teamId} AND q_key = ${qKey}`;
+        if (existing.length) {
+          const d = existing[0].data || {};
+          d.answer = d.answer || '(minigame result)';
+          d.verdict = 'correct';
+          d.points = pts;
+          d.minigame = true;
+          d.adjudicatedAt = new Date().toISOString();
+          await sql`UPDATE trivia_answers SET data = ${JSON.stringify(d)}::jsonb WHERE id = ${existing[0].id}`;
+        } else {
+          const d = {
+            answer: '(minigame result)', wager: null,
+            submittedAt: Date.now(), verdict: 'correct', points: pts,
+            minigame: true, adjudicatedAt: new Date().toISOString()
+          };
+          await sql`INSERT INTO trivia_answers (id, game_id, team_id, q_key, data)
+            VALUES (${newId('ANS')}, ${gameId}, ${s.teamId}, ${qKey}, ${JSON.stringify(d)}::jsonb)`;
+        }
+        saved++;
+      }
+      return json({ ok: true, saved });
     }
 
     // ----- PUBLIC (team token): my answer + verdict for one question -----

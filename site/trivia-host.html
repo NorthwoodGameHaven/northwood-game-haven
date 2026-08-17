@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 07b -->
+<!-- NGH-BUILD 07e -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<title>NGH Trivia Host Console</title>
+<title>NGH Event Stream Hub</title>
 <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
 <script src="guru-common.js"></script>
 <style>
@@ -46,12 +46,18 @@
   .pill{display:inline-block;background:var(--forest);border:1px solid var(--gold-dk);
     border-radius:12px;padding:2px 9px;font-size:12px;font-weight:800;margin-left:6px}
   .wager-pill{background:var(--red);color:#fff;border-color:var(--red)}
+  .used-pill{background:var(--maroon);color:#fff;border-color:var(--maroon)}
   #loginCard{max-width:380px;margin:80px auto}
   table{width:100%;border-collapse:collapse;font-size:14px}
   td,th{padding:7px 9px;border-bottom:1px solid rgba(231,193,91,.2);text-align:left}
   .verdict-c{color:#7bd68b;font-weight:800}
   .verdict-i{color:#e08a7d;font-weight:800}
   .verdict-p{color:var(--gold);font-weight:800}
+  .tabbar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .tabbar button{min-width:150px}
+  .tabbar button.on{outline:3px solid var(--gold)}
+  .check-inline{display:flex;gap:6px;align-items:center;margin:0;color:var(--cream);font-weight:700;font-size:13px}
+  .check-inline input{width:auto}
 </style>
 </head>
 <body>
@@ -59,7 +65,7 @@
 
   <!-- ============ LOGIN ============ -->
   <div class="card" id="loginCard" style="display:none">
-    <h1>🧠 Trivia Console</h1>
+    <h1>🎬 Event Stream Hub</h1>
     <label>Guru admin code</label>
     <input type="password" id="loginCode" autocomplete="current-password">
     <div style="margin-top:10px"><button onclick="doLogin()">Log in</button></div>
@@ -68,113 +74,218 @@
 
   <!-- ============ MAIN ============ -->
   <div id="main" style="display:none">
-    <h1>🧠 Team Trivia — Host Console</h1>
+    <h1>🎬 Event Stream Hub</h1>
+    <p class="muted" style="margin-top:-6px">Trivia nights · tournament round timers · TV cast screens · phone play · the content vault</p>
 
-    <!-- Games list -->
-    <div class="card" id="gamesCard">
-      <div class="row" style="align-items:center">
-        <h2 class="grow" style="margin:0">Games</h2>
-        <div style="flex:0"><button onclick="newGame()">＋ New game</button></div>
-      </div>
-      <div id="gamesList" class="muted" style="margin-top:8px">Loading…</div>
+    <div class="tabbar">
+      <button id="tab-sessions" class="on" onclick="showTab('sessions')">🎙 Sessions</button>
+      <button id="tab-library" class="sec" onclick="showTab('library')">📚 Content Library</button>
     </div>
 
-    <!-- Editor -->
-    <div class="card" id="editorCard" style="display:none">
-      <div class="row" style="align-items:center">
-        <h2 class="grow" style="margin:0">Edit: <span id="edTitleLabel"></span></h2>
-        <div style="flex:0"><button class="sec" onclick="closeEditor()">Close</button></div>
-      </div>
-      <div class="row">
-        <div><label>Title</label><input id="gTitle"></div>
-        <div><label>Event ID (optional)</label><input id="gEventId" placeholder="EVT-…"></div>
-        <div><label>Occurrence date</label><input id="gOccDate" type="date"></div>
-      </div>
-      <div class="row">
-        <div><label>Wager round label</label><input id="gWagerLabel" placeholder="Stash or Splash"></div>
-        <div><label>Join PIN (blank = open)</label><input id="gJoinPin"></div>
-        <div>
-          <label>Options</label>
-          <div style="display:flex;gap:14px;padding-top:6px">
-            <label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--cream)">
-              <input type="checkbox" id="gTvAudio" style="width:auto"> TV speakers (audio fallback)</label>
-            <label style="display:flex;gap:6px;align-items:center;margin:0;color:var(--cream)">
-              <input type="checkbox" id="gShowQR" style="width:auto"> Join QR on lobby screen</label>
+    <!-- ================= SESSIONS TAB ================= -->
+    <div id="pane-sessions">
+      <div class="card" id="gamesCard">
+        <div class="row" style="align-items:center">
+          <h2 class="grow" style="margin:0">Sessions</h2>
+          <div style="flex:0;white-space:nowrap">
+            <button onclick="newGame()">＋ Trivia night</button>
+            <button class="sec" onclick="newTimer()">＋ Tournament timer</button>
           </div>
         </div>
+        <div id="gamesList" class="muted" style="margin-top:8px">Loading…</div>
       </div>
 
-      <h3 style="margin-top:14px">Rounds</h3>
-      <div id="roundsBox"></div>
-      <div style="margin-top:8px"><button class="sec" onclick="addRound()">＋ Add round</button></div>
+      <!-- Trivia editor -->
+      <div class="card" id="editorCard" style="display:none">
+        <div class="row" style="align-items:center">
+          <h2 class="grow" style="margin:0">Edit: <span id="edTitleLabel"></span></h2>
+          <div style="flex:0"><button class="sec" onclick="closeEditor()">Close</button></div>
+        </div>
+        <div class="row">
+          <div><label>Title</label><input id="gTitle"></div>
+          <div style="flex:2"><label>Linked public event</label><select id="gEventPick" onchange="pickEvent('g')"></select></div>
+          <div><label>Occurrence date</label><input id="gOccDate" type="date"></div>
+        </div>
+        <div class="row">
+          <div><label>Wager round label</label><input id="gWagerLabel" placeholder="Stash or Splash"></div>
+          <div><label>Join PIN (blank = open)</label><input id="gJoinPin"></div>
+          <div>
+            <label>Options</label>
+            <div style="display:flex;gap:14px;padding-top:6px">
+              <label class="check-inline"><input type="checkbox" id="gTvAudio"> TV speakers (audio fallback)</label>
+              <label class="check-inline"><input type="checkbox" id="gShowQR"> Join QR on lobby screen</label>
+            </div>
+          </div>
+        </div>
 
-      <div style="margin-top:14px;display:flex;gap:10px">
-        <button onclick="saveGame()">💾 Save game</button>
-        <button class="danger" onclick="deleteGame()" id="delBtn">🗑 Delete</button>
+        <h3 style="margin-top:14px">Rounds</h3>
+        <div id="roundsBox"></div>
+        <div style="margin-top:8px"><button class="sec" onclick="addRound()">＋ Add round</button></div>
+
+        <div style="margin-top:14px;display:flex;gap:10px">
+          <button onclick="saveGame()">💾 Save session</button>
+          <button class="danger" onclick="deleteGame()" id="delBtn">🗑 Delete</button>
+        </div>
+        <div class="muted" id="edMsg" style="margin-top:8px"></div>
       </div>
-      <div class="muted" id="edMsg" style="margin-top:8px"></div>
+
+      <!-- Timer editor -->
+      <div class="card" id="timerEdCard" style="display:none">
+        <div class="row" style="align-items:center">
+          <h2 class="grow" style="margin:0">Edit timer: <span id="tEdTitleLabel"></span></h2>
+          <div style="flex:0"><button class="sec" onclick="closeEditor()">Close</button></div>
+        </div>
+        <div class="row">
+          <div><label>Title (e.g. MtG Draft Night)</label><input id="tTitle"></div>
+          <div style="flex:2"><label>Linked public event (auto-fills details + image)</label><select id="tEventPick" onchange="pickEvent('t')"></select></div>
+        </div>
+        <div class="row">
+          <div><label>Occurrence date</label><input id="tOccDate" type="date"></div>
+          <div style="flex:2"><label>Custom image URL (optional — overrides event image)</label><input id="tCustomImg" placeholder="/trivia-media/bracket.png"></div>
+        </div>
+        <div class="muted" style="margin-top:6px">The cast screen shows: NGH crest · event image · event title, date &amp; time · round label · big synced countdown. Round labels and durations are set live from the Run console.</div>
+        <div style="margin-top:14px;display:flex;gap:10px">
+          <button onclick="saveTimer()">💾 Save timer</button>
+          <button class="danger" onclick="deleteGame()" id="tDelBtn">🗑 Delete</button>
+        </div>
+        <div class="muted" id="tEdMsg" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Run console (trivia) -->
+      <div class="card" id="runCard" style="display:none">
+        <div class="row" style="align-items:center">
+          <h2 class="grow" style="margin:0">Run: <span id="runTitleLabel"></span></h2>
+          <div style="flex:0"><button class="sec" onclick="closeRun()">Close</button></div>
+        </div>
+
+        <div class="row" style="align-items:center;margin-top:6px">
+          <div>
+            <span class="muted">Phase</span><br>
+            <span class="big-phase" id="runPhase">—</span>
+          </div>
+          <div>
+            <label>Round</label>
+            <select id="runRound" onchange="fillRunQ()"></select>
+          </div>
+          <div>
+            <label>Question</label>
+            <select id="runQ"></select>
+          </div>
+          <div>
+            <label>Answer time (sec)</label>
+            <input id="runSecs" type="number" value="45" min="5" max="600">
+          </div>
+          <div>
+            <label>Break time (sec)</label>
+            <input id="runBreak" type="number" value="300" min="30" max="3600">
+          </div>
+        </div>
+
+        <div class="phase-btns">
+          <button class="sec" onclick="setPhase('lobby')">🦦 Lobby</button>
+          <button class="sec" onclick="setPhase('preload')">📦 Preload</button>
+          <button onclick="goLive()">▶ Go LIVE (+4s)</button>
+          <button class="sec" onclick="setPhase('answering')">⏱ Answer window</button>
+          <button class="sec" onclick="setPhase('locked')">🔒 Lock</button>
+          <button onclick="setPhase('reveal')">💡 Reveal</button>
+          <button class="sec" onclick="startIntermission()">☕ Intermission</button>
+          <button class="sec" onclick="setPhase('scoreboard')">🏆 Scoreboard</button>
+          <button class="sec" onclick="nextQuestion()">⏭ Next Q</button>
+          <button class="danger" onclick="setPhase('ended')">🏁 End game</button>
+        </div>
+
+        <div class="qgrid" style="margin-top:10px">
+          <div>
+            <h3>Displays <button class="sec" style="padding:4px 10px;font-size:12px" onclick="cmdRefresh('all')">↻ Refresh all</button></h3>
+            <div id="displaysBox" class="muted">—</div>
+            <h3 style="margin-top:12px">Teams</h3>
+            <div id="teamsBox" class="muted">—</div>
+          </div>
+          <div>
+            <h3>Answers — current question</h3>
+            <div id="answersBox" class="muted">—</div>
+            <h3 style="margin-top:12px">⚖️ Adjudication queue <span class="pill" id="adjCount">0</span></h3>
+            <div id="adjBox" class="muted">Nothing pending.</div>
+          </div>
+        </div>
+        <div class="muted" style="margin-top:10px">
+          Display URL: <span id="dispUrl" style="user-select:all"></span> &nbsp;(set <code>&display=Retail</code> etc. per TV)<br>
+          Team join URL: <span id="playUrl" style="user-select:all"></span>
+        </div>
+      </div>
+
+      <!-- Run console (timer) -->
+      <div class="card" id="timerRunCard" style="display:none">
+        <div class="row" style="align-items:center">
+          <h2 class="grow" style="margin:0">⏱ Run timer: <span id="tRunTitleLabel"></span></h2>
+          <div style="flex:0"><button class="sec" onclick="closeRun()">Close</button></div>
+        </div>
+        <div class="row" style="align-items:center;margin-top:6px">
+          <div>
+            <span class="muted">Phase</span><br>
+            <span class="big-phase" id="tRunPhase">—</span>
+          </div>
+          <div style="flex:2"><label>Round label (shows on every screen)</label><input id="tRoundLabel" placeholder="Draft Round 2 of 3"></div>
+          <div><label>Minutes</label><input id="tMins" type="number" value="50" min="1" max="600"></div>
+        </div>
+        <div class="phase-btns">
+          <button onclick="timerStart()">▶ Start round</button>
+          <button class="sec" onclick="timerPause()">⏸ Pause</button>
+          <button class="sec" onclick="timerResume()">▶ Resume</button>
+          <button class="sec" onclick="timerAdd(60)">＋1 min</button>
+          <button class="sec" onclick="timerAdd(300)">＋5 min</button>
+          <button class="sec" onclick="setPhase('lobby')">🦦 Idle screen</button>
+          <button class="danger" onclick="setPhase('ended')">🏁 End</button>
+        </div>
+        <h3>Displays <button class="sec" style="padding:4px 10px;font-size:12px" onclick="cmdRefresh('all')">↻ Refresh all</button></h3>
+        <div id="tDisplaysBox" class="muted">—</div>
+        <div class="muted" style="margin-top:10px">
+          Display URL: <span id="tDispUrl" style="user-select:all"></span>
+        </div>
+      </div>
     </div>
 
-    <!-- Run console -->
-    <div class="card" id="runCard" style="display:none">
-      <div class="row" style="align-items:center">
-        <h2 class="grow" style="margin:0">Run: <span id="runTitleLabel"></span></h2>
-        <div style="flex:0"><button class="sec" onclick="closeRun()">Close</button></div>
+    <!-- ================= LIBRARY TAB ================= -->
+    <div id="pane-library" style="display:none">
+      <div class="card">
+        <h2 style="margin-top:0">🏷 Themes</h2>
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:2"><label>New theme name</label><input id="thmName" placeholder="Local History — Chippewa Valley"></div>
+          <div style="flex:0"><button onclick="addTheme()">＋ Add theme</button></div>
+        </div>
+        <div id="themesList" class="muted" style="margin-top:8px">Loading…</div>
       </div>
 
-      <div class="row" style="align-items:center;margin-top:6px">
-        <div>
-          <span class="muted">Phase</span><br>
-          <span class="big-phase" id="runPhase">—</span>
+      <div class="card">
+        <div class="row" style="align-items:center">
+          <h2 class="grow" style="margin:0">🧠 Question bank</h2>
+          <div style="flex:0"><button onclick="editBankQ(null)">＋ New question</button></div>
         </div>
-        <div>
-          <label>Round</label>
-          <select id="runRound" onchange="fillRunQ()"></select>
+        <div class="row" style="margin-top:6px">
+          <div><label>Filter by theme</label><select id="qbTheme" onchange="renderBank()"></select></div>
+          <div><label>Filter by type</label><select id="qbType" onchange="renderBank()">
+            <option value="">All types</option>
+            <option value="mc">Multiple choice</option>
+            <option value="fill">Short answer</option>
+            <option value="media-mc">Audio/Video/Image clue + MC</option>
+            <option value="media-fill">Audio/Video/Image clue + short answer</option>
+            <option value="minigame-app">Minigame — app based</option>
+            <option value="minigame-tabletop">Minigame — tabletop</option>
+          </select></div>
+          <div><label>Usage</label><select id="qbUsed" onchange="renderBank()">
+            <option value="">All</option>
+            <option value="unused">Never used</option>
+            <option value="used">Used before</option>
+          </select></div>
+          <div style="flex:2"><label>Search</label><input id="qbSearch" oninput="renderBank()" placeholder="prompt text…"></div>
         </div>
-        <div>
-          <label>Question</label>
-          <select id="runQ"></select>
-        </div>
-        <div>
-          <label>Answer time (sec)</label>
-          <input id="runSecs" type="number" value="45" min="5" max="600">
-        </div>
-        <div>
-          <label>Break time (sec)</label>
-          <input id="runBreak" type="number" value="300" min="30" max="3600">
-        </div>
+        <div id="bankList" class="muted" style="margin-top:8px">Loading…</div>
+        <div id="bankEditor"></div>
       </div>
 
-      <div class="phase-btns">
-        <button class="sec" onclick="setPhase('lobby')">🦦 Lobby</button>
-        <button class="sec" onclick="setPhase('preload')">📦 Preload</button>
-        <button onclick="goLive()">▶ Go LIVE (+4s)</button>
-        <button class="sec" onclick="setPhase('answering')">⏱ Answer window</button>
-        <button class="sec" onclick="setPhase('locked')">🔒 Lock</button>
-        <button onclick="setPhase('reveal')">💡 Reveal</button>
-        <button class="sec" onclick="startIntermission()">☕ Intermission</button>
-        <button class="sec" onclick="setPhase('scoreboard')">🏆 Scoreboard</button>
-        <button class="sec" onclick="nextQuestion()">⏭ Next Q</button>
-        <button class="danger" onclick="setPhase('ended')">🏁 End game</button>
-      </div>
-
-      <div class="qgrid" style="margin-top:10px">
-        <div>
-          <h3>Displays <button class="sec" style="padding:4px 10px;font-size:12px" onclick="cmdRefresh('all')">↻ Refresh all</button></h3>
-          <div id="displaysBox" class="muted">—</div>
-          <h3 style="margin-top:12px">Teams</h3>
-          <div id="teamsBox" class="muted">—</div>
-        </div>
-        <div>
-          <h3>Answers — current question</h3>
-          <div id="answersBox" class="muted">—</div>
-          <h3 style="margin-top:12px">⚖️ Adjudication queue <span class="pill" id="adjCount">0</span></h3>
-          <div id="adjBox" class="muted">Nothing pending.</div>
-        </div>
-      </div>
-      <div class="muted" style="margin-top:10px">
-        Display URL: <span id="dispUrl" style="user-select:all"></span> &nbsp;(set <code>&display=Retail</code> etc. per TV)<br>
-        Team join URL: <span id="playUrl" style="user-select:all"></span>
+      <div class="card">
+        <h2 style="margin-top:0">💡 Customer theme suggestions</h2>
+        <div id="sugList" class="muted">Loading…</div>
       </div>
     </div>
 
@@ -183,12 +294,13 @@
 
 <script>
 /* =====================================================================
-   NGH TRIVIA HOST CONSOLE — NGH-BUILD 07b
-   Build games (rounds + questions inc. media clues + per-round wager
-   toggle) and run them live: phase machine, display health, answers
-   monitor, adjudication queue (fuzzy-match suggested verdicts, one-tap
-   rulings), intermission control. Content Library console arrives in 07d;
-   event-page publishing in 07e.
+   NGH EVENT STREAM HUB — NGH-BUILD 07e
+   Sessions: trivia nights (rounds pulled from the content bank or written
+   inline) + tournament round timers (synced countdown cast screens with
+   event image/details pulled from the linked public-calendar event).
+   Content Library: themes, question bank with usage tracking, customer
+   theme suggestions. Event linking is a picker over future public events
+   — no manual event IDs.
    ===================================================================== */
 "use strict";
 var API = "/api/trivia";
@@ -215,13 +327,20 @@ function esc(s) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
   });
 }
+function showTab(t) {
+  document.getElementById("pane-sessions").style.display = t === "sessions" ? "block" : "none";
+  document.getElementById("pane-library").style.display = t === "library" ? "block" : "none";
+  document.getElementById("tab-sessions").className = t === "sessions" ? "on" : "sec";
+  document.getElementById("tab-library").className = t === "library" ? "on" : "sec";
+  if (t === "library") loadLibrary();
+}
 
 /* ------------------ auth gate ------------------ */
 function boot() {
   var t = window.GuruAuth ? GuruAuth.get() : "";
   document.getElementById("loginCard").style.display = t ? "none" : "block";
   document.getElementById("main").style.display = t ? "block" : "none";
-  if (t) loadGames();
+  if (t) { loadGames(); loadEvents(); }
 }
 function doLogin() {
   var code = document.getElementById("loginCode").value;
@@ -234,18 +353,75 @@ function doLogin() {
   }).catch(function () { document.getElementById("loginMsg").textContent = "Login failed"; });
 }
 
-/* ------------------ games list ------------------ */
+/* ------------------ public events (for the picker) ------------------ */
+var pubEvents = [];
+function loadEvents() {
+  fetch("/api/events").then(function (r) { return r.json(); }).then(function (list) {
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    pubEvents = (list || []).filter(function (e) {
+      if (!e || !e.title || !e.date) return false;
+      var p = String(e.date).split("-");
+      var d = new Date(+p[0], (+p[1] || 1) - 1, +p[2] || 1);
+      // keep future occurrences; recurring series stay listed off their base date
+      return d >= today || !!e.recurrence || !!e.repeat;
+    }).sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+    fillEventPick("gEventPick");
+    fillEventPick("tEventPick");
+  }).catch(function () {});
+}
+function fillEventPick(selId, chosenId) {
+  var sel = document.getElementById(selId);
+  if (!sel) return;
+  var h = '<option value="">— not linked to a calendar event —</option>';
+  pubEvents.forEach(function (e) {
+    var rec = (e.recurrence || e.repeat) ? " ↻" : "";
+    h += '<option value="' + esc(e.id) + '">' + esc(e.date) + rec + " · " + esc(e.title) + "</option>";
+  });
+  sel.innerHTML = h;
+  if (chosenId) sel.value = chosenId;
+}
+function eventById(id) {
+  for (var i = 0; i < pubEvents.length; i++) if (pubEvents[i].id === id) return pubEvents[i];
+  return null;
+}
+function pickEvent(prefix) {
+  if (!cur) return;
+  var sel = document.getElementById(prefix + "EventPick");
+  var e = eventById(sel.value);
+  var g = cur.game;
+  if (!e) {
+    g.eventId = null; g.eventTitle = null; g.eventStart = null; g.eventEnd = null; g.eventPhoto = null;
+    return;
+  }
+  g.eventId = e.id;
+  g.eventTitle = e.title || "";
+  g.eventStart = e.allDay ? "All day" : (e.start || null);
+  g.eventEnd = e.allDay ? null : (e.end || null);
+  g.eventPhoto = "/event/" + encodeURIComponent(e.id) + "/photo";
+  var dateEl = document.getElementById(prefix + "OccDate");
+  if (dateEl) { dateEl.value = e.date || ""; g.occDate = e.date || null; }
+  if (prefix === "g" && !document.getElementById("gTitle").value.trim()) {
+    document.getElementById("gTitle").value = e.title;
+  }
+  if (prefix === "t" && !document.getElementById("tTitle").value.trim()) {
+    document.getElementById("tTitle").value = e.title;
+  }
+}
+
+/* ------------------ sessions list ------------------ */
 var games = [];
 function loadGames() {
   api("/games").then(function (list) {
     games = list;
     var box = document.getElementById("gamesList");
-    if (!list.length) { box.textContent = "No games yet — create one."; return; }
+    if (!list.length) { box.textContent = "No sessions yet — create one."; return; }
     box.innerHTML = list.map(function (g) {
+      var kind = g.kind === "timer" ? "⏱ timer" : "🧠 trivia";
       return '<div class="list-item">' +
         '<div class="grow"><b>' + esc(g.title) + "</b>" +
+        ' <span class="pill">' + kind + "</span>" +
         (g.occDate ? ' <span class="pill">' + esc(g.occDate) + "</span>" : "") +
-        ' <span class="pill">' + g.rounds + " rounds</span>" +
+        (g.kind !== "timer" ? ' <span class="pill">' + g.rounds + " rounds</span>" : "") +
         ' <span class="pill">' + esc(g.phase) + "</span></div>" +
         '<button class="sec" onclick="openEditor(\'' + g.id + '\')">✏️ Edit</button>' +
         '<button onclick="openRun(\'' + g.id + '\')">🎙 Run</button>' +
@@ -256,39 +432,67 @@ function loadGames() {
   });
 }
 
-/* ------------------ editor ------------------ */
-var cur = null; // {game, v} being edited
+/* ------------------ editors ------------------ */
+var cur = null;
 
 function blankQuestion() {
   return { type: "mc", prompt: "", choices: ["", "", "", ""], answer: "", alternates: [], points: 10, media: null };
 }
 function newGame() {
-  cur = { game: { title: "New Trivia Night", wagerLabel: "Stash or Splash", settings: {}, rounds: [] }, isNew: true };
+  cur = { game: { kind: "trivia", title: "New Trivia Night", wagerLabel: "Stash or Splash", settings: {}, rounds: [] }, isNew: true };
   showEditor();
 }
-function openEditor(id) {
-  api("/games/" + id).then(function (j) { cur = { game: j.game, v: j.v }; showEditor(); })
-    .catch(function (e) { alert(e.message); });
+function newTimer() {
+  cur = { game: { kind: "timer", title: "New Tournament Timer" }, isNew: true };
+  showTimerEditor();
 }
-function closeEditor() { document.getElementById("editorCard").style.display = "none"; cur = null; }
+function openEditor(id) {
+  api("/games/" + id).then(function (j) {
+    cur = { game: j.game, v: j.v };
+    if ((j.game.kind || "trivia") === "timer") showTimerEditor(); else showEditor();
+  }).catch(function (e) { alert(e.message); });
+}
+function closeEditor() {
+  document.getElementById("editorCard").style.display = "none";
+  document.getElementById("timerEdCard").style.display = "none";
+  cur = null;
+}
+function hideAllPanels() {
+  ["editorCard", "timerEdCard", "runCard", "timerRunCard"].forEach(function (id) {
+    document.getElementById(id).style.display = "none";
+  });
+}
 
 function showEditor() {
   var g = cur.game;
+  hideAllPanels();
   document.getElementById("editorCard").style.display = "block";
-  document.getElementById("runCard").style.display = "none";
   document.getElementById("edTitleLabel").textContent = g.title || "(new)";
   document.getElementById("gTitle").value = g.title || "";
-  document.getElementById("gEventId").value = g.eventId || "";
+  fillEventPick("gEventPick", g.eventId || "");
   document.getElementById("gOccDate").value = g.occDate || "";
   document.getElementById("gWagerLabel").value = g.wagerLabel || "Stash or Splash";
   document.getElementById("gJoinPin").value = (g.settings && g.settings.joinPin) || "";
   document.getElementById("gTvAudio").checked = !!(g.settings && g.settings.tvAudio);
   document.getElementById("gShowQR").checked = !!(g.settings && g.settings.showJoinQR);
   document.getElementById("delBtn").style.display = cur.isNew ? "none" : "inline-block";
-  renderRounds();
+  ensureLibraryLoaded().then(renderRounds);
   document.getElementById("editorCard").scrollIntoView({ behavior: "smooth" });
 }
+function showTimerEditor() {
+  var g = cur.game;
+  hideAllPanels();
+  document.getElementById("timerEdCard").style.display = "block";
+  document.getElementById("tEdTitleLabel").textContent = g.title || "(new)";
+  document.getElementById("tTitle").value = g.title || "";
+  fillEventPick("tEventPick", g.eventId || "");
+  document.getElementById("tOccDate").value = g.occDate || "";
+  document.getElementById("tCustomImg").value = g.customImage || "";
+  document.getElementById("tDelBtn").style.display = cur.isNew ? "none" : "inline-block";
+  document.getElementById("timerEdCard").scrollIntoView({ behavior: "smooth" });
+}
 
+/* ------------------ trivia rounds + bank picker ------------------ */
 function renderRounds() {
   var g = cur.game;
   var box = document.getElementById("roundsBox");
@@ -301,29 +505,77 @@ function renderRounds() {
       return '<div class="list-item">' +
         '<div class="grow">Q' + (qi + 1) + ". " + esc(q.prompt || "(blank)") +
         ' <span class="pill">' + esc(q.type) + "</span>" +
+        (q.bankId ? ' <span class="pill">bank</span>' : "") +
         (q.media && q.media.url ? ' <span class="pill">' + esc(q.media.kind) + " clue</span>" : "") +
         "</div>" +
+        '<button class="sec" onclick="moveQ(' + ri + "," + qi + ',-1)">↑</button>' +
+        '<button class="sec" onclick="moveQ(' + ri + "," + qi + ',1)">↓</button>' +
         '<button class="sec" onclick="editQ(' + ri + "," + qi + ')">✏️</button>' +
         '<button class="danger" onclick="delQ(' + ri + "," + qi + ')">✕</button>' +
         "</div>";
     }).join("");
+    var themeOpts = '<option value="">— pick a theme to browse the bank —</option>' +
+      themes.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + "</option>"; }).join("");
     div.innerHTML =
       '<div class="row" style="align-items:center">' +
       '<div class="grow"><label>Round ' + (ri + 1) + ' title / theme</label>' +
       '<input value="' + esc(r.title || "") + '" onchange="cur.game.rounds[' + ri + '].title=this.value"></div>' +
       '<div style="flex:0;padding-top:22px;white-space:nowrap">' +
-      '<label style="display:inline-flex;gap:6px;align-items:center;margin:0;color:var(--cream)">' +
-      '<input type="checkbox" style="width:auto" ' + (r.isWager ? "checked" : "") +
+      '<label class="check-inline" style="display:inline-flex">' +
+      '<input type="checkbox" ' + (r.isWager ? "checked" : "") +
       ' onchange="setWager(' + ri + ',this.checked)"> 💰 Wager round' +
       (r.isWager ? ' <span class="pill wager-pill">' + esc(cur.game.wagerLabel || "Stash or Splash") + "</span>" : "") +
       "</label></div>" +
       '<div style="flex:0;padding-top:16px"><button class="danger" onclick="delRound(' + ri + ')">✕ Round</button></div>' +
       "</div>" +
       qHtml +
-      '<div style="margin-top:6px"><button class="sec" onclick="addQ(' + ri + ')">＋ Question</button></div>' +
+      '<div class="row" style="align-items:flex-end;margin-top:8px">' +
+      '<div style="flex:0"><button class="sec" onclick="addQ(' + ri + ')">＋ Question (write here)</button></div>' +
+      '<div style="flex:2"><label style="margin-top:0">Add from bank</label>' +
+      '<select onchange="browseBank(' + ri + ', this.value)">' + themeOpts + "</select></div>" +
+      "</div>" +
+      '<div id="bankPick-' + ri + '"></div>' +
       '<div id="qEditor-' + ri + '"></div>';
     box.appendChild(div);
   });
+}
+function browseBank(ri, themeId) {
+  var box = document.getElementById("bankPick-" + ri);
+  if (!themeId) { box.innerHTML = ""; return; }
+  var inRound = {};
+  (cur.game.rounds[ri].questions || []).forEach(function (q) { if (q.bankId) inRound[q.bankId] = true; });
+  var usedElsewhere = {};
+  cur.game.rounds.forEach(function (r2, i2) {
+    if (i2 === ri) return;
+    (r2.questions || []).forEach(function (q) { if (q.bankId) usedElsewhere[q.bankId] = true; });
+  });
+  var items = bank.filter(function (q) { return (q.themes || []).indexOf(themeId) >= 0; });
+  if (!items.length) { box.innerHTML = '<p class="muted">No bank questions in this theme yet.</p>'; return; }
+  box.innerHTML = '<div class="card" style="background:#22301f;margin-top:8px">' + items.map(function (q) {
+    var used = (q.usage || []).length;
+    var lastUse = used ? q.usage[used - 1] : null;
+    return '<div class="list-item"><div class="grow">' + esc(q.prompt || "(blank)") +
+      ' <span class="pill">' + esc(q.type) + "</span>" +
+      (used ? ' <span class="pill used-pill">used ' + used + "× · last " + esc((lastUse && lastUse.occDate) || (lastUse && lastUse.at || "").slice(0, 10)) + "</span>" : ' <span class="pill ok" style="background:#2f7a44;color:#fff;border-color:#2f7a44">never used</span>') +
+      (inRound[q.id] ? ' <span class="pill">in this round</span>' : "") +
+      (usedElsewhere[q.id] ? ' <span class="pill">in another round</span>' : "") +
+      "</div>" +
+      (inRound[q.id] ? "" : '<button onclick="addFromBank(' + ri + ',\'' + q.id + '\')">＋ Add</button>') +
+      "</div>";
+  }).join("") + "</div>";
+}
+function addFromBank(ri, bankId) {
+  var q = null;
+  for (var i = 0; i < bank.length; i++) if (bank[i].id === bankId) q = bank[i];
+  if (!q) return;
+  cur.game.rounds[ri].questions.push({
+    type: q.type || "mc", prompt: q.prompt || "",
+    choices: (q.choices || []).slice(), answer: q.answer || "",
+    alternates: (q.alternates || []).slice(), points: Number(q.points) || 10,
+    media: q.media ? { kind: q.media.kind, url: q.media.url } : null,
+    bankId: q.id
+  });
+  renderRounds();
 }
 function addRound() {
   cur.game.rounds = cur.game.rounds || [];
@@ -335,68 +587,80 @@ function delRound(ri) {
   cur.game.rounds.splice(ri, 1); renderRounds();
 }
 function setWager(ri, on) {
-  // Any bundled round can be flipped into the wager round; only one at a time.
   cur.game.rounds.forEach(function (r, i) { r.isWager = on && i === ri; });
   renderRounds();
 }
 function addQ(ri) { cur.game.rounds[ri].questions.push(blankQuestion()); renderRounds(); editQ(ri, cur.game.rounds[ri].questions.length - 1); }
 function delQ(ri, qi) { cur.game.rounds[ri].questions.splice(qi, 1); renderRounds(); }
+function moveQ(ri, qi, dir) {
+  var qs = cur.game.rounds[ri].questions;
+  var j = qi + dir;
+  if (j < 0 || j >= qs.length) return;
+  var t = qs[qi]; qs[qi] = qs[j]; qs[j] = t;
+  renderRounds();
+}
 
+function qTypeOptions(sel) {
+  var types = [["mc", "Multiple choice"], ["fill", "Short answer (typed)"],
+    ["media-mc", "Media clue + multiple choice"], ["media-fill", "Media clue + short answer"],
+    ["minigame-app", "Minigame — app based"], ["minigame-tabletop", "Minigame — tabletop"]];
+  return types.map(function (t) {
+    return '<option value="' + t[0] + '"' + (sel === t[0] ? " selected" : "") + ">" + t[1] + "</option>";
+  }).join("");
+}
+function qFormHTML(q, idPrefix) {
+  return '<div class="row">' +
+    '<div><label>Type</label><select id="' + idPrefix + 'Type">' + qTypeOptions(q.type || "mc") + "</select></div>" +
+    '<div><label>Points</label><input id="' + idPrefix + 'Points" type="number" value="' + (q.points || 10) + '"></div>' +
+    "</div>" +
+    '<label>Prompt / instructions</label><textarea id="' + idPrefix + 'Prompt">' + esc(q.prompt) + "</textarea>" +
+    '<label>Choices (one per line — MC types only)</label>' +
+    '<textarea id="' + idPrefix + 'Choices">' + esc((q.choices || []).join("\n")) + "</textarea>" +
+    '<div class="row">' +
+    '<div><label>Answer</label><input id="' + idPrefix + 'Answer" value="' + esc(q.answer) + '"></div>' +
+    '<div><label>Accepted alternates (comma-separated)</label><input id="' + idPrefix + 'Alt" value="' + esc((q.alternates || []).join(", ")) + '"></div>' +
+    "</div>" +
+    '<div class="row">' +
+    '<div><label>Media kind</label><select id="' + idPrefix + 'MediaKind">' +
+    '<option value="">— none —</option><option value="video"' + (q.media && q.media.kind === "video" ? " selected" : "") + '>Video</option>' +
+    '<option value="audio"' + (q.media && q.media.kind === "audio" ? " selected" : "") + '>Audio</option>' +
+    '<option value="image"' + (q.media && q.media.kind === "image" ? " selected" : "") + '>Image</option>' +
+    "</select></div>" +
+    '<div style="flex:2"><label>Media URL (site-hosted preferred, e.g. /trivia-media/clip1.mp4)</label>' +
+    '<input id="' + idPrefix + 'MediaUrl" value="' + esc(q.media ? q.media.url : "") + '"></div>' +
+    "</div>";
+}
+function qFormRead(idPrefix, q) {
+  q.type = document.getElementById(idPrefix + "Type").value;
+  q.points = Number(document.getElementById(idPrefix + "Points").value) || 10;
+  q.prompt = document.getElementById(idPrefix + "Prompt").value.trim();
+  q.choices = document.getElementById(idPrefix + "Choices").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
+  q.answer = document.getElementById(idPrefix + "Answer").value.trim();
+  q.alternates = document.getElementById(idPrefix + "Alt").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+  var mk = document.getElementById(idPrefix + "MediaKind").value;
+  var mu = document.getElementById(idPrefix + "MediaUrl").value.trim();
+  q.media = (mk && mu) ? { kind: mk, url: mu } : null;
+  return q;
+}
 function editQ(ri, qi) {
   var q = cur.game.rounds[ri].questions[qi];
   var box = document.getElementById("qEditor-" + ri);
   box.innerHTML =
     '<div class="card" style="background:#22301f;margin-top:8px">' +
-    "<h3>Edit Q" + (qi + 1) + "</h3>" +
-    '<div class="row">' +
-    '<div><label>Type</label><select id="qType">' +
-    '<option value="mc">Multiple choice</option>' +
-    '<option value="fill">Fill-in (typed)</option>' +
-    '<option value="media-mc">Media clue + multiple choice</option>' +
-    '<option value="media-fill">Media clue + fill-in</option>' +
-    "</select></div>" +
-    '<div><label>Points</label><input id="qPoints" type="number" value="' + (q.points || 10) + '"></div>' +
-    "</div>" +
-    '<label>Prompt</label><textarea id="qPrompt">' + esc(q.prompt) + "</textarea>" +
-    '<label>Choices (one per line — MC types only)</label>' +
-    '<textarea id="qChoices">' + esc((q.choices || []).join("\n")) + "</textarea>" +
-    '<div class="row">' +
-    '<div><label>Answer</label><input id="qAnswer" value="' + esc(q.answer) + '"></div>' +
-    '<div><label>Accepted alternates (comma-separated)</label><input id="qAlt" value="' + esc((q.alternates || []).join(", ")) + '"></div>' +
-    "</div>" +
-    '<div class="row">' +
-    '<div><label>Media kind</label><select id="qMediaKind">' +
-    '<option value="">— none —</option><option value="video">Video</option>' +
-    '<option value="audio">Audio</option><option value="image">Image</option>' +
-    "</select></div>" +
-    '<div style="flex:2"><label>Media URL (site-hosted preferred, e.g. /trivia-media/clip1.mp4)</label>' +
-    '<input id="qMediaUrl" value="' + esc(q.media ? q.media.url : "") + '"></div>' +
-    "</div>" +
+    "<h3>Edit Q" + (qi + 1) + "</h3>" + qFormHTML(q, "qe") +
     '<div style="margin-top:10px;display:flex;gap:8px">' +
     '<button onclick="saveQ(' + ri + "," + qi + ')">Apply</button>' +
     '<button class="sec" onclick="renderRounds()">Cancel</button>' +
     "</div></div>";
-  document.getElementById("qType").value = q.type || "mc";
-  document.getElementById("qMediaKind").value = q.media ? (q.media.kind || "video") : "";
 }
 function saveQ(ri, qi) {
-  var q = cur.game.rounds[ri].questions[qi];
-  q.type = document.getElementById("qType").value;
-  q.points = Number(document.getElementById("qPoints").value) || 10;
-  q.prompt = document.getElementById("qPrompt").value.trim();
-  q.choices = document.getElementById("qChoices").value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
-  q.answer = document.getElementById("qAnswer").value.trim();
-  q.alternates = document.getElementById("qAlt").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-  var mk = document.getElementById("qMediaKind").value;
-  var mu = document.getElementById("qMediaUrl").value.trim();
-  q.media = (mk && mu) ? { kind: mk, url: mu } : null;
+  qFormRead("qe", cur.game.rounds[ri].questions[qi]);
   renderRounds();
 }
 
 function collectGame() {
   var g = cur.game;
   g.title = document.getElementById("gTitle").value.trim();
-  g.eventId = document.getElementById("gEventId").value.trim() || null;
   g.occDate = document.getElementById("gOccDate").value || null;
   g.wagerLabel = document.getElementById("gWagerLabel").value.trim() || "Stash or Splash";
   g.settings = g.settings || {};
@@ -408,33 +672,46 @@ function collectGame() {
 function saveGame() {
   var g = collectGame();
   if (!g.title) { document.getElementById("edMsg").textContent = "Title required."; return; }
+  persistGame(g, "edMsg", "edTitleLabel");
+}
+function saveTimer() {
+  var g = cur.game;
+  g.kind = "timer";
+  g.title = document.getElementById("tTitle").value.trim();
+  g.occDate = document.getElementById("tOccDate").value || null;
+  g.customImage = document.getElementById("tCustomImg").value.trim() || null;
+  if (!g.title) { document.getElementById("tEdMsg").textContent = "Title required."; return; }
+  persistGame(g, "tEdMsg", "tEdTitleLabel");
+}
+function persistGame(g, msgId, titleId) {
   var p = cur.isNew
     ? api("/games", { method: "POST", body: JSON.stringify(g) })
     : api("/games/" + g.id, { method: "PUT", body: JSON.stringify(g) });
   p.then(function (j) {
     cur.game = j.game || j; cur.isNew = false;
-    document.getElementById("edMsg").textContent = "Saved ✓";
-    document.getElementById("edTitleLabel").textContent = cur.game.title;
+    document.getElementById(msgId).textContent = "Saved ✓";
+    document.getElementById(titleId).textContent = cur.game.title;
     loadGames();
-  }).catch(function (e) { document.getElementById("edMsg").textContent = "Error: " + e.message; });
+  }).catch(function (e) { document.getElementById(msgId).textContent = "Error: " + e.message; });
 }
 function deleteGame() {
   if (!cur || cur.isNew) return;
-  if (!confirm("Delete this game, its teams and answers?")) return;
+  if (!confirm("Delete this session, its teams and answers?")) return;
   api("/games/" + cur.game.id, { method: "DELETE" }).then(function () {
     closeEditor(); loadGames();
   }).catch(function (e) { alert(e.message); });
 }
 
-/* ------------------ run console ------------------ */
-var run = null;        // {game, v, state}
+/* ------------------ run consoles ------------------ */
+var run = null;
 var runTimers = [];
 function clearRunTimers() { runTimers.forEach(clearInterval); runTimers = []; }
 
 function openRun(id) {
   api("/games/" + id).then(function (j) {
     run = { game: j.game, state: j.state || {}, v: j.v };
-    document.getElementById("editorCard").style.display = "none";
+    hideAllPanels();
+    if ((run.game.kind || "trivia") === "timer") { openTimerRun(); return; }
     document.getElementById("runCard").style.display = "block";
     document.getElementById("runTitleLabel").textContent = run.game.title;
     document.getElementById("dispUrl").textContent =
@@ -452,7 +729,20 @@ function openRun(id) {
     document.getElementById("runCard").scrollIntoView({ behavior: "smooth" });
   }).catch(function (e) { alert(e.message); });
 }
-function closeRun() { clearRunTimers(); run = null; document.getElementById("runCard").style.display = "none"; }
+function openTimerRun() {
+  document.getElementById("timerRunCard").style.display = "block";
+  document.getElementById("tRunTitleLabel").textContent = run.game.title;
+  document.getElementById("tDispUrl").textContent =
+    location.origin + "/trivia-display.html?game=" + run.game.id + "&display=Main";
+  document.getElementById("tRoundLabel").value = run.state.timerLabel || "";
+  updTimerPhase();
+  clearRunTimers();
+  runTimers.push(setInterval(pollRun, 2000));
+  runTimers.push(setInterval(pollDisplaysTimer, 5000));
+  pollDisplaysTimer();
+  document.getElementById("timerRunCard").scrollIntoView({ behavior: "smooth" });
+}
+function closeRun() { clearRunTimers(); run = null; hideAllPanels(); }
 
 function fillRunSelectors() {
   var rSel = document.getElementById("runRound");
@@ -474,40 +764,40 @@ function fillRunQ() {
 function updRunPhase() {
   document.getElementById("runPhase").textContent = (run.state.phase || "lobby").toUpperCase();
 }
+function updTimerPhase() {
+  document.getElementById("tRunPhase").textContent = (run.state.phase || "lobby").toUpperCase();
+}
 function pollRun() {
   if (!run) return;
   api("/games/" + run.game.id).then(function (j) {
-    run.game = j.game; run.state = j.state || {}; updRunPhase();
+    run.game = j.game; run.state = j.state || {};
+    if ((run.game.kind || "trivia") === "timer") updTimerPhase(); else updRunPhase();
   }).catch(function () {});
 }
 
 function setPhase(phase, extra) {
   if (!run) return;
-  var body = Object.assign({
-    phase: phase,
-    roundIdx: Number(document.getElementById("runRound").value) || 0,
-    qIdx: Number(document.getElementById("runQ").value) || 0
-  }, extra || {});
-  if (phase === "answering") body.answerSecs = Number(document.getElementById("runSecs").value) || 45;
+  var body = Object.assign({ phase: phase }, extra || {});
+  if ((run.game.kind || "trivia") !== "timer") {
+    body.roundIdx = Number(document.getElementById("runRound").value) || 0;
+    body.qIdx = Number(document.getElementById("runQ").value) || 0;
+    if (phase === "answering") body.answerSecs = Number(document.getElementById("runSecs").value) || 45;
+  }
   api("/games/" + run.game.id + "/state", { method: "POST", body: JSON.stringify(body) })
-    .then(function (j) { run.state = j.state; updRunPhase(); pollAnswers(); })
+    .then(function (j) {
+      run.state = j.state;
+      if ((run.game.kind || "trivia") === "timer") updTimerPhase(); else { updRunPhase(); pollAnswers(); }
+    })
     .catch(function (e) { alert(e.message); });
 }
 function goLive() {
   setPhase("live", { leadMs: 4000, answerSecs: Number(document.getElementById("runSecs").value) || 0 });
 }
 function startIntermission() {
-  // Next round = whatever is selected in the Round picker.
   setPhase("intermission", {
     breakSecs: Number(document.getElementById("runBreak").value) || 300,
     nextRoundIdx: Number(document.getElementById("runRound").value) || 0
   });
-}
-function adjudicate(answerId, verdict) {
-  api("/games/" + run.game.id + "/adjudicate", {
-    method: "POST", body: JSON.stringify({ answerId: answerId, verdict: verdict })
-  }).then(function () { pollAnswers(); pollTeams(); })
-    .catch(function (e) { alert(e.message); });
 }
 function nextQuestion() {
   var ri = Number(document.getElementById("runRound").value) || 0;
@@ -520,22 +810,62 @@ function nextQuestion() {
   document.getElementById("runQ").value = String(qi);
   setPhase("preload");
 }
+function adjudicate(answerId, verdict) {
+  api("/games/" + run.game.id + "/adjudicate", {
+    method: "POST", body: JSON.stringify({ answerId: answerId, verdict: verdict })
+  }).then(function () { pollAnswers(); pollTeams(); })
+    .catch(function (e) { alert(e.message); });
+}
+function saveMinigame(qKey) {
+  var scores = mgTeams.map(function (t) {
+    var el = document.getElementById("mg-" + t.id);
+    return { teamId: t.id, points: el ? (Number(el.value) || 0) : 0 };
+  });
+  api("/games/" + run.game.id + "/minigame-score", {
+    method: "POST", body: JSON.stringify({ qKey: qKey, scores: scores })
+  }).then(function (j) {
+    var m = document.getElementById("mgMsg");
+    if (m) m.textContent = "Saved " + j.saved + " ✓";
+    pollTeams();
+  }).catch(function (e) { alert(e.message); });
+}
 
+/* ------------------ timer controls ------------------ */
+function timerStart() {
+  setPhase("timer", {
+    label: document.getElementById("tRoundLabel").value.trim(),
+    secs: (Number(document.getElementById("tMins").value) || 50) * 60
+  });
+}
+function timerPause() { setPhase("timer-paused"); }
+function timerResume() { setPhase("timer", { resume: true, label: document.getElementById("tRoundLabel").value.trim() }); }
+function timerAdd(secs) { setPhase("timer", { addSecs: secs }); }
+
+/* ------------------ displays / teams / answers ------------------ */
 function cmdRefresh(target) {
   api("/games/" + run.game.id + "/command", { method: "POST", body: JSON.stringify({ target: target, action: "refresh" }) })
     .then(function () {}).catch(function (e) { alert(e.message); });
+}
+function displaysHTML(list) {
+  return '<div class="chips">' + list.map(function (d) {
+    var cls = d.online ? (d.ready ? "ok" : "warn") : "";
+    var mark = d.online ? (d.ready ? "✓" : "…") : "✗";
+    return '<span class="chip ' + cls + '">' + esc(d.name) + " " + mark +
+      ' <a href="#" style="color:inherit" onclick="cmdRefresh(\'' + esc(d.displayId) + '\');return false">↻</a></span>';
+  }).join("") + "</div>";
 }
 function pollDisplays() {
   if (!run) return;
   api("/games/" + run.game.id + "/displays").then(function (list) {
     var box = document.getElementById("displaysBox");
-    if (!list.length) { box.textContent = "No displays connected yet."; return; }
-    box.innerHTML = '<div class="chips">' + list.map(function (d) {
-      var cls = d.online ? (d.ready ? "ok" : "warn") : "";
-      var mark = d.online ? (d.ready ? "✓" : "…") : "✗";
-      return '<span class="chip ' + cls + '">' + esc(d.name) + " " + mark +
-        ' <a href="#" style="color:inherit" onclick="cmdRefresh(\'' + esc(d.displayId) + '\');return false">↻</a></span>';
-    }).join("") + "</div>";
+    box.innerHTML = list.length ? displaysHTML(list) : "No displays connected yet.";
+  }).catch(function () {});
+}
+function pollDisplaysTimer() {
+  if (!run) return;
+  api("/games/" + run.game.id + "/displays").then(function (list) {
+    var box = document.getElementById("tDisplaysBox");
+    box.innerHTML = list.length ? displaysHTML(list) : "No displays connected yet.";
   }).catch(function () {});
 }
 function pollTeams() {
@@ -548,17 +878,55 @@ function pollTeams() {
     }).join("") + "</table>";
   }).catch(function () {});
 }
-function currentQKey() {
+function currentQ() {
   var ri = run.state.roundIdx | 0, qi = run.state.qIdx | 0;
-  var q = ((run.game.rounds || [])[ri] || {}).questions;
-  q = q && q[qi];
+  var qs = ((run.game.rounds || [])[ri] || {}).questions;
+  return (qs && qs[qi]) || null;
+}
+function currentQKey() {
+  var q = currentQ();
   return q ? q.key : null;
 }
+var mgTeams = [];
 function pollAnswers() {
-  if (!run) return;
-  var qKey = currentQKey();
+  if (!run || (run.game.kind || "trivia") === "timer") return;
+  var q = currentQ();
+  var qKey = q && q.key;
   var box = document.getElementById("answersBox");
   if (!qKey) { box.textContent = "—"; return; }
+
+  // ---- minigame questions: placement/points entry instead of answers ----
+  if (String(q.type || "").indexOf("minigame") === 0) {
+    document.getElementById("adjCount").textContent = "0";
+    document.getElementById("adjBox").textContent = "Minigame — score it in the panel above.";
+    Promise.all([
+      api("/games/" + run.game.id + "/teams"),
+      api("/games/" + run.game.id + "/answers?qKey=" + encodeURIComponent(qKey))
+    ]).then(function (res) {
+      mgTeams = res[0] || [];
+      var existing = {};
+      (res[1] || []).forEach(function (a) { existing[a.teamId] = a.points; });
+      var P = Number(q.points) || 10;
+      var ladder = [P, Math.round(P * 0.6), Math.round(P * 0.4), Math.round(P * 0.2)];
+      if (!mgTeams.length) { box.textContent = "No teams joined yet."; return; }
+      // don't clobber in-progress typing: only rebuild when team set changes
+      if (box.getAttribute("data-mgkey") === qKey + ":" + mgTeams.length) return;
+      box.setAttribute("data-mgkey", qKey + ":" + mgTeams.length);
+      box.innerHTML =
+        '<div class="muted" style="margin-bottom:6px">🎲 Minigame scoring — suggested ladder: 1st ' +
+        ladder[0] + " · 2nd " + ladder[1] + " · 3rd " + ladder[2] + " · rest " + ladder[3] + "</div>" +
+        "<table>" + mgTeams.map(function (t) {
+          var v = existing[t.id] != null ? existing[t.id] : "";
+          return "<tr><td>" + esc(t.name) + '</td><td style="width:110px">' +
+            '<input type="number" id="mg-' + esc(t.id) + '" value="' + esc(String(v)) + '" placeholder="0"></td></tr>';
+        }).join("") + "</table>" +
+        '<div style="margin-top:8px"><button onclick="saveMinigame(\'' + qKey + '\')">💾 Save minigame scores</button>' +
+        ' <span class="muted" id="mgMsg"></span></div>';
+    }).catch(function () {});
+    return;
+  }
+  box.removeAttribute("data-mgkey");
+
   api("/games/" + run.game.id + "/answers?qKey=" + encodeURIComponent(qKey)).then(function (list) {
     if (!list.length) { box.textContent = "No answers yet."; }
     else {
@@ -571,7 +939,6 @@ function pollAnswers() {
             (a.wager == null ? "—" : a.wager) + "</td><td>" + v + "</td></tr>";
         }).join("") + "</table>";
     }
-    // Adjudication queue: pending answers with a suggested verdict + one-tap rule.
     var pend = list.filter(function (a) { return !a.verdict; });
     document.getElementById("adjCount").textContent = String(pend.length);
     var abox = document.getElementById("adjBox");
@@ -586,6 +953,149 @@ function pollAnswers() {
         '<button class="danger" onclick="adjudicate(\'' + a.id + '\',\'incorrect\')">✗</button></div>';
     }).join("");
   }).catch(function () {});
+}
+
+/* ------------------ content library ------------------ */
+var themes = [], bank = [], sugs = [], libLoaded = false;
+function ensureLibraryLoaded() {
+  if (libLoaded) return Promise.resolve();
+  return loadLibrary();
+}
+function loadLibrary() {
+  return Promise.all([api("/themes"), api("/questions"), api("/suggestions")]).then(function (res) {
+    themes = res[0] || []; bank = res[1] || []; sugs = res[2] || [];
+    libLoaded = true;
+    renderThemes(); fillBankFilters(); renderBank(); renderSugs();
+  }).catch(function (e) {
+    var el = document.getElementById("themesList");
+    if (el) el.textContent = "Error: " + e.message;
+  });
+}
+function themeName(id) {
+  for (var i = 0; i < themes.length; i++) if (themes[i].id === id) return themes[i].name;
+  return id;
+}
+function renderThemes() {
+  var box = document.getElementById("themesList");
+  if (!themes.length) { box.textContent = "No themes yet — add the round themes you'll build from."; return; }
+  var counts = {};
+  bank.forEach(function (q) { (q.themes || []).forEach(function (t) { counts[t] = (counts[t] || 0) + 1; }); });
+  box.innerHTML = themes.map(function (t) {
+    return '<div class="list-item"><div class="grow"><b>' + esc(t.name) + "</b>" +
+      ' <span class="pill">' + (counts[t.id] || 0) + " questions</span></div>" +
+      '<button class="danger" onclick="delTheme(\'' + t.id + '\')">✕</button></div>';
+  }).join("");
+}
+function addTheme() {
+  var name = document.getElementById("thmName").value.trim();
+  if (!name) return;
+  api("/themes", { method: "POST", body: JSON.stringify({ name: name }) }).then(function () {
+    document.getElementById("thmName").value = "";
+    libLoaded = false; loadLibrary();
+  }).catch(function (e) { alert(e.message); });
+}
+function delTheme(id) {
+  if (!confirm("Delete this theme? (Bank questions keep their other themes.)")) return;
+  api("/themes/" + id, { method: "DELETE" }).then(function () { libLoaded = false; loadLibrary(); })
+    .catch(function (e) { alert(e.message); });
+}
+function fillBankFilters() {
+  var sel = document.getElementById("qbTheme");
+  sel.innerHTML = '<option value="">All themes</option>' +
+    themes.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + "</option>"; }).join("");
+}
+function renderBank() {
+  var box = document.getElementById("bankList");
+  var fTheme = document.getElementById("qbTheme").value;
+  var fType = document.getElementById("qbType").value;
+  var fUsed = document.getElementById("qbUsed").value;
+  var fSearch = document.getElementById("qbSearch").value.trim().toLowerCase();
+  var items = bank.filter(function (q) {
+    if (fTheme && (q.themes || []).indexOf(fTheme) < 0) return false;
+    if (fType && (q.type || "mc") !== fType) return false;
+    var used = (q.usage || []).length > 0;
+    if (fUsed === "used" && !used) return false;
+    if (fUsed === "unused" && used) return false;
+    if (fSearch && String(q.prompt || "").toLowerCase().indexOf(fSearch) < 0) return false;
+    return true;
+  });
+  if (!items.length) { box.textContent = "No matching questions."; return; }
+  box.innerHTML = items.map(function (q) {
+    var used = (q.usage || []).length;
+    var lastUse = used ? q.usage[used - 1] : null;
+    return '<div class="list-item"><div class="grow">' + esc(q.prompt || "(blank)") +
+      ' <span class="pill">' + esc(q.type || "mc") + "</span>" +
+      (q.media && q.media.url ? ' <span class="pill">' + esc(q.media.kind) + " clue</span>" : "") +
+      (q.themes || []).map(function (t) { return ' <span class="pill">' + esc(themeName(t)) + "</span>"; }).join("") +
+      (used ? ' <span class="pill used-pill">used ' + used + "× · last " + esc((lastUse && lastUse.occDate) || (lastUse && lastUse.at || "").slice(0, 10)) + "</span>" : "") +
+      "</div>" +
+      '<button class="sec" onclick="editBankQ(\'' + q.id + '\')">✏️</button>' +
+      '<button class="danger" onclick="delBankQ(\'' + q.id + '\')">✕</button>' +
+      "</div>";
+  }).join("");
+}
+function editBankQ(id) {
+  var q = null;
+  if (id) { for (var i = 0; i < bank.length; i++) if (bank[i].id === id) q = bank[i]; }
+  if (!q) q = Object.assign(blankQuestion(), { themes: [] });
+  var themeChecks = themes.map(function (t) {
+    var on = (q.themes || []).indexOf(t.id) >= 0;
+    return '<label class="check-inline" style="display:inline-flex;margin-right:12px">' +
+      '<input type="checkbox" name="bqThemes" value="' + esc(t.id) + '"' + (on ? " checked" : "") + "> " + esc(t.name) + "</label>";
+  }).join("");
+  document.getElementById("bankEditor").innerHTML =
+    '<div class="card" style="background:#22301f;margin-top:10px">' +
+    "<h3>" + (id ? "Edit bank question" : "New bank question") + "</h3>" +
+    qFormHTML(q, "bq") +
+    "<label>Themes (a question can live in several)</label>" +
+    '<div style="padding:4px 0">' + (themeChecks || '<span class="muted">Add themes first.</span>') + "</div>" +
+    '<div style="margin-top:10px;display:flex;gap:8px">' +
+    '<button onclick="saveBankQ(' + (id ? "'" + id + "'" : "null") + ')">💾 Save to bank</button>' +
+    '<button class="sec" onclick="document.getElementById(\'bankEditor\').innerHTML=\'\'">Cancel</button>' +
+    "</div></div>";
+  document.getElementById("bankEditor").scrollIntoView({ behavior: "smooth" });
+}
+function saveBankQ(id) {
+  var q = id ? bank.filter(function (x) { return x.id === id; })[0] : {};
+  q = qFormRead("bq", Object.assign({}, q));
+  q.themes = Array.prototype.slice.call(document.querySelectorAll('input[name="bqThemes"]:checked'))
+    .map(function (el) { return el.value; });
+  if (!q.prompt) { alert("Prompt required."); return; }
+  var p = id
+    ? api("/questions/" + id, { method: "PUT", body: JSON.stringify(q) })
+    : api("/questions", { method: "POST", body: JSON.stringify(q) });
+  p.then(function () {
+    document.getElementById("bankEditor").innerHTML = "";
+    libLoaded = false; loadLibrary();
+  }).catch(function (e) { alert(e.message); });
+}
+function delBankQ(id) {
+  if (!confirm("Delete this question from the bank? (Sessions that already copied it keep their copy.)")) return;
+  api("/questions/" + id, { method: "DELETE" }).then(function () { libLoaded = false; loadLibrary(); })
+    .catch(function (e) { alert(e.message); });
+}
+function renderSugs() {
+  var box = document.getElementById("sugList");
+  if (!sugs.length) { box.textContent = "No suggestions yet."; return; }
+  box.innerHTML = sugs.map(function (s) {
+    var badge = s.status === "accepted" ? '<span class="pill ok" style="background:#2f7a44;color:#fff;border-color:#2f7a44">accepted</span>'
+      : s.status === "rejected" ? '<span class="pill used-pill">rejected</span>' : '<span class="pill">new</span>';
+    return '<div class="list-item"><div class="grow"><b>' + esc(s.theme) + "</b> " + badge +
+      (s.name ? ' <span class="muted">from ' + esc(s.name) + "</span>" : "") +
+      (s.note ? '<br><span class="muted">' + esc(s.note) + "</span>" : "") + "</div>" +
+      (s.status !== "accepted" ? '<button onclick="acceptSug(\'' + s.id + '\',\'' + esc(s.theme).replace(/'/g, "\\'") + '\')">✓ Accept → theme</button>' : "") +
+      (s.status !== "rejected" ? '<button class="danger" onclick="setSug(\'' + s.id + '\',\'rejected\')">✕</button>' : "") +
+      "</div>";
+  }).join("");
+}
+function acceptSug(id, themeName) {
+  api("/themes", { method: "POST", body: JSON.stringify({ name: themeName }) })
+    .then(function () { return setSug(id, "accepted"); });
+}
+function setSug(id, status) {
+  return api("/suggestions/" + id, { method: "PUT", body: JSON.stringify({ status: status }) })
+    .then(function () { libLoaded = false; loadLibrary(); })
+    .catch(function (e) { alert(e.message); });
 }
 
 boot();

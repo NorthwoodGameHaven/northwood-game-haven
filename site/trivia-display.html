@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 07b -->
+<!-- NGH-BUILD 07d -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -51,9 +51,23 @@
   .small{font-size:2.6vmin;opacity:.75;margin-top:2vmin}
   .devban{background:var(--maroon);color:#fff;font-weight:800;font-size:2.8vmin;
     padding:1vmin 2.4vmin;border-radius:1.2vmin;letter-spacing:.02em;max-width:92vw}
+  /* ---- tournament timer layout (NGH-BUILD 07d) ---- */
+  #tHead{position:fixed;top:2.2vmin;left:0;right:0;display:flex;align-items:center;
+    justify-content:space-between;padding:0 3vmin;display:none}
+  #tHead img.crest{height:11vmin}
+  #tHead img.evimg{height:16vmin;max-width:28vw;object-fit:cover;border:.4vmin solid var(--gold);border-radius:1.4vmin}
+  .bigclock{font-family:'Alfa Slab One',serif;font-size:24vmin;color:var(--gold);line-height:1;letter-spacing:.02em}
+  .bigclock.hot{color:var(--red)}
+  .bigclock.paused{opacity:.55}
+  .tlabel{font-size:5.5vmin;font-weight:800;margin-top:1vmin}
+  .tev{font-family:'Caveat',cursive;font-size:4.2vmin;opacity:.85;margin-top:1.2vmin}
 </style>
 </head>
 <body>
+<div id="tHead">
+  <img class="crest" src="logo.png" alt="NGH">
+  <img class="evimg" id="tEvImg" src="" alt="" style="display:none">
+</div>
 <div id="roundTag"></div>
 <div id="wagerTag"></div>
 <div id="stage"></div>
@@ -66,7 +80,7 @@
 
 <script>
 /* =====================================================================
-   NGH TRIVIA DISPLAY — NGH-BUILD 07b
+   NGH TRIVIA DISPLAY — NGH-BUILD 07d
    Dumb, resilient TV client.
    URL: trivia-display.html?game=GAME-XXXX&display=Retail
    - Server clock offset: median of ping samples against /api/trivia/time
@@ -286,6 +300,49 @@
     clearTimers();
     timerEl.style.display = "none";
     timerEl.classList.remove("hot");
+
+    // ---- tournament timer sessions ----
+    var tHead = document.getElementById("tHead");
+    if (st.kind === "timer") {
+      roundTag.style.display = "none"; wagerTag.style.display = "none";
+      tHead.style.display = "flex";
+      var img = document.getElementById("tEvImg");
+      var imgSrc = st.customImage || (st.event && st.event.photo) || "";
+      if (imgSrc && img.getAttribute("src") !== imgSrc) img.src = imgSrc;
+      img.style.display = imgSrc ? "block" : "none";
+      var evLine = "";
+      if (st.event && st.event.title) {
+        evLine = esc(st.event.title) +
+          (st.event.date ? " · " + esc(st.event.date) : "") +
+          (st.event.start ? " · " + esc(st.event.start) + (st.event.end ? "–" + esc(st.event.end) : "") : "");
+      }
+      var paused = st.phase === "timer-paused";
+      stage.innerHTML =
+        '<div class="tlabel">' + esc(st.timerLabel || st.title) + "</div>" +
+        '<div class="bigclock' + (paused ? " paused" : "") + '" id="bigClock">--:--</div>' +
+        (paused ? '<div class="tlabel" style="color:var(--gold)">⏸ PAUSED</div>' : "") +
+        (evLine ? '<div class="tev">' + evLine + "</div>" : "");
+      var bc = document.getElementById("bigClock");
+      function fmt(ms) {
+        var s = Math.max(0, Math.ceil(ms / 1000));
+        var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+        var mm = (h ? String(m).padStart(2, "0") : String(m));
+        return (h ? h + ":" : "") + mm + ":" + String(sec).padStart(2, "0");
+      }
+      if (paused) { bc.textContent = fmt(Number(st.remainMs) || 0); return; }
+      if (!st.deadline) { bc.textContent = "--:--"; return; }
+      countdownTimer = setInterval(function () {
+        var left = Number(st.deadline) - serverNow();
+        bc.textContent = fmt(left);
+        bc.classList.toggle("hot", left <= 60000);
+        if (left <= 0) {
+          bc.textContent = "0:00";
+          bc.style.visibility = (Math.floor(Date.now() / 500) % 2) ? "hidden" : "visible";
+        } else bc.style.visibility = "visible";
+      }, 200);
+      return;
+    }
+    tHead.style.display = "none";
     tags();
     var ph = st.phase;
 
