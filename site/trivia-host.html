@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 09g -->
+<!-- NGH-BUILD 09h -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -363,8 +363,12 @@
       </div>
 
       <div class="card">
-        <h2 style="margin-top:0">🔗 Clue linker <span class="pill" id="linkerCount">—</span>
-          <button class="sec" style="padding:4px 10px;font-size:12px" onclick="loadLinker()">↻ Load</button></h2>
+        <h2 style="margin-top:0">🔗 Clue linker <span class="pill" id="linkerCount">—</span></h2>
+        <div class="phase-btns" style="margin:4px 0 6px">
+          <button id="lkTab-need" onclick="setLinkerMode('need')">🕳 Needs a clue</button>
+          <button id="lkTab-unver" class="sec" onclick="setLinkerMode('unver')">⚠ Unverified links</button>
+          <button class="sec" onclick="loadLinker()">↻ Reload</button>
+        </div>
         <div class="muted">Every media question still missing its clue. Hit 🔎 to search YouTube for it, paste the link, set the clip window (start/end in seconds), and Attach — the question flips to ready automatically. Tip: a YouTube share link with "start at" already carries the timestamp.</div>
         <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:800;color:var(--gold)">⇪ Bulk fill from a pasted list</summary>
           <div class="muted" style="margin:6px 0">One per line: <code>answer | youtube-url | start | end</code> (start/end optional). Example:<br>
@@ -398,7 +402,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 09g
+   NGH EVENT STREAM HUB — NGH-BUILD 09h
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -1615,16 +1619,31 @@ function ytThumb(id) { return "https://img.youtube.com/vi/" + id + "/mqdefault.j
 
 /* ------------------ media linker: fill the shells fast ------------------ */
 var linkerRows = [];
+var linkerMode = "need";
+function setLinkerMode(m) {
+  linkerMode = m;
+  document.getElementById("lkTab-need").className = m === "need" ? "" : "sec";
+  document.getElementById("lkTab-unver").className = m === "unver" ? "" : "sec";
+  loadLinker();
+}
 function loadLinker() {
   var box = document.getElementById("linkerBox");
   if (!box) return;
   box.textContent = "Loading…";
   api("/questions").then(function (list) {
     linkerRows = (list || []).filter(function (q) {
-      return String(q.type || "").indexOf("media") === 0 && (!q.media || !q.media.url);
+      if (String(q.type || "").indexOf("media") !== 0) return false;
+      var linked = q.media && q.media.url;
+      if (linkerMode === "unver") return linked && q.status !== "ready";
+      return !linked;
     });
     document.getElementById("linkerCount").textContent = linkerRows.length;
-    if (!linkerRows.length) { box.innerHTML = '<span class="muted">🎉 Every media question has a clue attached.</span>'; return; }
+    if (!linkerRows.length) {
+      box.innerHTML = '<span class="muted">' + (linkerMode === "unver"
+        ? "🎉 No unverified links — everything attached has been checked."
+        : "🎉 Every media question has a clue attached.") + "</span>";
+      return;
+    }
     box.innerHTML = linkerRows.map(function (q, i) {
       var search = "https://www.youtube.com/results?search_query=" + encodeURIComponent(q.answer + " " + (q.prompt || "").replace(/[^\w\s]/g, " ").slice(0, 50));
       return '<div class="card" style="background:#0f1c13;margin:6px 0;padding:10px 12px" id="lk-' + i + '">' +
@@ -1632,14 +1651,14 @@ function loadLinker() {
         '<div class="muted" style="margin:2px 0 6px">Answer: <b style="color:var(--gold)">' + esc(q.answer) + "</b>" +
         (q.notes ? " · " + esc(q.notes) : "") + "</div>" +
         '<div class="row" style="align-items:flex-end">' +
-        '<div style="flex:3"><label style="margin-top:0">YouTube link</label><input id="lku-' + i + '" placeholder="paste link"></div>' +
-        '<div><label style="margin-top:0">Start (s)</label><input id="lks-' + i + '" type="number" min="0" style="width:90px"></div>' +
-        '<div><label style="margin-top:0">End (s)</label><input id="lke-' + i + '" type="number" min="0" style="width:90px"></div>' +
+        '<div style="flex:3"><label style="margin-top:0">YouTube link</label><input id="lku-' + i + '" placeholder="paste link" value="' + esc((q.media && q.media.url) || "") + '"></div>' +
+        '<div><label style="margin-top:0">Start (s)</label><input id="lks-' + i + '" type="number" min="0" style="width:90px" value="' + esc(String((q.media && q.media.start) || "")) + '"></div>' +
+        '<div><label style="margin-top:0">End (s)</label><input id="lke-' + i + '" type="number" min="0" style="width:90px" value="' + esc(String((q.media && q.media.end) || "")) + '"></div>' +
         '<div style="flex:0;white-space:nowrap;padding-bottom:2px">' +
         '<label class="check-inline" style="margin-right:8px"><input type="checkbox" id="lkh-' + i + '"' + (String(q.type) === "media-fill" && /audio|jingle|song|listen/i.test((q.notes || "") + q.prompt) ? " checked" : "") + '> audio only</label>' +
         '<a class="sec" style="text-decoration:none;padding:8px 10px;border-radius:8px;background:#25402c;color:var(--cream)" href="' + esc(search) + '" target="_blank" rel="noopener">🔎 Find</a> ' +
         '<button class="sec" onclick="previewLink(' + i + ')">▶ Preview</button> ' +
-        '<button onclick="saveLink(' + i + ')">💾 Attach</button></div>' +
+        '<button onclick="saveLink(' + i + ')">💾 ' + (linkerMode === "unver" ? "Save + verify" : "Attach") + "</button></div>" +
         "</div>" +
         '<div id="lkp-' + i + '" style="display:none;margin-top:8px">' +
         '<div id="lkyt-' + i + '" style="width:420px;max-width:100%;aspect-ratio:16/9;background:#000;border-radius:8px"></div>' +
@@ -1736,6 +1755,7 @@ function saveLink(i) {
   q.media = { kind: "youtube", url: url, videoId: vid, start: st0, end: en0 > st0 ? en0 : null,
     hideVideo: document.getElementById("lkh-" + i).checked };
   q.status = "ready";
+  if (q.notes) q.notes = q.notes.replace(/^CANDIDATE LINK[^.]*\.\s*/, "");
   api("/questions/" + encodeURIComponent(q.id), { method: "PUT", body: JSON.stringify(q) })
     .then(function () {
       msg.innerHTML = '<span style="color:var(--gold)">Attached ✓ — marked ready</span> ' +
