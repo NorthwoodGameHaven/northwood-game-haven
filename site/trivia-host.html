@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 09a -->
+<!-- NGH-BUILD 09c -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -38,6 +38,18 @@
   .list-item:hover{background:rgba(231,193,91,.06)}
   .grow{flex:1}
   .muted{opacity:.65;font-size:12.5px}
+  .qrowwrap{position:relative}
+  .qpop{display:none;position:absolute;left:20px;top:100%;z-index:20;background:#0f1c13;border:2px solid var(--gold-dk);
+    border-radius:10px;padding:10px 12px;min-width:280px;max-width:520px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+  .qrowwrap:hover .qpop{display:block}
+  .qpop .opt{padding:3px 0;font-size:13px}
+  .qpop .opt.right{color:var(--gold);font-weight:800}
+  .wheel{display:flex;align-items:center;gap:10px;margin:10px 0;flex-wrap:wrap}
+  .wheel .wnode{padding:10px 14px;border-radius:999px;border:2px solid var(--gold-dk);background:#0f1c13;color:var(--cream);
+    font-weight:800;font-size:13px;cursor:pointer}
+  .wheel .wnode.cur{background:var(--gold);color:var(--ink);border-color:var(--gold);box-shadow:0 0 0 3px rgba(231,193,91,.3)}
+  .wheel .warrow{opacity:.6;font-weight:800}
+  .wheel .wnav{padding:12px 16px;font-size:15px}
   .phase-btns{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
   .phase-btns button{min-width:110px}
   .big-phase{font-family:'Alfa Slab One',serif;font-size:22px;color:var(--gold);text-transform:uppercase}
@@ -119,7 +131,10 @@
           </div>
         </div>
 
-        <h3 style="margin-top:14px">Rounds</h3>
+        <h3 style="margin-top:14px">Rounds
+          <button class="sec" style="padding:4px 10px;font-size:12px" onclick="setAllRounds(false)">⊞ Expand all</button>
+          <button class="sec" style="padding:4px 10px;font-size:12px" onclick="setAllRounds(true)">⊟ Collapse all</button>
+        </h3>
         <div id="roundsBox"></div>
         <div style="margin-top:8px"><button class="sec" onclick="addRound()">＋ Add round</button></div>
 
@@ -138,7 +153,7 @@
               <option value="tease">Tease as "??? Mystery Round ???" 💰</option>
               <option value="hide">Hide that it's the wager round</option>
             </select></div>
-            <div style="flex:0;white-space:nowrap;display:flex;gap:8px;flex-wrap:wrap">
+            <div style="flex:0 0 auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
               <button onclick="publishPlan(true,true)">📣 Publish + email registrants</button>
               <button class="sec" onclick="publishPlan(true,false)">📣 Publish only</button>
               <button class="sec" onclick="publishPlan(false,false)">🚫 Unpublish</button>
@@ -207,17 +222,25 @@
           </div>
         </div>
 
+        <div class="wheel">
+          <button class="sec wnav" onclick="wheelBack()">◀ Back</button>
+          <span class="wnode" id="wn-live" onclick="wheelJump('live')">📺 Question</span>
+          <span class="warrow">→</span>
+          <span class="wnode" id="wn-answering" onclick="wheelJump('answering')">⏱ Answers open</span>
+          <span class="warrow">→</span>
+          <span class="wnode" id="wn-locked" onclick="wheelJump('locked')">🔒 Locked</span>
+          <span class="warrow">→</span>
+          <span class="wnode" id="wn-reveal" onclick="wheelJump('reveal')">💡 Revealed</span>
+          <button class="wnav" id="wheelNextBtn" onclick="wheelNext()">Next ▶</button>
+        </div>
+        <div class="muted" id="wheelHint" style="margin:-4px 0 6px"></div>
         <div class="phase-btns">
+          <span class="muted" style="align-self:center;font-size:12px">Other screens:</span>
           <button class="sec" onclick="setPhase('lobby')">🦦 Lobby</button>
-          <button class="sec" onclick="setPhase('preload')">📦 Preload</button>
-          <button onclick="goLive()">▶ Go LIVE (+4s)</button>
-          <button class="sec" onclick="setPhase('answering')">⏱ Answer window</button>
-          <button class="sec" onclick="setPhase('locked')">🔒 Lock</button>
-          <button onclick="setPhase('reveal')">💡 Reveal</button>
+          <button class="sec" onclick="setPhase('preload')">📦 Preload media</button>
           <button class="sec" onclick="startIntermission()">☕ Intermission</button>
           <button class="sec" onclick="setPhase('scoreboard')">🏆 Scoreboard</button>
-          <button class="sec" onclick="nextQuestion()">⏭ Next Q</button>
-          <button class="danger" onclick="setPhase('ended')">🏁 End game</button>
+          <button class="danger" onclick="endGameConfirm()">🏁 End game</button>
         </div>
 
         <div class="qgrid" style="margin-top:10px">
@@ -239,10 +262,7 @@
             <div id="adjBox" class="muted">Nothing pending.</div>
           </div>
         </div>
-        <div class="muted" style="margin-top:10px">
-          Display URL: <span id="dispUrl" style="user-select:all"></span> &nbsp;(set <code>&display=Retail</code> etc. per TV)<br>
-          Team join URL: <span id="playUrl" style="user-select:all"></span>
-        </div>
+        <div id="linksBox" style="margin-top:10px"></div>
       </div>
 
       <!-- Run console (timer) -->
@@ -268,8 +288,9 @@
           <button class="sec" onclick="timerResume()">▶ Resume</button>
           <button class="sec" onclick="timerAdd(60)">＋1 min</button>
           <button class="sec" onclick="timerAdd(300)">＋5 min</button>
+          <button class="sec" onclick="endRoundEarly()">⏭ End round → break</button>
           <button class="sec" onclick="setPhase('lobby')">🦦 Idle screen</button>
-          <button class="danger" onclick="setPhase('ended')">🏁 End</button>
+          <button class="danger" onclick="endEvent()">🏁 End event</button>
         </div>
         <div class="qgrid" style="margin-top:8px">
           <div>
@@ -289,7 +310,7 @@
                 <option value="roundrobin">Round robin</option>
                 <option value="single-elim">Single elimination</option>
               </select></div>
-              <div style="flex:0;white-space:nowrap;display:flex;gap:6px">
+              <div style="flex:0 0 auto;display:flex;gap:6px;flex-wrap:wrap">
                 <button onclick="genPairings()">⚔ Pair next round</button>
                 <button class="danger" onclick="undoPairings()">↩ Undo round</button>
               </div>
@@ -299,9 +320,7 @@
             <div id="standBox" class="muted">—</div>
           </div>
         </div>
-        <div class="muted" style="margin-top:10px">
-          Display URL: <span id="tDispUrl" style="user-select:all"></span>
-        </div>
+        <div id="tLinksBox" style="margin-top:10px"></div>
       </div>
     </div>
 
@@ -366,7 +385,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 09a
+   NGH EVENT STREAM HUB — NGH-BUILD 09c
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -653,7 +672,7 @@ function autoGen(ri) {
       bankId: q.id
     };
   });
-  if (!r.title || /^Round \d+$/.test(r.title)) r.title = themeName(themeId);
+  r.title = themeName(themeId);
   renderRounds();
   var tol = Math.max(3, Math.round((effTarget || 1) * 0.1));
   var msg = "Generated " + res.picked.length + " questions · Σ diff " + res.sum +
@@ -661,6 +680,26 @@ function autoGen(ri) {
   document.getElementById("edMsg").textContent = msg;
 }
 
+var roundCollapsed = {};
+function toggleRound(ri) { roundCollapsed[ri] = !roundCollapsed[ri]; renderRounds(); }
+function setAllRounds(collapsed) {
+  (cur.game.rounds || []).forEach(function (_, i) { roundCollapsed[i] = collapsed; });
+  renderRounds();
+}
+function qPopHTML(q) {
+  var inner = "";
+  if (q.type === "mc" || q.type === "media-mc") {
+    inner = (q.choices || []).map(function (c, i) {
+      var right = c === q.answer;
+      return '<div class="opt' + (right ? " right" : "") + '">' + "ABCDEFGH"[i] + ". " + esc(c) + (right ? " ✓" : "") + "</div>";
+    }).join("");
+  } else {
+    inner = '<div class="opt right">Answer: ' + esc(q.answer || "—") + " ✓</div>" +
+      ((q.alternates || []).length ? '<div class="opt">Also accepted: ' + esc(q.alternates.join(", ")) + "</div>" : "");
+  }
+  if (q.notes) inner += '<div class="opt" style="opacity:.7;border-top:1px solid var(--gold-dk);margin-top:4px;padding-top:5px">📝 ' + esc(q.notes) + "</div>";
+  return '<div class="qpop">' + inner + "</div>";
+}
 function renderRounds() {
   var g = cur.game;
   var box = document.getElementById("roundsBox");
@@ -670,7 +709,7 @@ function renderRounds() {
     div.className = "card";
     div.style.background = "#17281c";
     var qHtml = (r.questions || []).map(function (q, qi) {
-      return '<div class="list-item">' +
+      return '<div class="list-item qrowwrap">' + qPopHTML(q) +
         '<div class="grow">Q' + (qi + 1) + ". " + esc(q.prompt || "(blank)") +
         ' <span class="pill">' + esc(q.type) + "</span>" +
         ' <span class="pill">diff ' + diffOf(q) + "</span>" +
@@ -689,7 +728,9 @@ function renderRounds() {
       themes.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + "</option>"; }).join("");
     div.innerHTML =
       '<div class="row" style="align-items:center">' +
-      '<div class="grow"><label>Round ' + (ri + 1) + ' title / theme ' + diffBadge(r) + '</label>' +
+      '<div style="flex:0;padding-top:14px"><button class="sec" onclick="toggleRound(' + ri + ')" style="min-width:38px">' + (roundCollapsed[ri] ? "＋" : "－") + "</button></div>" +
+      '<div class="grow"><label>Round ' + (ri + 1) + ' title / theme ' + diffBadge(r) +
+        ' <span class="pill">' + (r.questions || []).length + ' q</span>' + '</label>' +
       '<input value="' + esc(r.title || "") + '" onchange="cur.game.rounds[' + ri + '].title=this.value"></div>' +
       '<div style="flex:0;padding-top:22px;white-space:nowrap">' +
       '<label class="check-inline" style="display:inline-flex">' +
@@ -699,6 +740,7 @@ function renderRounds() {
       "</label></div>" +
       '<div style="flex:0;padding-top:16px"><button class="danger" onclick="delRound(' + ri + ')">✕ Round</button></div>' +
       "</div>" +
+      '<div id="rbody-' + ri + '"' + (roundCollapsed[ri] ? ' style="display:none"' : "") + ">" +
       qHtml +
       '<div class="row" style="align-items:flex-end;margin-top:8px">' +
       '<div style="flex:0"><button class="sec" onclick="addQ(' + ri + ')">＋ Question (write here)</button></div>' +
@@ -712,7 +754,7 @@ function renderRounds() {
       '<div style="flex:0"><button onclick="autoGen(' + ri + ')">⚡ Auto-generate</button></div>' +
       "</div>" +
       '<div id="bankPick-' + ri + '"></div>' +
-      '<div id="qEditor-' + ri + '"></div>';
+      '<div id="qEditor-' + ri + '"></div>' + "</div>";
     box.appendChild(div);
   });
 }
@@ -828,6 +870,7 @@ function qFormRead(idPrefix, q) {
   return q;
 }
 function editQ(ri, qi) {
+  if (roundCollapsed[ri]) { roundCollapsed[ri] = false; renderRounds(); }
   var q = cur.game.rounds[ri].questions[qi];
   var box = document.getElementById("qEditor-" + ri);
   box.innerHTML =
@@ -837,6 +880,9 @@ function editQ(ri, qi) {
     '<button onclick="saveQ(' + ri + "," + qi + ')">Apply</button>' +
     '<button class="sec" onclick="renderRounds()">Cancel</button>' +
     "</div></div>";
+  box.scrollIntoView({ behavior: "smooth", block: "center" });
+  box.style.transition = "none"; box.style.outline = "3px solid var(--gold)";
+  setTimeout(function () { box.style.transition = "outline .8s"; box.style.outline = "3px solid transparent"; }, 700);
 }
 function saveQ(ri, qi) {
   qFormRead("qe", cur.game.rounds[ri].questions[qi]);
@@ -917,12 +963,14 @@ function openRun(id) {
     if ((run.game.kind || "trivia") === "timer") { openTimerRun(); return; }
     document.getElementById("runCard").style.display = "block";
     document.getElementById("runTitleLabel").textContent = run.game.title;
-    document.getElementById("dispUrl").textContent =
-      location.origin + "/trivia-display.html?game=" + run.game.id + "&display=Retail";
-    document.getElementById("playUrl").textContent =
-      location.origin + "/trivia-play.html?game=" + run.game.id;
+  // 09c: replaced by renderLinks — document.getElementById("dispUrl").textContent =
+  // 09c: replaced by renderLinks — location.origin + "/trivia-display.html?game=" + run.game.id + "&display=Retail";
+  // 09c: replaced by renderLinks — document.getElementById("playUrl").textContent =
+  // 09c: replaced by renderLinks — location.origin + "/trivia-play.html?game=" + run.game.id;
     fillRunSelectors();
     updRunPhase();
+    updWheel();
+    renderLinks("linksBox");
     clearRunTimers();
     runTimers.push(setInterval(pollRun, 2000));
     runTimers.push(setInterval(pollDisplays, 5000));
@@ -935,8 +983,8 @@ function openRun(id) {
 function openTimerRun() {
   document.getElementById("timerRunCard").style.display = "block";
   document.getElementById("tRunTitleLabel").textContent = run.game.title;
-  document.getElementById("tDispUrl").textContent =
-    location.origin + "/trivia-display.html?game=" + run.game.id + "&display=Main";
+  // 09c: replaced by renderLinks — document.getElementById("tDispUrl").textContent =
+  // 09c: replaced by renderLinks — location.origin + "/trivia-display.html?game=" + run.game.id + "&display=Main";
   document.getElementById("tRoundLabel").value = run.state.timerLabel || "";
   updTimerPhase();
   renderSchedRun();
@@ -947,6 +995,7 @@ function openTimerRun() {
   pollDisplaysTimer();
   pollRoster();
   pollBrackets();
+  renderLinks("tLinksBox");
   document.getElementById("timerRunCard").scrollIntoView({ behavior: "smooth" });
 }
 function closeRun() { clearRunTimers(); run = null; hideAllPanels(); }
@@ -980,7 +1029,7 @@ function pollRun() {
   if (!run) return;
   api("/games/" + run.game.id).then(function (j) {
     run.game = j.game; run.state = j.state || {};
-    if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else { updRunPhase(); renderBuzzes(); }
+    if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else { updRunPhase(); updWheel(); renderBuzzes(); }
   }).catch(function () {});
 }
 
@@ -995,7 +1044,7 @@ function setPhase(phase, extra) {
   api("/games/" + run.game.id + "/state", { method: "POST", body: JSON.stringify(body) })
     .then(function (j) {
       run.state = j.state;
-      if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else { updRunPhase(); pollAnswers(); }
+      if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else { updRunPhase(); updWheel(); pollAnswers(); }
     })
     .catch(function (e) { alert(e.message); });
 }
@@ -1008,6 +1057,87 @@ function startIntermission() {
     nextRoundIdx: Number(document.getElementById("runRound").value) || 0
   });
 }
+/* ---------- workflow wheel (NGH-BUILD 09c) ---------- */
+var WHEEL = ["live", "answering", "locked", "reveal"];
+function wheelState() {
+  var ph = run.state.phase;
+  // visual auto-lock when the answer clock has expired
+  if (ph === "answering" && run.state.deadline && Date.now() > Number(run.state.deadline) + 1500) return "locked";
+  return WHEEL.indexOf(ph) >= 0 ? ph : null;
+}
+function updWheel() {
+  var cur2 = wheelState();
+  WHEEL.forEach(function (w) {
+    var el = document.getElementById("wn-" + w);
+    if (el) el.className = "wnode" + (cur2 === w ? " cur" : "");
+  });
+  var btn = document.getElementById("wheelNextBtn");
+  var hint = document.getElementById("wheelHint");
+  if (!btn) return;
+  var labels = { live: "Open answers ▶", answering: "Lock ▶", locked: "Reveal ▶", reveal: (lastQOfRound() ? "☕ Intermission ▶" : "Next question ▶") };
+  btn.textContent = cur2 ? labels[cur2] : "Show question ▶";
+  if (hint) {
+    var hints = { live: "Screens show the question — answers not open yet.",
+      answering: "Teams are answering on their phones.",
+      locked: "Answers locked" + (run.state.phase === "answering" ? " (time expired)" : "") + " — adjudicate, then reveal.",
+      reveal: "Answer revealed on every screen." };
+    hint.textContent = cur2 ? hints[cur2] : "Pick a round & question above, then Show question — or Preload first for media clues.";
+  }
+}
+function lastQOfRound() {
+  var ri = Number(document.getElementById("runRound").value) || 0;
+  var qi = Number(document.getElementById("runQ").value) || 0;
+  return qi >= (((run.game.rounds || [])[ri] || {}).questions || []).length - 1;
+}
+function wheelJump(target) {
+  if (target === "live") { goLiveDirect(); return; }
+  if (WHEEL.indexOf(run.state.phase) === -1 && wheelState() === null) { goLiveDirect(); return; }
+  setPhase(target);
+}
+function wheelNext() {
+  var cur2 = wheelState();
+  if (!cur2) { goLiveDirect(); return; }
+  if (cur2 === "live") { setPhase("answering"); return; }
+  if (cur2 === "answering") { setPhase("locked"); return; }
+  if (cur2 === "locked") { setPhase("reveal"); return; }
+  // reveal → advance
+  if (lastQOfRound()) { startIntermission(); return; }
+  advanceQ(1);
+}
+function wheelBack() {
+  var cur2 = wheelState();
+  if (cur2 === "reveal") { setPhase("locked"); return; }
+  if (cur2 === "locked") { setPhase("answering"); return; }
+  if (cur2 === "answering") { setPhase("live"); return; }
+  if (cur2 === "live") {
+    var qi = Number(document.getElementById("runQ").value) || 0;
+    if (qi > 0) { advanceQ(-1, "reveal"); }
+    return;
+  }
+}
+function goLiveDirect() {
+  setPhase("live", {
+    leadMs: 1500,
+    answerSecs: Number(document.getElementById("runAnswer").value) || 45
+  });
+}
+function advanceQ(dir, phase) {
+  var ri = Number(document.getElementById("runRound").value) || 0;
+  var qi = (Number(document.getElementById("runQ").value) || 0) + dir;
+  var rounds = run.game.rounds || [];
+  if (qi >= ((rounds[ri] || {}).questions || []).length) { ri++; qi = 0; }
+  if (qi < 0) { return; }
+  if (ri >= rounds.length) { setPhase("scoreboard"); return; }
+  document.getElementById("runRound").value = String(ri);
+  fillRunQ();
+  document.getElementById("runQ").value = String(qi);
+  if (phase === "reveal") setPhase("reveal");
+  else goLiveDirect();
+}
+function endGameConfirm() {
+  if (!confirm("End the WHOLE game? Displays switch to final scores.")) return;
+  setPhase("ended");
+}
 function nextQuestion() {
   var ri = Number(document.getElementById("runRound").value) || 0;
   var qi = (Number(document.getElementById("runQ").value) || 0) + 1;
@@ -1017,7 +1147,7 @@ function nextQuestion() {
   document.getElementById("runRound").value = String(ri);
   fillRunQ();
   document.getElementById("runQ").value = String(qi);
-  setPhase("preload");
+  goLiveDirect();
 }
 function adjudicate(answerId, verdict) {
   api("/games/" + run.game.id + "/adjudicate", {
@@ -1080,6 +1210,14 @@ function timerStartSched(i) { setPhase("timer", { schedIdx: i }); }
 function timerPause() { setPhase("timer-paused"); }
 function timerResume() { setPhase("timer", { resume: true }); }
 function timerAdd(secs) { setPhase("timer", { addSecs: secs, keepSchedIdx: true }); }
+function endRoundEarly() {
+  if (!confirm("End the current round now? The intermission countdown starts immediately on every screen.")) return;
+  setPhase("timer", { endRound: true });
+}
+function endEvent() {
+  if (!confirm("End the WHOLE EVENT? Displays switch to the final screen. (To end just the current round, use ⏭ End round → break.)")) return;
+  setPhase("ended");
+}
 function renderSchedRun() {
   var box = document.getElementById("tSchedRun");
   var s = run.game.schedule || [];
@@ -1093,6 +1231,7 @@ function renderSchedRun() {
       ' <span class="pill">' + Math.round((r.secs || 0) / 60) + " min</span>" +
       ' <span class="pill">☕ ' + Math.round((r.intermissionSecs || 0) / 60) + " min</span>" +
       (isCur ? ' <span class="pill wager-pill">' + curPill + "</span>" : "") + "</div>" +
+      (isCur && run.state.phase === "timer" ? '<button class="sec" onclick="endRoundEarly()">⏭ Break now</button>' : "") +
       '<button onclick="timerStartSched(' + i + ')">▶ Start</button>' +
       "</div>";
   }).join("");
@@ -1246,6 +1385,68 @@ function currentQKey() {
   return q ? q.key : null;
 }
 var mgTeams = [];
+/* ------------------ display & join links (NGH-BUILD 09c) ------------------ */
+function displayNames() {
+  var n = run.game.displayNames;
+  if (!Array.isArray(n) || !n.length) n = ["Guru Laptop"];
+  return n;
+}
+function displayUrl(name) {
+  return location.origin + "/trivia-display.html?game=" + encodeURIComponent(run.game.id) +
+    "&display=" + encodeURIComponent(name);
+}
+function copyText(str) {
+  navigator.clipboard.writeText(JSON.parse(str)).then(function () {
+    var el = document.getElementById("linkMsg");
+    if (el) el.textContent = "Copied ✓";
+    setTimeout(function () { if (el) el.textContent = ""; }, 1500);
+  });
+}
+function linkRow(label, url) {
+  return '<div class="list-item"><div class="grow"><b>' + esc(label) + '</b><br>' +
+    '<a href="' + esc(url) + '" target="_blank" rel="noopener" style="color:var(--gold);font-size:12px;word-break:break-all">' + esc(url) + " ↗</a></div>" +
+    '<button class="sec" onclick="copyText(' + JSON.stringify(JSON.stringify(url)) + ')">📋 Copy</button></div>';
+}
+function renderLinks(boxId) {
+  var box = document.getElementById(boxId);
+  if (!box) return;
+  var h = "<h3>🔗 Screens &amp; links <span class='muted' id='linkMsg' style='font-size:12px'></span></h3>";
+  displayNames().forEach(function (n, i) {
+    h += '<div class="list-item"><div class="grow"><b>📺 ' + esc(n) + '</b><br>' +
+      '<a href="' + esc(displayUrl(n)) + '" target="_blank" rel="noopener" style="color:var(--gold);font-size:12px;word-break:break-all">' + esc(displayUrl(n)) + " ↗</a></div>" +
+      '<button class="sec" onclick="copyText(' + JSON.stringify(JSON.stringify(displayUrl(n))) + ')">📋 Copy</button>' +
+      (n === "Guru Laptop" ? "" : '<button class="danger" onclick="removeDisplay(' + i + ')">✕</button>') +
+      "</div>";
+  });
+  if ((run.game.kind || "trivia") !== "timer") {
+    var joinUrl = location.origin + "/trivia-play.html?game=" + encodeURIComponent(run.game.id);
+    h += linkRow("📱 Team join (put this behind the lobby QR)", joinUrl);
+  }
+  h += '<div class="row" style="align-items:flex-end;margin-top:6px">' +
+    '<div style="flex:2"><label style="margin-top:0">Add a screen (e.g. Bar TV, The Holt, River Deck)</label><input id="newDispName-' + boxId + '" maxlength="30"></div>' +
+    '<div style="flex:0"><button class="sec" onclick="addDisplay(\'' + boxId + '\')">＋ Add screen</button></div></div>';
+  box.innerHTML = h;
+}
+function addDisplay(boxId) {
+  var el = document.getElementById("newDispName-" + boxId);
+  var name = (el.value || "").trim();
+  if (!name) return;
+  var names = displayNames().slice();
+  if (names.indexOf(name) >= 0) { alert("That screen name already exists."); return; }
+  names.push(name);
+  saveDisplayNames(names, boxId);
+}
+function removeDisplay(i) {
+  var names = displayNames().slice();
+  names.splice(i, 1);
+  saveDisplayNames(names, run.game.kind === "timer" ? "tLinksBox" : "linksBox");
+}
+function saveDisplayNames(names, boxId) {
+  run.game.displayNames = names;
+  api("/games/" + run.game.id, { method: "PUT", body: JSON.stringify(run.game) })
+    .then(function (j) { if (j && j.id) run.game = j; renderLinks(boxId); })
+    .catch(function (e) { alert(e.message); });
+}
 /* ------------------ buzzer race panel (NGH-BUILD 09a) ------------------ */
 function renderBuzzes() {
   var box = document.getElementById("buzzBox");

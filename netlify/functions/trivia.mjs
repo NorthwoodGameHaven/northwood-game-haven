@@ -1,5 +1,5 @@
 // netlify/functions/trivia.mjs
-// NGH-BUILD 09a — Event Stream engine: + buzzer rounds, minigame self-report entries, always-on standings.
+// NGH-BUILD 09c — Event Stream engine: + rounds outline in trivia state; end-round-early; buzzers; self-report.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -225,6 +225,7 @@ function publicState(game, st, version) {
       showJoinQR: !!(game.settings && game.settings.showJoinQR)
     },
     round: round ? { title: round.title || '', isWager: !!round.isWager, qCount: (round.questions || []).length } : null,
+    roundsOutline: (game.rounds || []).map(r2 => ({ title: r2.title || '', isWager: !!r2.isWager, qCount: (r2.questions || []).length })),
     standings: st.scoreboard || []
   };
   if (q) {
@@ -988,7 +989,13 @@ const _handler = async (req) => {
       // ---- timer sessions ----
       if (phase === 'timer') {
         const sched = Array.isArray(game.schedule) ? game.schedule : [];
-        if (b.schedIdx != null) {
+        if (b.endRound) {
+          // End the running (or paused) round immediately — the shared-clock
+          // intermission window starts right now on every screen.
+          if (!st.deadline && st.remainMs == null) return bad('No round is running.');
+          st.deadline = now;
+          st.remainMs = null;
+        } else if (b.schedIdx != null) {
           // Start a scheduled round: label/duration/intermission from the schedule.
           const si = Math.max(0, Math.min(sched.length - 1, b.schedIdx | 0));
           const r = sched[si] || {};

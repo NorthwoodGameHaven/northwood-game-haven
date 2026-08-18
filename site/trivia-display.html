@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 08a -->
+<!-- NGH-BUILD 09c -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -19,7 +19,7 @@
   html,body{height:100%;overflow:hidden;background:var(--forest-dk);color:var(--cream);
     font-family:'Nunito',sans-serif;cursor:none}
   #stage{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;text-align:center;padding:4vmin}
+    justify-content:center;text-align:center;padding:11vmin 4vmin 4vmin;box-sizing:border-box}
   .brand{font-family:'Alfa Slab One',serif;color:var(--gold);letter-spacing:.02em}
   .sub{font-family:'Caveat',cursive;color:var(--cream);opacity:.9}
   #roundTag{position:fixed;top:2.2vmin;left:2.6vmin;font-weight:800;font-size:3vmin;
@@ -36,6 +36,16 @@
     padding:2.6vmin 3vmin;font-size:4.2vmin;font-weight:800;text-align:left}
   .choice b{color:var(--gold);margin-right:1.4vmin}
   .choice.win{background:var(--gold);color:var(--forest-dk)}
+  .choice.win b{color:var(--maroon)}
+  .devban-bottom{position:fixed;bottom:3vmin;left:50%;transform:translateX(-50%);z-index:2;margin:0}
+  .intclock{font-family:'Alfa Slab One',serif;font-size:12vmin;color:var(--gold);line-height:1;margin:1vmin 0;
+    text-shadow:0 .4vmin 1.2vmin rgba(0,0,0,.45)}
+  .intgrid{display:flex;gap:4vmin;justify-content:center;align-items:flex-start;margin-top:2.5vmin;max-width:92vw}
+  .intpanel{background:rgba(20,34,24,.55);border:.35vmin solid var(--gold-dk);border-radius:1.6vmin;padding:1.6vmin 2.2vmin;min-width:32vmin}
+  .intpanel h4{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:2.8vmin;margin:0 0 1vmin;font-weight:normal}
+  .introw{display:flex;gap:1.4vmin;font-size:2.7vmin;font-weight:800;padding:.5vmin 0;text-align:left}
+  .introw.done{opacity:.4;text-decoration:line-through}
+  .introw.cur{color:var(--gold)}
   video,audio{max-width:88vw;max-height:62vh;border:.5vmin solid var(--gold);border-radius:1.6vmin;background:#000}
   img.clue{max-width:80vw;max-height:60vh;border:.5vmin solid var(--gold);border-radius:1.6vmin}
   #overlay{position:fixed;inset:0;background:rgba(20,34,24,.96);display:none;
@@ -64,11 +74,11 @@
   body.wx-storm-day{background:linear-gradient(#39434e 0%,#525f6b 55%,#1e3326 100%)}
   body.wx-storm-night{background:linear-gradient(#0a0e16 0%,#161c26 60%,#0e150f 100%)}
   #wxLayer{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
-  #sunGlow{position:absolute;top:6vmin;right:10vmin;width:16vmin;height:16vmin;border-radius:50%;
+  #sunGlow{position:absolute;top:6vmin;right:30vw;width:16vmin;height:16vmin;border-radius:50%;
     background:radial-gradient(circle,#ffe9a3 0%,#f5c542 45%,rgba(245,197,66,0) 72%);display:none;
     animation:sunpulse 6s ease-in-out infinite}
   @keyframes sunpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
-  #moon{position:absolute;top:7vmin;right:11vmin;width:9vmin;height:9vmin;border-radius:50%;
+  #moon{position:absolute;top:7vmin;right:31vw;width:9vmin;height:9vmin;border-radius:50%;
     background:radial-gradient(circle at 35% 35%,#f4f1e0,#c9c6b4);box-shadow:0 0 4vmin rgba(244,241,224,.5);display:none}
   .star{position:absolute;width:.4vmin;height:.4vmin;background:#fff;border-radius:50%;opacity:.8;
     animation:twinkle 3s ease-in-out infinite}
@@ -84,13 +94,18 @@
   @keyframes snowfall{0%{transform:translateY(-5vh) translateX(0)}50%{transform:translateY(52vh) translateX(3vmin)}100%{transform:translateY(112vh) translateX(-2vmin)}}
   #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:2}
   #stage,#tHead,#roundTag,#wagerTag,#timer{z-index:1}
-  #stage{position:relative}
+  body.wx #stage{justify-content:flex-start;padding:19vmin 27vw 4vmin;box-sizing:border-box}
+  body.wx #stage .tlabel:first-child{margin-top:0}
+  .tblGrid{margin-top:2.4vmin;background:rgba(20,34,24,.62);border:.35vmin solid var(--gold-dk);border-radius:1.6vmin;padding:1.4vmin 2vmin;max-width:64vmin}
+  .tblGrid h4{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:2.8vmin;margin:0 0 .8vmin;font-weight:normal}
+  .tblGrid .pairRow{font-size:2.6vmin}
+  .champBanner{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:6vmin;margin-top:1.6vmin;text-shadow:0 .4vmin 1.2vmin rgba(0,0,0,.55)}
   #tHead{position:fixed;top:1.6vmin;left:0;right:0;display:none;align-items:flex-start;
     justify-content:space-between;padding:0 2.4vmin;z-index:1}
   #tHead img.crest{height:22vmin;filter:drop-shadow(0 .5vmin 1vmin rgba(0,0,0,.45))}
   #tHead .mid{text-align:center;padding-top:1vmin}
-  #tHead .clock{font-family:'Alfa Slab One',serif;font-size:4.6vmin;color:var(--cream);text-shadow:0 .3vmin .8vmin rgba(0,0,0,.5)}
-  #tHead .datewx{font-size:2.4vmin;font-weight:800;opacity:.92;margin-top:.4vmin;text-shadow:0 .2vmin .6vmin rgba(0,0,0,.5)}
+  #tHead .clock{font-family:'Alfa Slab One',serif;font-size:4.2vmin;line-height:1.05;color:var(--cream);text-shadow:0 .3vmin .8vmin rgba(0,0,0,.5)}
+  #tHead .datewx{font-size:2.2vmin;font-weight:800;opacity:.92;margin-top:.5vmin;text-shadow:0 .2vmin .6vmin rgba(0,0,0,.5)}
   #tHead img.evimg{height:16vmin;max-width:24vw;object-fit:cover;border:.4vmin solid var(--gold);border-radius:1.4vmin}
   .bigclock{font-family:'Alfa Slab One',serif;font-size:21vmin;color:var(--gold);line-height:1;letter-spacing:.02em;
     text-shadow:0 .6vmin 1.6vmin rgba(0,0,0,.55)}
@@ -100,6 +115,15 @@
   .tev{font-family:'Caveat',cursive;font-size:4vmin;opacity:.9;margin-top:1vmin;text-shadow:0 .2vmin .6vmin rgba(0,0,0,.5)}
   #schedPanel{position:fixed;right:2.4vmin;top:26vmin;width:26vw;max-height:60vh;overflow:hidden;z-index:1;
     background:rgba(20,34,24,.72);border:.35vmin solid var(--gold-dk);border-radius:1.6vmin;padding:1.6vmin 1.8vmin;display:none}
+  #pairPanel{position:fixed;left:2.4vmin;top:26vmin;width:26vw;max-height:60vh;overflow:hidden;z-index:1;
+    background:rgba(20,34,24,.72);border:.35vmin solid var(--gold-dk);border-radius:1.6vmin;padding:1.6vmin 1.8vmin;display:none}
+  #pairPanel h4{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:2.6vmin;margin:0 0 1vmin;font-weight:normal}
+  .pairRow{display:flex;gap:1vmin;font-size:2.35vmin;font-weight:800;padding:.55vmin .9vmin;align-items:baseline}
+  .pairRow .tno{font-family:'Alfa Slab One',serif;color:var(--gold);min-width:4.2vmin}
+  .pairRow .done{opacity:.5;text-decoration:line-through}
+  .standRow{display:flex;gap:1vmin;font-size:2.5vmin;font-weight:800;padding:.55vmin .9vmin}
+  .standRow .pos{font-family:'Alfa Slab One',serif;color:var(--gold);min-width:4vmin}
+  .standRow .pts{margin-left:auto;font-family:'Alfa Slab One',serif;color:var(--gold)}
   #schedPanel h4{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:2.6vmin;margin:0 0 1vmin;font-weight:normal}
   .schedRow{display:flex;justify-content:space-between;gap:1vmin;font-size:2.5vmin;font-weight:800;
     padding:.7vmin .9vmin;border-radius:.9vmin;opacity:.65}
@@ -125,6 +149,7 @@
   <img class="evimg" id="tEvImg" src="" alt="" style="display:none">
 </div>
 <div id="schedPanel"></div>
+<div id="pairPanel"></div>
 <div id="roundTag"></div>
 <div id="wagerTag"></div>
 <div id="stage"></div>
@@ -137,7 +162,7 @@
 
 <script>
 /* =====================================================================
-   NGH TRIVIA DISPLAY — NGH-BUILD 08a
+   NGH TRIVIA DISPLAY — NGH-BUILD 09c
    Dumb, resilient TV client.
    URL: trivia-display.html?game=GAME-XXXX&display=Retail
    - Server clock offset: median of ping samples against /api/trivia/time
@@ -473,14 +498,48 @@
     var m = Math.floor(secs / 60), s = secs % 60;
     return m + ":" + String(s).padStart(2, "0");
   }
-  function schedPanelHTML(doneThrough, curIdx) {
+  function schedPanelHTML(doneThrough, curIdx, curIcon) {
     if (!st.schedule || !st.schedule.length) return "";
     var h = "<h4>ROUND SCHEDULE</h4>";
     st.schedule.forEach(function (r, i) {
       var cls = i === curIdx ? "cur" : (doneThrough != null && i <= doneThrough ? "done" : "");
-      h += '<div class="schedRow ' + cls + '"><span>' + (i + 1) + ". " + esc(r.label || ("Round " + (i + 1))) + "</span>" +
+      var icon = (i === curIdx && curIcon) ? (curIcon + " ") : "";
+      h += '<div class="schedRow ' + cls + '"><span>' + icon + (i + 1) + ". " + esc(r.label || ("Round " + (i + 1))) + "</span>" +
         '<span class="dur">' + fmtDur(r.secs) + "</span></div>";
     });
+    return h;
+  }
+
+  function leftPanelHTML() {
+    // ALWAYS-ON standings panel (left side)
+    var h = "";
+    if (st.champion && st.champion.name) {
+      h += '<h4>\ud83c\udfc6 CHAMPION</h4><div class="standRow" style="font-size:3vmin"><span>' + esc(st.champion.name) + "</span></div>";
+    }
+    h += "<h4>STANDINGS</h4>";
+    if (!st.standings || !st.standings.length) {
+      h += '<div class="standRow" style="opacity:.6">Pending \u2014 updates after the first results</div>';
+      return h;
+    }
+    st.standings.slice(0, 12).forEach(function (s2) {
+      h += '<div class="standRow"><span class="pos">' + s2.standing + '.</span><span>' + esc(s2.name) + '</span><span class="pts">' + s2.pts + "</span></div>";
+    });
+    return h;
+  }
+  function tablesBlockHTML() {
+    // Table assignments — shown on intermission / waiting / idle center stage
+    var h = '<div class="tblGrid"><h4>TABLE ASSIGNMENTS' + ((st.pairings && st.pairings.length) ? (" \u2014 ROUND " + st.pairRound) : "") + "</h4>";
+    if (!st.pairings || !st.pairings.length) {
+      h += '<div class="pairRow" style="opacity:.6">Pending \u2014 the Guru is pairing tables</div></div>';
+      return h;
+    }
+    var max = 10;
+    st.pairings.slice(0, max).forEach(function (m) {
+      h += '<div class="pairRow"><span class="tno">T' + esc(String(m.table)) + '</span><span class="' + (m.result ? "done" : "") + '">' +
+        esc(m.aName) + (m.bName ? " vs " + esc(m.bName) : " \u2014 BYE") + "</span></div>";
+    });
+    if (st.pairings.length > max) h += '<div class="pairRow"><span class="tno">\u2026</span><span>+' + (st.pairings.length - max) + " more</span></div>";
+    h += "</div>";
     return h;
   }
 
@@ -509,14 +568,28 @@
 
     // ---- IDLE screen ----
     if (st.phase === "lobby" || st.phase === "ended") {
+      var pp = document.getElementById("pairPanel");
+      pp.style.display = "block";
+      pp.innerHTML = leftPanelHTML();
       sp.style.display = (st.schedule && st.schedule.length) ? "block" : "none";
       sp.innerHTML = schedPanelHTML(st.phase === "ended" ? (st.schedule || []).length - 1 : null,
-        st.phase === "ended" ? -1 : (st.schedIdx != null ? st.schedIdx : -1));
+        st.phase === "ended" ? -1 : (st.schedIdx != null ? st.schedIdx : -1), null);
       var names = "";
       if (roster && roster.roster && roster.roster.length) {
-        names = '<div class="rosterWrap">' + roster.roster.map(function (p) {
+        var list = roster.roster.slice();
+        if (st.standings && st.standings.length) {
+          var order = {};
+          st.standings.forEach(function (s2) { order[s2.name] = s2.standing; });
+          list.sort(function (a, b2) {
+            var oa = order[a.name] != null ? order[a.name] : 999;
+            var ob = order[b2.name] != null ? order[b2.name] : 999;
+            return oa - ob || String(a.name).localeCompare(String(b2.name));
+          });
+        }
+        names = '<div class="rosterWrap">' + list.map(function (p) {
+          var standNo = (st.standings || []).length ? null : p.standing;
           return '<span class="rosterName' + (p.checkedIn ? "" : " ghost") + '">' +
-            (p.standing != null ? (p.standing + ". ") : "") + esc(p.name) +
+            esc(p.name) +
             (p.qty > 1 ? " (+" + (p.qty - 1) + ")" : "") +
             (p.table ? '<span class="tbl">T' + esc(String(p.table)) + "</span>" : "") + "</span>";
         }).join("") + "</div>" +
@@ -525,12 +598,17 @@
       stage.innerHTML =
         '<div class="brand" style="font-size:8vmin">' + esc(st.title) + "</div>" +
         (evLine ? '<div class="tev">' + evLine + "</div>" : "") +
+        (st.champion && st.champion.name ? '<div class="champBanner">🏆 Champion: ' + esc(st.champion.name) + "</div>" : "") +
         (st.phase === "ended" ? '<div class="tlabel" style="color:var(--gold)">🏁 That\u2019s a wrap — thanks for playing!</div>' : "") +
-        names;
+        names +
+        (st.phase !== "ended" ? tablesBlockHTML() : "");
       if (!rosterTimer) { pollRoster(); rosterTimer = setInterval(pollRoster, 10000); }
       return;
     }
     if (rosterTimer) { clearInterval(rosterTimer); rosterTimer = null; }
+    var pp2 = document.getElementById("pairPanel");
+    pp2.style.display = "block";
+    pp2.innerHTML = leftPanelHTML();
 
     // ---- PAUSED ----
     var paused = st.phase === "timer-paused";
@@ -538,21 +616,22 @@
     sp.style.display = (st.schedule && st.schedule.length) ? "block" : "none";
 
     if (paused) {
-      sp.innerHTML = schedPanelHTML(curIdx - 1, curIdx);
+      sp.innerHTML = schedPanelHTML(curIdx - 1, curIdx, "⏸");
       var rm = Number(st.remainMs) || 0;
       var inInt = rm < 0;
       stage.innerHTML =
-        '<div class="tlabel">' + esc(inInt ? "Intermission" : (st.timerLabel || st.title)) + "</div>" +
+        '<div class="tlabel">' + esc(inInt ? "☕ Intermission" : (st.timerLabel || st.title)) + "</div>" +
         '<div class="bigclock paused">' + fmt(inInt ? (Number(st.intMs) + rm) : rm) + "</div>" +
-        '<div class="tlabel" style="color:var(--gold)">⏸ PAUSED</div>' +
-        (evLine ? '<div class="tev">' + evLine + "</div>" : "");
+        '<div class="tlabel" style="color:var(--gold)">⏸ PAUSED' + (inInt && st.nextLabel ? " · up next: " + esc(st.nextLabel) : "") + "</div>" +
+        (evLine ? '<div class="tev">' + evLine + "</div>" : "") +
+        (inInt ? tablesBlockHTML() : "");
       return;
     }
 
     if (!st.deadline) {
-      sp.innerHTML = schedPanelHTML(curIdx - 1, curIdx);
+      sp.innerHTML = schedPanelHTML(curIdx - 1, curIdx, null);
       stage.innerHTML = '<div class="tlabel">' + esc(st.timerLabel || st.title) + '</div><div class="bigclock">--:--</div>' +
-        (evLine ? '<div class="tev">' + evLine + "</div>" : "");
+        (evLine ? '<div class="tev">' + evLine + "</div>" : "") + tablesBlockHTML();
       return;
     }
 
@@ -561,10 +640,12 @@
       '<div class="tlabel" id="tPhaseLabel"></div>' +
       '<div class="bigclock" id="bigClock">--:--</div>' +
       '<div class="tlabel" id="tSubLabel" style="display:none"></div>' +
-      (evLine ? '<div class="tev">' + evLine + "</div>" : "");
+      (evLine ? '<div class="tev">' + evLine + "</div>" : "") +
+      '<div id="tblArea"></div>';
     var bc = document.getElementById("bigClock");
     var lbl = document.getElementById("tPhaseLabel");
     var sub = document.getElementById("tSubLabel");
+    var tblArea = document.getElementById("tblArea");
     var lastMode = "";
     countdownTimer = setInterval(function () {
       var now = serverNow();
@@ -576,17 +657,20 @@
         if (mode === "round") {
           lbl.textContent = st.timerLabel || st.title;
           sub.style.display = "none";
-          sp.innerHTML = schedPanelHTML(curIdx - 1, curIdx);
+          tblArea.innerHTML = "";
+          sp.innerHTML = schedPanelHTML(curIdx - 1, curIdx, "▶");
         } else if (mode === "int") {
           lbl.textContent = "☕ Intermission";
           sub.style.display = "block";
           sub.innerHTML = st.nextLabel ? ("Up next: <b style='color:var(--gold)'>" + esc(st.nextLabel) + "</b>") : "Next round soon";
-          sp.innerHTML = schedPanelHTML(curIdx, curIdx + (st.nextLabel ? 1 : 0));
+          sp.innerHTML = schedPanelHTML(curIdx, curIdx + (st.nextLabel ? 1 : 0), "☕");
+          tblArea.innerHTML = tablesBlockHTML();
         } else {
           lbl.textContent = st.nextLabel ? ("Next: " + st.nextLabel) : "Round complete";
           sub.style.display = "block";
           sub.textContent = "Waiting for the host…";
-          sp.innerHTML = schedPanelHTML(curIdx, st.nextLabel ? curIdx + 1 : -1);
+          sp.innerHTML = schedPanelHTML(curIdx, st.nextLabel ? curIdx + 1 : -1, null);
+          tblArea.innerHTML = tablesBlockHTML();
         }
       }
       if (mode === "round") {
@@ -616,6 +700,7 @@
     if (st.kind === "timer") { renderTimerMode(); return; }
     document.getElementById("tHead").style.display = "none";
     document.getElementById("schedPanel").style.display = "none";
+    document.getElementById("pairPanel").style.display = "none";
     if (rosterTimer) { clearInterval(rosterTimer); rosterTimer = null; }
     document.body.className = "";
     tags();
@@ -691,20 +776,46 @@
       var rows0 = st.scoreboard || [];
       var nx = st.next;
       var h = '<div class="devban">📵 Use of phones or devices to search for answers is STRICTLY PROHIBITED during the game</div>' +
-        '<div class="brand" style="font-size:6.5vmin;margin-top:1vmin">INTERMISSION</div>';
+        '<div class="brand" style="font-size:6.5vmin;margin-top:1vmin">☕ INTERMISSION</div>' +
+        '<div class="intclock" id="intClock">–:––</div>';
       if (nx) {
-        h += '<div class="sub" style="font-size:5vmin;margin-top:1vmin">Up next: Round ' + (nx.roundIdx + 1) +
+        h += '<div class="sub" style="font-size:4.6vmin">Up next: Round ' + (nx.roundIdx + 1) +
           " — " + esc(nx.title) + (nx.isWager ? " 💰 " + esc(st.wagerLabel) : "") + "</div>";
       }
-      h += "<table class='board' style='margin-top:2.5vmin'>";
+      h += '<div class="intgrid">';
+      // standings panel
+      h += '<div class="intpanel"><h4>📊 STANDINGS</h4>';
+      if (!rows0.length) h += '<div class="introw" style="opacity:.6">Scores post after the first reveal</div>';
       for (var m = 0; m < Math.min(rows0.length, 10); m++) {
-        h += "<tr" + (m === 0 ? ' class="gold"' : "") + "><td>" + (m + 1) + ".</td><td>" +
-          esc(rows0[m].team) + "</td><td>" + rows0[m].score + "</td></tr>";
+        h += '<div class="introw' + (m === 0 ? " cur" : "") + '"><span style="min-width:4vmin">' + (m + 1) + '.</span><span style="flex:1">' +
+          esc(rows0[m].team) + '</span><span>' + rows0[m].score + "</span></div>";
       }
-      h += "</table>";
-      h += '<div class="devban" style="margin-top:2.5vmin">📵 Stash is watching — keep it fair, keep it fun</div>';
+      h += "</div>";
+      // upcoming rounds panel
+      var outline = st.roundsOutline || [];
+      if (outline.length) {
+        var nxIdx = nx ? (nx.roundIdx | 0) : -1;
+        h += '<div class="intpanel"><h4>🗺 ROUNDS</h4>';
+        outline.forEach(function (r0, i0) {
+          var cls = nxIdx >= 0 ? (i0 < nxIdx ? "done" : (i0 === nxIdx ? "cur" : "")) : "";
+          h += '<div class="introw ' + cls + '"><span style="min-width:4vmin">' + (i0 + 1) + '.</span><span style="flex:1">' +
+            esc(r0.title || ("Round " + (i0 + 1))) + (r0.isWager ? " 💰" : "") + "</span></div>";
+        });
+        h += "</div>";
+      }
+      h += "</div>";
+      h += '<div class="devban devban-bottom">📵 Stash is watching — keep it fair, keep it fun</div>';
       stage.innerHTML = h;
-      startCountdown(); // break timer, synced off the shared clock
+      // centered M:SS break clock off the shared deadline
+      if (st.deadline) {
+        countdownTimer = setInterval(function () {
+          var el = document.getElementById("intClock");
+          if (!el) return;
+          var left = Math.max(0, Number(st.deadline) - serverNow());
+          var sM = Math.floor(left / 60000), sS = Math.floor((left % 60000) / 1000);
+          el.textContent = sM + ":" + String(sS).padStart(2, "0");
+        }, 250);
+      }
       return;
     }
 
