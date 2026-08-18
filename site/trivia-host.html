@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 09e -->
+<!-- NGH-BUILD 09f -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -366,6 +366,12 @@
         <h2 style="margin-top:0">🔗 Clue linker <span class="pill" id="linkerCount">—</span>
           <button class="sec" style="padding:4px 10px;font-size:12px" onclick="loadLinker()">↻ Load</button></h2>
         <div class="muted">Every media question still missing its clue. Hit 🔎 to search YouTube for it, paste the link, set the clip window (start/end in seconds), and Attach — the question flips to ready automatically. Tip: a YouTube share link with "start at" already carries the timestamp.</div>
+        <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:800;color:var(--gold)">⇪ Bulk fill from a pasted list</summary>
+          <div class="muted" style="margin:6px 0">One per line: <code>answer | youtube-url | start | end</code> (start/end optional). Example:<br>
+          <code>Menards | https://www.youtube.com/watch?v=xxxxxxxxxxx | 3 | 12</code></div>
+          <textarea id="bulkBox" style="width:100%;min-height:110px;background:#0f1c13;color:var(--cream);border:2px solid var(--gold-dk);border-radius:8px;padding:8px"></textarea>
+          <div style="margin-top:6px"><button class="sec" onclick="bulkImport()">⇪ Fill rows</button> <span class="muted" id="bulkMsg"></span></div>
+        </details>
         <div id="linkerBox" class="muted" style="margin-top:8px">Press ↻ Load.</div>
       </div>
 
@@ -392,7 +398,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 09e
+   NGH EVENT STREAM HUB — NGH-BUILD 09f
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -1605,11 +1611,91 @@ function loadLinker() {
         '<div><label style="margin-top:0">End (s)</label><input id="lke-' + i + '" type="number" min="0" style="width:90px"></div>' +
         '<div style="flex:0;white-space:nowrap;padding-bottom:2px">' +
         '<label class="check-inline" style="margin-right:8px"><input type="checkbox" id="lkh-' + i + '"' + (String(q.type) === "media-fill" && /audio|jingle|song|listen/i.test((q.notes || "") + q.prompt) ? " checked" : "") + '> audio only</label>' +
-        '<a class="sec" style="text-decoration:none;padding:8px 10px;border-radius:8px;background:#25402c;color:var(--cream)" href="' + esc(search) + '" target="_blank" rel="noopener">🔎 Find on YouTube</a> ' +
+        '<a class="sec" style="text-decoration:none;padding:8px 10px;border-radius:8px;background:#25402c;color:var(--cream)" href="' + esc(search) + '" target="_blank" rel="noopener">🔎 Find</a> ' +
+        '<button class="sec" onclick="previewLink(' + i + ')">▶ Preview</button> ' +
         '<button onclick="saveLink(' + i + ')">💾 Attach</button></div>' +
-        "</div><div class=\"muted\" id=\"lkm-" + i + "\"></div></div>";
+        "</div>" +
+        '<div id="lkp-' + i + '" style="display:none;margin-top:8px">' +
+        '<div id="lkyt-' + i + '" style="width:420px;max-width:100%;aspect-ratio:16/9;background:#000;border-radius:8px"></div>' +
+        '<div class="row" style="align-items:center;margin-top:6px">' +
+        '<button class="sec" onclick="markTime(' + i + ",'s')\">⬅ Set START here</button> " +
+        '<button class="sec" onclick="markTime(' + i + ",'e')\">Set END here ➡</button> " +
+        '<span class="muted" id="lkt-' + i + '">—</span></div></div>' +
+        '<div class="muted" id="lkm-' + i + '"></div></div>';
     }).join("");
   }).catch(function (e) { box.textContent = "Error: " + e.message; });
+}
+var lkPlayers = {};
+function previewLink(i) {
+  var url = document.getElementById("lku-" + i).value.trim();
+  var msg = document.getElementById("lkm-" + i);
+  var vid = ytId(url);
+  if (!vid) { msg.textContent = "Paste a YouTube link first."; return; }
+  document.getElementById("lkp-" + i).style.display = "block";
+  msg.innerHTML = '<span class="muted">Checking the video…</span>';
+  // dead-video probe: a missing video has no mqdefault thumbnail
+  var probe = new Image();
+  probe.onload = function () {
+    msg.innerHTML = (probe.naturalWidth > 120)
+      ? '<span style="color:var(--gold)">Video exists ✓ — press play below. If it says "Watch on YouTube", embedding is blocked: pick a different upload.</span>'
+      : '<span style="color:#ff8f7a">That video ID looks dead or private — pick another upload.</span>';
+  };
+  probe.onerror = function () { msg.innerHTML = '<span style="color:#ff8f7a">That video ID looks dead or private — pick another upload.</span>'; };
+  probe.src = ytThumb(vid);
+  if (!window.YT || !YT.Player) {
+    if (!document.getElementById("ytapi")) {
+      var t = document.createElement("script"); t.id = "ytapi"; t.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(t);
+    }
+    window.onYouTubeIframeAPIReady = function () { mountPreview(i, vid); };
+    return;
+  }
+  mountPreview(i, vid);
+}
+function mountPreview(i, vid) {
+  try { if (lkPlayers[i] && lkPlayers[i].destroy) lkPlayers[i].destroy(); } catch (e) {}
+  var start = Number(document.getElementById("lks-" + i).value) || 0;
+  lkPlayers[i] = new YT.Player("lkyt-" + i, {
+    videoId: vid,
+    playerVars: { start: start, rel: 0, modestbranding: 1, playsinline: 1 }
+  });
+  var tick = setInterval(function () {
+    var p = lkPlayers[i], el = document.getElementById("lkt-" + i);
+    if (!p || !p.getCurrentTime || !el) { clearInterval(tick); return; }
+    try { el.textContent = "player at " + p.getCurrentTime().toFixed(1) + "s"; } catch (e) {}
+  }, 500);
+}
+function markTime(i, which) {
+  var p = lkPlayers[i];
+  if (!p || !p.getCurrentTime) return;
+  var t = Math.max(0, Math.floor(p.getCurrentTime()));
+  document.getElementById(which === "s" ? "lks-" + i : "lke-" + i).value = t;
+  document.getElementById("lkm-" + i).innerHTML =
+    '<span style="color:var(--gold)">' + (which === "s" ? "Start" : "End") + " set to " + t + "s</span>";
+}
+function bulkImport() {
+  var txt = document.getElementById("bulkBox").value.trim();
+  var msg = document.getElementById("bulkMsg");
+  if (!txt) { msg.textContent = "Paste some lines first."; return; }
+  var lines = txt.split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+  var matched = 0, missed = [];
+  lines.forEach(function (line) {
+    var parts = line.split(/\s*(?:\||=>|\t)\s*/);
+    if (parts.length < 2) { missed.push(line.slice(0, 40)); return; }
+    var key = parts[0].toLowerCase(), url = parts[1];
+    var idx = -1;
+    for (var i = 0; i < linkerRows.length; i++) {
+      var q = linkerRows[i];
+      if (String(q.answer).toLowerCase() === key || String(q.prompt).toLowerCase().indexOf(key) >= 0) { idx = i; break; }
+    }
+    if (idx < 0 || !ytId(url)) { missed.push(line.slice(0, 40)); return; }
+    document.getElementById("lku-" + idx).value = url;
+    if (parts[2]) document.getElementById("lks-" + idx).value = Number(parts[2]) || "";
+    if (parts[3]) document.getElementById("lke-" + idx).value = Number(parts[3]) || "";
+    matched++;
+  });
+  msg.innerHTML = "Filled " + matched + " row(s)." + (missed.length ? " Unmatched: " + esc(missed.join("; ")) : "") +
+    " Preview each, then Attach.";
 }
 function saveLink(i) {
   var q = linkerRows[i];
