@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 09c -->
+<!-- NGH-BUILD 09e -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -48,6 +48,14 @@
   .introw.cur{color:var(--gold)}
   video,audio{max-width:88vw;max-height:62vh;border:.5vmin solid var(--gold);border-radius:1.6vmin;background:#000}
   img.clue{max-width:80vw;max-height:60vh;border:.5vmin solid var(--gold);border-radius:1.6vmin}
+  #ytWrap{position:relative;width:72vw;height:40.5vw;max-height:56vh;max-width:99.5vh;margin:2vmin auto;
+    border:.5vmin solid var(--gold);border-radius:1.6vmin;overflow:hidden;background:#000}
+  #ytWrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  #ytCover{position:absolute;inset:0;background:var(--forest-dk);display:none;
+    align-items:center;justify-content:center;flex-direction:column;color:var(--gold);
+    font-family:'Alfa Slab One',serif;font-size:9vmin;text-align:center}
+  #ytWrap.audioonly #ytCover{display:flex}
+  #ytBlock{position:absolute;left:0;right:0;bottom:0;height:16%;background:transparent}
   #overlay{position:fixed;inset:0;background:rgba(20,34,24,.96);display:none;
     flex-direction:column;align-items:center;justify-content:center;z-index:50;text-align:center}
   #overlay .brand{font-size:7vmin}
@@ -162,7 +170,7 @@
 
 <script>
 /* =====================================================================
-   NGH TRIVIA DISPLAY — NGH-BUILD 09c
+   NGH TRIVIA DISPLAY — NGH-BUILD 09e
    Dumb, resilient TV client.
    URL: trivia-display.html?game=GAME-XXXX&display=Retail
    - Server clock offset: median of ping samples against /api/trivia/time
@@ -366,8 +374,75 @@
     }
   }
 
+  /* ---------- YouTube clue player (NGH-BUILD 09e) ---------- */
+  var ytPlayer = null, ytReady = false, ytPending = null, ytStopTimer = null;
+  function loadYT() {
+    if (window.YT && window.YT.Player) { ytReady = true; return; }
+    if (document.getElementById("ytapi")) return;
+    var t = document.createElement("script");
+    t.id = "ytapi"; t.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(t);
+    window.onYouTubeIframeAPIReady = function () {
+      ytReady = true;
+      if (ytPending) { var p = ytPending; ytPending = null; ytMount(p.m, p.play); }
+    };
+  }
+  loadYT();
+  function ytMount(m, playNow) {
+    if (!ytReady) { ytPending = { m: m, play: playNow }; return; }
+    var host = document.getElementById("ytHost");
+    if (!host) return;
+    var opts = {
+      videoId: m.videoId,
+      playerVars: {
+        autoplay: 0, controls: 0, disablekb: 1, modestbranding: 1, rel: 0,
+        fs: 0, iv_load_policy: 3, playsinline: 1,
+        start: m.start || 0
+      },
+      events: {
+        onReady: function (e) {
+          try { if (!(st.settings && st.settings.tvAudio)) e.target.mute(); } catch (x) {}
+          if (playNow) ytPlayAt(m);
+        }
+      }
+    };
+    try { if (ytPlayer && ytPlayer.destroy) ytPlayer.destroy(); } catch (x) {}
+    ytPlayer = new YT.Player(host, opts);
+  }
+  function ytPlayAt(m) {
+    if (!ytPlayer || !ytPlayer.seekTo) return;
+    clearTimeout(ytStopTimer);
+    var startAt = Number(st.startAt) || serverNow();
+    var go = function () {
+      var lateBy = Math.max(0, (serverNow() - startAt) / 1000);
+      try {
+        ytPlayer.seekTo((m.start || 0) + lateBy, true);
+        ytPlayer.playVideo();
+      } catch (x) {}
+      if (m.end) {
+        var runMs = Math.max(500, ((m.end - (m.start || 0)) - lateBy) * 1000);
+        ytStopTimer = setTimeout(function () { try { ytPlayer.pauseVideo(); } catch (x) {} }, runMs);
+      }
+    };
+    var delay = startAt - serverNow();
+    if (delay > 30) setTimeout(go, delay); else go();
+  }
+  function ytStop() {
+    clearTimeout(ytStopTimer);
+    try { if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo(); } catch (x) {}
+  }
+
   function mediaBlock(q, ph) {
     if (!q || !q.media || !q.media.url) return Promise.resolve("");
+    if (q.media.kind === "youtube") {
+      readyQKey = q.key;
+      if (ph === "preload") { return Promise.resolve(""); }
+      return Promise.resolve(
+        '<div id="ytWrap"' + (q.media.hideVideo ? ' class="audioonly"' : "") + '>' +
+        '<div id="ytHost"></div>' +
+        '<div id="ytCover">🎵<div style="font-size:4vmin;margin-top:1vmin">LISTEN…</div></div>' +
+        '<div id="ytBlock"></div></div>');
+    }
     return preloadAsset(q.media.url).then(function (src) {
       readyQKey = q.key;
       if (ph === "preload") return "";
@@ -750,6 +825,9 @@
         stage.innerHTML = html;
         var el = document.getElementById("clueMedia");
         if (el && el.tagName !== "IMG" && ph === "live" && st.startAt) scheduleMedia(el, q.media.kind);
+        if (q.media && q.media.kind === "youtube" && document.getElementById("ytHost")) {
+          ytMount(q.media, ph === "live" || ph === "answering");
+        }
         if (ph !== "locked") startCountdown();
       });
       return;

@@ -1,5 +1,5 @@
 // netlify/functions/trivia.mjs
-// NGH-BUILD 09c — Event Stream engine: + rounds outline in trivia state; end-round-early; buzzers; self-report.
+// NGH-BUILD 09e — Event Stream engine: + YouTube clue media (clip window, audio-only mode).
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -153,6 +153,19 @@ function suggestVerdict(answer, q) {
   return best <= tol ? 'correct' : 'incorrect';
 }
 
+// Media payload for clients. YouTube clues carry an id + optional clip window.
+function mediaOut(q) {
+  const m = q && q.media;
+  if (!m || !m.url) return null;
+  const out = { kind: m.kind || 'video', url: m.url };
+  if (m.kind === 'youtube') {
+    out.videoId = String(m.videoId || '').slice(0, 20) || null;
+    out.start = Number(m.start) > 0 ? Math.floor(Number(m.start)) : 0;
+    out.end = Number(m.end) > 0 ? Math.floor(Number(m.end)) : null;
+    out.hideVideo = !!m.hideVideo;   // audio-only rounds: cover the picture
+  }
+  return out;
+}
 function findQuestion(game, roundIdx, qIdx) {
   const r = (game.rounds || [])[roundIdx];
   if (!r) return { round: null, q: null };
@@ -231,14 +244,14 @@ function publicState(game, st, version) {
   if (q) {
     if (phase === 'preload') {
       // TVs need the asset early; players must not see the prompt yet.
-      out.q = { key: q.key, media: q.media && q.media.url ? { kind: q.media.kind || 'video', url: q.media.url } : null };
+      out.q = { key: q.key, media: mediaOut(q) };
     } else if (['live', 'answering', 'locked', 'reveal'].includes(phase)) {
       out.q = {
         key: q.key, type: q.type || 'mc', prompt: q.prompt || '',
         choices: (q.type === 'mc' || q.type === 'media-mc') ? (q.choices || []) : null,
         points: Number(q.points) || 10,
         entryMode: (String(q.type || '').indexOf('minigame') === 0) ? (q.entryMode || 'none') : null,
-        media: q.media && q.media.url ? { kind: q.media.kind || 'video', url: q.media.url } : null
+        media: mediaOut(q)
       };
       if (q.type === 'minigame-buzzer') out.buzzes = (st.buzzes || []).map(x => ({ teamId: x.teamId, name: x.name }));
       if (phase === 'reveal') out.q.answer = q.answer == null ? '' : String(q.answer);

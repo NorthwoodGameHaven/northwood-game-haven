@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 09c -->
+<!-- NGH-BUILD 09e -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -363,6 +363,13 @@
       </div>
 
       <div class="card">
+        <h2 style="margin-top:0">🔗 Clue linker <span class="pill" id="linkerCount">—</span>
+          <button class="sec" style="padding:4px 10px;font-size:12px" onclick="loadLinker()">↻ Load</button></h2>
+        <div class="muted">Every media question still missing its clue. Hit 🔎 to search YouTube for it, paste the link, set the clip window (start/end in seconds), and Attach — the question flips to ready automatically. Tip: a YouTube share link with "start at" already carries the timestamp.</div>
+        <div id="linkerBox" class="muted" style="margin-top:8px">Press ↻ Load.</div>
+      </div>
+
+      <div class="card">
         <h2 style="margin-top:0">📁 Media vault <button class="sec" style="padding:4px 10px;font-size:12px" onclick="loadMedia()">↻</button></h2>
         <div class="muted">Audio &amp; image clue files up to 4.5 MB — uploads go live instantly at a stable URL you paste into a bank question's Media field. Video files stay in the repo at site/trivia-media/.</div>
         <div class="row" style="align-items:flex-end;margin-top:6px">
@@ -385,7 +392,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 09c
+   NGH EVENT STREAM HUB — NGH-BUILD 09e
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -423,7 +430,7 @@ function showTab(t) {
   document.getElementById("pane-library").style.display = t === "library" ? "block" : "none";
   document.getElementById("tab-sessions").className = t === "sessions" ? "on" : "sec";
   document.getElementById("tab-library").className = t === "library" ? "on" : "sec";
-  if (t === "library") { loadLibrary(); loadMedia(); }
+  if (t === "library") { loadLibrary(); loadMedia(); loadLinker(); }
 }
 
 /* ------------------ auth gate ------------------ */
@@ -850,9 +857,16 @@ function qFormHTML(q, idPrefix) {
     '<option value="">— none —</option><option value="video"' + (q.media && q.media.kind === "video" ? " selected" : "") + '>Video</option>' +
     '<option value="audio"' + (q.media && q.media.kind === "audio" ? " selected" : "") + '>Audio</option>' +
     '<option value="image"' + (q.media && q.media.kind === "image" ? " selected" : "") + '>Image</option>' +
+    '<option value="youtube"' + (q.media && q.media.kind === "youtube" ? " selected" : "") + '>YouTube link</option>' +
     "</select></div>" +
-    '<div style="flex:2"><label>Media URL (site-hosted preferred, e.g. /trivia-media/clip1.mp4)</label>' +
+    '<div style="flex:2"><label>Media URL — paste any YouTube link, or a site path like /trivia-media/clip1.mp4</label>' +
     '<input id="' + idPrefix + 'MediaUrl" value="' + esc(q.media ? q.media.url : "") + '"></div>' +
+    "</div>" +
+    '<div class="row">' +
+    '<div><label>Clip start (sec)</label><input id="' + idPrefix + 'MediaStart" type="number" min="0" value="' + esc(String((q.media && q.media.start) || "")) + '"></div>' +
+    '<div><label>Clip end (sec)</label><input id="' + idPrefix + 'MediaEnd" type="number" min="0" value="' + esc(String((q.media && q.media.end) || "")) + '"></div>' +
+    '<div style="flex:2"><label>YouTube options</label><div style="padding-top:6px">' +
+    '<label class="check-inline"><input type="checkbox" id="' + idPrefix + 'MediaHide"' + (q.media && q.media.hideVideo ? " checked" : "") + '> Audio only — hide the picture on screen</label></div></div>' +
     "</div>";
 }
 function qFormRead(idPrefix, q) {
@@ -866,7 +880,21 @@ function qFormRead(idPrefix, q) {
   q.alternates = document.getElementById(idPrefix + "Alt").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
   var mk = document.getElementById(idPrefix + "MediaKind").value;
   var mu = document.getElementById(idPrefix + "MediaUrl").value.trim();
-  q.media = (mk && mu) ? { kind: mk, url: mu } : null;
+  if (mk && mu) {
+    q.media = { kind: mk, url: mu };
+    if (mk === "youtube") {
+      var vid = ytId(mu);
+      if (!vid) { alert("That doesn\u2019t look like a YouTube link — paste the full watch/share/embed URL."); }
+      q.media.videoId = vid || "";
+      var st0 = Number(document.getElementById(idPrefix + "MediaStart").value) || 0;
+      var en0 = Number(document.getElementById(idPrefix + "MediaEnd").value) || 0;
+      // a share link with ?t= or &start= pre-fills the start when the field is blank
+      if (!st0) { var tm = /[?&](?:t|start)=(\d+)/.exec(mu); if (tm) st0 = Number(tm[1]); }
+      q.media.start = st0 > 0 ? st0 : 0;
+      q.media.end = en0 > st0 ? en0 : null;
+      q.media.hideVideo = document.getElementById(idPrefix + "MediaHide").checked;
+    }
+  } else q.media = null;
   return q;
 }
 function editQ(ri, qi) {
@@ -1545,6 +1573,64 @@ var themes = [], bank = [], sugs = [], libLoaded = false;
 function ensureLibraryLoaded() {
   if (libLoaded) return Promise.resolve();
   return loadLibrary();
+}
+/* ------------------ YouTube helpers (NGH-BUILD 09e) ------------------ */
+function ytId(url) {
+  var m = /(?:youtu\.be\/|v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/.exec(String(url || ""));
+  return m ? m[1] : null;
+}
+function ytThumb(id) { return "https://img.youtube.com/vi/" + id + "/mqdefault.jpg"; }
+
+/* ------------------ media linker: fill the shells fast ------------------ */
+var linkerRows = [];
+function loadLinker() {
+  var box = document.getElementById("linkerBox");
+  if (!box) return;
+  box.textContent = "Loading…";
+  api("/questions").then(function (list) {
+    linkerRows = (list || []).filter(function (q) {
+      return String(q.type || "").indexOf("media") === 0 && (!q.media || !q.media.url);
+    });
+    document.getElementById("linkerCount").textContent = linkerRows.length;
+    if (!linkerRows.length) { box.innerHTML = '<span class="muted">🎉 Every media question has a clue attached.</span>'; return; }
+    box.innerHTML = linkerRows.map(function (q, i) {
+      var search = "https://www.youtube.com/results?search_query=" + encodeURIComponent(q.answer + " " + (q.prompt || "").replace(/[^\w\s]/g, " ").slice(0, 50));
+      return '<div class="card" style="background:#0f1c13;margin:6px 0;padding:10px 12px" id="lk-' + i + '">' +
+        '<div style="font-weight:800">' + esc(q.prompt || "") + '</div>' +
+        '<div class="muted" style="margin:2px 0 6px">Answer: <b style="color:var(--gold)">' + esc(q.answer) + "</b>" +
+        (q.notes ? " · " + esc(q.notes) : "") + "</div>" +
+        '<div class="row" style="align-items:flex-end">' +
+        '<div style="flex:3"><label style="margin-top:0">YouTube link</label><input id="lku-' + i + '" placeholder="paste link"></div>' +
+        '<div><label style="margin-top:0">Start (s)</label><input id="lks-' + i + '" type="number" min="0" style="width:90px"></div>' +
+        '<div><label style="margin-top:0">End (s)</label><input id="lke-' + i + '" type="number" min="0" style="width:90px"></div>' +
+        '<div style="flex:0;white-space:nowrap;padding-bottom:2px">' +
+        '<label class="check-inline" style="margin-right:8px"><input type="checkbox" id="lkh-' + i + '"' + (String(q.type) === "media-fill" && /audio|jingle|song|listen/i.test((q.notes || "") + q.prompt) ? " checked" : "") + '> audio only</label>' +
+        '<a class="sec" style="text-decoration:none;padding:8px 10px;border-radius:8px;background:#25402c;color:var(--cream)" href="' + esc(search) + '" target="_blank" rel="noopener">🔎 Find on YouTube</a> ' +
+        '<button onclick="saveLink(' + i + ')">💾 Attach</button></div>' +
+        "</div><div class=\"muted\" id=\"lkm-" + i + "\"></div></div>";
+    }).join("");
+  }).catch(function (e) { box.textContent = "Error: " + e.message; });
+}
+function saveLink(i) {
+  var q = linkerRows[i];
+  var url = document.getElementById("lku-" + i).value.trim();
+  var msg = document.getElementById("lkm-" + i);
+  if (!url) { msg.textContent = "Paste a link first."; return; }
+  var vid = ytId(url);
+  if (!vid) { msg.textContent = "That doesn\u2019t look like a YouTube link."; return; }
+  var st0 = Number(document.getElementById("lks-" + i).value) || 0;
+  if (!st0) { var tm = /[?&](?:t|start)=(\d+)/.exec(url); if (tm) st0 = Number(tm[1]); }
+  var en0 = Number(document.getElementById("lke-" + i).value) || 0;
+  q.media = { kind: "youtube", url: url, videoId: vid, start: st0, end: en0 > st0 ? en0 : null,
+    hideVideo: document.getElementById("lkh-" + i).checked };
+  q.status = "ready";
+  api("/questions/" + encodeURIComponent(q.id), { method: "PUT", body: JSON.stringify(q) })
+    .then(function () {
+      msg.innerHTML = '<span style="color:var(--gold)">Attached ✓ — marked ready</span> ' +
+        '<img src="' + esc(ytThumb(vid)) + '" style="height:54px;vertical-align:middle;border-radius:6px;margin-left:8px">';
+      document.getElementById("lk-" + i).style.opacity = ".55";
+    })
+    .catch(function (e) { msg.textContent = "Error: " + e.message; });
 }
 /* ------------------ media vault (NGH-BUILD 08d) ------------------ */
 function loadMedia() {
