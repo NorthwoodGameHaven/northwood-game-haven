@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 09f -->
+<!-- NGH-BUILD 09g -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -398,7 +398,7 @@
 
 <script>
 /* =====================================================================
-   NGH EVENT STREAM HUB — NGH-BUILD 09f
+   NGH EVENT STREAM HUB — NGH-BUILD 09g
    Sessions: trivia nights (rounds pulled from the content bank or written
    inline) + tournament round timers (synced countdown cast screens with
    event image/details pulled from the linked public-calendar event).
@@ -612,6 +612,18 @@ function diffOf(q) {
 function roundDiffSum(r) {
   return (r.questions || []).reduce(function (s, q) { return s + diffOf(q); }, 0);
 }
+function dupBadge(r) {
+  var seen = {}, dups = [];
+  (r.questions || []).forEach(function (q) {
+    var k = normAns(q.answer);
+    if (!k) return;
+    if (seen[k] && dups.indexOf(q.answer) < 0) dups.push(q.answer);
+    seen[k] = true;
+  });
+  if (!dups.length) return "";
+  return ' <span class="pill wager-pill" title="Same answer appears more than once in this round">⚠ repeat answer: ' +
+    esc(dups.slice(0, 3).join(", ")) + "</span>";
+}
 function diffBadge(r) {
   var sum = roundDiffSum(r);
   var n = (r.questions || []).length;
@@ -626,9 +638,17 @@ function diffBadge(r) {
 }
 // Pick `count` questions from candidates targeting Σ difficulty ≈ target.
 // Unused-first shuffle, then greedy swap passes to close the gap.
+function normAns(a) { return String(a == null ? "" : a).toLowerCase().replace(/[^a-z0-9]+/g, ""); }
 function pickQuestions(cands, count, target) {
   if (!cands.length) return { picked: [], sum: 0 };
-  var pool = cands.slice();
+  // one question per distinct answer — no "Menards" twice in a round
+  var byAnswer = {}, uniq = [];
+  cands.forEach(function (q) {
+    var k = normAns(q.answer);
+    if (!k || byAnswer[k]) return;
+    byAnswer[k] = true; uniq.push(q);
+  });
+  var pool = uniq.slice();
   // unused first, shuffled within groups
   function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
   var unused = shuffle(pool.filter(function (q) { return !(q.usage || []).length; }));
@@ -660,14 +680,20 @@ function autoGen(ri) {
   var themeId = sel && sel.value;
   if (!themeId) { alert("Pick a theme to generate from."); return; }
   var count = Math.max(1, Math.min(30, Number(document.getElementById("agCount-" + ri).value) || 10));
-  var inSession = {};
+  var inSession = {}, answersUsed = {};
   cur.game.rounds.forEach(function (r2, i2) {
-    (r2.questions || []).forEach(function (q) { if (q.bankId && i2 !== ri) inSession[q.bankId] = true; });
+    (r2.questions || []).forEach(function (q) {
+      if (q.bankId && i2 !== ri) inSession[q.bankId] = true;
+      if (i2 !== ri && q.answer) answersUsed[normAns(q.answer)] = true;
+    });
   });
   var cands = bank.filter(function (q) {
-    return (q.themes || []).indexOf(themeId) >= 0 && !inSession[q.id];
+    return (q.themes || []).indexOf(themeId) >= 0 && !inSession[q.id] && !answersUsed[normAns(q.answer)];
   });
-  if (cands.length < count) { alert("Only " + cands.length + " bank question(s) in that theme are available — add more to the vault or lower the count."); if (!cands.length) return; }
+  if (cands.length < count) {
+    alert("Only " + cands.length + " question(s) in that theme are available with a unique answer not already used elsewhere in this session.\n\nAdd more to the vault, lower the count, or free up answers used in other rounds.");
+    if (!cands.length) return;
+  }
   var target = Number(cur.game.roundDifficultyTarget) || 0;
   var scaledTarget = target ? Math.round(target * (Math.min(count, cands.length) / 10) * 10) / 10 : 0;
   // target is defined per 10-question round; scale proportionally for other counts
@@ -742,7 +768,7 @@ function renderRounds() {
     div.innerHTML =
       '<div class="row" style="align-items:center">' +
       '<div style="flex:0;padding-top:14px"><button class="sec" onclick="toggleRound(' + ri + ')" style="min-width:38px">' + (roundCollapsed[ri] ? "＋" : "－") + "</button></div>" +
-      '<div class="grow"><label>Round ' + (ri + 1) + ' title / theme ' + diffBadge(r) +
+      '<div class="grow"><label>Round ' + (ri + 1) + ' title / theme ' + diffBadge(r) + dupBadge(r) +
         ' <span class="pill">' + (r.questions || []).length + ' q</span>' + '</label>' +
       '<input value="' + esc(r.title || "") + '" onchange="cur.game.rounds[' + ri + '].title=this.value"></div>' +
       '<div style="flex:0;padding-top:22px;white-space:nowrap">' +
