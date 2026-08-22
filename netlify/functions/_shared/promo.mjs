@@ -29,6 +29,9 @@ export const PROMO_FALLBACK_GURU = process.env.PROMO_FALLBACK_GURU || 'Dustin';
 export const DISCORD_URL = process.env.NGH_DISCORD_URL || 'https://discord.gg/EP2f6npF';
 // Poster tasks apply to NEW events only - those created on/after this date.
 export const POSTER_SINCE = process.env.PROMO_POSTER_SINCE || '2026-08-06';
+export const PROMO_PRINT_GURU = process.env.PROMO_PRINT_GURU || 'Chad';         // weekly printed schedule
+export const PRINT_SINCE = '2026-08-22';                                        // first Saturday
+export const TT_GURU = process.env.PROMO_TT_GURU || 'Dustin';                   // Team Trivia teasers
 
 /* ---------- promo_tasks schema (local; same race-swallow pattern as db.mjs) ---------- */
 let _ready = false;
@@ -172,6 +175,23 @@ export function discordDayBeforeText(e, occDate) {
   return L.join('\n');
 }
 
+export function triviaTeaserText(e, occDate, daysOut) {
+  const when = daysOut === 0 ? 'TONIGHT' : daysOut === 1 ? 'TOMORROW' : daysOut + ' days out';
+  const L = ['🧠 TEAM TRIVIA — ' + when + ': ' + human(occDate) + (timesOf(e) ? (', ' + timesOf(e)) : '') + ' @ the Haven!'];
+  L.push('');
+  L.push("THIS ROUND'S CATEGORIES — with a teaser question for each 👇");
+  L.push('• [category 1] — teaser…');
+  L.push('• [category 2] — teaser…');
+  L.push('• [category 3] — teaser…');
+  L.push('');
+  L.push('😏 (optional: hint at a minigame or two)');
+  L.push('');
+  L.push((e.registration && e.registration.enabled ? 'Register your team: ' : 'Details: ') + eventUrl(e, occDate));
+  L.push('');
+  L.push('🦦 Think together. Win together.');
+  return L.join('\n');
+}
+
 /* ---------- task computation ----------
  * Returns tasks relevant on `forDate` (YMD, America/Chicago):
  *   today[]    — tasks whose scheduled day is forDate
@@ -269,6 +289,43 @@ export async function computeTasks(sql, forDate) {
         }
       }
     }
+    // 3a-2) Saturday: print, laminate & display the physical weekly schedule
+    if (dow(day) === 6 && day >= PRINT_SINCE) {
+      out.push({
+        id: 'print:' + day, kind: 'print', day, assignees: [PROMO_PRINT_GURU],
+        label: 'Print, laminate & display this week\u2019s event schedule \u2014 hand-sanitizer frame near the checkout counter',
+        links: { open: BASE + '/events.html?view=week&date=' + addDays(day, -6) + '&share=1' }
+      });
+    }
+
+    // 3a-3) Sunday: review & update the TV display slideshows
+    if (dow(day) === 0) {
+      out.push({
+        id: 'tv:' + day, kind: 'tv', day, assignees: [PROMO_WEEKLY_DAILY_GURU],
+        label: 'Review & update the TV display slideshows \u2014 upcoming Special Events and current promotions',
+        links: { details: BASE + '/events.html' }
+      });
+    }
+
+    // 3a-4) Team Trivia teasers: 3 / 2 / 1 days before + day-of each instance —
+    //       publish the categories with a teaser question each, link to
+    //       registration, optionally hint at the minigames.
+    for (const { e, date } of specialOccs) {
+      if (!/team trivia/i.test(e.title || '')) continue;
+      for (const n of [3, 2, 1, 0]) {
+        if (addDays(date, -n) === day) {
+          out.push({
+            id: 'tt:' + e.id + ':' + date + ':' + n + 'd', kind: 'tt', day, assignees: [TT_GURU],
+            label: 'Team Trivia teaser \u2014 ' + (n === 0 ? 'DAY OF' : n + ' day' + (n > 1 ? 's' : '') + ' before') + ' (' + human(date) + '): publish categories + a teaser question each, link to register' + (n >= 2 ? ', optionally hint the minigames' : ''),
+            text: triviaTeaserText(e, date, n),
+            flag: dow(date) === 5 ? EC_FLAG : undefined,
+            links: { facebook: 'https://www.facebook.com/', details: eventUrl(e, date) },
+            event: { id: e.id, title: e.title, occDate: date }
+          });
+        }
+      }
+    }
+
     // 3b) Discord countdown posts — same 4/3/2/1-week cadence, posted to the
     //     event's designated channel by the event's owner Guru. The task text
     //     doubles as a discussion starter (guest requests, questions, and any
@@ -304,6 +361,30 @@ export async function computeTasks(sql, forDate) {
   const overdue = [];
   for (let i = 7; i >= 1; i--) {
     tasksForDay(addDays(forDate, -i)).forEach(t => { if (!t.done) overdue.push(t); });
+  }
+
+  // 3.5) Monthly standing tasks (until done):
+  //  - smc:<YYYY-MM> — social-media giveaway campaign, activates the 3rd week
+  //    of each month (from the 15th)
+  //  - gbp:<YYYY-MM> — Google Business Profile refresh, activates from the 1st
+  const _ym = forDate.slice(0, 7);
+  const _monthDay = Number(forDate.slice(8, 10));
+  const monthly = [];
+  if (_monthDay >= 15 && !done.has('smc:' + _ym)) {
+    monthly.push({
+      id: 'smc:' + _ym, kind: 'smc', day: forDate, assignees: [PROMO_WEEKLY_DAILY_GURU],
+      label: 'Social-Media campaign \u2014 giveaways for more followers (' + _ym + ' edition): pick the prize, set the follow/share/tag mechanics, schedule the posts',
+      links: { facebook: 'https://www.facebook.com/' },
+      done: false
+    });
+  }
+  if (!done.has('gbp:' + _ym)) {
+    monthly.push({
+      id: 'gbp:' + _ym, kind: 'gbp', day: forDate, assignees: [PROMO_WEEKLY_DAILY_GURU],
+      label: 'Google Business Profile refresh (' + _ym + '): post upcoming Special Events, update photos, reply to new reviews \u2014 this is what shows next to the map pin',
+      links: { open: 'https://business.google.com/' },
+      done: false
+    });
   }
 
   // 4) Volume One listings — standing until done, regardless of event date.
@@ -426,7 +507,7 @@ export async function computeTasks(sql, forDate) {
   [].concat(today, overdue, standing).forEach(t => (t.assignees || []).forEach(g => { if (gurus.indexOf(g) < 0) gurus.push(g); }));
   gurus.sort();
 
-  return { date: forDate, today, overdue, standing, gurus };
+  return { date: forDate, today, overdue, standing: monthly.concat(standing), gurus };
 }
 
 /* Per-Guru digest filtering: a result narrowed to tasks assigned to any of
@@ -439,7 +520,7 @@ export function filterForGurus(result, gurus) {
 /* ---------- plain-text digest body (daily email) ---------- */
 export function digestBody(result) {
   const L = [];
-  const line = t => '  • ' + t.label + ((t.assignees && t.assignees.length) ? ('  [' + t.assignees.join(' + ') + ']') : '') + (t.flag ? '  · 🚫 no EC Board Game Group' : '') + (t.done ? '  ✅' : '');
+  const line = t => '  • ' + t.label + ((t.assignees && t.assignees.length) ? ('  [' + t.assignees.join(' + ') + ']') : '') + ((t.kind === 'weekly' || t.kind === 'daily' || t.kind === 'cd') ? '  · + share to applicable FB groups' : '') + (t.flag ? '  · 🚫 no EC Board Game Group' : '') + (t.done ? '  ✅' : '');
   if (result.overdue.length) {
     L.push('⚠️ OVERDUE (last 7 days, not yet done):');
     result.overdue.forEach(t => L.push(line(t)));
