@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <title>🎁 Web Promotions — Northwood Game Haven (staff)</title>
 <link rel="icon" href="logo.png">
-<!-- NGH-BUILD 07c-hub · Web Promotions console (moved off the Guru Hub) -->
+<!-- NGH-BUILD 2026-08-22d · Web Promotions console: + Stash's Labor Day Treasure Hunt (external/FB-administered entry) -->
 <style>
   :root{ --forest:#2d5a3d; --deep:#1c3a26; --gold:#c79a3b; --ink:#22301f; --paper:#f4f1e8; --card:#ffffff; --red:#9a2b2b; }
   *{ box-sizing:border-box; }
@@ -90,7 +90,10 @@ $("admin-code").addEventListener("keydown", function(e){ if(e.key==="Enter") doL
 var WEB_PROMOTIONS = [
   { id:"usa250", title:"USA 250 — $5 Store Cash Giveaway", emoji:"🎆",
     page:"/USA250", endpoint:"/usa250", cap:50,
-    desc:"July 4th weekend giveaway. First 50 entrants receive $5 store credit (Lightspeed). Launched via Facebook Live." }
+    desc:"July 4th weekend giveaway. First 50 entrants receive $5 store credit (Lightspeed). Launched via Facebook Live." },
+  { id:"stash-treasure", title:"Stash's Labor Day Treasure Hunt — Follower Giveaway", emoji:"🦦",
+    page:"/stash-treasure", terms:"/stash-treasure#terms", external:true,
+    desc:"Aug 22 – Sep 8, 2026. Entries tracked in the Facebook/Instagram post thread (new follower comments naming who sent them). Drawing evening of Sep 8: 5 Mystery, 3 Bonus (4-hr room), 1 Grand (Lodge/Adventurer's Rest stay)." }
 ];
 var promoData = {};   /* id -> {cap,count,entries} */
 var promoShow = {};   /* id -> entries table expanded */
@@ -103,12 +106,14 @@ function renderPromos(){
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
         '<div><b style="color:var(--forest);">' + p.emoji + ' ' + esc(p.title) + '</b>' +
         '<div class="muted" style="margin-top:3px;">' + esc(p.desc) + '</div></div>' +
-        '<span class="badge" style="white-space:nowrap;">' + (d ? (d.count + ' / ' + d.cap + ' entries') : '—') + '</span>' +
+        '<span class="badge" style="white-space:nowrap;">' + (p.external ? 'Entries on Facebook' : (d ? (d.count + ' / ' + d.cap + ' entries') : '—')) + '</span>' +
       '</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center;">' +
         '<a class="btn ghost small" href="' + p.page + '" target="_blank" rel="noopener">🔗 Open page</a>' +
+        (p.terms ? '<a class="btn ghost small" href="' + p.terms + '" target="_blank" rel="noopener">📜 Official rules</a>' : '') +
+        (p.external ? '' :
         '<button class="btn small" onclick="loadPromo(\'' + p.id + '\',true)">👥 ' + (promoShow[p.id] ? 'Refresh entries' : 'View entries') + '</button>' +
-        '<button class="btn ghost small" onclick="exportPromoCSV(\'' + p.id + '\')"' + (d && d.entries.length ? '' : ' disabled') + '>📥 Download CSV</button>' +
+        '<button class="btn ghost small" onclick="exportPromoCSV(\'' + p.id + '\')"' + (d && d.entries.length ? '' : ' disabled') + '>📥 Download CSV</button>') +
       '</div>' +
       '<div style="margin-top:10px;overflow-x:auto;">' + (promoShow[p.id] && d ? promoTableHTML(p, d) : '') + '</div>' +
     '</div>';
@@ -135,7 +140,7 @@ function promoTableHTML(p, d){
 }
 function promoPhone(p){ p = String(p||""); return p.length===10 ? "("+p.slice(0,3)+") "+p.slice(3,6)+"-"+p.slice(6) : p; }
 async function loadPromo(id, show){
-  var p = WEB_PROMOTIONS.filter(function(x){ return x.id===id; })[0]; if(!p) return;
+  var p = WEB_PROMOTIONS.filter(function(x){ return x.id===id; })[0]; if(!p || p.external) return;
   if(show) promoShow[id] = true;
   try{
     promoData[id] = await api(p.endpoint);
