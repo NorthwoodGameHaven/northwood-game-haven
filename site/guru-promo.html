@@ -27,7 +27,7 @@
   .task.k-weekly{ border-left-color:var(--gold); }
   .task.k-vo{ border-left-color:var(--forest); }
   .task.k-cd{ border-left-color:var(--teal); }
-  .task.overdue{ border-left-color:var(--red); }
+  .task.overdue{ border-left-color:var(--red); background:#fdf1f0; box-shadow:0 2px 10px rgba(154,43,43,.12); }
   .task.done{ opacity:.62; }
   .task.done .lbl{ text-decoration:line-through; }
   .task .lbl{ font-weight:bold; color:var(--forest); font-size:15.5px; }
@@ -92,7 +92,7 @@
           <option value="extend">Extend series</option>
           <option value="dchan">Discord channels</option>
           <option value="dcd">Discord countdown</option>
-          <option value="dpre">Discord day-before</option>
+          <option value="dpre">Discord day-before</option><option value="tt">Trivia teaser</option><option value="print">Printed schedule</option><option value="tv">TV slideshows</option><option value="smc">Social campaign</option><option value="gbp">Google Business</option>
         </select>
       </label>
     </div>
@@ -123,7 +123,8 @@
       stays put and refreshes itself. <b>Friday courtesy rule:</b> the Eau Claire Board Game
       Group runs their own event every Friday, so anything promoting a Friday-occurring NGH
       event carries a 🚫 flag — post it everywhere EXCEPT that group. Posting on a Friday
-      about other days is fine; it's the event's day that matters. Tasks route to each event's assigned Guru(s) — Sarah owns
+      about other days is fine; it's the event's day that matters. Every Facebook post also
+      gets shared to the applicable FB groups (the blue 📣 strip is the reminder). Tasks route to each event's assigned Guru(s) — Sarah owns
       the weekly &amp; daily posts, unassigned events go to Dustin with an "assign a Guru" task
       first. A task shared by multiple Gurus is completed for everyone the moment any one of
       them clicks it, so the same post never goes out twice.
@@ -136,6 +137,7 @@
 <script>
 (function(){
   "use strict";
+  console.log("guru-promo NGH-BUILD 2026-08-21a — print/tv/smc/tt/gbp kinds + FB-groups highlight");
   var API_BASE = window.NGH_API_BASE || "/.netlify/functions";
   var ref = null;   // YMD being viewed (null = server default: today, America/Chicago)
 
@@ -149,8 +151,8 @@
   function human(ymd){ return new Date(ymd+"T12:00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"}); }
 
   /* ---------- rendering ---------- */
-  var KICON = { weekly:"🗓️", daily:"🦦", cd:"⏳", vo:"📰", poster:"🎨", assign:"🧭", extend:"🔁", dchan:"💬", dcd:"💬", dpre:"💬" };
-  var KNAME = { weekly:"Weekly calendar", daily:"Tomorrow's events", cd:"FB countdown", vo:"Volume One", poster:"Poster", assign:"Assign Guru", extend:"Extend series", dchan:"Discord channels", dcd:"Discord countdown", dpre:"Discord day-before" };
+  var KICON = { weekly:"🗓️", daily:"🦦", cd:"⏳", vo:"📰", poster:"🎨", assign:"🧭", extend:"🔁", dchan:"💬", dcd:"💬", dpre:"💬", print:"🖨️", tv:"📺", smc:"🎁", tt:"🧠", gbp:"📍" };
+  var KNAME = { weekly:"Weekly calendar", daily:"Tomorrow's events", cd:"FB countdown", vo:"Volume One", poster:"Poster", assign:"Assign Guru", extend:"Extend series", dchan:"Discord channels", dcd:"Discord countdown", dpre:"Discord day-before", print:"Printed schedule", tv:"TV slideshows", smc:"Social campaign", tt:"Trivia teaser", gbp:"Google Business" };
 
   function taskCard(t, overdue){
     var h='<div class="task card k-'+esc(t.kind)+(t.done?" done":"")+(overdue?" overdue":"")+'" id="task-'+esc(t.id)+'">';
@@ -158,6 +160,7 @@
        ((t.assignees&&t.assignees.length)?'<span class="kbadge" style="background:#e8f0e9;color:#2d5a3d;">👤 '+esc(t.assignees.join(" + "))+'</span>':'')+
        '<span class="lbl">'+esc(t.label)+'</span></div>';
     h+='<div class="meta">'+(overdue?("⚠️ scheduled "+esc(t.day)+" · "):"")+"task id: "+esc(t.id)+'</div>';
+    if(t.kind==="weekly"||t.kind==="daily"||t.kind==="cd") h+='<div style="margin-top:8px;padding:6px 12px;background:#e9f2fb;border:1.5px solid #8fb4d9;border-radius:8px;font-size:13px;font-weight:bold;color:#1e4d74;">📣 + share to applicable FB groups</div>';
     if(t.flag) h+='<div style="margin-top:8px;padding:7px 12px;background:#fdf1e3;border:1.5px solid #d9a444;border-radius:8px;font-size:13px;font-weight:bold;color:#7a4a10;">'+esc(t.flag)+'</div>';
     if(t.text) h+='<textarea id="txt-'+esc(t.id)+'" spellcheck="false">'+esc(t.text)+'</textarea>';
     h+='<div class="actions">';
@@ -173,6 +176,19 @@
          '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
     } else if(t.kind==="dcd"||t.kind==="dpre"){
       h+='<button class="btn" onclick="PROMO.copyGo(\''+esc(t.id)+'\',\''+esc(t.links.discord)+'\')">📋 Copy post &amp; open Discord</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
+    } else if(t.kind==="print"){
+      h+='<button class="btn" onclick="PROMO.go(\''+esc(t.id)+'\',\''+esc(t.links.open)+'\')">🖨️ Open week view — print &amp; laminate</button>';
+    } else if(t.kind==="tv"){
+      h+='<button class="btn" onclick="PROMO.markDone(\''+esc(t.id)+'\')">✅ Slideshows reviewed &amp; updated</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event calendar ↗</a>';
+    } else if(t.kind==="smc"){
+      h+='<button class="btn" onclick="PROMO.markDone(\''+esc(t.id)+'\')">✅ Campaign launched</button>'+
+         '<a class="btn ghost small" href="'+esc(t.links.facebook)+'" target="_blank" rel="noopener">Facebook ↗</a>';
+    } else if(t.kind==="gbp"){
+      h+='<button class="btn" onclick="PROMO.go(\''+esc(t.id)+'\',\''+esc(t.links.open)+'\')">📍 Open Google Business (marks done)</button>';
+    } else if(t.kind==="tt"){
+      h+='<button class="btn" onclick="PROMO.copyGo(\''+esc(t.id)+'\',\''+esc(t.links.facebook)+'\')">📋 Copy teaser &amp; open Facebook</button>'+
          '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>';
     } else if(t.kind==="dchan"){
       h+='<button class="btn" onclick="PROMO.go(\''+esc(t.id)+'\',\''+esc(t.links.edit)+'\')">💬 Open event editor → set channels</button>'+
@@ -191,6 +207,10 @@
       h+='<button class="btn" onclick="PROMO.voGo(\''+esc(t.id)+'\',\''+esc(t.links.details)+'\',\''+esc(t.links.volumeone)+'\')">📋 Copy details &amp; open event + Volume One</button>'+
          '<a class="btn ghost small" href="'+esc(t.links.details)+'" target="_blank" rel="noopener">Event details ↗</a>'+
          '<a class="btn ghost small" href="'+esc(t.links.volumeone)+'" target="_blank" rel="noopener">VO submit form ↗</a>';
+    }
+    if(overdue && !t.done){
+      h+='<button class="btn ghost small" style="border-color:#e2b8b4;color:var(--red);" '+
+         'onclick="PROMO.clearTask(\''+esc(t.id)+'\')">🗑 Clear without action</button>';
     }
     h+='</div></div>';
     return h;
@@ -222,7 +242,7 @@
     var od=r.overdue.filter(taskMatches), td=r.today.filter(taskMatches), st=r.standing.filter(taskMatches);
     var h="";
     if(mode==="schedule"){
-      h = section("⚠️ Overdue — last 7 days", od, true)
+      h = section("🔴 Overdue Events — post late or clear without action", od, true)
         + section("📣 Today's promotion tasks", td, false)
         + section("📌 Standing tasks — until done", st, false);
     } else {
@@ -302,6 +322,11 @@
     window.open(detailsUrl, "_blank", "noopener");
     window.open(voUrl, "_blank", "noopener");
     complete(id, true, labelOf(id)).then(function(){ toast("Details copied 📋 — paste into the Volume One form"); load(ref); }).catch(completeFail);
+  }
+  // Overdue escape hatch: close a stale task (e.g. a "tomorrow" post whose
+  // tomorrow already happened) without posting anything.
+  function clearTask(id){
+    complete(id, true, labelOf(id)+" — cleared without action").then(function(){ toast("Cleared without posting 🗑"); load(ref); }).catch(completeFail);
   }
   function markDone(id){
     complete(id, true, labelOf(id)).then(function(){ toast("Task marked done ✅"); load(ref); }).catch(completeFail);
@@ -383,7 +408,7 @@
     load: function(){ load(ref); },
     shift: function(n){ load(ymdShift(ref, n)); },
     today: function(){ load(null); },
-    go: go, copyGo: copyGo, voGo: voGo, undo: undo, imgFix: imgFix, markDone: markDone, redraw: redraw
+    go: go, copyGo: copyGo, voGo: voGo, undo: undo, imgFix: imgFix, markDone: markDone, clearTask: clearTask, redraw: redraw
   };
   boot();
 })();
