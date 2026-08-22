@@ -33,7 +33,7 @@ const _handler = async (req) => {
   if (req.method === 'POST') {
     let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
     const id = String(b.id || '');
-    if (!/^(weekly|daily|vo|cd|poster|assign|extend|dchan|dcd|dpre):/.test(id)) return bad('bad task id');
+    if (!/^(weekly|daily|vo|cd|poster|assign|extend|dchan|dcd|dpre|print|tv|smc|tt|gbp):/.test(id)) return bad('bad task id');
     if (b.done === false) {
       await sql`DELETE FROM promo_tasks WHERE id = ${id}`;
       return json({ id, done: false });
