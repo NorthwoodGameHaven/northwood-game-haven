@@ -70,6 +70,7 @@
   .hidden{ display:none !important; }
   #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
 </style>
+<!-- NGH-BUILD 2026-08-26a: CI carryover + scoring publish-gate -->
 </head>
 <body>
 <div class="wrap">
@@ -78,7 +79,7 @@
     <h1>📝 Draft Event Review</h1>
     <p>Every draft is an event being planned. Review the pipeline weekly: spider-factor flags surface what
     needs attention (lead-time runway, external anchors from the Radar, revenue setup, Guru capacity,
-    community channels), discuss inline, tune the promotion plan, and publish when it's ready.</p>
+    community channels), discuss inline, tune the promotion plan, and publish when it's ready. Scoring is the gate: all five factors + event type are <b>required before 🚀 publish</b>, and each draft picks up 🔁 open Continuous-Improvement actions from prior runs and related events — adopt them into the plan (or mark them done) before go-live.</p>
   </header>
 
   <div id="gate" class="card hidden" style="max-width:420px;margin:30px auto;text-align:center;">
@@ -168,7 +169,7 @@
   function runwayWeeks(sc){ return sc>=9?10 : sc>=7?6 : sc>=4?3 : 1; }
   function daysUntil(ds, today){ return Math.round((D(ds)-D(today))/86400000); }
 
-  function computeFlags(e, today, radar, guruData){
+  function computeFlags(e, today, radar, guruData, ci){
     var f=[], sc=scoresOf(e);
     if(!e.date) { f.push({lv:"bad", t:"No event date set — nothing else can be judged until it has one."}); return f; }
     var du=daysUntil(e.date, today);
@@ -200,14 +201,20 @@
     if(sc.community>=6 && !((e.discordChannels||[]).length)) f.push({lv:"warn", t:"Community "+sc.community+"/10 with no Discord channel selected — community events live or die in their channel."});
     // basics
     if(!e.photo) f.push({lv:"warn", t:"No photo — shares and calendar art fall back to the logo."});
-    if(!(e.strategy&&(e.strategy.type))) f.push({lv:"warn", t:"No strategy type set — score it in the editor (Gate G1 expects it)."});
+    /* NGH-BUILD 2026-08-26a: scoring completeness is a HARD publish-gate.
+       Only drafts live in this console, so the requirement applies exactly to
+       drafts — live events already passed it. */
+    var _missing=AXES.filter(function(a){ return !(sc[a[0]]>0); }).map(function(a){ return a[1]; });
+    if(!(e.strategy&&(e.strategy.type))) f.push({lv:"bad", t:"No strategy type set — Cadence + Event type are required before 🚀 publish (Gate G1)."});
+    if(_missing.length) f.push({lv:"bad", t:"Scoring incomplete — "+_missing.join(", ")+" unscored. All five factors are required before 🚀 publish (Gate G2)."});
+    if(ci&&ci.length) f.push({lv:"warn", t:"🔁 "+ci.length+" open CI action"+(ci.length>1?"s":"")+" carried over from prior related runs — adopt into this plan or mark done before go-live."});
     if(D(e.date).getDay()===5) f.push({lv:"info", t:"Friday event — promo tasks will carry the 🚫 Eau Claire Board Game Group flag."});
     return f;
   }
   function sev(fl){ var s=0; fl.forEach(function(f){ s+= f.lv==="bad"?100 : f.lv==="warn"?10 : 0; }); return s; }
 
   /* ================= state + data ================= */
-  var S={ events:[], drafts:[], radar:[], guru:{assignments:[],shifts:[],unavail:[]}, notes:{}, calRef:new Date(), curView:"list", pp:null };
+  var S={ events:[], drafts:[], radar:[], guru:{assignments:[],shifts:[],unavail:[]}, notes:{}, ci:{}, calRef:new Date(), curView:"list", pp:null };
 
   function load(){
     $("listwrap").innerHTML='<p class="muted" style="text-align:center;">Loading drafts…</p>';
@@ -221,6 +228,14 @@
       var ie=res[1]; S.radar=(ie&&ie.items)||ie||[];
       S.guru={ assignments:(res[2]&&res[2].assignments)||[], shifts:(res[2]&&res[2].shifts)||[], unavail:(res[2]&&res[2].unavail)||[] };
       redraw(); renderCal();
+      // NGH-BUILD 2026-08-26a: CI carryover per draft — open actions from prior
+      // runs + related/similar events (title tokens, then strategy type).
+      S.drafts.forEach(function(e){
+        fetch(API+"/retro?planning="+encodeURIComponent(e.id),{headers:hdrs()})
+          .then(function(r){ return r.ok?r.json():{actions:[]}; })
+          .then(function(d){ S.ci[e.id]=(d&&d.actions)||[]; redraw(); })
+          .catch(function(){});
+      });
       // fetch notes for each draft (parallel, tolerant)
       S.drafts.forEach(function(e){
         fetch(API+"/draft-notes?eventId="+encodeURIComponent(e.id),{headers:hdrs()})
@@ -261,7 +276,7 @@
   }
 
   function card(e){
-    var fl=computeFlags(e, TODAY, S.radar, S.guru), sc=scoresOf(e);
+    var fl=computeFlags(e, TODAY, S.radar, S.guru, S.ci[e.id]||[]), sc=scoresOf(e), ci=S.ci[e.id]||[];
     var du=e.date?daysUntil(e.date,TODAY):null, gs=gurusFor(e);
     var h='<div class="card dr" id="dr-'+esc(e.id)+'">';
     h+='<div class="top"><div style="flex:1;min-width:240px;">';
@@ -272,7 +287,7 @@
        +(e.strategy&&e.strategy.cadence?'<span class="chip cad">'+esc(e.strategy.cadence)+'</span>':'')
        +(gs.length?'<span class="chip guru">👤 '+esc(gs.join(" + "))+'</span>':'<span class="chip" style="background:#fbe9e7;color:#8a2418;">no Guru</span>')
        +((e.discordChannels||[]).length?'<span class="chip">💬 '+e.discordChannels.length+' ch</span>':'')
-       +(e.promoPlan?'<span class="chip" style="background:#e9f2fb;color:#1e4d74;">📣 custom plan</span>':'')
+       +(e.promoPlan?'<span class="chip" style="background:#e9f2fb;color:#1e4d74;">📣 custom plan</span>':'')+(ci.length?'<span class="chip" style="background:#fdf0e0;color:#7a5a14;">🔁 '+ci.length+' CI</span>':'')
        +'</div>';
     var top=fl.filter(function(f){return f.lv==="bad"||f.lv==="warn";}).slice(0,2);
     top.forEach(function(f){ h+='<span class="flag '+f.lv+'">'+esc(f.t)+'</span>'; });
@@ -297,6 +312,19 @@
       h+='<tr><td>'+a[1]+'</td><td>'+scoreChip(v)+'</td><td class="muted">'+note+'</td></tr>';
     });
     h+='</table>';
+    if(ci.length){ /* NGH-BUILD 2026-08-26a */
+      h+='<div style="margin-top:10px;background:#fff7e8;border:1px solid #f0dcae;border-radius:9px;padding:9px 11px;">'
+        +'<b style="color:#7a5a14;">🔁 Continuous Improvement — carryover from prior &amp; related events</b>';
+      ci.forEach(function(a){
+        h+='<div style="display:flex;align-items:flex-start;gap:8px;margin-top:6px;font-size:13px;" id="ci-'+esc(a.retroId)+'-'+esc(a.id)+'">'
+          +'<button class="btn ghost small" style="flex:0 0 auto;" onclick="DR.ciDone(\''+esc(a.retroId)+'\',\''+esc(a.id)+'\',\''+esc(e.id)+'\')">✓ Done</button>'
+          +'<span>'+esc(a.text)
+          +(a.assignee?' <span style="color:#7a5a14;font-weight:bold;">👤 '+esc(a.assignee)+'</span>':' <span class="muted">👤 unassigned</span>')
+          +' <span class="muted">· '+esc(a.area)+' · '+esc(a.relation)+': '+esc(a.sourceTitle)+(a.occDate?' ('+esc(a.occDate)+')':'')
+          +' · <a href="guru-retro.html?event='+encodeURIComponent(a.sourceEventId)+'">retro →</a></span></span></div>';
+      });
+      h+='<div class="muted" style="font-size:11.5px;margin-top:7px;">Adopt into the event details / promo plan (then ✓), or ✓ if already handled — syncs with the Retro console, event editor and Promotion tracker.</div></div>';
+    }
     fl.forEach(function(f){ h+='<span class="flag '+f.lv+'">'+esc(f.t)+'</span>'; });
     if(e.notes) h+='<div class="muted" style="margin-top:8px;white-space:pre-line;">'+esc(String(e.notes).slice(0,500))+(String(e.notes).length>500?"…":"")+'</div>';
     h+='<div class="notes"><b style="color:var(--forest);">💬 Review discussion</b><div id="notes-'+esc(e.id)+'">'+notesHTML(e.id)+'</div></div>';
@@ -306,7 +334,7 @@
 
   function redraw(){
     var mode=$("sortsel").value, list=S.drafts.slice();
-    var flc={}; list.forEach(function(e){ flc[e.id]=sev(computeFlags(e,TODAY,S.radar,S.guru)); });
+    var flc={}; list.forEach(function(e){ flc[e.id]=sev(computeFlags(e,TODAY,S.radar,S.guru,S.ci[e.id]||[])); });
     list.sort(function(a,b){
       if(mode==="sev") return (flc[b.id]-flc[a.id]) || String(a.date||"9999").localeCompare(String(b.date||"9999"));
       if(mode==="date") return String(a.date||"9999").localeCompare(String(b.date||"9999"));
@@ -399,8 +427,20 @@
 
   function publish(id){
     var e=S.drafts.filter(function(x){return x.id===id;})[0]; if(!e) return;
-    var fl=computeFlags(e,TODAY,S.radar,S.guru), bad=fl.filter(function(f){return f.lv==="bad";});
+    var fl=computeFlags(e,TODAY,S.radar,S.guru,S.ci[e.id]||[]), bad=fl.filter(function(f){return f.lv==="bad";});
+    /* NGH-BUILD 2026-08-26a: scoring gate — publish is blocked outright until
+       Cadence + Event type + all five factors are scored. */
+    var _sc=scoresOf(e), _missing=AXES.filter(function(a){ return !(_sc[a[0]]>0); }).map(function(a){ return a[1]; });
+    if(_missing.length || !(e.strategy&&e.strategy.type)){
+      alert("⛔ Publish blocked — strategy scoring incomplete.\n\n"
+        +(!(e.strategy&&e.strategy.type)?"• Cadence + Event type not set\n":"")
+        +(_missing.length?("• Unscored: "+_missing.join(", ")+"\n"):"")
+        +"\nOpen ✏️ the editor, complete the scoring, then publish from here.");
+      return;
+    }
+    var _ci=S.ci[e.id]||[];
     var msg="Publish \""+(e.title||id)+"\" — it goes live on the public calendar and the promotion task engine picks it up immediately.";
+    if(_ci.length) msg+="\n\n🔁 OPEN CI CARRYOVER ("+_ci.length+"):\n• "+_ci.slice(0,6).map(function(a){ return a.text+(a.assignee?(" ["+a.assignee+"]"):""); }).join("\n• ")+(_ci.length>6?"\n…":"")+"\nPublishing won\u2019t clear these — adopt or ✓ them.";
     if(bad.length) msg+="\n\n⛔ UNRESOLVED RED FLAGS:\n• "+bad.map(function(f){return f.t;}).join("\n• ")+"\n";
     msg+="\n(The draft already holds its rooms, so publishing can't create a room conflict.)\n\nGo live?";
     if(!confirm(msg)) return;
@@ -410,10 +450,16 @@
       .catch(function(e){ toast("⚠️ "+(e.message||e)); });
   }
 
+  function ciDone(retroId, actionId, evId){ /* NGH-BUILD 2026-08-26a */
+    fetch(API+"/retro",{method:"POST",headers:hdrs(),body:JSON.stringify({actionDone:{retroId:retroId,actionId:actionId,status:"done"}})})
+      .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); })
+      .then(function(){ S.ci[evId]=(S.ci[evId]||[]).filter(function(a){ return !(a.retroId===retroId&&a.id===actionId); }); toast("✓ CI action done"); redraw(); })
+      .catch(function(e){ toast("⚠️ "+(e.message||e)); });
+  }
   function gate(){ $("gate").classList.remove("hidden"); $("app").classList.add("hidden"); }
   function boot(){ if(!token()){ gate(); return; } $("app").classList.remove("hidden"); load(); }
   window.DR={ load:load, redraw:redraw, toggle:toggle, jump:jump, view:view, calShift:calShift,
-              addNote:addNote, ppOpen:ppOpen, ppClose:ppClose, ppSave:ppSave, publish:publish };
+              addNote:addNote, ppOpen:ppOpen, ppClose:ppClose, ppSave:ppSave, publish:publish, ciDone:ciDone };
   boot();
 })();
 </script>

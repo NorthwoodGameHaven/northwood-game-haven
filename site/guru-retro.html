@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>📈 Event Retros — Northwood Game Haven (staff)</title>
+<link rel="icon" href="logo.png">
+<!-- NGH-BUILD 2026-08-26a · Event Retro console (WI-105 in software form) -->
+<style>
+  :root{ --forest:#2d5a3d; --deep:#1c3a26; --gold:#c79a3b; --ink:#22301f; --paper:#f4f1e8; --card:#ffffff; --red:#9a2b2b; --teal:#1488a6; --amber:#7a5a14; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--paper); color:var(--ink); font-family:Georgia,'Times New Roman',serif; }
+  .wrap{ max-width:940px; margin:0 auto; padding:18px 16px 60px; }
+  header.hub{ text-align:center; padding:18px 0 6px; }
+  header.hub .kicker{ letter-spacing:.35em; font-size:12px; color:var(--gold); text-transform:uppercase; }
+  header.hub h1{ margin:6px 0 4px; color:var(--forest); font-size:32px; }
+  header.hub p{ margin:0; color:#6b6b5a; font-size:14px; }
+  .card{ background:var(--card); border:1px solid #e2dcc8; border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,.06); margin-bottom:12px; }
+  .btn{ display:inline-block; cursor:pointer; border:0; border-radius:26px; padding:10px 20px; font-family:inherit; font-size:14.5px; font-weight:bold; background:var(--gold); color:#1a1a12; text-decoration:none; }
+  .btn.ghost{ background:#fff; color:var(--forest); border:2px solid #cfe0d4; }
+  .btn.small{ padding:6px 12px; font-size:13px; border-radius:18px; }
+  .btn.danger{ background:#fff; color:var(--red); border:2px solid #e5c4c4; }
+  h2.sec{ color:var(--forest); border-bottom:2px solid var(--gold); padding-bottom:6px; margin:26px 0 12px; font-size:20px; }
+  h2.sec .cnt{ font-size:13px; color:#8a8a75; font-weight:normal; }
+  .muted{ color:#8a8a75; font-size:13px; }
+  .empty{ text-align:center; color:#8a8a75; padding:22px; font-size:14.5px; }
+  .chip{ display:inline-block; font-size:11.5px; padding:2px 9px; border-radius:12px; background:#eee; color:#555; margin:0 6px 4px 0; white-space:nowrap; }
+  .chip.stat{ background:#dcebe0; color:var(--forest); font-weight:bold; }
+  .chip.rev{ background:#f3e8c8; color:var(--amber); font-weight:bold; }
+  .chip.area-promotion{ background:#f3e8c8; color:var(--amber); }
+  .chip.area-details{ background:#d9edf3; color:#0f6b84; }
+  .chip.area-prizes{ background:#f6e3ef; color:#8a2b62; }
+  .chip.area-scheduling{ background:#e6e0f5; color:#4a3a8a; }
+  .chip.area-other{ background:#eee; color:#555; }
+  .due{ border-left:5px solid var(--red); }
+  .carry{ border-left:5px solid var(--gold); background:#fffaf0; }
+  .rt-title{ font-weight:bold; color:var(--forest); font-size:15.5px; }
+  .rt-meta{ font-size:12.5px; color:#8a8a75; margin:2px 0 8px; }
+  .actrow{ display:flex; align-items:flex-start; gap:8px; margin-top:8px; font-size:13.5px; }
+  .actrow.done{ opacity:.5; }
+  .actrow.done .txt{ text-decoration:line-through; }
+  .fld{ display:block; font-size:12.5px; font-weight:bold; color:var(--forest); margin:10px 0 3px; }
+  input[type=text], input[type=number], textarea, select{ width:100%; font-family:inherit; font-size:13.5px; border:1px solid #cfc9b4; border-radius:8px; padding:8px; background:#fff; }
+  textarea{ min-height:74px; line-height:1.5; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .scores{ display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  @media (max-width:640px){ .grid3{ grid-template-columns:1fr 1fr; } .scores{ grid-template-columns:repeat(2,1fr); } }
+  .trend{ display:flex; align-items:flex-end; gap:3px; height:44px; margin:6px 0 2px; }
+  .trend .bar{ flex:1; background:var(--forest); border-radius:3px 3px 0 0; min-height:2px; position:relative; }
+  .trend .bar.now{ background:var(--gold); }
+  .occrow{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 0; border-bottom:1px dashed #e2dcc8; font-size:13.5px; }
+  .occrow:last-child{ border-bottom:0; }
+  .hidden{ display:none !important; }
+  #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
+  .tips{ font-size:13px; color:#6b6b5a; line-height:1.6; margin-top:26px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hub">
+    <div class="kicker">Staff Only</div>
+    <h1>📈 Event Retros</h1>
+    <p>Close the loop after every event: score it against its goals, capture wins &amp; issues, and turn them into carryover actions that follow the event into its next run — promotion fixes route to the Promotion tracker, event fixes route to the event editor. (WI-105 §Execution Review)</p>
+  </header>
+
+  <div id="gate" class="card hidden" style="max-width:420px;margin:30px auto;text-align:center;">
+    <p>You're not signed in. Retros are staff-only.</p>
+    <a class="btn" href="guru.html">Sign in at the Guru Hub →</a>
+  </div>
+
+  <div id="app" class="hidden">
+
+    <h2 class="sec">🔴 Retros due <span class="cnt" id="due-cnt"></span></h2>
+    <p class="muted" style="margin:0 0 10px;">Past occurrences (last 60 days) with no retro yet. Registrations, check-ins, and paid revenue are pulled in automatically from the ticketing system — you only add the judgment calls.</p>
+    <div id="due-list"><p class="empty">Loading…</p></div>
+
+    <!-- ============ RETRO EDITOR ============ -->
+    <div id="editor" class="card hidden" style="border-left:5px solid var(--teal);">
+      <div class="rt-title" id="ed-title">✍️ Retro</div>
+      <div class="rt-meta" id="ed-meta"></div>
+      <div id="ed-auto" class="muted" style="margin-bottom:4px;"></div>
+      <div class="grid3">
+        <div><label class="fld">🎯 Target attendance</label><input type="number" id="ed-t-att" min="0" placeholder="e.g. 16"></div>
+        <div><label class="fld">🎯 Target revenue ($)</label><input type="number" id="ed-t-rev" min="0" step="0.01" placeholder="e.g. 120"></div>
+        <div><label class="fld">👥 Actual attendance</label><input type="number" id="ed-a-att" min="0" placeholder="defaults to check-ins"></div>
+      </div>
+      <div class="grid2">
+        <div><label class="fld">💵 Actual revenue ($) <span class="muted" style="font-weight:normal;">(override — auto shows ticket revenue only)</span></label><input type="number" id="ed-a-rev" min="0" step="0.01"></div>
+        <div><label class="fld">📝 Metric notes</label><input type="text" id="ed-a-notes" placeholder="e.g. +$85 singles sales at the counter"></div>
+      </div>
+      <label class="fld" style="margin-top:14px;">Scores (1 = rough · 5 = nailed it)</label>
+      <div class="scores" id="ed-scores"></div>
+      <label class="fld">✅ What worked</label>
+      <textarea id="ed-wins" placeholder="Keep doing this next time…"></textarea>
+      <label class="fld">⚠️ What didn't</label>
+      <textarea id="ed-issues" placeholder="Root causes, not just symptoms…"></textarea>
+
+      <label class="fld" style="margin-top:14px;">📌 Improvement actions <span class="muted" style="font-weight:normal;">— each one follows this event into its next run</span></label>
+      <div id="ed-actions"></div>
+      <div class="grid2" style="align-items:end;margin-top:6px;">
+        <div>
+          <select id="ed-new-area">
+            <option value="promotion">📣 Promotion — shows in the Promotion tracker</option>
+            <option value="details">📝 Event details — shows in the event editor</option>
+            <option value="prizes">🏆 Prize support — shows in the event editor</option>
+            <option value="scheduling">📅 Scheduling</option>
+            <option value="other">🧩 Other</option>
+          </select>
+        </div>
+        <div style="margin-top:6px;"><!-- NGH-BUILD 2026-08-26a: CI owner -->
+          <label class="fld">👤 Owner — the Guru who carries this into the next plan</label>
+          <select id="ed-new-owner"><option value="">— unassigned —</option></select>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="ed-new-text" placeholder="e.g. Post the FB event 10 days out, not 4" onkeydown="if(event.key==='Enter'){RETRO.addAction();}">
+          <button class="btn ghost small" style="flex:0 0 auto;" onclick="RETRO.addAction()">＋ Add</button>
+        </div>
+      </div>
+      <div class="grid2" style="margin-top:8px;">
+        <div><label class="fld">🦦 Guru</label><input type="text" id="ed-guru" placeholder="Who's writing this retro?"></div>
+        <div style="align-self:end;text-align:right;">
+          <button class="btn ghost small" onclick="RETRO.closeEditor()">Cancel</button>
+          <button class="btn" id="ed-save" onclick="RETRO.save()">Save retro</button>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="sec">📌 Apply before the next run <span class="cnt" id="carry-cnt"></span></h2>
+    <p class="muted" style="margin:0 0 10px;">Open actions from past retros whose event runs again within 21 days. Tick them done here, or jump straight to where the fix happens.</p>
+    <div id="carry-list"><p class="empty">Loading…</p></div>
+
+    <h2 class="sec">🗂 Event history &amp; trends</h2>
+    <div class="card">
+      <label class="fld" style="margin-top:0;">Event</label>
+      <select id="hist-pick" onchange="RETRO.loadHistory(this.value)"><option value="">— choose an event —</option></select>
+      <div id="hist-body"></div>
+    </div>
+
+    <div class="tips">
+      <b>How the loop runs (WI-105):</b> after each occurrence a retro lands in <b>Retros due</b> with its numbers pre-filled → score it, write wins/issues, add improvement actions tagged by area → open actions surface (a)&nbsp;here before the next run, (b)&nbsp;in the <b>event editor</b> as a “from the last retro” banner, and (c)&nbsp;<b>📣 promotion</b> actions in the Promotion tracker. Tick an action anywhere and it's done everywhere.
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="guru-common.js"></script>
+<script>
+(function(){
+  "use strict";
+  var API = (window.NGH_API_BASE || "/.netlify/functions");
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function toast(m){ var t=$("toast"); t.textContent=m; t.style.display="block"; setTimeout(function(){ t.style.display="none"; },2600); }
+  function token(){ return (window.GuruAuth && window.GuruAuth.get && window.GuruAuth.get()) || ""; }
+  function hdrs(){ return { "Content-Type":"application/json", "Authorization":"Bearer "+token() }; }
+  function human(ymd){ if(!ymd) return ""; return new Date(ymd+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric",year:"numeric"}); }
+  function money(n){ return "$"+(Math.round((Number(n)||0)*100)/100).toFixed(2); }
+  var AREAS={promotion:"📣 Promotion",details:"📝 Details",prizes:"🏆 Prizes",scheduling:"📅 Scheduling",other:"🧩 Other"};
+  var SCORE_DEFS=[["turnout","👥 Turnout"],["energy","⚡ Energy"],["promo","📣 Promotion"],["prizes","🏆 Prizes"],["logistics","🧰 Logistics"]];
+
+  var queue=null, editing=null, editorActions=[], histCache={};
+
+  function gate(){ $("gate").classList.remove("hidden"); $("app").classList.add("hidden"); }
+  function authFail(r){ if(r.status===401){ gate(); throw new Error("auth"); } return r; }
+
+  /* --------------- queue --------------- */
+  function loadQueue(){
+    fetch(API+"/retro?queue=1",{headers:hdrs()})
+      .then(authFail).then(function(r){ return r.json(); })
+      .then(function(d){ queue=d; renderDue(); renderCarry(); })
+      .catch(function(e){ if(String(e.message)!=="auth"){ $("due-list").innerHTML='<p class="empty">Couldn\u2019t load — '+esc(e.message||e)+'</p>'; $("carry-list").innerHTML=""; } });
+  }
+  function statChips(it){
+    return '<span class="chip stat">🎟️ '+(it.regs||0)+' reg</span>'+
+           '<span class="chip stat">✅ '+(it.checkedIn||0)+' checked in</span>'+
+           '<span class="chip rev">💵 '+money(it.revenue)+'</span>';
+  }
+  function renderDue(){
+    var d=(queue&&queue.due)||[];
+    $("due-cnt").textContent = d.length ? "("+d.length+")" : "";
+    if(!d.length){ $("due-list").innerHTML='<p class="empty">🎉 All caught up — every recent occurrence has a retro.</p>'; return; }
+    $("due-list").innerHTML = d.map(function(it){
+      return '<div class="card due">'+
+        '<div class="rt-title">'+esc(it.title)+'</div>'+
+        '<div class="rt-meta">'+human(it.occDate)+(it.recurring?' · 🔁 recurring':'')+(it.strategyType?' · 🎯 '+esc(it.strategyType):'')+'</div>'+
+        statChips(it)+
+        '<div style="margin-top:8px;"><button class="btn small" onclick="RETRO.write(\''+esc(it.eventId)+'\',\''+it.occDate+'\')">✍️ Write retro</button> '+
+        '<a class="btn ghost small" style="text-decoration:none;" href="booking.html?admin=1&view=events&editEvent='+encodeURIComponent(it.eventId)+'">📝 Open event</a></div>'+
+      '</div>';
+    }).join("");
+  }
+  function carryLink(a, eventId){
+    if(a.area==="promotion") return 'guru-promo.html';
+    if(a.area==="scheduling") return 'guru-schedule.html';
+    return 'booking.html?admin=1&view=events&editEvent='+encodeURIComponent(eventId);
+  }
+  function renderCarry(){
+    var u=(queue&&queue.upcoming)||[];
+    var total=0; u.forEach(function(x){ total+=x.openActions.length; });
+    $("carry-cnt").textContent = total ? "("+total+")" : "";
+    if(!u.length){ $("carry-list").innerHTML='<p class="empty">No open carryover actions for the next 21 days.</p>'; return; }
+    $("carry-list").innerHTML = u.map(function(ev){
+      return '<div class="card carry">'+
+        '<div class="rt-title">'+esc(ev.title)+'</div>'+
+        '<div class="rt-meta">Next run: '+human(ev.occDate)+'</div>'+
+        ev.openActions.map(function(a){
+          return '<div class="actrow" id="act-'+esc(a.retroId)+'-'+esc(a.id)+'">'+
+            '<button class="btn ghost small" style="flex:0 0 auto;" onclick="RETRO.tick(\''+esc(a.retroId)+'\',\''+esc(a.id)+'\')">✓ Done</button>'+
+            '<span class="txt"><span class="chip area-'+esc(a.area)+'">'+ (AREAS[a.area]||a.area) +'</span> '+esc(a.text)+(a.assignee?' <span class="muted">\ud83d\udc64 '+esc(a.assignee)+'</span>':'')+
+            ' <a class="muted" href="'+carryLink(a, ev.eventId)+'">Fix it →</a></span></div>';
+        }).join("")+
+      '</div>';
+    }).join("");
+  }
+
+  /* --------------- editor --------------- */
+  function scoreSelects(vals){
+    return SCORE_DEFS.map(function(sd){
+      var v=(vals&&vals[sd[0]])||0, opts='<option value="0">—</option>';
+      for(var i=1;i<=5;i++) opts+='<option value="'+i+'"'+(v===i?' selected':'')+'>'+i+'</option>';
+      return '<div><label class="fld" style="margin-top:0;">'+sd[1]+'</label><select id="ed-s-'+sd[0]+'">'+opts+'</select></div>';
+    }).join("");
+  }
+  function renderEditorActions(){
+    $("ed-actions").innerHTML = editorActions.length ? editorActions.map(function(a,i){
+      return '<div class="actrow'+(a.status==="done"?" done":"")+'">'+
+        '<button class="btn ghost small" style="flex:0 0 auto;" onclick="RETRO.rmAction('+i+')">🗑</button>'+
+        '<span class="txt"><span class="chip area-'+esc(a.area)+'">'+(AREAS[a.area]||a.area)+'</span> '+esc(a.text)+(a.assignee?' <span class="muted">\ud83d\udc64 '+esc(a.assignee)+'</span>':'')+(a.status==="done"?' <span class="muted">(done)</span>':'')+'</span></div>';
+    }).join("") : '<p class="muted" style="margin:4px 0;">No actions yet — add the one or two things that would most improve the next run.</p>';
+  }
+  function openEditor(eventId, occDate, seed){
+    editing={eventId:eventId, occDate:occDate};
+    var rt=(seed&&seed.retro)||null, auto=seed||{};
+    $("ed-title").textContent='✍️ Retro — '+((seed&&seed.title)||eventId);
+    $("ed-meta").textContent=human(occDate);
+    $("ed-auto").innerHTML='Auto from ticketing: '+statChips({regs:auto.regs,checkedIn:auto.checkedIn,revenue:auto.revenue});
+    $("ed-t-att").value = rt&&rt.targets&&rt.targets.attendance!=null ? rt.targets.attendance : "";
+    $("ed-t-rev").value = rt&&rt.targets&&rt.targets.revenue!=null ? rt.targets.revenue : "";
+    $("ed-a-att").value = rt&&rt.actuals&&rt.actuals.attendance!=null ? rt.actuals.attendance : (auto.checkedIn||"");
+    $("ed-a-rev").value = rt&&rt.actuals&&rt.actuals.revenue!=null ? rt.actuals.revenue : (auto.revenue||"");
+    $("ed-a-notes").value = (rt&&rt.actuals&&rt.actuals.notes)||"";
+    $("ed-scores").innerHTML = scoreSelects(rt&&rt.scores);
+    $("ed-wins").value = (rt&&rt.wins)||"";
+    $("ed-issues").value = (rt&&rt.issues)||"";
+    $("ed-guru").value = (rt&&rt.guru)||localStorage.getItem("ngh_retro_guru")||"";
+    editorActions = (rt&&rt.actions ? rt.actions.slice() : []);
+    editing.autoRegs=auto.regs||0; editing.autoChecked=auto.checkedIn||0; editing.autoRev=auto.revenue||0;
+    renderEditorActions();
+    $("editor").classList.remove("hidden");
+    $("editor").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  function write(eventId, occDate){
+    var seed=null,d=(queue&&queue.due)||[];
+    for(var i=0;i<d.length;i++) if(d[i].eventId===eventId&&d[i].occDate===occDate) seed=d[i];
+    if(seed) return openEditor(eventId,occDate,seed);
+    // opened from history: pull the occurrence row
+    fetch(API+"/retro?event="+encodeURIComponent(eventId),{headers:hdrs()})
+      .then(authFail).then(function(r){return r.json();})
+      .then(function(h){
+        var occ=null; (h.occurrences||[]).forEach(function(o){ if(o.occDate===occDate) occ=o; });
+        openEditor(eventId,occDate,{title:h.event&&h.event.title,regs:occ&&occ.regs,checkedIn:occ&&occ.checkedIn,revenue:occ&&occ.revenue,retro:occ&&occ.retro});
+      }).catch(function(){ openEditor(eventId,occDate,null); });
+  }
+  var GURUS=["Dustin","Sarah","Chad","Zach","Mike","Jen","Kyle","Hazel","Josh","Miles"]; /* NGH-BUILD 2026-08-26a */
+  (function(){ var s=$("ed-new-owner"); if(s) GURUS.forEach(function(g){ var o=document.createElement("option"); o.value=g; o.textContent=g; s.appendChild(o); }); })();
+  function addAction(){
+    var t=$("ed-new-text").value.trim(); if(!t){ $("ed-new-text").focus(); return; }
+    editorActions.push({area:$("ed-new-area").value, assignee:($("ed-new-owner")?$("ed-new-owner").value:""), text:t, status:"open"});
+    $("ed-new-text").value=""; renderEditorActions(); $("ed-new-text").focus();
+  }
+  function rmAction(i){ editorActions.splice(i,1); renderEditorActions(); }
+  function save(){
+    if(!editing) return;
+    var scores={}; SCORE_DEFS.forEach(function(sd){ scores[sd[0]]=parseInt($("ed-s-"+sd[0]).value,10)||0; });
+    var guru=$("ed-guru").value.trim()||"Guru";
+    try{ localStorage.setItem("ngh_retro_guru",guru); }catch(e){}
+    var body={ retro:{
+      eventId:editing.eventId, occDate:editing.occDate, guru:guru,
+      targets:{ attendance:$("ed-t-att").value, revenue:$("ed-t-rev").value },
+      actuals:{ regs:editing.autoRegs, checkedIn:editing.autoChecked,
+                revenue:$("ed-a-rev").value, attendance:$("ed-a-att").value, notes:$("ed-a-notes").value },
+      scores:scores, wins:$("ed-wins").value, issues:$("ed-issues").value,
+      actions:editorActions
+    }};
+    $("ed-save").disabled=true;
+    fetch(API+"/retro",{method:"POST",headers:hdrs(),body:JSON.stringify(body)})
+      .then(authFail).then(function(r){ if(!r.ok) throw new Error("save failed ("+r.status+")"); return r.json(); })
+      .then(function(){ toast("📈 Retro saved"); closeEditor(); histCache={}; loadQueue(); var hp=$("hist-pick"); if(hp.value===editing.eventId) loadHistory(hp.value); editing=null; })
+      .catch(function(e){ if(String(e.message)!=="auth") toast("⚠️ "+ (e.message||e)); })
+      .finally(function(){ $("ed-save").disabled=false; });
+  }
+  function closeEditor(){ $("editor").classList.add("hidden"); }
+  function tick(retroId, actionId){
+    fetch(API+"/retro",{method:"POST",headers:hdrs(),body:JSON.stringify({actionDone:{retroId:retroId,actionId:actionId,status:"done"}})})
+      .then(authFail).then(function(r){ if(!r.ok) throw new Error("save failed"); })
+      .then(function(){ var el=$("act-"+retroId+"-"+actionId); if(el){ el.classList.add("done"); var b=el.querySelector("button"); if(b){b.disabled=true;b.textContent="✓";} } toast("✓ Done"); })
+      .catch(function(e){ if(String(e.message)!=="auth") toast("⚠️ Couldn\u2019t save"); });
+  }
+
+  /* --------------- history --------------- */
+  function loadEventsList(){
+    fetch(API+"/events",{headers:hdrs()})
+      .then(authFail).then(function(r){ return r.json(); })
+      .then(function(evs){
+        var today=new Date().toISOString().slice(0,10);
+        evs=(evs||[]).filter(function(e){ return e && e.id && e.status!=="draft"; });
+        evs.sort(function(a,b){ return (a.title||"").localeCompare(b.title||""); });
+        var pick=$("hist-pick");
+        pick.innerHTML='<option value="">— choose an event —</option>'+evs.map(function(e){
+          return '<option value="'+esc(e.id)+'">'+esc(e.title||e.id)+(e.recurrence?' 🔁':'')+((e.date&&e.date<today&&!e.recurrence)?' (past)':'')+'</option>';
+        }).join("");
+        var qev=new URLSearchParams(location.search).get("event");
+        if(qev){ pick.value=qev; if(pick.value===qev){ loadHistory(qev); $("hist-pick").scrollIntoView({behavior:"smooth",block:"center"}); } }
+      }).catch(function(){});
+  }
+  function scoreDots(sc){
+    if(!sc) return "";
+    return SCORE_DEFS.map(function(sd){ var v=sc[sd[0]]||0; return v?('<span class="chip">'+sd[1].split(" ")[0]+" "+v+"/5</span>"):""; }).join("");
+  }
+  function loadHistory(eventId){
+    var box=$("hist-body");
+    if(!eventId){ box.innerHTML=""; return; }
+    if(histCache[eventId]){ return renderHistory(histCache[eventId]); }
+    box.innerHTML='<p class="empty">Loading…</p>';
+    fetch(API+"/retro?event="+encodeURIComponent(eventId),{headers:hdrs()})
+      .then(authFail).then(function(r){ if(!r.ok) throw new Error("load failed ("+r.status+")"); return r.json(); })
+      .then(function(h){ histCache[eventId]=h; renderHistory(h); })
+      .catch(function(e){ if(String(e.message)!=="auth") box.innerHTML='<p class="empty">'+esc(e.message||e)+'</p>'; });
+  }
+  function renderHistory(h){
+    var box=$("hist-body"), occ=h.occurrences||[];
+    if(!occ.length){ box.innerHTML='<p class="empty">No past occurrences yet — the first retro unlocks after this event runs.</p>'; return; }
+    var chron=occ.slice().reverse(); // oldest → newest for the trend
+    var max=1; chron.forEach(function(o){ max=Math.max(max,o.checkedIn||0,o.regs||0); });
+    var trend='<div class="trend">'+chron.map(function(o,i){
+      var v=o.checkedIn||0, hpx=Math.max(2,Math.round(44*v/max));
+      return '<div class="bar'+(i===chron.length-1?' now':'')+'" style="height:'+hpx+'px;" title="'+o.occDate+' · '+v+' checked in"></div>';
+    }).join("")+'</div><div class="muted">Check-ins per occurrence (oldest → newest'+(h.event&&h.event.strategyType?(' · 🎯 '+esc(h.event.strategyType)):'')+')</div>';
+    box.innerHTML = trend + occ.map(function(o){
+      var rt=o.retro;
+      return '<div class="occrow">'+
+        '<b style="min-width:118px;">'+human(o.occDate)+'</b>'+
+        statChips(o)+
+        (rt?scoreDots(rt.scores):'<span class="chip" style="background:#fdf1f0;color:var(--red);">no retro</span>')+
+        '<span style="flex:1;"></span>'+
+        '<button class="btn ghost small" onclick="RETRO.write(\''+esc(h.event.id)+'\',\''+o.occDate+'\')">'+(rt?'✎ Edit retro':'✍️ Write retro')+'</button>'+
+      '</div>'+
+      (rt&&(rt.wins||rt.issues)?('<div class="muted" style="margin:-2px 0 6px;">'+(rt.wins?('✅ '+esc(rt.wins)+' '):'')+(rt.issues?('⚠️ '+esc(rt.issues)):'')+'</div>'):'');
+    }).join("");
+  }
+
+  /* --------------- boot --------------- */
+  function boot(){
+    if(!token()){ gate(); return; }
+    $("app").classList.remove("hidden");
+    loadQueue(); loadEventsList();
+  }
+  window.RETRO = { write:write, save:save, closeEditor:closeEditor, addAction:addAction, rmAction:rmAction,
+                   tick:tick, loadHistory:loadHistory };
+  boot();
+})();
+</script>
+</body>
+</html>

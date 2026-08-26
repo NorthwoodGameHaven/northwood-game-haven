@@ -38,6 +38,11 @@
   from = "/api/promo-tasks"
   to   = "/.netlify/functions/promo-tasks"
   status = 200
+# Event retrospectives (NGH-BUILD 2026-08-26a)
+[[redirects]]
+  from = "/api/retro"
+  to   = "/.netlify/functions/retro"
+  status = 200
 
 [[redirects]]
   from = "/api/blackouts"

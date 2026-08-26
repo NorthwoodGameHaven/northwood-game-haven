@@ -62,6 +62,7 @@
   #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
   .hidden{ display:none !important; }
 </style>
+<!-- NGH-BUILD 2026-08-26a: Retro tile + retros-due / open-CI stat tiles -->
 </head>
 <body>
 <div class="wrap">
@@ -101,6 +102,10 @@
       <a class="tile" href="guru-draft.html">
         <div class="t">📝 Draft Review</div>
         <div class="d">The weekly pipeline — score webs vs type ideals, calendar fit, factor flags, discussion, promo plans, publish</div>
+      </a>
+      <a class="tile" href="guru-retro.html">
+        <div class="t">📈 Event Retros</div>
+        <div class="d">Score past runs vs targets, log wins &amp; issues, assign CI actions that carry into the next plan</div>
       </a>
       <a class="tile" href="guru-schedule.html">
         <div class="t">📅 Guru Schedule</div>
@@ -227,6 +232,11 @@ async function loadStats(){
     out.push(stat(live, "Live events on calendar", false, "booking.html?admin=1&view=events"));
     out.push(stat(drafts, "Draft events (still hold rooms!)", drafts>0, "booking.html?admin=1&view=events&drafts=1"));
   }catch(e){ out.push(stat("–","Events")); }
+  try{ /* NGH-BUILD 2026-08-26a */
+    var rs = await api("/retro?stats=1");
+    out.push(stat(rs.retrosDue, "Event retros due", rs.retrosDue>0, "guru-retro.html"));
+    out.push(stat(rs.openActions, "Open CI actions", rs.openActions>0, "guru-retro.html"));
+  }catch(e){ out.push(stat("–","Retros / CI")); }
   $("stats").innerHTML = out.join("");
   renderBirthdays();
 }
