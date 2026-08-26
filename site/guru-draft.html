@@ -57,6 +57,18 @@
   .cal .dn{ font-weight:bold; color:#6b6b5a; font-size:11px; }
   .ev{ display:block; margin:2px 0; padding:1px 5px; border-radius:5px; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .ev.live{ background:var(--teal); color:#fff; }
+  /* pipeline strip (NGH-BUILD 2026-08-26b) */
+  .pipe{ display:flex; gap:8px; flex-wrap:wrap; align-items:stretch; margin-bottom:12px; }
+  .pipe .st{ flex:1 1 120px; min-width:120px; background:var(--card); border:1px solid #e2dcc8; border-radius:12px; padding:10px 12px; text-align:center; cursor:pointer; transition:transform .1s; text-decoration:none; color:inherit; display:block; }
+  .pipe .st:hover{ transform:translateY(-2px); }
+  .pipe .st.on{ border-color:var(--gold); box-shadow:0 0 0 2px #f0e2bd; }
+  .pipe .st .n{ font-size:24px; font-weight:bold; color:var(--forest); }
+  .pipe .st .n.alert{ color:var(--red); }
+  .pipe .st .l{ font-size:11.5px; color:#6b6b5a; margin-top:2px; line-height:1.35; }
+  .pipe .arrow{ align-self:center; color:#c9c2a8; font-size:18px; }
+  .stagechip{ display:inline-block; font-size:11px; padding:2px 9px; border-radius:12px; font-weight:bold; margin-right:6px; }
+  .stagechip.idea{ background:#eee; color:#666; } .stagechip.scoring{ background:#f3e8c8; color:#7a5a14; }
+  .stagechip.ready{ background:#dcebe0; color:#2d5a3d; } .stagechip.blocked{ background:#fdecea; color:#9a2b2b; }
   .ev.draft{ background:#fff; border:1.5px dashed var(--maroon); color:var(--maroon); font-weight:bold; cursor:pointer; }
   .ev.radar{ background:#f1ecfa; border:1px solid var(--purple); color:var(--purple); }
   .ev.un{ color:var(--red); font-weight:bold; }
@@ -70,7 +82,7 @@
   .hidden{ display:none !important; }
   #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
 </style>
-<!-- NGH-BUILD 2026-08-26a: CI carryover + scoring publish-gate -->
+<!-- NGH-BUILD 2026-08-26b: lifecycle pipeline strip + CI carryover + scoring publish-gate -->
 </head>
 <body>
 <div class="wrap">
@@ -88,6 +100,8 @@
   </div>
 
   <div id="app" class="hidden">
+    <div class="pipe" id="pipe"></div><!-- NGH-BUILD 2026-08-26b: lifecycle at a glance -->
+
     <div class="toolbar card">
       <button class="btn small" id="v-list" onclick="DR.view('list')">📋 Review list</button>
       <button class="btn ghost small" id="v-cal" onclick="DR.view('cal')">🗓️ Calendar fit</button>
@@ -228,6 +242,9 @@
       var ie=res[1]; S.radar=(ie&&ie.items)||ie||[];
       S.guru={ assignments:(res[2]&&res[2].assignments)||[], shifts:(res[2]&&res[2].shifts)||[], unavail:(res[2]&&res[2].unavail)||[] };
       redraw(); renderCal();
+      fetch(API+"/retro?stats=1",{headers:hdrs()}) /* NGH-BUILD 2026-08-26b */
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(d){ if(d){ retroStats=d; renderPipe(); } }).catch(function(){});
       // NGH-BUILD 2026-08-26a: CI carryover per draft — open actions from prior
       // runs + related/similar events (title tokens, then strategy type).
       S.drafts.forEach(function(e){
@@ -283,6 +300,7 @@
     h+='<h3>'+esc(e.title||"(untitled)")+'</h3>';
     h+='<div class="meta">'+(e.date? human(e.date)+(e.start?(' · '+e.start+'–'+(e.end||"")):"")+' · '+(du>=0? du+" days out":"PAST") : "no date")+' · id '+esc(e.id)+'</div>';
     h+='<div style="margin-top:5px;">'
+       +(function(){ var st=stageOf(e); return '<span class="stagechip '+st+'">'+stageLabel(st)+'</span>'; })()
        +(e.strategy&&e.strategy.type?'<span class="chip type">'+esc(e.strategy.type)+'</span>':'')
        +(e.strategy&&e.strategy.cadence?'<span class="chip cad">'+esc(e.strategy.cadence)+'</span>':'')
        +(gs.length?'<span class="chip guru">👤 '+esc(gs.join(" + "))+'</span>':'<span class="chip" style="background:#fbe9e7;color:#8a2418;">no Guru</span>')
@@ -332,8 +350,40 @@
     return h;
   }
 
+  /* ---- lifecycle stages (NGH-BUILD 2026-08-26b) ----
+     Derived, no schema: Idea (nothing scored) -> Scoring (partial) ->
+     Ready (fully scored, no red flags) / Blocked (fully scored, red flags).
+     Live + retro counts round out the pipeline; chips filter the list. */
+  var stageFilter=null, retroStats=null;
+  function stageOf(e){
+    var sc=scoresOf(e), n=AXES.filter(function(a){ return sc[a[0]]>0; }).length;
+    var typed=!!(e.strategy&&e.strategy.type);
+    if(!typed && n===0) return "idea";
+    if(!typed || n<AXES.length) return "scoring";
+    var hasBad=computeFlags(e,TODAY,S.radar,S.guru,S.ci[e.id]||[]).some(function(f){ return f.lv==="bad"; });
+    return hasBad ? "blocked" : "ready";
+  }
+  function stageLabel(st){ return {idea:"💡 Idea",scoring:"🕸️ Scoring",ready:"✅ Ready",blocked:"🚧 Blocked"}[st]||st; }
+  function setStage(st){ stageFilter = (stageFilter===st)?null:st; redraw(); }
+  function renderPipe(){
+    var box=$("pipe"); if(!box) return;
+    var c={idea:0,scoring:0,ready:0,blocked:0};
+    S.drafts.forEach(function(e){ c[stageOf(e)]++; });
+    var liveUp=S.events.filter(function(e){ return e.status!=="draft" && e.date; }).length;
+    function chip(st,n,lbl,alert){ return '<div class="st'+(stageFilter===st?" on":"")+'" onclick="DR.stage(\''+st+'\')"><div class="n'+(alert&&n>0?" alert":"")+'">'+n+'</div><div class="l">'+lbl+'</div></div>'; }
+    box.innerHTML =
+      chip("idea",c.idea,"💡 Idea<br>unscored drafts",false)+'<span class="arrow">›</span>'+
+      chip("scoring",c.scoring,"🕸️ Scoring<br>partly scored",false)+'<span class="arrow">›</span>'+
+      chip("blocked",c.blocked,"🚧 Blocked<br>red flags to clear",true)+'<span class="arrow">›</span>'+
+      chip("ready",c.ready,"✅ Ready<br>publish-gate clear",false)+'<span class="arrow">›</span>'+
+      '<a class="st" href="guru-promo.html"><div class="n">'+liveUp+'</div><div class="l">📣 Live<br>on the drumbeat</div></a><span class="arrow">›</span>'+
+      '<a class="st" href="guru-retro.html"><div class="n'+((retroStats&&retroStats.retrosDue>0)?" alert":"")+'">'+(retroStats?retroStats.retrosDue:"–")+'</div><div class="l">📈 Retro due<br>close the loop</div></a>'+
+      '<a class="st" href="guru-retro.html"><div class="n'+((retroStats&&retroStats.openActions>0)?" alert":"")+'">'+(retroStats?retroStats.openActions:"–")+'</div><div class="l">🔁 Open CI<br>feeds new drafts</div></a>';
+  }
   function redraw(){
+    renderPipe();
     var mode=$("sortsel").value, list=S.drafts.slice();
+    if(stageFilter) list=list.filter(function(e){ return stageOf(e)===stageFilter; });
     var flc={}; list.forEach(function(e){ flc[e.id]=sev(computeFlags(e,TODAY,S.radar,S.guru,S.ci[e.id]||[])); });
     list.sort(function(a,b){
       if(mode==="sev") return (flc[b.id]-flc[a.id]) || String(a.date||"9999").localeCompare(String(b.date||"9999"));
@@ -343,7 +393,7 @@
     });
     $("listwrap").innerHTML = list.length
       ? '<p class="muted" style="text-align:center;">'+list.length+' draft'+(list.length>1?"s":"")+' in the pipeline — highest attention first when sorted by default.</p>'+list.map(card).join("")
-      : '<p class="muted" style="text-align:center;padding:26px;">🎉 No drafts — the pipeline is clear.</p>';
+      : '<p class="muted" style="text-align:center;padding:26px;">'+(stageFilter?('No drafts in the '+stageLabel(stageFilter)+' stage — tap the tile again to clear the filter.'):'🎉 No drafts — the pipeline is clear.')+'</p>';
   }
 
   /* ================= calendar view ================= */
@@ -459,7 +509,7 @@
   function gate(){ $("gate").classList.remove("hidden"); $("app").classList.add("hidden"); }
   function boot(){ if(!token()){ gate(); return; } $("app").classList.remove("hidden"); load(); }
   window.DR={ load:load, redraw:redraw, toggle:toggle, jump:jump, view:view, calShift:calShift,
-              addNote:addNote, ppOpen:ppOpen, ppClose:ppClose, ppSave:ppSave, publish:publish, ciDone:ciDone };
+              addNote:addNote, ppOpen:ppOpen, ppClose:ppClose, ppSave:ppSave, publish:publish, ciDone:ciDone, stage:setStage };
   boot();
 })();
 </script>

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>🌙 Tonight — Run Sheet — Northwood Game Haven (staff)</title>
+<link rel="icon" href="logo.png">
+<!-- NGH-BUILD 2026-08-26b · Day-of Run Sheet: everything the floor Guru needs
+     for today (and the week ahead) on one page — times, rooms, owners, reg
+     counts, unresolved CI, and an auto-generated day-of checklist per event. -->
+<style>
+  :root{ --forest:#2d5a3d; --deep:#1c3a26; --gold:#c79a3b; --ink:#22301f; --paper:#f4f1e8; --card:#ffffff; --red:#9a2b2b; --teal:#1488a6; --amber:#7a5a14; --purple:#5a4a9a; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--paper); color:var(--ink); font-family:Georgia,'Times New Roman',serif; }
+  .wrap{ max-width:940px; margin:0 auto; padding:18px 16px 60px; }
+  header.hub{ text-align:center; padding:18px 0 6px; }
+  header.hub .kicker{ letter-spacing:.35em; font-size:12px; color:var(--gold); text-transform:uppercase; }
+  header.hub h1{ margin:6px 0 4px; color:var(--forest); font-size:32px; }
+  header.hub p{ margin:0; color:#6b6b5a; font-size:14px; }
+  .card{ background:var(--card); border:1px solid #e2dcc8; border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,.06); margin-bottom:12px; }
+  .btn{ display:inline-block; cursor:pointer; border:0; border-radius:26px; padding:10px 20px; font-family:inherit; font-size:14.5px; font-weight:bold; background:var(--gold); color:#1a1a12; text-decoration:none; }
+  .btn.ghost{ background:#fff; color:var(--forest); border:2px solid #cfe0d4; }
+  .btn.small{ padding:6px 12px; font-size:13px; border-radius:18px; }
+  h2.sec{ color:var(--forest); border-bottom:2px solid var(--gold); padding-bottom:6px; margin:26px 0 12px; font-size:20px; }
+  h2.sec .cnt{ font-size:13px; color:#8a8a75; font-weight:normal; }
+  .muted{ color:#8a8a75; font-size:13px; }
+  .empty{ text-align:center; color:#8a8a75; padding:22px; font-size:14.5px; }
+  .chip{ display:inline-block; font-size:11.5px; padding:2px 9px; border-radius:12px; background:#eee; color:#555; margin:0 6px 4px 0; white-space:nowrap; }
+  .chip.guru{ background:#dcebe0; color:var(--forest); font-weight:bold; }
+  .chip.noguru{ background:#fbe9e7; color:#8a2418; font-weight:bold; }
+  .chip.room{ background:#e6e0f5; color:var(--purple); }
+  .chip.reg{ background:#f3e8c8; color:var(--amber); font-weight:bold; }
+  .chip.ci{ background:#fdecea; color:var(--red); font-weight:bold; }
+  .ev{ border-left:5px solid var(--forest); }
+  .ev.offsite{ border-left-color:var(--teal); }
+  .ev-title{ font-weight:bold; color:var(--forest); font-size:17px; }
+  .ev-time{ font-size:14px; color:var(--amber); font-weight:bold; }
+  .weather{ background:linear-gradient(135deg,#eef4ee,#f7f3e6); border:1px solid #dfe6d8; border-radius:12px; padding:10px 14px; text-align:center; font-size:14px; color:#41523f; margin-bottom:12px; }
+  .chk{ margin-top:10px; border-top:1px dashed #e2dcc8; padding-top:8px; }
+  .chk label{ display:flex; align-items:flex-start; gap:8px; font-size:13.5px; padding:4px 0; cursor:pointer; }
+  .chk label.done{ opacity:.5; text-decoration:line-through; }
+  .chk input{ margin-top:3px; }
+  .links{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .week-row{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 0; border-bottom:1px dashed #e2dcc8; font-size:13.5px; }
+  .week-row:last-child{ border-bottom:0; }
+  .week-day{ min-width:86px; font-weight:bold; color:var(--forest); }
+  .hidden{ display:none !important; }
+  #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
+  .tips{ font-size:13px; color:#6b6b5a; line-height:1.6; margin-top:26px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hub">
+    <div class="kicker">Northwood Game Haven · Staff</div>
+    <h1>🌙 Tonight</h1>
+    <p>The day-of run sheet — who's on, what's running, what to set up, and what the last retro said to do differently. Checklist ticks save on this device.</p>
+  </header>
+
+  <div id="gate" class="card hidden" style="max-width:420px;margin:30px auto;text-align:center;">
+    <p>You're not signed in. The run sheet is staff-only.</p>
+    <a class="btn" href="guru.html">Sign in at the Guru Hub →</a>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="weather" id="wx">☁️ Loading Chippewa Falls weather…</div>
+
+    <h2 class="sec">📋 Today <span class="cnt" id="today-label"></span></h2>
+    <div id="today-list"><p class="empty">Loading…</p></div>
+
+    <h2 class="sec">🗓️ The week ahead <span class="cnt">(next 7 days)</span></h2>
+    <div class="card" id="week-list"><p class="empty">Loading…</p></div>
+
+    <p class="tips">💡 The checklist is generated from the event itself — registration adds check-in steps, tournaments add bracket setup, prizes add the pull list, and any unresolved 🔁 CI carryover from the last retro shows in red. After close: write the retro while it's fresh — <a href="guru-retro.html">📈 Event Retros</a>.</p>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="guru-common.js"></script>
+<script>
+(function(){
+  var API = "/.netlify/functions";
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function toast(m){ var t=$("toast"); t.textContent=m; t.style.display="block"; setTimeout(function(){ t.style.display="none"; },2600); }
+  function token(){ return (window.GuruAuth&&GuruAuth.get&&GuruAuth.get())||""; }
+  function hdrs(){ return { "Content-Type":"application/json", "Authorization":"Bearer "+token() }; }
+  function pad(n){ return (n<10?"0":"")+n; }
+  function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function D(s){ return new Date(s+"T12:00:00"); }
+  function human(s){ return D(s).toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"}); }
+  function humanShort(s){ return D(s).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}); }
+  function t2m(t){ if(!t) return null; var p=String(t).split(":"); return parseInt(p[0],10)*60+parseInt(p[1],10); }
+  function fmtTime(mins){ if(mins==null) return ""; var h=Math.floor(mins/60),m=mins%60,ap=h>=12?"PM":"AM",hh=h%12; if(hh===0)hh=12; return hh+":"+pad(m)+" "+ap; }
+  var TODAY = ymd(new Date());
+
+  /* ---- recurrence expansion: VERBATIM the shared monthlyModeDate rule ---- */
+  function addDays(ds,n){ var d=new Date(ds+"T12:00:00"); d.setDate(d.getDate()+n); return ymd(d); }
+  function addMonths(ds,n){ var d=new Date(ds+"T12:00:00"); d.setMonth(d.getMonth()+n); return ymd(d); }
+  function monthModeDate(anchor,i,mode){
+    var a=new Date(anchor+"T12:00:00"), y=a.getFullYear(), m=a.getMonth()+i;
+    if(mode==="lastday") return ymd(new Date(y,m+1,0,12));
+    if(mode==="lastdow"){ var L=new Date(y,m+1,0,12), df=(L.getDay()-a.getDay()+7)%7; L.setDate(L.getDate()-df); return ymd(L); }
+    if(mode==="nthdow"){ var nth=Math.ceil(a.getDate()/7), F=new Date(y,m,1,12), off=(a.getDay()-F.getDay()+7)%7, day=1+off+(nth-1)*7, dim=new Date(y,m+1,0).getDate(); if(day>dim) day-=7; return ymd(new Date(y,m,day,12)); }
+    return addMonths(anchor,i);
+  }
+  function expand(e){
+    if(!e.recurrence) return [e];
+    var out=[], cur=e.date, f=e.recurrence.freq, c=e.recurrence.count||1, md=e.recurrence.mode||"dom", exc=e.exceptions||[];
+    for(var i=0;i<c;i++){ if(exc.indexOf(cur)<0){ var x=Object.assign({},e); x.date=cur; out.push(x); }
+      cur = f==="weekly"?addDays(cur,7):f==="biweekly"?addDays(cur,14):monthModeDate(e.date,i+1,md); }
+    return out;
+  }
+
+  var S={ events:[], guru:{assignments:[],shifts:[],unavail:[]}, ci:{}, regs:{} };
+
+  function gurusFor(evId, date){
+    var asg=(S.guru.assignments||[]).filter(function(a){ return a.eventId===evId && !a.none; });
+    if(!asg.length) return [];
+    // per-date override wins over the series-wide assignment
+    var hit = asg.filter(function(a){ return a.date===date; })[0] || asg.filter(function(a){ return !a.date; })[0] || asg[0];
+    return (hit.gurus||[]).slice();
+  }
+
+  /* ---- auto day-of checklist, derived from the event itself ---- */
+  function checklist(o){
+    var items=[], reg=o.registration||{};
+    if(!o.offsite && (o.rooms||[]).length) items.push("Set the room"+(o.rooms.length>1?"s":"")+": "+o.rooms.join(", ")+" — tables, chairs, signage out");
+    if(o.offsite) items.push("Offsite at "+(o.offsiteLocation||"(location TBD)")+" — pack the travel kit");
+    if(reg.enabled) items.push("Open the Check-in console and greet registrants at the door");
+    if(reg.enabled && reg.cost>0) items.push("Confirm payments — chase unpaid registrations before start");
+    if(o.tournament) items.push("Set the bracket / timer in the Event Stream Hub ("+((o.tournament.type||"tournament"))+(o.tournament.rounds?(", "+o.tournament.rounds+" rounds"):"")+")");
+    if(o.prizes && (o.prizes.placement||o.prizes.participation)) items.push("Pull prizes — "+[o.prizes.placement?("placement: "+o.prizes.placement):"",o.prizes.participation?("participation: "+o.prizes.participation):""].filter(Boolean).join(" · "));
+    if((o.discordChannels||[]).length) items.push("Post the day-of hype in "+o.discordChannels.map(function(c){return "#"+c;}).join(", "));
+    if(o.photo) items.push("Event art is on the TV slideshow");
+    items.push("Snap 2–3 photos mid-event for socials & the retro");
+    items.push("After close: write the retro while it's fresh (📈)");
+    return items;
+  }
+  function chkKey(o){ return "ngh_run_"+o.id+"_"+o.date; }
+  function loadTicks(o){ try{ return JSON.parse(localStorage.getItem(chkKey(o))||"[]"); }catch(e){ return []; } }
+  function tick(evId, date, i, el){
+    var o={id:evId, date:date}, t=loadTicks(o);
+    var idx=t.indexOf(i);
+    if(idx<0) t.push(i); else t.splice(idx,1);
+    try{ localStorage.setItem(chkKey(o), JSON.stringify(t)); }catch(e){}
+    el.closest("label").classList.toggle("done", idx<0);
+  }
+
+  function todayCard(o){
+    var gs=gurusFor(o.id,o.date), reg=o.registration||{}, cnt=S.regs[o.id+"|"+o.date], ci=S.ci[o.id]||[];
+    var h='<div class="card ev'+(o.offsite?" offsite":"")+'">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;">'
+      +'<span class="ev-title">'+esc(o.title||"(untitled)")+'</span>'
+      +'<span class="ev-time">'+(o.allDay?"All day":(fmtTime(t2m(o.start))+" – "+fmtTime(t2m(o.end))))+'</span></div>';
+    h+='<div style="margin-top:6px;">'
+      +(gs.length?gs.map(function(g){ return '<span class="chip guru">👤 '+esc(g)+'</span>'; }).join(""):'<span class="chip noguru">no Guru assigned!</span>')
+      +(o.offsite?'<span class="chip room">📍 '+esc(o.offsiteLocation||"offsite")+'</span>':(o.rooms||[]).map(function(r){ return '<span class="chip room">'+esc(r)+'</span>'; }).join(""))
+      +(reg.enabled?'<span class="chip reg">🎟️ '+(cnt?(cnt.approved+" registered"+(reg.max?(" / "+reg.max):"")):"…")+'</span>':'')
+      +(ci.length?'<span class="chip ci">🔁 '+ci.length+' unresolved CI</span>':'')
+      +'</div>';
+    if(ci.length){
+      h+='<div style="margin-top:8px;background:#fdecea;border:1px solid #f0c5be;border-radius:9px;padding:8px 10px;font-size:13px;color:#7a2418;">'
+        +'<b>From the last retro — still open:</b>'
+        +ci.slice(0,4).map(function(a){ return '<div style="margin-top:4px;">• '+esc(a.text)+(a.assignee?' <b>👤 '+esc(a.assignee)+'</b>':'')+'</div>'; }).join("")
+        +(ci.length>4?'<div class="muted">…and '+(ci.length-4)+' more</div>':'')
+        +' <a href="guru-retro.html?event='+encodeURIComponent(o.id)+'" style="color:#7a2418;">open retros →</a></div>';
+    }
+    var items=checklist(o), ticks=loadTicks(o);
+    h+='<div class="chk"><b style="color:var(--forest);font-size:13.5px;">✅ Day-of checklist</b>'
+      +items.map(function(it,i){
+        var done=ticks.indexOf(i)>=0;
+        return '<label class="'+(done?"done":"")+'"><input type="checkbox" '+(done?"checked":"")+' onchange="RUN.tick(\''+esc(o.id)+'\',\''+esc(o.date)+'\','+i+',this)"><span>'+esc(it)+'</span></label>';
+      }).join("")+'</div>';
+    h+='<div class="links">';
+    if(reg.enabled) h+='<a class="btn ghost small" href="checkin.html">🎟️ Check-in console</a>';
+    if(o.tournament) h+='<a class="btn ghost small" href="trivia-host.html">🧠 Event Stream Hub</a>';
+    h+='<a class="btn ghost small" href="booking.html?admin=1&view=events&editEvent='+encodeURIComponent(o.id)+'">✏️ Event</a>'
+      +'<a class="btn ghost small" href="guru-schedule.html">📅 Schedule</a></div>';
+    h+='</div>';
+    return h;
+  }
+
+  function render(){
+    $("today-label").textContent = "("+human(TODAY)+")";
+    var horizon=addDays(TODAY,7), occ=[];
+    S.events.forEach(function(e){
+      if(e.status==="draft") return;
+      expand(e).forEach(function(x){ if(x.date && x.date>=TODAY && x.date<=horizon) occ.push(x); });
+    });
+    occ.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:((t2m(a.start)||0)-(t2m(b.start)||0)); });
+    var today=occ.filter(function(o){ return o.date===TODAY; });
+    var week=occ.filter(function(o){ return o.date>TODAY; });
+
+    $("today-list").innerHTML = today.length ? today.map(todayCard).join("")
+      : '<div class="card"><p class="empty">🛋️ Nothing scheduled today — open play reigns. Good day to prep the week, print signage, or knock out 🔁 CI actions.</p></div>';
+
+    $("week-list").innerHTML = week.length ? week.map(function(o){
+      var gs=gurusFor(o.id,o.date), reg=o.registration||{}, cnt=S.regs[o.id+"|"+o.date];
+      return '<div class="week-row"><span class="week-day">'+humanShort(o.date)+'</span>'
+        +'<span style="flex:1;"><b>'+esc(o.title)+'</b> <span class="muted">'+(o.allDay?"all day":fmtTime(t2m(o.start)))+'</span></span>'
+        +(gs.length?'<span class="chip guru">👤 '+esc(gs.join(" + "))+'</span>':'<span class="chip noguru">no Guru</span>')
+        +(reg.enabled&&cnt?'<span class="chip reg">🎟️ '+cnt.approved+(reg.max?("/"+reg.max):"")+'</span>':'');
+    }).join("") : '<p class="empty">Nothing on the calendar for the next 7 days.</p>';
+
+    // reg counts + CI, fetched after first paint (each triggers a re-render)
+    var seen={};
+    occ.forEach(function(o){
+      var reg=o.registration||{};
+      if(reg.enabled && S.regs[o.id+"|"+o.date]===undefined){
+        S.regs[o.id+"|"+o.date]=null;
+        fetch(API+"/registrations?event="+encodeURIComponent(o.id)+"&date="+encodeURIComponent(o.date))
+          .then(function(r){ return r.ok?r.json():{approved:0,total:0}; })
+          .then(function(c){ S.regs[o.id+"|"+o.date]=c; paint(); })
+          .catch(function(){ S.regs[o.id+"|"+o.date]={approved:0,total:0}; });
+      }
+      if(o.date===TODAY && !seen[o.id] && S.ci[o.id]===undefined){
+        seen[o.id]=1; S.ci[o.id]=[];
+        fetch(API+"/retro?planning="+encodeURIComponent(o.id),{headers:hdrs()})
+          .then(function(r){ return r.ok?r.json():{actions:[]}; })
+          .then(function(d){ S.ci[o.id]=(d&&d.actions)||[]; paint(); })
+          .catch(function(){});
+      }
+    });
+  }
+  var _pt=null;
+  function paint(){ if(_pt) return; _pt=setTimeout(function(){ _pt=null; renderStatic(); }, 120); }
+  function renderStatic(){
+    // re-render without re-kicking fetches (they're cached in S.regs / S.ci)
+    var horizon=addDays(TODAY,7), occ=[];
+    S.events.forEach(function(e){ if(e.status==="draft") return;
+      expand(e).forEach(function(x){ if(x.date && x.date>=TODAY && x.date<=horizon) occ.push(x); }); });
+    occ.sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:((t2m(a.start)||0)-(t2m(b.start)||0)); });
+    var today=occ.filter(function(o){ return o.date===TODAY; }), week=occ.filter(function(o){ return o.date>TODAY; });
+    $("today-list").innerHTML = today.length ? today.map(todayCard).join("")
+      : '<div class="card"><p class="empty">🛋️ Nothing scheduled today — open play reigns. Good day to prep the week, print signage, or knock out 🔁 CI actions.</p></div>';
+    $("week-list").innerHTML = week.length ? week.map(function(o){
+      var gs=gurusFor(o.id,o.date), reg=o.registration||{}, cnt=S.regs[o.id+"|"+o.date];
+      return '<div class="week-row"><span class="week-day">'+humanShort(o.date)+'</span>'
+        +'<span style="flex:1;"><b>'+esc(o.title)+'</b> <span class="muted">'+(o.allDay?"all day":fmtTime(t2m(o.start)))+'</span></span>'
+        +(gs.length?'<span class="chip guru">👤 '+esc(gs.join(" + "))+'</span>':'<span class="chip noguru">no Guru</span>')
+        +(reg.enabled&&cnt?'<span class="chip reg">🎟️ '+cnt.approved+(reg.max?("/"+reg.max):"")+'</span>':'');
+    }).join("") : '<p class="empty">Nothing on the calendar for the next 7 days.</p>';
+  }
+
+  function loadWx(){
+    // Open-Meteo, Chippewa Falls — same source as the trivia display effects.
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=44.937&longitude=-91.393&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&temperature_unit=fahrenheit&timezone=America%2FChicago&forecast_days=1")
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var dy=(d&&d.daily)||{}; if(!(dy.temperature_2m_max&&dy.temperature_2m_max.length)) return;
+        var code=(dy.weather_code||[])[0], icon = code===0?"☀️" : code<=3?"⛅" : code<=48?"🌫️" : code<=67?"🌧️" : code<=77?"🌨️" : code<=82?"🌧️" : code<=86?"🌨️" : "⛈️";
+        $("wx").innerHTML = icon+' Chippewa Falls today: <b>'+Math.round(dy.temperature_2m_max[0])+'°</b> / '+Math.round(dy.temperature_2m_min[0])+'° · '+(dy.precipitation_probability_max?dy.precipitation_probability_max[0]:0)+'% precip'
+          +((dy.precipitation_probability_max&&dy.precipitation_probability_max[0]>=50)?' — <b>call weather-dependent setups (bounce house, River Deck) early</b>':'');
+      }).catch(function(){ $("wx").style.display="none"; });
+  }
+
+  function load(){
+    $("today-list").innerHTML='<p class="empty">Loading…</p>';
+    Promise.all([
+      fetch(API+"/events",{headers:hdrs()}).then(function(r){ if(r.status===401) throw new Error("auth"); return r.json(); }),
+      fetch(API+"/gurus",{headers:hdrs()}).then(function(r){ return r.ok?r.json():{}; }).catch(function(){ return {}; })
+    ]).then(function(res){
+      var ev=res[0]; S.events=(ev&&ev.events)||ev||[];
+      S.guru={ assignments:(res[1]&&res[1].assignments)||[], shifts:(res[1]&&res[1].shifts)||[], unavail:(res[1]&&res[1].unavail)||[] };
+      render();
+    }).catch(function(e){
+      if(String(e.message)==="auth"){ gate(); return; }
+      $("today-list").innerHTML='<p class="empty">⚠️ '+esc(e.message||String(e))+'</p>';
+    });
+  }
+
+  function gate(){ $("gate").classList.remove("hidden"); $("app").classList.add("hidden"); }
+  function boot(){ if(!token()){ gate(); return; } $("app").classList.remove("hidden"); loadWx(); load(); }
+  window.RUN={ tick:tick, load:load };
+  boot();
+})();
+</script>
+</body>
+</html>

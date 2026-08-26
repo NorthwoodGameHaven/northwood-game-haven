@@ -43,6 +43,11 @@
   from = "/api/retro"
   to   = "/.netlify/functions/retro"
   status = 200
+# Event blueprints (NGH-BUILD 2026-08-26b)
+[[redirects]]
+  from = "/api/blueprints"
+  to   = "/.netlify/functions/blueprints"
+  status = 200
 
 [[redirects]]
   from = "/api/blackouts"

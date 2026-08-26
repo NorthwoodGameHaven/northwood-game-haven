@@ -2305,6 +2305,7 @@ function eventCardHTML(e){
       '<button class="btn btn-sm btn-ghost" onclick="setAdminView(\'calendar\');calGoto(\''+e.date+'\',\'day\');">📅 View day schedule</button>'+
       '<button class="btn btn-sm btn-ghost" onclick="duplicateEvent(\''+e.id+'\')">⧉ Duplicate</button>'+
       '<a class="btn btn-sm btn-ghost" href="guru-retro.html?event='+encodeURIComponent(e.id)+'" style="text-decoration:none;display:inline-flex;align-items:center;">📈 Retro</a>'+
+      '<button class="btn btn-sm btn-ghost" onclick="nghSaveBlueprint(\''+e.id+'\')" title="Save this event as a reusable template">📋 Blueprint</button>'+ /* NGH-BUILD 2026-08-26b */
       '<button class="btn btn-sm btn-ghost" onclick="exportEvent(\''+e.id+'\')">📥 Export (.ics)</button>'+
       '<a class="btn btn-sm btn-ghost" href="'+adminGcalUrl(e)+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;">📅 Add to Google</a>'+
       (e.recurrence?'<button class="btn btn-sm btn-ghost" onclick="reviewInstances(\''+e.id+'\')">🔁 Review instances</button>':'')+
@@ -2340,7 +2341,8 @@ function renderEventsAdmin(){
     '</div>'+
     '<div id="share-links" style="font-size:0.78rem;"></div>'+
     '</div>'+
-    '<div class="card"><h2 id="ev-form-title">🎉 Create a Public NGH Event</h2>'+
+    '<div class="card"><h2 id="ev-form-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">🎉 Create a Public NGH Event<button class="btn btn-sm btn-ghost" style="font-size:0.72rem;" onclick="nghOpenBlueprints()">✨ New from Blueprint</button></h2>'+ /* NGH-BUILD 2026-08-26b */
+    '<div id="ev-bp-picker" style="display:none;"></div>'+
     '<p class="hint">Public events (tournaments, launch nights, demo days) appear on the booking calendar in teal, hold the selected rooms, and publish to the Event Calendar on the main site for customers to view. Make it recurring for a weekly series.</p>'+
     '<div id="ev-retro-carry" style="display:none;"></div>'+
     '<div class="row"><div><label class="fld req">Event title</label><input type="text" id="ev-title" placeholder="e.g. Friday Night Magic"></div>'+
@@ -2718,7 +2720,7 @@ function resetStrategyInputs(){
   var cad=$("ev-str-cadence"); if(cad){ cad.value=""; cad.style.borderColor=""; }
   onStrategyCadenceChange();
 }
-function resetEventForm(){ editingEventId=null; evPhotoData=null; renderEvDiscord([]); var _rc=$("ev-retro-carry"); if(_rc){ _rc.style.display="none"; _rc.innerHTML=""; } $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
+function resetEventForm(){ editingEventId=null; evPhotoData=null; renderEvDiscord([]); var _bp=$("ev-bp-picker"); if(_bp){ _bp.style.display="none"; _bp.innerHTML=""; } var _rc=$("ev-retro-carry"); if(_rc){ _rc.style.display="none"; _rc.innerHTML=""; } $("ev-form-title").textContent="🎉 Create a Public NGH Event"; $("ev-save-btn").textContent="Save Event"; $("ev-cancel-btn").style.display="none";
   ["ev-title","ev-date","ev-start","ev-end","ev-notes","ev-photo-url","ev-fb","ev-rounds","ev-wins","ev-est-end","ev-arrival","ev-restrictions","ev-prizes-place","ev-prizes-part","ev-admin-notes"].forEach(function(id){ if($(id)) $(id).value=""; });
   if($("ev-ttype")) $("ev-ttype").value="";
   if(typeof resetStrategyInputs==="function") resetStrategyInputs();
@@ -4301,6 +4303,66 @@ function custWeekDayHTML(isDay){
    When a Guru edits an event, pull the OPEN improvement actions from its most
    recent retros (guru-retro.html / /api/retro) and surface them right above
    the form — so lessons learned actually make it into the next occurrence. */
+/* ---------- Event Blueprints (NGH-BUILD 2026-08-26b) ----------
+   A blueprint is a date-less saved copy of an event — including its strategy
+   scoring — so proven formats spin up in seconds and arrive at Draft Review
+   already scored for the publish-gate. Reuses the duplicate-event fill path. */
+async function nghSaveBlueprint(id){
+  var e=cache.events.filter(function(x){return x.id===id;})[0]; if(!e) return;
+  var name=prompt("Blueprint name (what shows in the picker):", e.title||"");
+  if(name==null) return; name=name.trim(); if(!name){ alert("Name required."); return; }
+  try{
+    var r=await fetch("/api/blueprints",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+GuruAuth.get()},
+      body:JSON.stringify({blueprint:{name:name, savedBy:"", data:e}})});
+    if(!r.ok){ var j={}; try{ j=await r.json(); }catch(_e){} throw new Error(j.error||("HTTP "+r.status)); }
+    alert("📋 Blueprint saved — find it under ✨ New from Blueprint."+((e.photo&&e.photo.slice(0,5)==="data:")?"\n(Note: the uploaded photo isn\u2019t carried — blueprints keep URL photos only.)":""));
+  }catch(err){ alert("Couldn\u2019t save blueprint: "+(err.message||err)); }
+}
+async function nghOpenBlueprints(){
+  var box=$("ev-bp-picker"); if(!box) return;
+  if(box.style.display==="block"){ box.style.display="none"; box.innerHTML=""; return; }
+  box.style.display="block"; box.innerHTML='<p class="hint">Loading blueprints…</p>';
+  try{
+    var r=await fetch("/api/blueprints",{headers:{Authorization:"Bearer "+GuruAuth.get()}});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    var d=await r.json(); var bps=(d&&d.blueprints)||[];
+    if(!bps.length){ box.innerHTML='<div style="background:#f6faf4;border:1px solid #d8e8d6;border-radius:9px;padding:10px 12px;margin:0 0 10px;font-size:0.84rem;">No blueprints yet — open any existing event below and hit 📋 Blueprint to save it as a template.</div>'; return; }
+    box.innerHTML='<div style="background:#f6faf4;border:1px solid #d8e8d6;border-radius:9px;padding:10px 12px;margin:0 0 10px;">'+
+      '<b style="color:var(--forest);">✨ Start from a blueprint</b> <span class="hint" style="display:inline;">— fills everything (incl. strategy scoring); you set the date.</span>'+
+      bps.map(function(b){
+        var meta=[]; if(b.allDay) meta.push("all day"); else if(b.start) meta.push(b.start+"–"+(b.end||""));
+        if((b.rooms||[]).length) meta.push(b.rooms.join(", "));
+        var chips=(b.hasStrategy?" 🕸️":"")+(b.hasReg?" 🎟️":"")+(b.hasTournament?" 🏆":"");
+        return '<div style="display:flex;align-items:center;gap:8px;margin-top:7px;font-size:0.84rem;">'+
+          '<button class="btn btn-sm" onclick="nghUseBlueprint(\''+b.id+'\')">Use</button>'+
+          '<span style="flex:1;"><b>'+esc(b.name)+'</b>'+chips+(meta.length?' <span style="color:#8a8a75;">· '+esc(meta.join(" · "))+'</span>':'')+'</span>'+
+          '<button class="btn btn-sm btn-ghost" onclick="nghDelBlueprint(\''+b.id+'\',this)" title="Delete blueprint">🗑</button></div>';
+      }).join("")+'</div>';
+  }catch(err){ box.innerHTML='<p class="hint">Couldn\u2019t load blueprints: '+esc(err.message||String(err))+'</p>'; }
+}
+async function nghUseBlueprint(id){
+  try{
+    var r=await fetch("/api/blueprints?id="+encodeURIComponent(id),{headers:{Authorization:"Bearer "+GuruAuth.get()}});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    var d=await r.json(); var bp=(d&&d.blueprint)||{}; var ev=bp.data||{};
+    editingEventId=null; evPhotoData=null;
+    _fillEventForm(ev, true);              // duplicate path: blanks date+times…
+    if(!ev.allDay){ setTimeSelect("ev-start", ev.start||""); setTimeSelect("ev-end", ev.end||""); }  // …times restored from the blueprint
+    var pk=$("ev-bp-picker"); if(pk){ pk.style.display="none"; pk.innerHTML=""; }
+    $("ev-form-title").childNodes[0].textContent="✨ New from Blueprint — "+(bp.name||"")+" — pick a date ";
+    $("ev-save-btn").textContent="Create Event"; $("ev-cancel-btn").style.display="inline-block";
+    window.scrollTo({top:0,behavior:"smooth"});
+    setTimeout(function(){ var dd=$("ev-date"); if(dd) dd.focus(); }, 80);
+  }catch(err){ alert("Couldn\u2019t load blueprint: "+(err.message||err)); }
+}
+async function nghDelBlueprint(id, btn){
+  if(!confirm("Delete this blueprint? (Events created from it are untouched.)")) return;
+  try{
+    var r=await fetch("/api/blueprints",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+GuruAuth.get()},body:JSON.stringify({delete:id})});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    if(btn){ var row=btn.parentNode; row.parentNode.removeChild(row); }
+  }catch(err){ alert("Couldn\u2019t delete: "+(err.message||err)); }
+}
 async function nghLoadCarryover(eventId){
   var box=$("ev-retro-carry"); if(!box) return;
   box.style.display="none"; box.innerHTML="";
