@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <title>📈 Event Retros — Northwood Game Haven (staff)</title>
 <link rel="icon" href="logo.png">
-<!-- NGH-BUILD 2026-08-26a · Event Retro console (WI-105 in software form) -->
+<!-- NGH-BUILD 2026-08-26c · series health + G3 decision · Event Retro console (WI-105 in software form) -->
 <style>
   :root{ --forest:#2d5a3d; --deep:#1c3a26; --gold:#c79a3b; --ink:#22301f; --paper:#f4f1e8; --card:#ffffff; --red:#9a2b2b; --teal:#1488a6; --amber:#7a5a14; }
   *{ box-sizing:border-box; }
@@ -120,12 +120,26 @@
       </div>
       <div class="grid2" style="margin-top:8px;">
         <div><label class="fld">🦦 Guru</label><input type="text" id="ed-guru" placeholder="Who's writing this retro?"></div>
+        <div><label class="fld">⚖️ G3 decision — this event's future</label>
+          <select id="ed-decision"><!-- NGH-BUILD 2026-08-26c -->
+            <option value="continue">▶️ Continue — keep the slot</option>
+            <option value="move">📅 Move the slot</option>
+            <option value="narrow">🎯 Narrow — rename around the winner</option>
+            <option value="split">🌱 Split — spin off a second night</option>
+            <option value="graduate">🏆 Graduate — launch a league</option>
+            <option value="handoff">🤝 Hand off — partner-run</option>
+            <option value="retire">🌙 Retire to hiatus</option>
+          </select>
+        </div>
         <div style="align-self:end;text-align:right;">
           <button class="btn ghost small" onclick="RETRO.closeEditor()">Cancel</button>
           <button class="btn" id="ed-save" onclick="RETRO.save()">Save retro</button>
         </div>
       </div>
     </div>
+
+    <h2 class="sec">🩺 Series health <span class="cnt" id="health-cnt"></span></h2>
+    <div id="health-list"><p class="empty">Loading…</p></div>
 
     <h2 class="sec">📌 Apply before the next run <span class="cnt" id="carry-cnt"></span></h2>
     <p class="muted" style="margin:0 0 10px;">Open actions from past retros whose event runs again within 21 days. Tick them done here, or jump straight to where the fix happens.</p>
@@ -169,7 +183,7 @@
   function loadQueue(){
     fetch(API+"/retro?queue=1",{headers:hdrs()})
       .then(authFail).then(function(r){ return r.json(); })
-      .then(function(d){ queue=d; renderDue(); renderCarry(); })
+      .then(function(d){ queue=d; renderDue(); renderCarry(); loadHealth(); })
       .catch(function(e){ if(String(e.message)!=="auth"){ $("due-list").innerHTML='<p class="empty">Couldn\u2019t load — '+esc(e.message||e)+'</p>'; $("carry-list").innerHTML=""; } });
   }
   function statChips(it){
@@ -196,6 +210,36 @@
     if(a.area==="scheduling") return 'guru-schedule.html';
     return 'booking.html?admin=1&view=events&editEvent='+encodeURIComponent(eventId);
   }
+  /* ---- series health: auto-evaluated attendance pivot triggers (26c) ---- */
+  var FLAGS={ move:{i:"📅",t:"Move the slot",c:"#9a2b2b"}, split:{i:"🌱",t:"Split — launch night two",c:"#2d5a3d"}, declining:{i:"📉",t:"Declining",c:"#7a5a14"} };
+  function loadHealth(){
+    fetch(API+"/retro?health=1",{headers:hdrs()})
+      .then(function(r){ return r.ok?r.json():{health:[]}; })
+      .then(function(d){ renderHealth((d&&d.health)||[]); })
+      .catch(function(){ renderHealth([]); });
+  }
+  function renderHealth(h){
+    $("health-cnt").textContent = h.length ? "("+h.length+")" : "";
+    if(!h.length){ $("health-list").innerHTML='<p class="empty">💚 All recurring series look healthy — no attendance triggers tripped.</p>'; return; }
+    $("health-list").innerHTML = h.map(function(s){
+      var f=FLAGS[s.flag]||{i:"⚖️",t:s.flag,c:"#555"};
+      var mx=Math.max.apply(null, s.series.map(function(p){return p.att;}).concat([1]));
+      var bars=s.series.map(function(p,i){ var hgt=Math.max(6,Math.round(p.att/mx*40));
+        return '<div class="bar'+(i===s.series.length-1?" now":"")+'" style="height:'+hgt+'px;" title="'+esc(p.date)+': '+p.att+'"></div>'; }).join("");
+      return '<div class="card" style="border-left:5px solid '+f.c+';">'
+        +'<div class="rt-title">'+f.i+' '+esc(s.title)+' <span class="chip" style="background:#fdecea;color:'+f.c+';font-weight:bold;">'+f.t+'</span></div>'
+        +'<div class="trend" style="max-width:220px;">'+bars+'</div>'
+        +'<div class="rt-meta">Last '+s.series.length+' runs: '+s.series.map(function(p){return p.att;}).join(" · ")+' attending</div>'
+        +'<div style="font-size:13.5px;">'+esc(s.msg)+'</div>'
+        +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">'
+        +'<button class="btn ghost small" onclick="RETRO.pick(\''+esc(s.eventId)+'\')">🗂 Open history</button>'
+        +'<a class="btn ghost small" href="guru-schedule.html">📅 Schedule</a>'
+        +'<a class="btn ghost small" href="booking.html?admin=1&view=events&editEvent='+encodeURIComponent(s.eventId)+'">✏️ Event</a></div>'
+        +'<div class="muted" style="margin-top:6px;">Record the call in the next retro’s ⚖️ G3 decision — the portfolio review reads these flags (SOP §6.5).</div>'
+      +'</div>';
+    }).join("");
+  }
+  function pick(eventId){ var hp=$("hist-pick"); if(!hp) return; hp.value=eventId; if(hp.value===eventId){ loadHistory(eventId); hp.scrollIntoView({behavior:"smooth",block:"center"}); } }
   function renderCarry(){
     var u=(queue&&queue.upcoming)||[];
     var total=0; u.forEach(function(x){ total+=x.openActions.length; });
@@ -243,6 +287,7 @@
     $("ed-a-notes").value = (rt&&rt.actuals&&rt.actuals.notes)||"";
     $("ed-scores").innerHTML = scoreSelects(rt&&rt.scores);
     $("ed-wins").value = (rt&&rt.wins)||"";
+    if($("ed-decision")) $("ed-decision").value = (rt&&rt.decision)||"continue"; /* NGH-BUILD 2026-08-26c */
     $("ed-issues").value = (rt&&rt.issues)||"";
     $("ed-guru").value = (rt&&rt.guru)||localStorage.getItem("ngh_retro_guru")||"";
     editorActions = (rt&&rt.actions ? rt.actions.slice() : []);
@@ -281,7 +326,7 @@
       targets:{ attendance:$("ed-t-att").value, revenue:$("ed-t-rev").value },
       actuals:{ regs:editing.autoRegs, checkedIn:editing.autoChecked,
                 revenue:$("ed-a-rev").value, attendance:$("ed-a-att").value, notes:$("ed-a-notes").value },
-      scores:scores, wins:$("ed-wins").value, issues:$("ed-issues").value,
+      scores:scores, decision:($("ed-decision")?$("ed-decision").value:"continue"), wins:$("ed-wins").value, issues:$("ed-issues").value,
       actions:editorActions
     }};
     $("ed-save").disabled=true;
@@ -357,7 +402,7 @@
     $("app").classList.remove("hidden");
     loadQueue(); loadEventsList();
   }
-  window.RETRO = { write:write, save:save, closeEditor:closeEditor, addAction:addAction, rmAction:rmAction,
+  window.RETRO = { write:write, save:save, closeEditor:closeEditor, addAction:addAction, rmAction:rmAction, pick:pick,
                    tick:tick, loadHistory:loadHistory };
   boot();
 })();

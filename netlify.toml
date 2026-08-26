@@ -48,6 +48,11 @@
   from = "/api/blueprints"
   to   = "/.netlify/functions/blueprints"
   status = 200
+# T-1 reminders — manual/dry-run access (NGH-BUILD 2026-08-26c)
+[[redirects]]
+  from = "/api/reminders"
+  to   = "/.netlify/functions/reminders"
+  status = 200
 
 [[redirects]]
   from = "/api/blackouts"
@@ -160,6 +165,10 @@
 # Daily event-promotion task digest -> promo inbox (12:00 UTC = 6-7 AM Central).
 [functions."promo-digest"]
   schedule = "0 12 * * *"
+
+# T-1 registrant reminder emails, 14:00 UTC = 9 AM Central (NGH-BUILD 2026-08-26c)
+[functions."reminders"]
+  schedule = "0 14 * * *"
 
 # USA250 giveaway landing page (unlisted — linked only from Facebook Live)
 [[redirects]]

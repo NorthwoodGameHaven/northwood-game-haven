@@ -82,7 +82,7 @@
   .hidden{ display:none !important; }
   #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
 </style>
-<!-- NGH-BUILD 2026-08-26b: lifecycle pipeline strip + CI carryover + scoring publish-gate -->
+<!-- NGH-BUILD 2026-08-26c: async G1 quorum (✓ G1 GO) · was 26b (pipeline strip + CI + scoring gate) -->
 </head>
 <body>
 <div class="wrap">
@@ -288,7 +288,8 @@
                   : '<div class="muted">No discussion yet — leave the first note.</div>';
     h+='<textarea class="nbox" id="nb-'+id+'" placeholder="Add to the discussion — decisions, blockers, prize ideas…"></textarea>'+
        '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;"><input id="ng-'+id+'" placeholder="Your name" style="font-family:inherit;padding:6px 9px;border:1px solid #cfc9b4;border-radius:8px;width:120px;font-size:13px;">'+
-       '<button class="btn small" onclick="DR.addNote(\''+id+'\')">💬 Post note</button></div>';
+       '<button class="btn small" onclick="DR.addNote(\''+id+'\')">💬 Post note</button>'+
+       '<button class="btn ghost small" onclick="DR.g1go(\''+id+'\')" title="One-tap async approval — two distinct owners = G1 quorum (SOP §6.13)">✓ G1 GO</button></div>';
     return h;
   }
 
@@ -305,7 +306,7 @@
        +(e.strategy&&e.strategy.cadence?'<span class="chip cad">'+esc(e.strategy.cadence)+'</span>':'')
        +(gs.length?'<span class="chip guru">👤 '+esc(gs.join(" + "))+'</span>':'<span class="chip" style="background:#fbe9e7;color:#8a2418;">no Guru</span>')
        +((e.discordChannels||[]).length?'<span class="chip">💬 '+e.discordChannels.length+' ch</span>':'')
-       +(e.promoPlan?'<span class="chip" style="background:#e9f2fb;color:#1e4d74;">📣 custom plan</span>':'')+(ci.length?'<span class="chip" style="background:#fdf0e0;color:#7a5a14;">🔁 '+ci.length+' CI</span>':'')
+       +(e.promoPlan?'<span class="chip" style="background:#e9f2fb;color:#1e4d74;">📣 custom plan</span>':'')+(ci.length?'<span class="chip" style="background:#fdf0e0;color:#7a5a14;">🔁 '+ci.length+' CI</span>':'')+(function(){ var g=g1Count(e.id); return g.length? '<span class="chip" style="background:'+(g.length>=2?'#dcebe0':'#f3e8c8')+';color:'+(g.length>=2?'#2d5a3d':'#7a5a14')+';font-weight:bold;" title="'+esc(g.join(', '))+'">🗳️ G1 '+g.length+'/2'+(g.length>=2?' ✓':'')+'</span>' : ''; })()
        +'</div>';
     var top=fl.filter(function(f){return f.lv==="bad"||f.lv==="warn";}).slice(0,2);
     top.forEach(function(f){ h+='<span class="flag '+f.lv+'">'+esc(f.t)+'</span>'; });
@@ -355,6 +356,20 @@
      Ready (fully scored, no red flags) / Blocked (fully scored, red flags).
      Live + retro counts round out the pipeline; chips filter the list. */
   var stageFilter=null, retroStats=null;
+  /* async G1 quorum (NGH-BUILD 2026-08-26c): distinct gurus whose discussion
+     notes contain "G1 GO" — two = quorum for standard events (SOP §6.13). */
+  function g1Count(id){
+    var gs=[]; ((S.notes[id])||[]).forEach(function(x){
+      if(/\bG1\s*GO\b/i.test(x.text||"")){ var g=(x.guru||"Guru"); if(gs.indexOf(g)<0) gs.push(g); } });
+    return gs;
+  }
+  function g1go(id){
+    var g=$("ng-"+id)&&$("ng-"+id).value.trim();
+    if(!g){ toast("✍️ Put your name in the note box first — quorum needs to know who approved."); var n=$("ng-"+id); if(n) n.focus(); return; }
+    var t=$("nb-"+id); if(t && !t.value.trim()) t.value="G1 GO ✅";
+    else if(t && !/G1\s*GO/i.test(t.value)) t.value="G1 GO ✅ — "+t.value;
+    addNote(id);
+  }
   function stageOf(e){
     var sc=scoresOf(e), n=AXES.filter(function(a){ return sc[a[0]]>0; }).length;
     var typed=!!(e.strategy&&e.strategy.type);
@@ -509,7 +524,7 @@
   function gate(){ $("gate").classList.remove("hidden"); $("app").classList.add("hidden"); }
   function boot(){ if(!token()){ gate(); return; } $("app").classList.remove("hidden"); load(); }
   window.DR={ load:load, redraw:redraw, toggle:toggle, jump:jump, view:view, calShift:calShift,
-              addNote:addNote, ppOpen:ppOpen, ppClose:ppClose, ppSave:ppSave, publish:publish, ciDone:ciDone, stage:setStage };
+              addNote:addNote, ppOpen:ppOpen, ppClose:ppClose, ppSave:ppSave, publish:publish, ciDone:ciDone, stage:setStage, g1go:g1go };
   boot();
 })();
 </script>

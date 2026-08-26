@@ -62,7 +62,7 @@
   #toast{ position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 20px; border-radius:24px; display:none; z-index:999999; font-size:14px; }
   .hidden{ display:none !important; }
 </style>
-<!-- NGH-BUILD 2026-08-26b: Tonight run-sheet tile + Retro tiles -->
+<!-- NGH-BUILD 2026-08-26c: series-health stat tile · was 26b (Tonight + Retro tiles) -->
 </head>
 <body>
 <div class="wrap">
@@ -240,6 +240,7 @@ async function loadStats(){
     var rs = await api("/retro?stats=1");
     out.push(stat(rs.retrosDue, "Event retros due", rs.retrosDue>0, "guru-retro.html"));
     out.push(stat(rs.openActions, "Open CI actions", rs.openActions>0, "guru-retro.html"));
+    if(rs.pivotFlags!==undefined) out.push(stat(rs.pivotFlags, "Series flagged for a pivot look", rs.pivotFlags>0, "guru-retro.html")); /* NGH-BUILD 2026-08-26c */
   }catch(e){ out.push(stat("–","Retros / CI")); }
   $("stats").innerHTML = out.join("");
   renderBirthdays();

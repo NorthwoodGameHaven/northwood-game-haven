@@ -1,4 +1,4 @@
-// netlify/functions/retro.mjs                          NGH-BUILD 2026-08-26a
+// netlify/functions/retro.mjs                          NGH-BUILD 2026-08-26c
 // Event Retrospectives — the "lessons learned" loop (WI-105 in software form).
 // Admin only. Powers site/guru-retro.html, the carryover banner in the
 // booking-console event editor, and the carryover strip on guru-promo.html.
@@ -29,6 +29,13 @@
 //     wins, issues,
 //     actions:[ { id, area, text, assignee, status:'open'|'done', ts, doneAt } ] }
 // action.assignee: the Guru who owns carrying this into the next plan (CI owner).
+// retro.decision (v2026-08-26c): the recorded G3 outcome for that occurrence —
+//   continue | move | narrow | split | graduate | handoff | retire  (SOP §6.5).
+// Series health (v2026-08-26c): ?health=1 auto-evaluates the ATTENDANCE pivot
+// triggers from check-in / retro data, so the portfolio review reads flags:
+//   move    — 3 straight occurrences under ~4 attending
+//   split   — 3 straight occurrences over ~12
+//   declining — newest 3 average ≥25% below the previous 3
 // action.area: promotion | details | prizes | scheduling | other — the area
 // tag is what routes a lesson forward (promo tracker vs. event editor).
 import { sql, ensureSchema, json, bad, preflight, requireAdmin } from './_shared/db.mjs';
@@ -120,6 +127,49 @@ function openActionsOf(retros) {
   return out;
 }
 
+const DECISIONS = ['continue', 'move', 'narrow', 'split', 'graduate', 'handoff', 'retire'];
+
+/* Series health — auto-evaluated attendance pivot triggers (SOP §6.5).
+   Attendance per occurrence prefers the retro's human numbers (actuals.attendance,
+   then actuals.checkedIn) and falls back to ticketing check-ins; occurrences with
+   no data at all are skipped so unticketed nights without retros don't read as 0. */
+function seriesHealth(events, agg, retrosByEvent, today) {
+  const out = [];
+  for (const ev of events) {
+    if (ev.status === 'draft' || !ev.recurrence) continue;
+    const byOcc = {}; (retrosByEvent[ev.id] || []).forEach(rt => { byOcc[rt.occDate] = rt; });
+    const occs = expandOccurrences(ev).map(o => o.date)
+      .filter(d => d && d < today).sort().slice(-6);
+    const series = [];
+    for (const d of occs) {
+      const rt = byOcc[d];
+      let att = null;
+      if (rt && rt.actuals) {
+        if (rt.actuals.attendance != null) att = Number(rt.actuals.attendance);
+        else if (rt.actuals.checkedIn != null) att = Number(rt.actuals.checkedIn);
+      }
+      if (att == null) {
+        const m = metricsFor(agg, ev.id, d, ev.date);
+        if (m.checkedIn > 0 || m.regs > 0) att = m.checkedIn;
+      }
+      if (att != null && isFinite(att)) series.push({ date: d, att });
+    }
+    if (series.length < 3) continue;
+    const last3 = series.slice(-3).map(s => s.att);
+    let flag = null, msg = '';
+    if (last3.every(a => a < 4)) { flag = 'move'; msg = '3 straight under ~4 attending — try a new day or time before killing the concept (SOP §6.5).'; }
+    else if (last3.every(a => a > 12)) { flag = 'split'; msg = '3 straight over ~12 — spin off a second night as its own event, with its own scores.'; }
+    else if (series.length >= 4) {
+      const newer = last3.reduce((a, b) => a + b, 0) / 3;
+      const prev = series.slice(0, -3).slice(-3);
+      const older = prev.reduce((a, b) => a + b.att, 0) / prev.length;
+      if (older > 0 && newer <= older * 0.75) { flag = 'declining'; msg = 'Attendance down ' + Math.round((1 - newer / older) * 100) + '% vs the prior runs — worth a look before the trigger trips.'; }
+    }
+    if (flag) out.push({ eventId: ev.id, title: ev.title || 'NGH event', flag, msg, series });
+  }
+  return out;
+}
+
 /* ---------------- handler ---------------- */
 export default async (req) => {
   try { return await _handler(req); }
@@ -206,12 +256,26 @@ const _handler = async (req) => {
       return json({ eventId, actions: actions.slice(0, 25) });
     }
 
+    /* ---- series health: auto-evaluated pivot triggers ---- */
+    if (q('health')) {
+      const today = chicagoToday();
+      const events = await loadEvents();
+      const agg = await loadRegAgg();
+      const retros = await loadRetros(null);
+      const byEvent = {};
+      retros.forEach(rt => { (byEvent[rt.eventId] = byEvent[rt.eventId] || []).push(rt); });
+      return json({ health: seriesHealth(events, agg, byEvent, today) });
+    }
+
     /* ---- hub stat tile counts ---- */
     if (q('stats')) {
       const today = chicagoToday(), since = addDaysYmd(today, -60);
       const events = await loadEvents();
+      const agg = await loadRegAgg();
       const retros = await loadRetros(null);
       const have = {}; retros.forEach(rt => { have[rt.eventId + '|' + rt.occDate] = true; });
+      const byEvent = {};
+      retros.forEach(rt => { (byEvent[rt.eventId] = byEvent[rt.eventId] || []).push(rt); });
       let retrosDue = 0, openActions = 0;
       retros.forEach(rt => (rt.actions || []).forEach(a => { if ((a.status || 'open') === 'open') openActions++; }));
       for (const ev of events) {
@@ -220,7 +284,8 @@ const _handler = async (req) => {
           if (o.date && o.date >= since && o.date < today && !have[ev.id + '|' + o.date]) retrosDue++;
         }
       }
-      return json({ retrosDue, openActions });
+      const pivotFlags = seriesHealth(events, agg, byEvent, today).length;
+      return json({ retrosDue, openActions, pivotFlags });
     }
 
     /* ---- open promotion actions for the promo tracker ---- */
@@ -322,6 +387,7 @@ const _handler = async (req) => {
                 promo:    clampScore(r.scores && r.scores.promo),
                 prizes:   clampScore(r.scores && r.scores.prizes),
                 logistics:clampScore(r.scores && r.scores.logistics) },
+      decision: DECISIONS.indexOf(r.decision) >= 0 ? r.decision : 'continue',
       wins:   String(r.wins || '').slice(0, 4000),
       issues: String(r.issues || '').slice(0, 4000),
       actions: (Array.isArray(r.actions) ? r.actions : []).slice(0, 40).map((a, i) => ({
