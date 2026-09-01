@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- NGH-BUILD 2026-09-01b · stash-treasure: window Sep 1–7, drawing Sep 8, Open Graph share card -->
+<!-- NGH-BUILD 2026-09-01c · stash-treasure: OG card v2 (footer clear of frame), FB post link constant -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
@@ -11,7 +11,7 @@
 <meta property="og:url" content="https://gamehaven.guru/stash-treasure">
 <meta property="og:title" content="Happy Labor Day! Stash's Treasure Hunt — Help him hit 1,000 followers">
 <meta property="og:description" content="“To all the hard-working humans — and otters — out there: you've earned a break, a game, and a shot at my stash.” — Stash. Sep 1–7, drawing Sep 8.">
-<meta property="og:image" content="https://gamehaven.guru/stash-treasure-og.jpg">
+<meta property="og:image" content="https://gamehaven.guru/stash-treasure-og-v2.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
@@ -97,7 +97,7 @@ h1 span{color:var(--gold2);}
         <div class="tier-body"><p>A complimentary stay at The Lodge or The Adventurer's Rest &mdash; one night on a Friday or Saturday, or two consecutive weeknights. One entry. You're also in the Bonus drawing and keep all your Mystery entries.</p></div>
       </div>
     </div>
-    <a class="btn" href="https://www.facebook.com/northwoodgamehaven" target="_blank" rel="noopener">Find the Post on Facebook</a>
+    <a class="btn" id="fb-post-btn" href="https://www.facebook.com/northwoodgamehaven" target="_blank" rel="noopener">Find the Post on Facebook</a>
     <button class="btn ghost" type="button" onclick="openTerms()">Official Rules &amp; Terms</button>
   </div>
 
@@ -150,6 +150,9 @@ h1 span{color:var(--gold2);}
 </div>
 
 <script>
+/* Paste the giveaway post URL (Facebook ⋯ → Copy link) between the quotes. Leave empty to fall back to the Page. */
+var FB_POST_URL = "";
+if(FB_POST_URL){document.getElementById("fb-post-btn").href=FB_POST_URL;document.getElementById("fb-post-btn").textContent="Open the Giveaway Post";}
 function openTerms(){document.getElementById('terms-modal').classList.add('open');document.body.style.overflow='hidden';if(location.hash!=='#terms'){history.replaceState(null,'','#terms');}}
 function closeTerms(){document.getElementById('terms-modal').classList.remove('open');document.body.style.overflow='';if(location.hash==='#terms'){history.replaceState(null,'',location.pathname);}}
 document.getElementById('terms-modal').addEventListener('click',function(e){if(e.target===this)closeTerms();});
