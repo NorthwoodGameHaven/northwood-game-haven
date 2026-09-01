@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<!-- NGH-BUILD 2026-09-01c · stash-treasure: OG card v2 (footer clear of frame), FB post link constant -->
+<!-- NGH-BUILD 2026-09-01d · stash-treasure: FB post + Page share links wired -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
@@ -97,7 +97,7 @@ h1 span{color:var(--gold2);}
         <div class="tier-body"><p>A complimentary stay at The Lodge or The Adventurer's Rest &mdash; one night on a Friday or Saturday, or two consecutive weeknights. One entry. You're also in the Bonus drawing and keep all your Mystery entries.</p></div>
       </div>
     </div>
-    <a class="btn" id="fb-post-btn" href="https://www.facebook.com/northwoodgamehaven" target="_blank" rel="noopener">Find the Post on Facebook</a>
+    <a class="btn" id="fb-post-btn" href="https://www.facebook.com/share/p/19hwGcHDbi/" target="_blank" rel="noopener">Open the Giveaway Post</a>
     <button class="btn ghost" type="button" onclick="openTerms()">Official Rules &amp; Terms</button>
   </div>
 
@@ -121,7 +121,7 @@ h1 span{color:var(--gold2);}
 
     <h3>4. How to enter</h3>
     <ol>
-      <li>Like the official giveaway post on the Northwood Game Haven Facebook page or Instagram account.</li>
+      <li>Like the official giveaway post on the <a href="https://www.facebook.com/share/17y8tyQcSd/" target="_blank" rel="noopener">Northwood Game Haven Facebook page</a> or Instagram account.</li>
       <li>A friend who does not already follow Northwood Game Haven follows the page/account and comments on the giveaway post naming the person who sent them (the &ldquo;Referrer&rdquo;).</li>
       <li>Each verified new follower earns one Mystery Treasure entry for the Referrer and one for the new follower.</li>
     </ol>
@@ -145,13 +145,13 @@ h1 span{color:var(--gold2);}
     <p>This promotion is in no way sponsored, endorsed, administered by, or associated with Facebook, Meta, or Instagram. You are providing your information to Northwood Game Haven and not to Meta. By participating you release Meta from any liability related to this promotion.</p>
 
     <h3>9. Sponsor</h3>
-    <p>Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI 54729. Questions: message us on Facebook or visit the store.</p>
+    <p>Northwood Game Haven, 115 W Spring St, Chippewa Falls, WI 54729. Questions: <a href="https://www.facebook.com/share/17y8tyQcSd/" target="_blank" rel="noopener">message us on Facebook</a> or visit the store.</p>
   </div>
 </div>
 
 <script>
 /* Paste the giveaway post URL (Facebook ⋯ → Copy link) between the quotes. Leave empty to fall back to the Page. */
-var FB_POST_URL = "";
+var FB_POST_URL = "https://www.facebook.com/share/p/19hwGcHDbi/";
 if(FB_POST_URL){document.getElementById("fb-post-btn").href=FB_POST_URL;document.getElementById("fb-post-btn").textContent="Open the Giveaway Post";}
 function openTerms(){document.getElementById('terms-modal').classList.add('open');document.body.style.overflow='hidden';if(location.hash!=='#terms'){history.replaceState(null,'','#terms');}}
 function closeTerms(){document.getElementById('terms-modal').classList.remove('open');document.body.style.overflow='';if(location.hash==='#terms'){history.replaceState(null,'',location.pathname);}}
