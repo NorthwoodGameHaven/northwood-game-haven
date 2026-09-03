@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 09h -->
+<!-- NGH-BUILD 09i · 2026-09-03a — fix Show-question crash (runAnswer→runSecs); one-tap ⏭ Next; 🚦 Auto-run loop -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -234,6 +234,16 @@
           <button class="wnav" id="wheelNextBtn" onclick="wheelNext()">Next ▶</button>
         </div>
         <div class="muted" id="wheelHint" style="margin:-4px 0 6px"></div>
+        <!-- 09i: one-tap flow + auto-run -->
+        <div class="row" style="align-items:center;margin:2px 0 8px">
+          <div style="flex:0"><button onclick="oneTapNext()" style="font-size:18px;padding:12px 22px">⏭ Next</button></div>
+          <div style="flex:0;white-space:nowrap;align-self:center"><label style="display:inline;cursor:pointer"><input type="checkbox" id="autoRun" onchange="autoRunToggle()"> 🚦 Auto-run</label></div>
+          <div style="flex:0">
+            <label>Reveal hold (sec)</label>
+            <input id="autoRevealSecs" type="number" value="8" min="3" max="120" style="width:80px">
+          </div>
+          <div class="muted grow" id="autoRunStatus" style="align-self:center"></div>
+        </div>
         <div class="phase-btns">
           <span class="muted" style="align-self:center;font-size:12px">Other screens:</span>
           <button class="sec" onclick="setPhase('lobby')">🦦 Lobby</button>
@@ -1107,6 +1117,7 @@ function setPhase(phase, extra) {
   }
   api("/games/" + run.game.id + "/state", { method: "POST", body: JSON.stringify(body) })
     .then(function (j) {
+      if (j && j.serverNow) autoClockOff = j.serverNow - Date.now(); // 09i
       run.state = j.state;
       if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else { updRunPhase(); updWheel(); pollAnswers(); }
     })
@@ -1165,7 +1176,10 @@ function wheelNext() {
   if (cur2 === "answering") { setPhase("locked"); return; }
   if (cur2 === "locked") { setPhase("reveal"); return; }
   // reveal → advance
-  if (lastQOfRound()) { startIntermission(); return; }
+  if (lastQOfRound()) { // 09i: point selectors at next round Q1 so intermission previews & resumes correctly
+    if (advSelectorsToNextRound()) startIntermission(); else setPhase("scoreboard");
+    return;
+  }
   advanceQ(1);
 }
 function wheelBack() {
@@ -1180,9 +1194,11 @@ function wheelBack() {
   }
 }
 function goLiveDirect() {
+  // 09i: was "runAnswer" (id doesn't exist) — threw TypeError, so Show question / Next / advance all silently failed.
+  var secsEl = document.getElementById("runSecs");
   setPhase("live", {
     leadMs: 1500,
-    answerSecs: Number(document.getElementById("runAnswer").value) || 45
+    answerSecs: Number(secsEl && secsEl.value) || 45
   });
 }
 function advanceQ(dir, phase) {
@@ -1197,6 +1213,99 @@ function advanceQ(dir, phase) {
   document.getElementById("runQ").value = String(qi);
   if (phase === "reveal") setPhase("reveal");
   else goLiveDirect();
+}
+/* ---------- 09i: one-tap flow + auto-run ---------- */
+var autoClockOff = 0, autoTimer = null, autoFired = "", autoRevealAt = 0;
+function autoNow() { return Date.now() + autoClockOff; }
+function syncSelectorsToState() {
+  if (!run) return;
+  document.getElementById("runRound").value = String(run.state.roundIdx | 0);
+  fillRunQ();
+  document.getElementById("runQ").value = String(run.state.qIdx | 0);
+}
+function advSelectorsToNextRound() {
+  var ri = (Number(document.getElementById("runRound").value) || 0) + 1;
+  if (ri >= (run.game.rounds || []).length) return false;
+  document.getElementById("runRound").value = String(ri);
+  fillRunQ();
+  document.getElementById("runQ").value = "0";
+  return true;
+}
+function oneTapNext() {
+  if (!run) return;
+  var ph = (run.state || {}).phase;
+  if (ph === "reveal") {
+    syncSelectorsToState();
+    if (lastQOfRound()) {
+      if (advSelectorsToNextRound()) startIntermission(); else setPhase("scoreboard");
+    } else { advanceQ(1); }
+    return;
+  }
+  if (ph === "live" || ph === "answering" || ph === "locked") { setPhase("reveal"); return; }
+  // lobby / preload / intermission / scoreboard → show the question the selectors point at
+  goLiveDirect();
+}
+function setAutoStatus(t) { var el = document.getElementById("autoRunStatus"); if (el) el.textContent = t; }
+function autoRunToggle() {
+  var on = document.getElementById("autoRun").checked;
+  autoFired = ""; autoRevealAt = 0;
+  if (on && !autoTimer) autoTimer = setInterval(autoTick, 1000);
+  if (!on && autoTimer) { clearInterval(autoTimer); autoTimer = null; setAutoStatus(""); }
+  if (on) setAutoStatus("Auto-run armed — reveals at 0:00, holds, then advances.");
+}
+function autoKey() {
+  var st = (run && run.state) || {};
+  return st.phase + "|" + (st.roundIdx | 0) + "." + (st.qIdx | 0) + "|" + (st.deadline || 0);
+}
+function autoTick() {
+  if (!run) return;
+  if ((run.game.kind || "trivia") === "timer") return;
+  var st = run.state || {}, ph = st.phase, now = autoNow(), key = autoKey();
+  if (ph === "live" || ph === "answering") {
+    autoRevealAt = 0;
+    if (!st.deadline) { setAutoStatus("No answer clock on this question — tap ⏭ Next to reveal."); return; }
+    if (now > Number(st.deadline) + 1200) {
+      if (autoFired === key) return;
+      autoFired = key;
+      setAutoStatus("⏱ Time! Revealing…");
+      syncSelectorsToState();
+      setPhase("reveal");
+    } else {
+      setAutoStatus("Answers close in " + Math.max(0, Math.ceil((Number(st.deadline) - now) / 1000)) + "s…");
+    }
+    return;
+  }
+  if (ph === "reveal") {
+    if (!autoRevealAt) autoRevealAt = now;
+    var hold = Math.min(120, Math.max(3, Number(document.getElementById("autoRevealSecs").value) || 8));
+    var left = Math.ceil((autoRevealAt + hold * 1000 - now) / 1000);
+    if (left > 0) { setAutoStatus("💡 Revealed — advancing in " + left + "s…"); return; }
+    if (autoFired === "adv|" + key) return;
+    autoFired = "adv|" + key;
+    autoRevealAt = 0;
+    syncSelectorsToState();
+    if (lastQOfRound()) {
+      if (advSelectorsToNextRound()) { setAutoStatus("☕ Round done — intermission."); startIntermission(); }
+      else { setAutoStatus("🏆 Final question done — scoreboard."); setPhase("scoreboard"); }
+    } else {
+      setAutoStatus("⏭ Next question…");
+      advanceQ(1);
+    }
+    return;
+  }
+  if (ph === "intermission") {
+    autoRevealAt = 0;
+    if (st.deadline && now > Number(st.deadline) + 1200) {
+      if (autoFired === key) return;
+      autoFired = key;
+      setAutoStatus("▶ Break over — next round.");
+      goLiveDirect(); // selectors already point at next round Q1
+    } else if (st.deadline) {
+      setAutoStatus("☕ Intermission — next round in " + Math.max(0, Math.ceil((Number(st.deadline) - now) / 1000)) + "s…");
+    }
+    return;
+  }
+  if (ph === "scoreboard" || ph === "ended") { setAutoStatus(""); return; }
 }
 function endGameConfirm() {
   if (!confirm("End the WHOLE game? Displays switch to final scores.")) return;
