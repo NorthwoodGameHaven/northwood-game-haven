@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.NghTv" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#132A1D</item>
+        <item name="android:colorPrimary">#C9973A</item>
+        <item name="android:colorAccent">#E8B84B</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>
