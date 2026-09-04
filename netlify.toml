@@ -107,6 +107,38 @@
   to   = "/.netlify/functions/trivia"
   status = 200
 
+# NGH TV Network (NGH-BUILD 2026-08-24a, integrated 10b): in-store displays + Guru console
+[[redirects]]
+  from = "/api/tv/*"
+  to   = "/.netlify/functions/tv/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/tv"
+  to   = "/.netlify/functions/tv"
+  status = 200
+[[redirects]]
+  from = "/tv"
+  to   = "/tv.html"
+  status = 200
+
+# NGH Arcade (NGH-BUILD 2026-08-24b, integrated 10b): buzzer + Q&A minigames
+[[redirects]]
+  from = "/api/arcade/*"
+  to   = "/.netlify/functions/arcade/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/arcade"
+  to   = "/.netlify/functions/arcade"
+  status = 200
+[[redirects]]
+  from = "/buzz"
+  to   = "/arcade-play.html"
+  status = 200
+[[redirects]]
+  from = "/qa"
+  to   = "/arcade-play.html"
+  status = 200
+
 # Tickets: printable page, QR PNG, Google Wallet save link
 [[redirects]]
   from = "/ticket/*"
@@ -195,3 +227,5 @@
   from = "/TheRaft"
   to   = "/theraft.html"
   status = 200
+
+# NGH-BUILD 10b — TV Network + Arcade redirects integrated onto current main

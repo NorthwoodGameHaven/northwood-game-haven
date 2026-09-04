@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- NGH-BUILD 2026-08-24f — NGH Slide Design Studio
+     Build decks for the TV Network: auto event slides (weekly calendar,
+     every-weekday, specials with QR), Stay & Play, product/sale slides,
+     Google Slides embeds, images, and a full custom WYSIWYG editor with
+     the brand logo library. Staff-only. Unlisted: noindex, no sitemap. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH · Slide Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{--forest:#1e3d2b;--forest-dk:#132a1d;--gold:#c9973a;--gold-lt:#e8b84b;
+    --maroon:#7a2431;--cream:#f6efdd;--ink:#26211a}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Nunito,sans-serif;background:var(--forest-dk);color:var(--cream)}
+  button{font-family:Nunito,sans-serif;font-weight:800;border:0;border-radius:8px;
+    padding:8px 12px;cursor:pointer;font-size:.9rem}
+  .btn-gold{background:var(--gold);color:var(--ink)}
+  .btn-dk{background:var(--forest-dk);color:var(--cream);border:1.5px solid var(--gold)}
+  .btn-red{background:var(--maroon);color:var(--cream)}
+  .mini{padding:4px 8px;font-size:.78rem}
+  input,select,textarea{font-family:Nunito,sans-serif;font-size:.9rem;border-radius:8px;
+    border:1.5px solid var(--gold);background:var(--forest-dk);color:var(--cream);padding:7px 9px}
+  label{font-weight:800;font-size:.78rem;color:var(--gold-lt)}
+  .muted{opacity:.72;font-size:.8rem}
+  #topbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;
+    background:var(--forest);border-bottom:3px solid var(--gold)}
+  #topbar h1{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:1.2rem;margin:0 8px 0 0}
+  #layout{display:flex;min-height:calc(100vh - 66px)}
+  #left{width:300px;min-width:300px;border-right:2px solid rgba(201,151,58,.4);padding:12px;overflow-y:auto;max-height:calc(100vh - 66px)}
+  #center{flex:1;padding:14px;overflow:auto}
+  #right{width:290px;min-width:290px;border-left:2px solid rgba(201,151,58,.4);padding:12px;overflow-y:auto;max-height:calc(100vh - 66px)}
+  h3{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:.95rem;margin:14px 0 8px}
+  h3:first-child{margin-top:0}
+  .slide-chip{display:flex;align-items:center;gap:8px;background:var(--forest);
+    border:2px solid var(--gold);border-radius:10px;padding:7px 9px;margin:6px 0;cursor:pointer}
+  .slide-chip.sel{border-color:var(--gold-lt);box-shadow:0 0 0 2px var(--gold-lt);background:#2a5a3f}
+  .slide-chip .lbl{flex:1;font-weight:800;font-size:.83rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .slide-chip input{width:52px;padding:3px 5px;font-size:.78rem}
+  .addgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .addgrid button{text-align:left}
+  #msg{min-height:1.2em;font-weight:800}
+  #msg.ok{color:#7fe0a4}#msg.err{color:#ff9b8a}
+  /* form panel */
+  .fpanel{background:var(--forest);border:2px solid var(--gold);border-radius:12px;padding:14px;max-width:640px}
+  .frow{display:flex;gap:10px;align-items:center;margin:8px 0;flex-wrap:wrap}
+  .frow input[type=text],.frow textarea{flex:1;min-width:200px}
+  /* custom editor */
+  #cvWrap{position:relative;width:960px;height:540px;background:#000;border:3px solid var(--gold);
+    border-radius:8px;overflow:hidden;user-select:none}
+  #cvBg{position:absolute;inset:0}
+  .cel{position:absolute;cursor:move;outline:1px dashed transparent}
+  .cel.sel{outline:2px solid var(--gold-lt);z-index:50}
+  .cel img{width:100%;height:100%;pointer-events:none}
+  .cel .qrph{width:100%;height:100%;background:var(--cream);border:4px solid var(--gold);
+    border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--ink);
+    font-weight:800;font-size:.8rem;text-align:center;pointer-events:none}
+  .swatch{width:26px;height:26px;border-radius:6px;border:2px solid rgba(246,239,221,.5);
+    cursor:pointer;display:inline-block;margin:2px}
+  #logoLib{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  #logoLib .lg{background:var(--forest);border:2px solid var(--gold);border-radius:10px;
+    padding:6px;cursor:pointer;text-align:center}
+  #logoLib .lg:hover{border-color:var(--gold-lt)}
+  #logoLib img{width:100%;height:74px;object-fit:contain}
+  #logoLib div{font-size:.68rem;font-weight:800;margin-top:2px}
+  #login{max-width:380px;margin:12vh auto;text-align:center}
+  a{color:var(--gold-lt)}
+  code{background:var(--forest);border:1px solid var(--gold);border-radius:4px;padding:1px 5px}
+  @media(max-width:1320px){
+    #layout{flex-wrap:wrap}
+    #left,#right{width:100%;min-width:0;max-width:none;max-height:none;
+      border-right:0;border-left:0;border-bottom:2px solid rgba(201,151,58,.4)}
+    #center{min-width:0;overflow-x:auto;order:2}
+    #right{order:3}
+  }
+</style>
+</head>
+<body>
+<script src="guru-common.js"></script>
+
+<div id="login" style="display:none">
+  <h1 style="font-family:'Alfa Slab One',serif;color:var(--gold-lt)">🎨 Slide Studio</h1>
+  <p class="muted">Enter the Guru code to continue.</p>
+  <div style="display:flex;gap:8px;justify-content:center">
+    <input id="admin-code" type="password" placeholder="Guru code">
+    <button class="btn-gold" id="loginBtn">Sign in</button>
+  </div>
+  <p id="loginErr" style="color:#ff9b8a;font-weight:800"></p>
+</div>
+
+<div id="app" style="display:none">
+  <div id="topbar">
+    <h1>🎨 Slide Studio</h1>
+    <label for="deckSel">Deck</label>
+    <select id="deckSel"><option value="">— pick or create —</option></select>
+    <button class="btn-dk mini" id="newDeck">＋ New</button>
+    <button class="btn-dk mini" id="renameDeck">Rename</button>
+    <button class="btn-dk mini" id="dupeDeck">Duplicate</button>
+    <button class="btn-red mini" id="delDeck">Delete</button>
+    <span style="flex:1"></span>
+    <button class="btn-gold" id="saveDeck">💾 Save deck</button>
+    <button class="btn-dk" id="previewDeck">▶ Preview on TV</button>
+    <span id="msg"></span>
+  </div>
+
+  <div id="layout">
+    <div id="left">
+      <h3>Slides <span class="muted" id="slideCount"></span></h3>
+      <div id="slideList"><span class="muted">Pick a deck to start.</span></div>
+      <h3>Add a slide</h3>
+      <div class="addgrid">
+        <button class="btn-dk mini" data-add="auto:weekly">📅 Weekly calendar</button>
+        <button class="btn-dk mini" id="addWeekdays">🔁 Weekday slides ×7</button>
+        <button class="btn-dk mini" id="addSpecials">⭐ All specials (60d)</button>
+        <button class="btn-dk mini" data-add="stayplay">🛏️ Stay &amp; Play</button>
+        <button class="btn-dk mini" data-add="product">🛒 Product / Sale</button>
+        <button class="btn-dk mini" data-add="image">🖼️ Image</button>
+        <button class="btn-dk mini" data-add="custom">🧩 Custom (blank)</button>
+        <button class="btn-dk mini" data-add="gslides">📽️ Google Slides</button>
+        <button class="btn-dk mini" data-add="floormap">🗺️ Floor map</button>
+      </div>
+      <div class="frow" style="margin-top:8px">
+        <label for="specialPick">Single special</label>
+        <select id="specialPick" style="flex:1"><option value="">— pick event —</option></select>
+      </div>
+      <p class="muted">Weekday &amp; special slides auto-hide on the TVs whenever they'd be
+        empty or the event has passed — safe to leave them in the deck.</p>
+    </div>
+
+    <div id="center">
+      <div id="editorHost"><p class="muted">Select a slide on the left, or add one.</p></div>
+    </div>
+
+    <div id="right">
+      <div id="inspector"><h3>Inspector</h3><p class="muted">Select a custom-slide element to edit it here.</p></div>
+      <h3>Brand logo library</h3>
+      <div id="logoLib"></div>
+      <h3>Palette</h3>
+      <div id="palette"></div>
+      <p class="muted">Click a logo to drop it onto the selected custom slide. Palette
+        swatches recolor the selected text/panel element.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var API = "/api/tv";
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+  function token(){ return (window.GuruAuth && GuruAuth.get()) || ""; }
+  function hdrs(){ return { "Content-Type":"application/json", "Authorization":"Bearer "+token() }; }
+  function msg(t,c){ var m=$("msg"); m.textContent=t; m.className=c||""; if(t) setTimeout(function(){ if(m.textContent===t) m.textContent=""; }, 6000); }
+
+  var LOGOS = [
+    ["/brand/logo-forest.png","Forest"], ["/brand/logo-sunflower.png","Sunflower"],
+    ["/brand/logo-autumn.png","Autumn"], ["/brand/logo-blossom.png","Blossom"],
+    ["/brand/logo-fireworks.png","Fireworks"], ["/brand/logo-clock.png","Clock"],
+    ["/brand/stash-fullbody.png","Stash (full)"], ["/brand/crest.png","Crest"]
+  ];
+  var PALETTE = ["#f6efdd","#e8b84b","#c9973a","#7a2431","#1e3d2b","#132a1d","#3fbf6f","#26211a"];
+  var DOWS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+  var decks = [], deckId = "", deck = null;   // deck = {name, slides:[]}
+  var sel = -1, celSel = -1, feed = null, dirty = false;
+
+  /* ================= auth ================= */
+  function gate(){
+    if (token()){ $("login").style.display="none"; $("app").style.display=""; boot(); }
+    else { $("login").style.display=""; $("app").style.display="none"; }
+  }
+  $("loginBtn").addEventListener("click", doLogin);
+  $("admin-code").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
+  function doLogin(){
+    fetch("/api/admin-login",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({code:$("admin-code").value})})
+      .then(function(r){return r.json();})
+      .then(function(j){ if(j&&j.token){ GuruAuth.set(j.token); gate(); }
+        else $("loginErr").textContent="That code didn't work."; })
+      .catch(function(){ $("loginErr").textContent="Login failed."; });
+  }
+
+  /* ================= decks ================= */
+  function loadDecks(){
+    return fetch(API+"/admin/decks",{headers:hdrs()})
+      .then(function(r){ if(r.status===401){ GuruAuth.clear(); gate(); throw 0; } return r.json(); })
+      .then(function(j){
+        decks = j.decks||[];
+        var sel=$("deckSel");
+        sel.innerHTML='<option value="">— pick or create —</option>'+decks.map(function(d){
+          return '<option value="'+esc(d.id)+'">'+esc(d.name)+' ('+d.slides+' slides)</option>';
+        }).join("");
+        if (deckId) sel.value=deckId;
+      });
+  }
+  function openDeck(id){
+    if (!id){ deck=null; deckId=""; renderSlideList(); renderEditor(); return; }
+    fetch(API+"/decks/"+encodeURIComponent(id))
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        deckId=id; deck={ name:j.name, slides:j.slides||[] };
+        sel=-1; dirty=false;
+        renderSlideList(); renderEditor();
+      }).catch(function(){ msg("Couldn't open that deck.","err"); });
+  }
+  $("deckSel").addEventListener("change", function(){
+    if (dirty && !confirm("Discard unsaved changes?")) { this.value=deckId; return; }
+    openDeck(this.value);
+  });
+  function slug(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40); }
+  $("newDeck").addEventListener("click", function(){
+    var n=prompt("Deck name:","Store Promo Deck"); if(!n) return;
+    var id=slug(n); if(!id){ msg("Name needs letters/numbers.","err"); return; }
+    deckId=id; deck={ name:n, slides:[] }; sel=-1; dirty=true;
+    var o=document.createElement("option"); o.value=id; o.textContent=n+" (new)";
+    $("deckSel").appendChild(o); $("deckSel").value=id;
+    renderSlideList(); renderEditor();
+    msg("New deck — add slides, then 💾 Save.","ok");
+  });
+  $("renameDeck").addEventListener("click", function(){
+    if(!deck) return; var n=prompt("New name:",deck.name); if(!n) return;
+    deck.name=n; dirty=true; msg("Renamed — save to keep it.","ok");
+  });
+  $("dupeDeck").addEventListener("click", function(){
+    if(!deck) return; var n=prompt("Name for the copy:",deck.name+" copy"); if(!n) return;
+    var id=slug(n); if(!id) return;
+    var copy=JSON.parse(JSON.stringify(deck)); copy.name=n;
+    fetch(API+"/admin/decks/"+encodeURIComponent(id),{method:"PUT",headers:hdrs(),
+      body:JSON.stringify(copy)})
+      .then(function(){ return loadDecks(); })
+      .then(function(){ $("deckSel").value=id; openDeck(id); msg("Duplicated.","ok"); });
+  });
+  $("delDeck").addEventListener("click", function(){
+    if(!deckId) return;
+    if(!confirm("Delete deck '"+deck.name+"'? TVs pointed at it will show an empty deck.")) return;
+    fetch(API+"/admin/decks/"+encodeURIComponent(deckId),{method:"DELETE",headers:hdrs()})
+      .then(function(){ deckId=""; deck=null; loadDecks(); renderSlideList(); renderEditor(); msg("Deleted.","ok"); });
+  });
+  $("saveDeck").addEventListener("click", saveDeck);
+  function saveDeck(){
+    if(!deckId||!deck){ msg("No deck open.","err"); return Promise.resolve(false); }
+    return fetch(API+"/admin/decks/"+encodeURIComponent(deckId),{method:"PUT",headers:hdrs(),
+      body:JSON.stringify(deck)})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+      .then(function(res){
+        if(!res.ok){ msg((res.j&&res.j.error)||"Save failed.","err"); return false; }
+        dirty=false; msg("Saved v"+res.j.version+" — live TVs on this deck refresh within ~5 s.","ok");
+        loadDecks(); return true;
+      });
+  }
+  $("previewDeck").addEventListener("click", function(){
+    if(!deckId) return;
+    saveDeck().then(function(ok){
+      if(!ok) return;
+      fetch(API+"/admin/channel/preview",{method:"PUT",headers:hdrs(),
+        body:JSON.stringify({mode:"deck", deck:deckId})})
+        .then(function(){ window.open("tv.html?d=preview","_blank"); });
+    });
+  });
+
+  /* ================= event feed (for pickers) ================= */
+  function loadFeed(){
+    return fetch(API+"/eventfeed").then(function(r){return r.json();}).then(function(j){
+      feed=j;
+      var sp=$("specialPick");
+      sp.innerHTML='<option value="">— pick event —</option>'+(j.specials||[]).map(function(e){
+        return '<option value="'+esc(e.id)+'">'+esc(e.date)+' · '+esc(e.title)+'</option>';
+      }).join("");
+    }).catch(function(){});
+  }
+  $("specialPick").addEventListener("change", function(){
+    if(!this.value||!deck) return;
+    addSlide({ kind:"auto:event", event:this.value, dur:14 });
+    this.value="";
+  });
+  $("addSpecials").addEventListener("click", function(){
+    if(!deck||!feed) return;
+    var have={}; deck.slides.forEach(function(s){ if(s.kind==="auto:event") have[s.event]=1; });
+    var n=0;
+    (feed.specials||[]).forEach(function(e){ if(!have[e.id]){ deck.slides.push({kind:"auto:event",event:e.id,dur:14}); n++; } });
+    dirty=true; renderSlideList(); msg("Added "+n+" special-event slide(s).","ok");
+  });
+  $("addWeekdays").addEventListener("click", function(){
+    if(!deck) return;
+    var have={}; deck.slides.forEach(function(s){ if(s.kind==="auto:recurring") have[s.dow]=1; });
+    for (var d=0; d<7; d++) if(!have[d]) deck.slides.push({kind:"auto:recurring",dow:d,dur:12});
+    dirty=true; renderSlideList(); msg("Weekday slides added (empty days auto-hide on TV).","ok");
+  });
+
+  /* ================= slide list ================= */
+  function slideLabel(s){
+    if (s.kind==="image") return "🖼️ "+(s.url||"image");
+    if (s.kind==="custom") return "🧩 Custom ("+((s.els||[]).length)+" el)";
+    if (s.kind==="gslides") return "📽️ Google Slides";
+    if (s.kind==="floormap") return "🗺️ Map · "+(s.map||"—");
+    if (s.kind==="stayplay") return "🛏️ Stay & Play";
+    if (s.kind==="product") return "🛒 "+(s.name||"Product");
+    if (s.kind==="auto:weekly") return "📅 Weekly calendar";
+    if (s.kind==="auto:recurring") return "🔁 Every "+DOWS[s.dow];
+    if (s.kind==="auto:event"){
+      var t=s.event;
+      if (feed) (feed.specials||[]).forEach(function(e){ if(e.id===s.event) t=e.title; });
+      return "⭐ "+t;
+    }
+    return s.kind;
+  }
+  function renderSlideList(){
+    var box=$("slideList");
+    if(!deck){ box.innerHTML='<span class="muted">Pick a deck to start.</span>'; $("slideCount").textContent=""; return; }
+    $("slideCount").textContent="("+deck.slides.length+")";
+    box.innerHTML="";
+    deck.slides.forEach(function(s,i){
+      var d=document.createElement("div");
+      d.className="slide-chip"+(i===sel?" sel":"");
+      d.innerHTML='<span class="lbl">'+esc(slideLabel(s))+'</span>'+
+        '<input type="number" min="4" max="300" value="'+s.dur+'" title="seconds">'+
+        '<button class="btn-dk mini" data-a="up">▲</button>'+
+        '<button class="btn-dk mini" data-a="dn">▼</button>'+
+        '<button class="btn-red mini" data-a="x">✕</button>';
+      d.addEventListener("click", function(e){
+        if (e.target.tagName==="BUTTON"||e.target.tagName==="INPUT") return;
+        sel=i; celSel=-1; renderSlideList(); renderEditor();
+      });
+      d.querySelector("input").addEventListener("change", function(){
+        s.dur=Math.min(300,Math.max(4,Number(this.value)||12)); dirty=true;
+      });
+      d.querySelector('[data-a="up"]').addEventListener("click", function(){
+        if(i>0){ deck.slides.splice(i-1,0,deck.slides.splice(i,1)[0]); if(sel===i)sel=i-1; dirty=true; renderSlideList(); }
+      });
+      d.querySelector('[data-a="dn"]').addEventListener("click", function(){
+        if(i<deck.slides.length-1){ deck.slides.splice(i+1,0,deck.slides.splice(i,1)[0]); if(sel===i)sel=i+1; dirty=true; renderSlideList(); }
+      });
+      d.querySelector('[data-a="x"]').addEventListener("click", function(){
+        deck.slides.splice(i,1); if(sel>=deck.slides.length) sel=deck.slides.length-1;
+        dirty=true; renderSlideList(); renderEditor();
+      });
+      box.appendChild(d);
+    });
+  }
+  document.querySelectorAll("[data-add]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var k=b.getAttribute("data-add");
+      var s={kind:k, dur:12};
+      if(k==="image") s.url="";
+      if(k==="gslides"){ s.url=""; s.dur=60; }
+      if(k==="floormap"){ s.map=""; s.title="Find Your Table"; s.dur=14; }
+      if(k==="stayplay"){ s.qrUrl="/"; s.dur=14; }
+      if(k==="product"){ s.name=""; s.price=""; s.dur=12; }
+      if(k==="custom"){ s.bg="grad:forest"; s.els=[
+        {t:"text",x:120,y:120,w:1400,h:160,txt:"Headline here",font:"alfa",size:110,color:"#e8b84b",align:"left",bold:true}
+      ]; s.dur=14; }
+      addSlide(s);
+    });
+  });
+  function addSlide(s){
+    if(!deck){ msg("Create or open a deck first.","err"); return; }
+    deck.slides.push(s); sel=deck.slides.length-1; celSel=-1; dirty=true;
+    renderSlideList(); renderEditor();
+  }
+
+  /* ================= editor host ================= */
+  function renderEditor(){
+    var host=$("editorHost");
+    if(!deck||sel<0||!deck.slides[sel]){ host.innerHTML='<p class="muted">Select a slide on the left, or add one.</p>'; renderInspector(); return; }
+    var s=deck.slides[sel];
+    if (s.kind==="custom"){ renderCustomEditor(host,s); return; }
+    // ---- form panels ----
+    var h='<div class="fpanel"><h3 style="margin-top:0">'+esc(slideLabel(s))+'</h3>';
+    function field(lbl,inner){ return '<div class="frow"><label>'+lbl+'</label>'+inner+'</div>'; }
+    if (s.kind==="image"){
+      h+=field("Image URL",'<input type="text" id="f_url" value="'+esc(s.url||"")+'" placeholder="/brand/logo-forest.png or https://…">');
+      h+=field("Caption",'<input type="text" id="f_cap" value="'+esc(s.caption||"")+'">');
+      h+=field("Fit",'<select id="f_fit"><option value="cover"'+(s.fit!=="contain"?" selected":"")+'>Fill</option><option value="contain"'+(s.fit==="contain"?" selected":"")+'>Fit</option></select>');
+    } else if (s.kind==="gslides"){
+      h+=field("Embed URL",'<input type="text" id="f_url" value="'+esc(s.url||"")+'" placeholder="https://docs.google.com/presentation/d/e/…/pubembed?…">');
+      h+='<p class="muted">In Google Slides: <b>File → Share → Publish to web → Embed</b>, copy the <code>src</code> link (or paste the whole &lt;iframe&gt; — I\'ll pull the link out). Add <code>&amp;start=true&amp;loop=true&amp;delayms=8000</code> to auto-advance, and give this slide a long duration (e.g. one Google slide ≈ 8 s × count).</p>';
+    } else if (s.kind==="floormap"){
+      h+=field("Map",'<select id="f_map"><option value="">— pick —</option></select> <a href="guru-floor.html" target="_blank" rel="noopener"><button class="btn-dk mini">Edit maps</button></a>');
+      h+=field("Title",'<input type="text" id="f_title" value="'+esc(s.title||"")+'">');
+      h+='<p class="muted">Shows the room layout with numbered tables and seats on ambient TVs — great before a tournament so folks can find their seat early. The live "who\'s at which table" version runs on the tournament display automatically.</p>';
+    } else if (s.kind==="stayplay"){
+      h+=field("Booking QR link",'<input type="text" id="f_qr" value="'+esc(s.qrUrl||"/")+'" placeholder="/">');
+      h+='<p class="muted">Fixed branded layout: Stay &amp; Play headline, The Lodge + The Adventurer\'s Rest cards, full-body Stash, QR to book.</p>';
+    } else if (s.kind==="product"){
+      h+=field("Name",'<input type="text" id="f_name" value="'+esc(s.name||"")+'" placeholder="Game name (in-store display only)">');
+      h+=field("Price",'<input type="text" id="f_price" value="'+esc(s.price||"")+'" placeholder="$49.99">');
+      h+=field("Sale price",'<input type="text" id="f_sale" value="'+esc(s.salePrice||"")+'" placeholder="leave blank if not on sale">');
+      h+=field("Badge",'<input type="text" id="f_badge" value="'+esc(s.badge||"")+'" placeholder="NEW ARRIVAL · STAFF PICK · THIS WEEK ONLY">');
+      h+=field("Blurb",'<input type="text" id="f_blurb" value="'+esc(s.blurb||"")+'">');
+      h+=field("Image URL",'<input type="text" id="f_img" value="'+esc(s.img||"")+'" placeholder="box-art photo URL (optional)">');
+      h+=field("QR link",'<input type="text" id="f_qr" value="'+esc(s.qrUrl||"")+'" placeholder="optional — product page / preorder">');
+      h+='<p class="muted">Note: on-screen product names are fine in-store; keep game titles out of social/web promo copy per the usual rule.</p>';
+    } else if (s.kind==="auto:weekly"){
+      h+='<p class="muted">Auto-renders the next 7 days from the live event calendar, today highlighted, QR to the full calendar. Nothing to configure — it stays current on its own.</p>';
+    } else if (s.kind==="auto:recurring"){
+      h+=field("Weekday",'<select id="f_dow">'+DOWS.map(function(d,i){
+        return '<option value="'+i+'"'+(i===s.dow?" selected":"")+'>'+d+'</option>';}).join("")+'</select>');
+      h+='<p class="muted">Shows every weekly/bi-weekly series on that weekday with times and blurbs, lead event\'s photo, QR to sign-ups. Auto-hides when that day has no series.</p>';
+    } else if (s.kind==="auto:event"){
+      h+='<p class="muted">Feature slide for one upcoming special: photo, date badge, blurb, and a QR to <code>gamehaven.guru/event/…</code> for details &amp; tickets. Auto-hides once the event has passed.</p>';
+      if (feed){ var ev=null; (feed.specials||[]).forEach(function(e){ if(e.id===s.event) ev=e; });
+        h+= ev ? '<p><b>'+esc(ev.title)+'</b> — '+esc(ev.date)+'</p>'
+               : '<p class="muted">⚠️ This event isn\'t in the next-60-days feed (passed or unpublished) — the TVs are skipping it.</p>'; }
+    }
+    h+='</div>';
+    host.innerHTML=h;
+    // bind
+    function bind(id,fn){ var el=$(id); if(el) el.addEventListener("input",function(){ fn(el.value); dirty=true; renderSlideListSoft(); }); }
+    var fm=$("f_map");
+    if (fm){
+      fetch(API+"/admin/floormaps",{headers:hdrs()}).then(function(r){return r.json();}).then(function(j){
+        fm.innerHTML='<option value="">— pick —</option>'+(j.maps||[]).map(function(m){
+          return '<option value="'+esc(m.id)+'"'+(m.id===s.map?" selected":"")+'>'+esc(m.name)+'</option>';
+        }).join("");
+        fm.addEventListener("change",function(){ s.map=fm.value; dirty=true; renderSlideListSoft(); });
+      }).catch(function(){});
+    }
+    bind("f_title",function(v){ s.title=v; });
+    bind("f_url",function(v){
+      if (s.kind==="gslides"){ var m=v.match(/src=["']([^"']+)["']/); if(m) { v=m[1]; $("f_url").value=v; } }
+      s.url=v.trim();
+    });
+    bind("f_cap",function(v){ s.caption=v; });
+    var ff=$("f_fit"); if(ff) ff.addEventListener("change",function(){ s.fit=ff.value; dirty=true; });
+    bind("f_qr",function(v){ s.qrUrl=v.trim(); });
+    bind("f_name",function(v){ s.name=v; }); bind("f_price",function(v){ s.price=v; });
+    bind("f_sale",function(v){ s.salePrice=v; }); bind("f_badge",function(v){ s.badge=v; });
+    bind("f_blurb",function(v){ s.blurb=v; }); bind("f_img",function(v){ s.img=v.trim(); });
+    var fd=$("f_dow"); if(fd) fd.addEventListener("change",function(){ s.dow=Number(fd.value); dirty=true; renderSlideListSoft(); });
+    renderInspector();
+  }
+  function renderSlideListSoft(){ // update labels without rebuilding focus
+    var chips=$("slideList").querySelectorAll(".slide-chip .lbl");
+    deck.slides.forEach(function(s,i){ if(chips[i]) chips[i].textContent=slideLabel(s); });
+  }
+
+  /* ================= custom WYSIWYG ================= */
+  var GRADS=[["grad:forest","Forest glow"],["grad:gold","Gold"],["grad:maroon","Maroon"]];
+  function renderCustomEditor(host,s){
+    var h='<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">'+
+      '<label>Background</label>'+
+      GRADS.map(function(g){ return '<button class="btn-dk mini" data-bg="'+g[0]+'">'+g[1]+'</button>'; }).join("")+
+      PALETTE.slice(0,6).map(function(c){ return '<span class="swatch" data-bg="'+c+'" style="background:'+c+'"></span>'; }).join("")+
+      '<input type="text" id="bgUrl" placeholder="or image URL / logo path" style="width:220px" value="'+esc(/^(https?:|\/)/.test(s.bg||"")?s.bg:"")+'">'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'+
+      '<button class="btn-dk mini" data-el="text">＋ Text</button>'+
+      '<button class="btn-dk mini" data-el="img">＋ Image</button>'+
+      '<button class="btn-dk mini" data-el="qr">＋ QR</button>'+
+      '<button class="btn-dk mini" data-el="panel">＋ Panel</button>'+
+      '<span class="muted">Drag to position · click to select · edit in the Inspector →</span>'+
+      '</div>'+
+      '<div id="cvWrap"><div id="cvBg"></div></div>';
+    host.innerHTML=h;
+    host.querySelectorAll("[data-bg]").forEach(function(b){
+      b.addEventListener("click",function(){ s.bg=b.getAttribute("data-bg"); dirty=true; paintCanvas(s); });
+    });
+    $("bgUrl").addEventListener("input",function(){ if(this.value.trim()){ s.bg=this.value.trim(); dirty=true; paintCanvas(s); } });
+    host.querySelectorAll("[data-el]").forEach(function(b){
+      b.addEventListener("click",function(){
+        var t=b.getAttribute("data-el"), e;
+        if(t==="text") e={t:"text",x:200,y:420,w:1000,h:140,txt:"New text",font:"nunito",size:64,color:"#f6efdd",align:"left",bold:true};
+        if(t==="img") e={t:"img",x:1200,y:520,w:560,h:480,url:"/brand/logo-forest.png",fit:"contain"};
+        if(t==="qr") e={t:"qr",x:1520,y:720,w:300,h:340,url:"/",label:"Scan me!"};
+        if(t==="panel") e={t:"panel",x:120,y:360,w:1100,h:300,color:"#132a1d",alpha:0.8,radius:24};
+        s.els=s.els||[]; s.els.push(e); celSel=s.els.length-1; dirty=true;
+        paintCanvas(s); renderInspector();
+      });
+    });
+    paintCanvas(s);
+  }
+  function paintCanvas(s){
+    var bg=$("cvBg"); if(!bg) return;
+    var b=s.bg||"grad:forest";
+    if(b==="grad:gold") bg.style.background="linear-gradient(120deg,#7a5a1e,#c9973a)";
+    else if(b==="grad:maroon") bg.style.background="linear-gradient(120deg,#3d1218,#7a2431)";
+    else if(b==="grad:forest") bg.style.background="radial-gradient(800px 500px at 50% 20%, #24503a, #132a1d 75%)";
+    else if(/^(https?:|\/)/.test(b)){ bg.style.background="#000 url('"+b+"') center/cover no-repeat"; }
+    else bg.style.background=b;
+    var wrap=$("cvWrap");
+    wrap.querySelectorAll(".cel").forEach(function(x){ x.remove(); });
+    (s.els||[]).forEach(function(e,i){
+      var d=document.createElement("div");
+      d.className="cel"+(i===celSel?" sel":"");
+      d.style.left=(e.x/2)+"px"; d.style.top=(e.y/2)+"px";
+      d.style.width=(e.w/2)+"px"; d.style.height=(e.h/2)+"px";
+      if(e.t==="text"){
+        var fam=e.font==="alfa"?"'Alfa Slab One',serif":e.font==="caveat"?"Caveat,cursive":"Nunito,sans-serif";
+        d.style.font=(e.bold?"800 ":"700 ")+(e.size/2)+"px "+fam;
+        d.style.color=e.color; d.style.textAlign=e.align; d.style.lineHeight="1.15"; d.style.overflow="hidden";
+        d.textContent=e.txt;
+      } else if(e.t==="img"){
+        d.innerHTML='<img src="'+esc(e.url)+'" style="object-fit:'+(e.fit||"contain")+'">';
+      } else if(e.t==="qr"){
+        d.innerHTML='<div class="qrph">QR<br>'+esc(e.label||"")+'</div>';
+      } else if(e.t==="panel"){
+        d.style.background=e.color; d.style.opacity=e.alpha; d.style.borderRadius=(e.radius/2)+"px";
+        d.style.border="2px solid #c9973a";
+      }
+      // drag + select
+      d.addEventListener("pointerdown", function(ev){
+        celSel=i; paintCanvas(s); renderInspector();
+        var sx=ev.clientX, sy=ev.clientY, ox=e.x, oy=e.y;
+        function mv(m){ e.x=Math.round(ox+(m.clientX-sx)*2); e.y=Math.round(oy+(m.clientY-sy)*2);
+          d.style.left=(e.x/2)+"px"; d.style.top=(e.y/2)+"px"; dirty=true; }
+        function up(){ removeEventListener("pointermove",mv); removeEventListener("pointerup",up); renderInspector(); }
+        addEventListener("pointermove",mv); addEventListener("pointerup",up);
+        ev.preventDefault();
+      });
+      wrap.appendChild(d);
+    });
+  }
+
+  /* ================= inspector ================= */
+  function renderInspector(){
+    var box=$("inspector");
+    var s=deck&&deck.slides[sel];
+    if(!s||s.kind!=="custom"||celSel<0||!s.els||!s.els[celSel]){
+      box.innerHTML='<h3>Inspector</h3><p class="muted">Select a custom-slide element to edit it here.</p>';
+      return;
+    }
+    var e=s.els[celSel];
+    function row(lbl,inner){ return '<div class="frow"><label>'+lbl+'</label>'+inner+'</div>'; }
+    var h='<h3>Inspector — '+e.t+'</h3>';
+    h+=row("X/Y",'<input type="number" id="i_x" value="'+e.x+'" style="width:70px"> <input type="number" id="i_y" value="'+e.y+'" style="width:70px">');
+    h+=row("W/H",'<input type="number" id="i_w" value="'+e.w+'" style="width:70px"> <input type="number" id="i_h" value="'+e.h+'" style="width:70px">');
+    if(e.t==="text"){
+      h+=row("Text",'<textarea id="i_txt" rows="3" style="width:100%">'+esc(e.txt)+'</textarea>');
+      h+=row("Font",'<select id="i_font"><option value="alfa"'+(e.font==="alfa"?" selected":"")+'>Alfa Slab</option><option value="nunito"'+(e.font==="nunito"?" selected":"")+'>Nunito</option><option value="caveat"'+(e.font==="caveat"?" selected":"")+'>Caveat</option></select>'+
+        '<input type="number" id="i_size" value="'+e.size+'" style="width:70px" title="px">');
+      h+=row("Align",'<select id="i_align"><option'+(e.align==="left"?" selected":"")+'>left</option><option'+(e.align==="center"?" selected":"")+'>center</option><option'+(e.align==="right"?" selected":"")+'>right</option></select>'+
+        '<label><input type="checkbox" id="i_bold"'+(e.bold?" checked":"")+'> bold</label>');
+    }
+    if(e.t==="img"){
+      h+=row("URL",'<input type="text" id="i_url" value="'+esc(e.url)+'" style="width:100%">');
+      h+=row("Fit",'<select id="i_fit"><option'+(e.fit==="contain"?" selected":"")+'>contain</option><option'+(e.fit==="cover"?" selected":"")+'>cover</option></select>');
+    }
+    if(e.t==="qr"){
+      h+=row("Link",'<input type="text" id="i_url" value="'+esc(e.url)+'" style="width:100%">');
+      h+=row("Label",'<input type="text" id="i_lbl" value="'+esc(e.label||"")+'" style="width:100%">');
+    }
+    if(e.t==="panel"){
+      h+=row("Alpha",'<input type="number" id="i_alpha" value="'+e.alpha+'" step="0.05" min="0" max="1" style="width:80px">'+
+        ' <label>Radius</label><input type="number" id="i_rad" value="'+e.radius+'" style="width:70px">');
+    }
+    h+='<div class="frow"><button class="btn-dk mini" id="i_up">Layer ▲</button>'+
+       '<button class="btn-dk mini" id="i_dn">Layer ▼</button>'+
+       '<button class="btn-red mini" id="i_del">Delete element</button></div>';
+    box.innerHTML=h;
+    var s2=s, e2=e;
+    function upd(){ dirty=true; paintCanvas(s2); }
+    function num(id,fn){ var el=$(id); if(el) el.addEventListener("input",function(){ fn(Number(el.value)||0); upd(); }); }
+    num("i_x",function(v){e2.x=v;}); num("i_y",function(v){e2.y=v;});
+    num("i_w",function(v){e2.w=Math.max(20,v);}); num("i_h",function(v){e2.h=Math.max(20,v);});
+    num("i_size",function(v){e2.size=Math.max(12,v);});
+    num("i_alpha",function(v){e2.alpha=Math.max(0,Math.min(1,v));});
+    num("i_rad",function(v){e2.radius=Math.max(0,v);});
+    var t=$("i_txt"); if(t) t.addEventListener("input",function(){ e2.txt=t.value; upd(); });
+    var u=$("i_url"); if(u) u.addEventListener("input",function(){ e2.url=u.value.trim(); upd(); });
+    var l=$("i_lbl"); if(l) l.addEventListener("input",function(){ e2.label=l.value; upd(); });
+    var f=$("i_font"); if(f) f.addEventListener("change",function(){ e2.font=f.value; upd(); });
+    var al=$("i_align"); if(al) al.addEventListener("change",function(){ e2.align=al.value; upd(); });
+    var bo=$("i_bold"); if(bo) bo.addEventListener("change",function(){ e2.bold=bo.checked; upd(); });
+    var fi=$("i_fit"); if(fi) fi.addEventListener("change",function(){ e2.fit=fi.value; upd(); });
+    $("i_del").addEventListener("click",function(){ s2.els.splice(celSel,1); celSel=-1; dirty=true; paintCanvas(s2); renderInspector(); });
+    $("i_up").addEventListener("click",function(){ if(celSel<s2.els.length-1){ s2.els.splice(celSel+1,0,s2.els.splice(celSel,1)[0]); celSel++; dirty=true; paintCanvas(s2); } });
+    $("i_dn").addEventListener("click",function(){ if(celSel>0){ s2.els.splice(celSel-1,0,s2.els.splice(celSel,1)[0]); celSel--; dirty=true; paintCanvas(s2); } });
+  }
+
+  /* ================= logo library + palette ================= */
+  LOGOS.forEach(function(L){
+    var d=document.createElement("div"); d.className="lg";
+    d.innerHTML='<img src="'+L[0]+'" loading="lazy"><div>'+L[1]+'</div>';
+    d.addEventListener("click",function(){
+      var s=deck&&deck.slides[sel];
+      if(!s||s.kind!=="custom"){ msg("Select a Custom slide first, then click a logo.","err"); return; }
+      s.els=s.els||[];
+      s.els.push({t:"img",x:1320,y:560,w:520,h:460,url:L[0],fit:"contain"});
+      celSel=s.els.length-1; dirty=true; paintCanvas(s); renderInspector();
+    });
+    $("logoLib").appendChild(d);
+  });
+  PALETTE.forEach(function(c){
+    var sw=document.createElement("span"); sw.className="swatch"; sw.style.background=c; sw.title=c;
+    sw.addEventListener("click",function(){
+      var s=deck&&deck.slides[sel];
+      if(!s||s.kind!=="custom"||celSel<0) return;
+      var e=s.els[celSel];
+      if(e.t==="text"||e.t==="panel"){ e.color=c; dirty=true; paintCanvas(s); }
+    });
+    $("palette").appendChild(sw);
+  });
+
+  window.addEventListener("beforeunload",function(e){ if(dirty){ e.preventDefault(); e.returnValue=""; } });
+
+  function boot(){ loadDecks().then(loadFeed); }
+  gate();
+})();
+</script>
+</body>
+</html>

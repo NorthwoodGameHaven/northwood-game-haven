@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- NGH-BUILD 2026-08-24f — NGH Floor Map Editor
+     Draw the event-space layout: numbered tables (auto seat dots), labels,
+     walls. Maps power the tournament TVs' "find your table" view (pairing
+     table numbers light up matching tables) and the Studio's floor-map deck
+     slide. Staff-only. Unlisted: noindex. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH · Floor Maps</title>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--forest:#1e3d2b;--forest-dk:#132a1d;--gold:#c9973a;--gold-lt:#e8b84b;
+    --maroon:#7a2431;--cream:#f6efdd;--ink:#26211a}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Nunito,sans-serif;background:var(--forest-dk);color:var(--cream)}
+  button{font-family:Nunito,sans-serif;font-weight:800;border:0;border-radius:8px;
+    padding:8px 12px;cursor:pointer;font-size:.9rem}
+  .btn-gold{background:var(--gold);color:var(--ink)}
+  .btn-dk{background:var(--forest-dk);color:var(--cream);border:1.5px solid var(--gold)}
+  .btn-red{background:var(--maroon);color:var(--cream)}
+  .mini{padding:4px 8px;font-size:.78rem}
+  input,select{font-family:Nunito,sans-serif;font-size:.9rem;border-radius:8px;
+    border:1.5px solid var(--gold);background:var(--forest-dk);color:var(--cream);padding:7px 9px}
+  label{font-weight:800;font-size:.78rem;color:var(--gold-lt)}
+  .muted{opacity:.72;font-size:.8rem}
+  #topbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;
+    background:var(--forest);border-bottom:3px solid var(--gold)}
+  #topbar h1{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:1.2rem;margin:0 8px 0 0}
+  #wrap{display:flex;gap:14px;padding:14px}
+  #cv{position:relative;width:960px;height:540px;background:
+    radial-gradient(700px 420px at 50% 30%, #24503a, #132a1d 78%);
+    border:3px solid var(--gold);border-radius:8px;overflow:hidden;user-select:none;flex:none}
+  #side{flex:1;min-width:260px;max-width:340px}
+  .fel{position:absolute;cursor:move}
+  .fel.sel{outline:2px solid var(--gold-lt);z-index:40}
+  .ftab{background:#3a6b4e;border:3px solid var(--gold);display:flex;align-items:center;
+    justify-content:center;font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:20px}
+  .ftab.round{border-radius:50%}
+  .ftab.rect{border-radius:8px}
+  .fseat{position:absolute;width:13px;height:13px;border-radius:50%;background:var(--gold);
+    border:2px solid var(--forest-dk);pointer-events:none}
+  .flabel{color:var(--cream);font-weight:800;opacity:.9;pointer-events:auto}
+  .fwall{background:rgba(201,151,58,.45);border-radius:3px}
+  h3{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:.95rem;margin:12px 0 6px}
+  .frow{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
+  #msg{min-height:1.1em;font-weight:800}
+  #msg.ok{color:#7fe0a4}#msg.err{color:#ff9b8a}
+  #login{max-width:380px;margin:12vh auto;text-align:center}
+  @media(max-width:1240px){
+    #wrap{flex-wrap:wrap}
+    #cv{max-width:100%;overflow:hidden}
+    #side{max-width:none}
+  }
+</style>
+</head>
+<body>
+<script src="guru-common.js"></script>
+
+<div id="login" style="display:none">
+  <h1 style="font-family:'Alfa Slab One',serif;color:var(--gold-lt)">🗺️ Floor Maps</h1>
+  <div style="display:flex;gap:8px;justify-content:center">
+    <input id="admin-code" type="password" placeholder="Guru code">
+    <button class="btn-gold" id="loginBtn">Sign in</button>
+  </div>
+  <p id="loginErr" style="color:#ff9b8a;font-weight:800"></p>
+</div>
+
+<div id="app" style="display:none">
+  <div id="topbar">
+    <h1>🗺️ Floor Maps</h1>
+    <label for="mapSel">Map</label>
+    <select id="mapSel"><option value="">— pick or create —</option></select>
+    <button class="btn-dk mini" id="newMap">＋ New</button>
+    <button class="btn-red mini" id="delMap">Delete</button>
+    <span style="flex:1"></span>
+    <button class="btn-dk mini" data-add="table-rect">＋ Table ▭</button>
+    <button class="btn-dk mini" data-add="table-round">＋ Table ◯</button>
+    <button class="btn-dk mini" data-add="label">＋ Label</button>
+    <button class="btn-dk mini" data-add="wall">＋ Wall</button>
+    <button class="btn-gold" id="saveMap">💾 Save map</button>
+    <span id="msg"></span>
+  </div>
+  <div id="wrap">
+    <div id="cv"></div>
+    <div id="side">
+      <h3>Inspector</h3>
+      <div id="insp" class="muted">Select an element on the canvas.</div>
+      <h3>How it's used</h3>
+      <p class="muted">Table <b>numbers must match pairing table numbers</b> (default 1, 2, 3…
+        or your custom table labels in game settings). On tournament TVs, the current round's
+        players appear on their table and unfinished matches glow. The Studio's 🗺️ Floor-map
+        slide shows this layout on ambient TVs too.</p>
+      <p class="muted">Canvas is the room at 1920×1080 (shown half-size). Drag to place;
+        seats draw automatically around each table.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var API="/api/tv";
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+  function token(){ return (window.GuruAuth && GuruAuth.get())||""; }
+  function hdrs(){ return {"Content-Type":"application/json","Authorization":"Bearer "+token()}; }
+  function msg(t,c){ var m=$("msg"); m.textContent=t; m.className=c||"";
+    if(t) setTimeout(function(){ if(m.textContent===t) m.textContent=""; },5000); }
+
+  var mapId="", els=[], sel=-1, dirty=false;
+
+  function gate(){
+    if(token()){ $("login").style.display="none"; $("app").style.display=""; boot(); }
+    else { $("login").style.display=""; $("app").style.display="none"; }
+  }
+  $("loginBtn").addEventListener("click",doLogin);
+  $("admin-code").addEventListener("keydown",function(e){ if(e.key==="Enter") doLogin(); });
+  function doLogin(){
+    fetch("/api/admin-login",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({code:$("admin-code").value})})
+      .then(function(r){return r.json();})
+      .then(function(j){ if(j&&j.token){ GuruAuth.set(j.token); gate(); }
+        else $("loginErr").textContent="That code didn't work."; });
+  }
+
+  function loadMaps(){
+    return fetch(API+"/admin/floormaps",{headers:hdrs()})
+      .then(function(r){ if(r.status===401){ GuruAuth.clear(); gate(); throw 0; } return r.json(); })
+      .then(function(j){
+        var s=$("mapSel");
+        s.innerHTML='<option value="">— pick or create —</option>'+(j.maps||[]).map(function(m){
+          return '<option value="'+esc(m.id)+'">'+esc(m.name)+' ('+m.els+')</option>';
+        }).join("");
+        if(mapId) s.value=mapId;
+      });
+  }
+  function openMap(id){
+    if(!id){ mapId=""; els=[]; sel=-1; paint(); return; }
+    fetch(API+"/floormaps/"+encodeURIComponent(id))
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){ mapId=id; els=j.els||[]; sel=-1; dirty=false; paint(); });
+  }
+  $("mapSel").addEventListener("change",function(){
+    if(dirty && !confirm("Discard unsaved changes?")){ this.value=mapId; return; }
+    openMap(this.value);
+  });
+  $("newMap").addEventListener("click",function(){
+    var n=prompt("Map name (e.g. The Depths — 12 tables):",""); if(!n) return;
+    var id=n.toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40);
+    if(!id) return;
+    mapId=id; els=[]; sel=-1; dirty=true;
+    var o=document.createElement("option"); o.value=id; o.textContent=n+" (new)";
+    $("mapSel").appendChild(o); $("mapSel").value=id;
+    window.__mapName=n;
+    paint(); msg("New map — add tables, then Save.","ok");
+  });
+  $("delMap").addEventListener("click",function(){
+    if(!mapId||!confirm("Delete this map?")) return;
+    fetch(API+"/admin/floormaps/"+encodeURIComponent(mapId),{method:"DELETE",headers:hdrs()})
+      .then(function(){ mapId=""; els=[]; loadMaps(); paint(); msg("Deleted.","ok"); });
+  });
+  $("saveMap").addEventListener("click",function(){
+    if(!mapId){ msg("Create or open a map first.","err"); return; }
+    var name = window.__mapName || ($("mapSel").selectedOptions[0]
+      ? $("mapSel").selectedOptions[0].textContent.replace(/ \(\d+\)$| \(new\)$/,"") : mapId);
+    fetch(API+"/admin/floormaps/"+encodeURIComponent(mapId),{method:"PUT",headers:hdrs(),
+      body:JSON.stringify({name:name, els:els})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j&&j.version){ dirty=false; msg("Saved v"+j.version+".","ok"); loadMaps(); }
+        else msg((j&&j.error)||"Save failed.","err");
+      });
+  });
+
+  function nextTableNo(){
+    var used={}; els.forEach(function(e){ if(e.t==="table") used[e.n]=1; });
+    for(var i=1;i<200;i++) if(!used[String(i)]) return String(i);
+    return "";
+  }
+  document.querySelectorAll("[data-add]").forEach(function(b){
+    b.addEventListener("click",function(){
+      if(!mapId){ msg("Create or open a map first.","err"); return; }
+      var k=b.getAttribute("data-add"), e;
+      if(k==="table-rect") e={t:"table",shape:"rect",n:nextTableNo(),seats:4,x:860,y:460,w:200,h:130};
+      if(k==="table-round") e={t:"table",shape:"round",n:nextTableNo(),seats:4,x:860,y:440,w:170,h:170};
+      if(k==="label") e={t:"label",txt:"Entrance",size:34,x:120,y:80,w:400,h:60};
+      if(k==="wall") e={t:"wall",x:100,y:200,w:600,h:24};
+      els.push(e); sel=els.length-1; dirty=true; paint();
+    });
+  });
+
+  function paint(){
+    var cv=$("cv"); cv.innerHTML="";
+    els.forEach(function(e,i){
+      var d=document.createElement("div");
+      d.className="fel"+(i===sel?" sel":"");
+      d.style.left=(e.x/2)+"px"; d.style.top=(e.y/2)+"px";
+      d.style.width=(e.w/2)+"px"; d.style.height=(e.h/2)+"px";
+      if(e.t==="table"){
+        d.className+=" ftab "+(e.shape==="round"?"round":"rect");
+        d.textContent="T"+e.n;
+      } else if(e.t==="label"){
+        d.className+=" flabel"; d.style.fontSize=(e.size/2)+"px"; d.textContent=e.txt;
+      } else if(e.t==="wall"){ d.className+=" fwall"; }
+      d.addEventListener("pointerdown",function(ev){
+        sel=i; paint(); insp();
+        var sx=ev.clientX, sy=ev.clientY, ox=e.x, oy=e.y;
+        function mv(m){ e.x=Math.max(0,Math.round(ox+(m.clientX-sx)*2));
+          e.y=Math.max(0,Math.round(oy+(m.clientY-sy)*2));
+          var dd=cv.children[iOf(e)]; if(dd){ dd.style.left=(e.x/2)+"px"; dd.style.top=(e.y/2)+"px"; }
+          paintSeats(); dirty=true; }
+        function up(){ removeEventListener("pointermove",mv); removeEventListener("pointerup",up); insp(); }
+        addEventListener("pointermove",mv); addEventListener("pointerup",up);
+        ev.preventDefault();
+      });
+      cv.appendChild(d);
+    });
+    paintSeats();
+    insp();
+  }
+  function iOf(e){ var k=-1; els.forEach(function(x,i){ if(x===e) k=iEl(i); }); return k; }
+  function iEl(i){ // element index → child index (seats appended after)
+    return i;
+  }
+  function paintSeats(){
+    var cv=$("cv");
+    cv.querySelectorAll(".fseat").forEach(function(x){ x.remove(); });
+    els.forEach(function(e){
+      if(e.t!=="table"||!e.seats) return;
+      var cx=e.x/2+e.w/4, cy=e.y/2+e.h/4, rx=e.w/4+11, ry=e.h/4+11;
+      for(var i=0;i<e.seats;i++){
+        var a=(Math.PI*2*i)/e.seats - Math.PI/2;
+        var s=document.createElement("div"); s.className="fseat";
+        s.style.left=Math.round(cx+Math.cos(a)*rx-6)+"px";
+        s.style.top=Math.round(cy+Math.sin(a)*ry-6)+"px";
+        cv.appendChild(s);
+      }
+    });
+  }
+  function insp(){
+    var box=$("insp");
+    var e=els[sel];
+    if(!e){ box.innerHTML='<span class="muted">Select an element on the canvas.</span>'; return; }
+    var h="";
+    function row(l,inner){ return '<div class="frow"><label>'+l+'</label>'+inner+'</div>'; }
+    h+=row("X / Y",'<input type="number" id="p_x" value="'+e.x+'" style="width:74px"> <input type="number" id="p_y" value="'+e.y+'" style="width:74px">');
+    h+=row("W / H",'<input type="number" id="p_w" value="'+e.w+'" style="width:74px"> <input type="number" id="p_h" value="'+e.h+'" style="width:74px">');
+    if(e.t==="table"){
+      h+=row("Table #",'<input id="p_n" value="'+esc(e.n)+'" style="width:80px">');
+      h+=row("Seats",'<input type="number" id="p_seats" min="0" max="12" value="'+e.seats+'" style="width:70px">');
+      h+=row("Shape",'<select id="p_shape"><option value="rect"'+(e.shape!=="round"?" selected":"")+'>Rectangle</option><option value="round"'+(e.shape==="round"?" selected":"")+'>Round</option></select>');
+    }
+    if(e.t==="label"){
+      h+=row("Text",'<input id="p_txt" value="'+esc(e.txt)+'" style="width:100%">');
+      h+=row("Size",'<input type="number" id="p_size" value="'+e.size+'" style="width:74px">');
+    }
+    h+='<div class="frow"><button class="btn-dk mini" id="p_dup">⧉ Duplicate</button>'+
+       '<button class="btn-red mini" id="p_del">✕ Delete</button></div>';
+    box.innerHTML=h;
+    function num(id,fn){ var el=$(id); if(el) el.addEventListener("input",function(){
+      fn(Number(el.value)||0); dirty=true; paint(); insp2Focus(id); }); }
+    function txt(id,fn){ var el=$(id); if(el) el.addEventListener("input",function(){
+      fn(el.value); dirty=true; paint(); insp2Focus(id); }); }
+    function insp2Focus(id){ var el=$(id); if(el) el.focus(); }
+    num("p_x",function(v){e.x=v;}); num("p_y",function(v){e.y=v;});
+    num("p_w",function(v){e.w=Math.max(20,v);}); num("p_h",function(v){e.h=Math.max(20,v);});
+    num("p_seats",function(v){e.seats=Math.max(0,Math.min(12,v));});
+    num("p_size",function(v){e.size=Math.max(14,v);});
+    txt("p_n",function(v){e.n=v.slice(0,8);});
+    txt("p_txt",function(v){e.txt=v;});
+    var sh=$("p_shape"); if(sh) sh.addEventListener("change",function(){ e.shape=sh.value; dirty=true; paint(); });
+    $("p_del").addEventListener("click",function(){ els.splice(sel,1); sel=-1; dirty=true; paint(); });
+    $("p_dup").addEventListener("click",function(){
+      var c=JSON.parse(JSON.stringify(e)); c.x+=60; c.y+=60;
+      if(c.t==="table") c.n=nextTableNo();
+      els.push(c); sel=els.length-1; dirty=true; paint();
+    });
+  }
+  window.addEventListener("beforeunload",function(e){ if(dirty){ e.preventDefault(); e.returnValue=""; } });
+  function boot(){ loadMaps(); }
+  gate();
+})();
+</script>
+</body>
+</html>

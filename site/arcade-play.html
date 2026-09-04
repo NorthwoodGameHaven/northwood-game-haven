@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- NGH-BUILD 2026-08-24f — NGH Arcade phone client
+     Players land here from the TV QR:  /buzz?s=CODE  (arcade-play.html)
+     Buzzer: giant button, GO flip driven by the phone's synced clock;
+     the press posts its offset-corrected server-time for fair ranking.
+     Q&A: submit questions + 👍 vote.
+     Unlisted: noindex, not in sitemap. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH Arcade</title>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{--forest:#1e3d2b;--forest-dk:#132a1d;--gold:#c9973a;--gold-lt:#e8b84b;
+    --maroon:#7a2431;--cream:#f6efdd;--ink:#26211a;--go:#2ecc71}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--forest-dk);color:var(--cream);
+    font-family:Nunito,sans-serif;overscroll-behavior:none}
+  .wrap{max-width:520px;margin:0 auto;padding:18px 16px 40px;min-height:100%;
+    display:flex;flex-direction:column}
+  h1{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:1.5rem;margin:.2em 0}
+  .sub{font-weight:800;opacity:.85;font-size:.95rem}
+  input,textarea{width:100%;font-family:Nunito,sans-serif;font-size:1.05rem;border-radius:10px;
+    border:2px solid var(--gold);background:var(--forest);color:var(--cream);padding:12px}
+  button{font-family:Nunito,sans-serif;font-weight:800;border:0;border-radius:12px;
+    padding:14px 18px;font-size:1.05rem;cursor:pointer}
+  .btn-gold{background:var(--gold);color:var(--ink);width:100%}
+  .card{background:var(--forest);border:2px solid var(--gold);border-radius:14px;padding:14px;margin:10px 0}
+  .err{color:#ff9b8a;font-weight:800;min-height:1.2em}
+  .screen{display:none;flex:1;flex-direction:column}
+  .screen.on{display:flex}
+
+  /* buzzer */
+  #buzzBtn{flex:1;min-height:52vh;border-radius:24px;font-family:'Alfa Slab One',serif;
+    font-size:2.4rem;color:var(--cream);background:#4a4a4a;transition:background .15s,transform .05s;
+    margin:14px 0;border:6px solid rgba(0,0,0,.25);user-select:none;touch-action:manipulation}
+  #buzzBtn:active{transform:scale(.97)}
+  #buzzBtn.wait{background:#57534b}
+  #buzzBtn.ready{background:var(--maroon)}
+  #buzzBtn.go{background:var(--go);color:#0b2e18}
+  #buzzBtn.done{background:#2a5a3f}
+  #buzzBtn.jumped{background:#7a2431}
+  #buzzBtn:disabled{opacity:.85}
+  #myline{text-align:center;font-weight:800;font-size:1.1rem;min-height:1.4em}
+  #myline .rt{color:var(--gold-lt)}
+  #scoreline{text-align:center;font-weight:800;color:var(--gold-lt);min-height:1.2em}
+  #qline{text-align:center;font-weight:800;font-size:1.05rem;min-height:1.3em}
+
+  /* qa */
+  .qitem{border-bottom:1px solid rgba(201,151,58,.35);padding:9px 0;display:flex;gap:10px;
+    align-items:flex-start;justify-content:space-between}
+  .qitem .t{font-weight:700}
+  .qitem .who{color:var(--gold-lt);font-size:.8rem;font-weight:800}
+  .vote{background:var(--forest-dk);border:2px solid var(--gold);color:var(--gold-lt);
+    border-radius:10px;padding:6px 10px;font-weight:800;min-width:64px}
+  .vote.did{opacity:.55}
+  .mineTag{font-size:.75rem;font-weight:800;color:var(--gold)}
+  .tag{font-family:Caveat,cursive;color:var(--gold);text-align:center;font-size:1.3rem;margin-top:auto}
+  #joinCrest{display:block;width:110px;margin:0 auto 6px;filter:drop-shadow(0 5px 14px rgba(0,0,0,.5))}
+  .qitem .t{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- join -->
+  <div class="screen on" id="sJoin">
+    <img id="joinCrest" src="/brand/crest.png" alt="Northwood Game Haven">
+    <h1 style="text-align:center">🕹️ NGH Arcade</h1>
+    <div class="card">
+      <div class="sub">Game code</div>
+      <input id="codeIn" autocapitalize="characters" autocomplete="off" maxlength="6" placeholder="e.g. K7PM">
+      <div class="sub" style="margin-top:10px">Your name</div>
+      <input id="nameIn" maxlength="24" placeholder="Name or team name" autocomplete="off">
+      <div style="height:12px"></div>
+      <button class="btn-gold" id="joinBtn">Jump in!</button>
+      <div class="err" id="joinErr"></div>
+    </div>
+    <div class="tag">Stay curious.</div>
+  </div>
+
+  <!-- buzzer -->
+  <div class="screen" id="sBuzz">
+    <h1>⚡ Speed Buzzer</h1>
+    <div class="sub" id="hello"></div>
+    <div id="qline"></div>
+    <button id="buzzBtn" class="wait">WAITING…</button>
+    <div id="myline"></div>
+    <div id="scoreline"></div>
+  </div>
+
+  <!-- qa -->
+  <div class="screen" id="sQa">
+    <h1 id="qaTitle">💬 Ask Away</h1>
+    <div class="sub" id="helloQa"></div>
+    <div class="card">
+      <textarea id="qIn" rows="2" maxlength="200" placeholder="Type your question…"></textarea>
+      <div style="height:10px"></div>
+      <button class="btn-gold" id="askBtn">Send it 🦦</button>
+      <div class="err" id="qaErr"></div>
+      <div class="sub" id="mine"></div>
+    </div>
+    <div class="card"><div class="sub" style="margin-bottom:6px">On the big screen</div>
+      <div id="qlist"></div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var API = "/api/arcade";
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+  var params = new URLSearchParams(location.search);
+  var S = String(params.get("s")||"").toUpperCase();
+  if (S) $("codeIn").value = S;
+
+  // ---- identity per session (survives refresh) ----
+  function credKey(code){ return "ngh_arcade_"+code; }
+  function savedCred(code){
+    try { var j = JSON.parse(localStorage.getItem(credKey(code))||"null"); return j; } catch(e){ return null; }
+  }
+
+  // ---- clock sync ----
+  var offset = 0;
+  function sample(){
+    var t0=Date.now();
+    return fetch(API+"/time").then(function(r){return r.json();}).then(function(j){
+      var t1=Date.now(); return j.serverNow+(t1-t0)/2-t1;
+    });
+  }
+  function syncClock(n){
+    var ps=[]; for(var i=0;i<n;i++) ps.push(sample().catch(function(){return null;}));
+    return Promise.all(ps).then(function(v){
+      v=v.filter(function(x){return x!==null;}).sort(function(a,b){return a-b;});
+      if(v.length) offset=v[Math.floor(v.length/2)];
+    });
+  }
+  function now(){ return Date.now()+offset; }
+
+  var cred=null, kind="", v=0, st=null;
+  var buzzedRound=0, myLast=null, goTimer=null;
+  var votedLocal={};
+
+  function screen(id){
+    ["sJoin","sBuzz","sQa"].forEach(function(x){ $(x).classList.toggle("on", x===id); });
+  }
+
+  // ---- join ----
+  $("joinBtn").addEventListener("click", doJoin);
+  $("nameIn").addEventListener("keydown", function(e){ if(e.key==="Enter") doJoin(); });
+  function doJoin(){
+    S = String($("codeIn").value||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    var name = String($("nameIn").value||"").trim();
+    if (!S){ $("joinErr").textContent="Enter the game code from the TV."; return; }
+    var existing = savedCred(S);
+    if (existing && existing.token){
+      cred = existing; startPlay();
+      return;
+    }
+    if (!name){ $("joinErr").textContent="Pick a name!"; return; }
+    fetch(API+"/sessions/"+encodeURIComponent(S)+"/join",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({name:name})})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+      .then(function(res){
+        if(!res.ok){ $("joinErr").textContent=(res.j&&res.j.error)||"Couldn't join."; return; }
+        cred = { playerId:res.j.playerId, token:res.j.token, name:name };
+        try { localStorage.setItem(credKey(S), JSON.stringify(cred)); } catch(e){}
+        startPlay();
+      })
+      .catch(function(){ $("joinErr").textContent="Network hiccup — try again."; });
+  }
+
+  function startPlay(){
+    syncClock(3).then(function(){
+      poll(); setInterval(poll, 1000);
+      setInterval(function(){ syncClock(2); }, 60000);
+    });
+  }
+
+  // ---- poll & render ----
+  function poll(){
+    fetch(API+"/sessions/"+encodeURIComponent(S)+"/state?v="+v)
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        if (j.unchanged) return;
+        v=j.version; st=j; kind=j.kind;
+        render();
+      }).catch(function(){});
+  }
+
+  function render(){
+    if (!st) return;
+    if (kind==="qa"){ renderQa(); return; }
+    renderBuzzer();
+  }
+
+  /* ================= BUZZER ================= */
+  function renderBuzzer(){
+    screen("sBuzz");
+    $("hello").textContent = "You're in as "+cred.name+" · "+st.players+" playing";
+    $("qline").textContent = st.question||"";
+    var sc = st.scores && st.scores[cred.playerId];
+    var arr=[]; var o=st.scores||{};
+    Object.keys(o).forEach(function(k){ arr.push(o[k]); });
+    arr.sort(function(a,b){ return b.pts-a.pts; });
+    $("scoreline").textContent = (sc?("Your points: "+sc.pts+"   ·   "):"")+
+      (arr.length?("Leader: "+arr[0].name+" "+arr[0].pts):"");
+
+    if (st.phase==="armed"){
+      if (buzzedRound !== st.round){ myLast=null; $("myline").textContent=""; }
+      paintBtn();
+      if (goTimer) clearInterval(goTimer);
+      goTimer = setInterval(paintBtn, 50);
+    } else {
+      if (goTimer){ clearInterval(goTimer); goTimer=null; }
+      var b=$("buzzBtn");
+      if (st.phase==="results"){
+        showMyResult();
+        b.className="done"; b.textContent="ROUND OVER"; b.disabled=true;
+      } else {
+        b.className="wait"; b.textContent="WAITING…"; b.disabled=true;
+        $("myline").textContent="";
+      }
+    }
+  }
+  function paintBtn(){
+    if (!st || st.phase!=="armed") return;
+    var b=$("buzzBtn");
+    if (buzzedRound === st.round){
+      // already pressed this round
+      if (myLast && myLast.jumped){ b.className="jumped"; b.textContent="JUMPED! 🚫"; }
+      else { b.className="done"; b.textContent="BUZZED!"; }
+      b.disabled=true; return;
+    }
+    b.disabled=false;
+    if (now() >= st.goAt){ b.className="go"; b.textContent="BUZZ!"; }
+    else { b.className="ready"; b.textContent="GET READY…"; }
+  }
+  function showMyResult(){
+    if (!myLast){ $("myline").textContent="No buzz this round."; return; }
+    if (myLast.jumped){ $("myline").innerHTML="🚫 You jumped the gun!"; return; }
+    var rank="";
+    var b=st.buzzes||[]; var place=0;
+    for (var i=0;i<b.length;i++){
+      if (b[i].jumped) continue;
+      place++;
+      if (b[i].playerId===cred.playerId){ rank=" · #"+place; break; }
+    }
+    $("myline").innerHTML="Your time: <span class='rt'>"+myLast.rt+" ms</span>"+esc(rank);
+  }
+
+  function pressBuzz(){
+    if (!st || st.phase!=="armed" || buzzedRound===st.round) return;
+    var t = now();
+    buzzedRound = st.round;
+    var jumpedLocal = t < st.goAt;
+    myLast = { rt: Math.round(t-st.goAt), jumped: jumpedLocal };
+    if (navigator.vibrate) navigator.vibrate(jumpedLocal?[60,40,60]:30);
+    paintBtn();
+    if (!jumpedLocal) $("myline").innerHTML="Sent! <span class='rt'>"+myLast.rt+" ms</span>";
+    fetch(API+"/sessions/"+encodeURIComponent(S)+"/buzz",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({token:cred.token, round:st.round, t:t})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){ if (j && isFinite(j.rt)) { myLast={rt:j.rt, jumped:!!j.jumped}; if(st.phase!=="results") paintBtn(); } })
+      .catch(function(){});
+  }
+  // touchstart for minimum latency; click fallback for desktop
+  $("buzzBtn").addEventListener("touchstart", function(e){ e.preventDefault(); pressBuzz(); }, {passive:false});
+  $("buzzBtn").addEventListener("click", function(){ pressBuzz(); });
+
+  /* ================= Q&A ================= */
+  var myItems = {};
+  function renderQa(){
+    screen("sQa");
+    $("qaTitle").textContent = "💬 " + (st.title||"Ask Away");
+    $("helloQa").textContent = "You're in as "+cred.name;
+    var html = (st.items||[]).map(function(i){
+      var did = votedLocal[i.id];
+      return '<div class="qitem"><div><div class="t">'+esc(i.text)+'</div>'+
+        '<div class="who">— '+esc(i.name)+(i.status==="done"?' · answered ✅':'')+
+        (myItems[i.id]?' <span class="mineTag">(yours)</span>':'')+'</div></div>'+
+        '<button class="vote'+(did?' did':'')+'" data-v="'+esc(i.id)+'" '+(did?'disabled':'')+
+        '>👍 '+i.votes+'</button></div>';
+    }).join("");
+    $("qlist").innerHTML = html || '<div class="sub">Nothing on the wall yet — ask the first one!</div>';
+    $("qlist").querySelectorAll("[data-v]").forEach(function(b){
+      b.addEventListener("click", function(){
+        var iid=b.getAttribute("data-v");
+        votedLocal[iid]=1; b.classList.add("did"); b.disabled=true;
+        fetch(API+"/sessions/"+encodeURIComponent(S)+"/vote",{
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({token:cred.token, itemId:iid})}).catch(function(){});
+      });
+    });
+  }
+  $("askBtn").addEventListener("click", function(){
+    var text = String($("qIn").value||"").trim();
+    if (text.length<3){ $("qaErr").textContent="A little longer, please!"; return; }
+    $("qaErr").textContent="";
+    fetch(API+"/sessions/"+encodeURIComponent(S)+"/ask",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({token:cred.token, text:text})})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+      .then(function(res){
+        if(!res.ok){ $("qaErr").textContent=(res.j&&res.j.error)||"Couldn't send."; return; }
+        if (res.j && res.j.id) myItems[res.j.id]=1;
+        $("qIn").value="";
+        $("mine").textContent="Sent! A Guru will wave it onto the big screen. 🦦";
+      })
+      .catch(function(){ $("qaErr").textContent="Network hiccup — try again."; });
+  });
+
+  // ---- auto-rejoin if we've played this session before ----
+  if (S){
+    var existing = savedCred(S);
+    if (existing && existing.token){ cred=existing; startPlay(); }
+  }
+})();
+</script>
+</body>
+</html>

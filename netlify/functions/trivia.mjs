@@ -1,6 +1,6 @@
 // netlify/functions/trivia.mjs
 // NGH-BUILD 09e — Event Stream engine: + YouTube clue media (clip window, audio-only mode).
-// NGH-BUILD 10a — blind 'wager' phase, /wager + /control endpoints, per-entry adjudication tolerance.
+// NGH-BUILD 10b — 10a (blind wager, /wager + /control, adjudication tolerance) + Reflex Rally re-port.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -68,6 +68,16 @@ async function ensureTriviaSchema() {
     created_at TIMESTAMPTZ DEFAULT now()
   )`);
   await mk(sql`CREATE UNIQUE INDEX IF NOT EXISTS trivia_answers_uni ON trivia_answers (game_id, team_id, q_key)`);
+  await mk(sql`CREATE TABLE IF NOT EXISTS trivia_mg (
+    id         TEXT PRIMARY KEY,
+    game_id    TEXT NOT NULL,
+    mg_id      TEXT NOT NULL,
+    team_id    TEXT NOT NULL,
+    sweep      INTEGER NOT NULL,
+    data       JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+  )`);
+  await mk(sql`CREATE UNIQUE INDEX IF NOT EXISTS trivia_mg_uni ON trivia_mg (game_id, mg_id, team_id, sweep)`);
   await mk(sql`CREATE TABLE IF NOT EXISTS trivia_displays (
     game_id    TEXT NOT NULL,
     display_id TEXT NOT NULL,
@@ -125,6 +135,37 @@ function normalize(s) {
 
 // ---- game helpers ----
 const PHASES = ['lobby', 'preload', 'live', 'answering', 'locked', 'reveal', 'intermission', 'scoreboard', 'ended', 'timer', 'timer-paused', 'wager'];
+
+// ---- Reflex Rally (sweep minigame) — NGH-BUILD 2026-08-24c ----------------
+// A phase-independent overlay the host can launch at any moment (st.mg).
+// The bar's position is a pure function of (t - startAt), identical here and
+// in trivia-play/trivia-display, so a tap is scored by WHERE THE BAR WAS at
+// the tapper's clock-synced press time — no round trips in the hot path.
+// Sweeps run left->right; each sweep is 7% faster than the last (floor 700ms).
+// Zones by |x-0.5|: <=.05 -> +100, <=.12 -> +50, <=.20 -> +20, else -10.
+// One counted tap per team per sweep (first wins). 30s run, 3s countdown.
+const MG_SWEEP = { d0: 2000, f: 0.93, min: 700, dur: 30000, lead: 3000 };
+function mgSweepAt(tms) {
+  let t = tms, i = 0, d = MG_SWEEP.d0;
+  while (t >= d) { t -= d; i++; d = Math.max(MG_SWEEP.min, Math.round(MG_SWEEP.d0 * Math.pow(MG_SWEEP.f, i))); }
+  return { sweep: i, x: t / d, dur: d };
+}
+function mgZonePts(x) {
+  const a = Math.abs(x - 0.5);
+  if (a <= 0.05) return 100;
+  if (a <= 0.12) return 50;
+  if (a <= 0.20) return 20;
+  return -10;
+}
+async function mgTotals(gameId, mgId) {
+  const rows = await sql`SELECT team_id,
+      COALESCE(SUM((data->>'pts')::int), 0) AS total,
+      COUNT(*)::int AS taps,
+      MAX(data->>'name') AS name
+    FROM trivia_mg WHERE game_id = ${gameId} AND mg_id = ${mgId}
+    GROUP BY team_id ORDER BY total DESC`;
+  return rows.map(r => ({ teamId: r.team_id, name: r.name || '?', total: Number(r.total), taps: Number(r.taps) }));
+}
 
 // Damerau-lite Levenshtein for adjudication suggestions.
 function levenshtein(a, b) {
@@ -215,8 +256,17 @@ function publicState(game, st, version) {
             table: m.table, aName: m.aName, bName: m.bName, result: m.result || null
           }))
         : [],
-      standings: (st.standings || []).slice(0, 16),
+      standings: (st.standings || []).slice(0, 40),
       champion: st.champion || null,
+      promos: st.promos || [],
+      tvView: st.tvView || 'auto',
+      mapId: st.mapId || '',
+      allRounds: (st.matches || []).slice(-12).map(rd => ({
+        round: rd.round, mode: rd.mode || '',
+        tables: (rd.tables || []).map(m => ({
+          table: m.table, aName: m.aName, bName: m.bName || null, result: m.result || null
+        }))
+      })),
       event: {
         id: game.eventId || null,
         title: game.eventTitle || game.title || '',
@@ -269,6 +319,13 @@ function publicState(game, st, version) {
   if (phase === 'intermission') {
     out.scoreboard = st.scoreboard || [];
     out.next = st.next || null; // {roundIdx, title, isWager}
+  }
+  if (st.mg) {
+    out.mg = {
+      id: st.mg.id, kind: st.mg.kind || 'sweep', phase: st.mg.phase,
+      startAt: st.mg.startAt, dur: st.mg.dur, maxPts: st.mg.maxPts,
+      live: st._mgLive || [], results: st.mg.results || null
+    };
   }
   return out;
 }
@@ -403,6 +460,18 @@ function computeStandings(matches, nameOf) {
   rows.forEach((r, i) => { r.standing = i + 1; });
   return rows;
 }
+// Movement arrows + drop flags (NGH-BUILD 2026-08-24e): remember the previous
+// ranking and annotate each row with mv (positive = climbed) and dropped.
+function setStandings(st, rows) {
+  const prev = {};
+  (st.standings || []).forEach(r => { prev[r.participantId] = r.standing; });
+  rows.forEach(r => {
+    r.mv = (prev[r.participantId] != null) ? (prev[r.participantId] - r.standing) : 0;
+    if (st.drops && st.drops[r.participantId]) r.dropped = true;
+  });
+  st.standings = rows;
+}
+
 function shuffleArr(a) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
   return a;
@@ -738,7 +807,11 @@ const _handler = async (req) => {
       if (!rows.length) return bad('not found', 404);
       const v = Number(url.searchParams.get('v') || 0);
       if (v && v === rows[0].version) return json({ unchanged: true, v, serverNow: Date.now() });
-      return json(publicState(rows[0].data, rows[0].state || {}, rows[0].version));
+      const stG = rows[0].state || {};
+      if (stG.mg && stG.mg.phase === 'run') {
+        try { stG._mgLive = await mgTotals(gameId, stG.mg.id); } catch (e) { stG._mgLive = []; }
+      }
+      return json(publicState(rows[0].data, stG, rows[0].version));
     }
 
     // ----- PUBLIC: team join -----
@@ -843,6 +916,42 @@ const _handler = async (req) => {
       st.buzzes.push({ teamId, name: (trow[0].data || {}).name || '?', at: Date.now() });
       await bumpState(gameId, st);
       return json({ ok: true, position: st.buzzes.length });
+    }
+
+    // ----- PUBLIC: Reflex Rally tap (team token) — scored where the bar WAS -----
+    if (req.method === 'POST' && gameId && action === 'mgtap') {
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const teamId = verifyTeamToken(String(b.token || ''));
+      if (!teamId) return bad('unauthorized', 401);
+      const rows = await sql`SELECT state FROM trivia_games WHERE id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const st = rows[0].state || {};
+      const mg = st.mg;
+      if (!mg || mg.kind !== 'sweep' || mg.phase !== 'run') return bad('No minigame is live', 409);
+      const arrival = Date.now();
+      let t = Number(b.t);
+      if (!isFinite(t)) t = arrival;               // unsynced phone: arrival time
+      if (t > arrival + 150) t = arrival;          // no taps from the future
+      const rel = t - Number(mg.startAt);
+      if (rel < 0) return json({ ok: true, early: true });          // countdown tap: free pass
+      if (rel > Number(mg.dur) + 400) return bad('Time is up', 409);
+      const s = mgSweepAt(rel);
+      const pts = mgZonePts(s.x);
+      const trow = await sql`SELECT data FROM trivia_teams WHERE id = ${teamId} AND game_id = ${gameId}`;
+      if (!trow.length) return bad('team not found', 404);
+      const name = (trow[0].data || {}).name || '?';
+      const d = { t, x: Math.round(s.x * 1000) / 1000, pts, name };
+      const ins = await sql`INSERT INTO trivia_mg (id, game_id, mg_id, team_id, sweep, data)
+        VALUES (${newId('MGT')}, ${gameId}, ${mg.id}, ${teamId}, ${s.sweep}, ${JSON.stringify(d)}::jsonb)
+        ON CONFLICT (game_id, mg_id, team_id, sweep) DO NOTHING RETURNING id`;
+      if (!ins.length) {
+        const prev = await sql`SELECT data FROM trivia_mg
+          WHERE game_id = ${gameId} AND mg_id = ${mg.id} AND team_id = ${teamId} AND sweep = ${s.sweep}`;
+        const pd = prev.length ? (prev[0].data || {}) : {};
+        return json({ ok: true, dup: true, sweep: s.sweep, x: pd.x, pts: pd.pts });
+      }
+      await sql`UPDATE trivia_games SET version = version + 1 WHERE id = ${gameId}`;
+      return json({ ok: true, sweep: s.sweep, x: d.x, pts });
     }
 
     // ----- PUBLIC: display heartbeat -----
@@ -970,7 +1079,7 @@ const _handler = async (req) => {
       } else {
         const mode = ['swiss', 'random', 'roundrobin', 'single-elim'].includes(b.mode) ? b.mode : 'swiss';
         const parts = await sql`SELECT id, data FROM trivia_participants WHERE game_id = ${gameId}`;
-        const players = parts.filter(p => (p.data || {}).checkedIn)
+        const players = parts.filter(p => (p.data || {}).checkedIn && !(st.drops && st.drops[p.id]))
           .map(p => ({ id: p.id, name: (p.data || {}).name || '?' }));
         if (players.length < 2) return bad('Need at least 2 checked-in participants.');
         const labels = parseTableLabels(rows[0].data.tableNumbers);
@@ -993,10 +1102,61 @@ const _handler = async (req) => {
       }
       const nameOf = {};
       for (const rd of st.matches) for (const m of rd.tables) { nameOf[m.a] = m.aName; if (m.b) nameOf[m.b] = m.bName; }
-      st.standings = computeStandings(st.matches, pid => nameOf[pid] || '?');
+      setStandings(st, computeStandings(st.matches, pid => nameOf[pid] || '?'));
       detectChampion(st);
       const v = await bumpState(gameId, st);
       return json({ ok: true, v, round: st.matches.length, matches: st.matches, standings: st.standings, champion: st.champion || null });
+    }
+
+    // ----- ADMIN: tournament TV extras — promos / pinned view / floor map -----
+    if (req.method === 'POST' && gameId && action === 'timer-extras') {
+      if (!requireAdmin(req)) return bad('unauthorized', 401);
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const rows = await sql`SELECT state FROM trivia_games WHERE id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const st = rows[0].state || {};
+      if (b.promos !== undefined) {
+        const raw = Array.isArray(b.promos) ? b.promos : [];
+        st.promos = [];
+        for (const pr of raw.slice(0, 12)) {
+          if (!pr || !pr.text) continue;
+          const one = { text: String(pr.text).slice(0, 90) };
+          if (pr.sub) one.sub = String(pr.sub).slice(0, 150);
+          const u = String(pr.img || '').trim();
+          if (/^(https?:\/\/|\/)/i.test(u)) one.img = u.slice(0, 400);
+          const q = String(pr.qrUrl || '').trim();
+          if (/^(https?:\/\/|\/)/i.test(q)) one.qrUrl = q.slice(0, 300);
+          st.promos.push(one);
+        }
+      }
+      if (b.tvView !== undefined) {
+        const v = String(b.tvView || 'auto');
+        st.tvView = ['auto', 'schedule', 'pairings', 'standings', 'map', 'bracket', 'promo']
+          .includes(v) ? v : 'auto';
+      }
+      if (b.mapId !== undefined) {
+        st.mapId = String(b.mapId || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 40);
+      }
+      const v = await bumpState(gameId, st);
+      return json({ ok: true, v, promos: st.promos || [], tvView: st.tvView || 'auto', mapId: st.mapId || '' });
+    }
+
+    // ----- ADMIN: drop / restore a tournament participant -----
+    if (req.method === 'POST' && gameId && action === 'participant-drop') {
+      if (!requireAdmin(req)) return bad('unauthorized', 401);
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const pid = String(b.participantId || '');
+      if (!pid) return bad('participantId required');
+      const rows = await sql`SELECT state FROM trivia_games WHERE id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const st = rows[0].state || {};
+      st.drops = st.drops || {};
+      if (b.drop === false) delete st.drops[pid]; else st.drops[pid] = true;
+      if (st.standings) setStandings(st, st.standings.map(r => {
+        const c = { ...r }; delete c.dropped; return c;
+      }));
+      const v = await bumpState(gameId, st);
+      return json({ ok: true, v, drops: Object.keys(st.drops) });
     }
 
     // ----- ADMIN: record a match result -----
@@ -1018,7 +1178,7 @@ const _handler = async (req) => {
       }
       const nameOf = {};
       for (const rd2 of st.matches) for (const m2 of rd2.tables) { nameOf[m2.a] = m2.aName; if (m2.b) nameOf[m2.b] = m2.bName; }
-      st.standings = computeStandings(st.matches, pid => nameOf[pid] || '?');
+      setStandings(st, computeStandings(st.matches, pid => nameOf[pid] || '?'));
       detectChampion(st);
       const v = await bumpState(gameId, st);
       return json({ ok: true, v, standings: st.standings, champion: st.champion || null });
@@ -1088,6 +1248,7 @@ const _handler = async (req) => {
       if (b.qIdx != null) { st.qIdx = Math.max(0, b.qIdx | 0); st.buzzes = []; }
       if (phase === 'preload') st.buzzes = [];
       if (b.clearBuzzes) st.buzzes = [];
+      if (st.mg && st.mg.phase === 'scored') delete st.mg; // overlay done — game moves on
       st.phase = phase;
       const now = Date.now();
       const { round, q } = findQuestion(game, st.roundIdx | 0, st.qIdx | 0);
@@ -1376,6 +1537,74 @@ const _handler = async (req) => {
         saved++;
       }
       return json({ ok: true, saved });
+    }
+
+    // ----- ADMIN: Reflex Rally control — start/abort/award/clear -----
+    if (req.method === 'POST' && gameId && action === 'mg') {
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const rows = await sql`SELECT state FROM trivia_games WHERE id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const st = rows[0].state || {};
+      const op = String(b.op || '');
+
+      if (op === 'start') {
+        if (st.mg && st.mg.phase === 'run') return bad('A minigame is already running', 409);
+        const maxPts = Math.max(1, Math.min(100, Math.round(Number(b.maxPts) || 15)));
+        st.mg = {
+          id: newId('MG'), kind: 'sweep', phase: 'run',
+          startAt: Date.now() + MG_SWEEP.lead, dur: MG_SWEEP.dur, maxPts
+        };
+        await bumpState(gameId, st);
+        return json({ ok: true, mg: st.mg });
+      }
+
+      if (!st.mg) return bad('No minigame to act on', 409);
+      const mgId = st.mg.id;
+
+      if (op === 'abort') {
+        await sql`DELETE FROM trivia_mg WHERE game_id = ${gameId} AND mg_id = ${mgId}`;
+        delete st.mg;
+        await bumpState(gameId, st);
+        return json({ ok: true });
+      }
+
+      if (op === 'clear') {
+        delete st.mg;
+        await bumpState(gameId, st);
+        return json({ ok: true });
+      }
+
+      if (op === 'award') {
+        const totals = await mgTotals(gameId, mgId);
+        const maxPts = Math.max(1, Math.min(100, Math.round(Number(b.maxPts) || st.mg.maxPts || 15)));
+        const top = totals.length ? Math.max(0, totals[0].total) : 0;
+        const qKey = 'MG:' + mgId;
+        const results = [];
+        for (const row of totals) {
+          const pts = top > 0 ? Math.max(0, Math.round(maxPts * Math.max(0, row.total) / top)) : 0;
+          results.push({ teamId: row.teamId, name: row.name, total: row.total, taps: row.taps, pts });
+          const d = {
+            answer: 'Reflex Rally — ' + row.total + ' raw (' + row.taps + ' taps)',
+            wager: null, submittedAt: Date.now(), verdict: 'correct', points: pts,
+            minigame: true, adjudicatedAt: new Date().toISOString()
+          };
+          const existing = await sql`SELECT id FROM trivia_answers
+            WHERE game_id = ${gameId} AND team_id = ${row.teamId} AND q_key = ${qKey}`;
+          if (existing.length) {
+            await sql`UPDATE trivia_answers SET data = ${JSON.stringify(d)}::jsonb WHERE id = ${existing[0].id}`;
+          } else {
+            await sql`INSERT INTO trivia_answers (id, game_id, team_id, q_key, data)
+              VALUES (${newId('ANS')}, ${gameId}, ${row.teamId}, ${qKey}, ${JSON.stringify(d)}::jsonb)`;
+          }
+        }
+        st.mg.phase = 'scored';
+        st.mg.results = results;
+        st.scoreboard = await computeScoreboard(gameId);
+        await bumpState(gameId, st);
+        return json({ ok: true, results });
+      }
+
+      return bad('bad op');
     }
 
     // ----- PUBLIC (team token): my answer + verdict for one question -----

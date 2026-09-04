@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH TRIVIA PLAY — NGH-BUILD 10a · 2026-09-04a — blind wagers; verdict-true reveal colors -->
+<!-- NGH TRIVIA PLAY — NGH-BUILD 10b · 2026-09-04b — 10a + Reflex Rally re-port -->
 <!-- Phone client: join via QR, answer + change anytime before lock, buzzer races,
      minigame self-reporting, live standings tab, suggestion link. -->
 <html lang="en">
@@ -79,9 +79,57 @@
     text-align:center;font-weight:800;font-size:13px;padding:4px;display:none}
   .devban{background:var(--maroon);border-radius:10px;padding:10px;text-align:center;font-weight:800;margin-top:10px}
   a{color:var(--gold)}
+/* ---- Reflex Rally overlay (NGH-BUILD 2026-08-24f) ---- */
+#mgWrap{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;
+  background:var(--forest-dk,#132a1d);color:var(--cream,#f6efdd);padding:14px;
+  font-family:Nunito,sans-serif;overflow-y:auto}
+#mgWrap.on{display:flex}
+#mgTop{text-align:center}
+#mgTitle{font-family:'Alfa Slab One',serif;color:#e8b84b;font-size:1.4rem;margin:2px 0}
+#mgSub{font-weight:800;opacity:.85;font-size:.9rem}
+#mgClock{font-family:'Alfa Slab One',serif;font-size:2rem;color:#e8b84b;min-height:1.1em}
+#mgBarBox{margin:10px 0 4px}
+#mgTrack{position:relative;height:56px;border-radius:12px;border:3px solid #c9973a;overflow:hidden;
+  background:linear-gradient(90deg,
+    #5a1f28 0%,#5a1f28 30%, #c9973a 30%,#c9973a 38%, #e8b84b 38%,#e8b84b 45%,
+    #3fbf6f 45%,#3fbf6f 55%, #e8b84b 55%,#e8b84b 62%, #c9973a 62%,#c9973a 70%,
+    #5a1f28 70%,#5a1f28 100%)}
+#mgCur{position:absolute;top:-4px;bottom:-4px;width:7px;left:0;background:#f6efdd;
+  border-radius:4px;box-shadow:0 0 10px rgba(0,0,0,.6)}
+#mgLegend{display:flex;justify-content:center;gap:12px;font-size:.72rem;font-weight:800;margin-top:4px;opacity:.85}
+#mgTapBtn{flex:1;min-height:32vh;margin-top:10px;border:0;border-radius:20px;
+  font-family:'Alfa Slab One',serif;font-size:2rem;color:#0b2e18;background:#3fbf6f;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+#mgTapBtn:active{transform:scale(.98)}
+#mgTapBtn:disabled{background:#57534b;color:#f6efdd;opacity:.9}
+#mgMe{text-align:center;font-weight:800;margin-top:8px;min-height:1.3em}
+#mgMe .pts{color:#e8b84b}
+#mgBoard{font-size:.85rem;font-weight:800;margin-top:6px;max-height:18vh;overflow:auto}
+#mgBoard .r{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px solid rgba(201,151,58,.3)}
+#mgBoard .r span:first-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#mgBoard .me{color:#e8b84b}
+#mgToast{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);z-index:70;
+  font-family:'Alfa Slab One',serif;font-size:3rem;pointer-events:none;opacity:0;transition:opacity .15s,transform .5s}
+#mgToast.show{opacity:1;transform:translate(-50%,-90%)}
+#mgToast.good{color:#8dffb8}#mgToast.mid{color:#e8b84b}#mgToast.bad{color:#ff8a7a}
 </style>
 </head>
 <body>
+<div id="mgWrap">
+  <div id="mgTop">
+    <div id="mgTitle">🎯 Reflex Rally</div>
+    <div id="mgSub">Tap when the bar hits the green center — once per sweep!</div>
+    <div id="mgClock">–</div>
+  </div>
+  <div id="mgBarBox">
+    <div id="mgTrack"><div id="mgCur"></div></div>
+    <div id="mgLegend"><span>🟩 +100</span><span>🟨 +50</span><span>🟧 +20</span><span>outside −10</span></div>
+  </div>
+  <button id="mgTapBtn">TAP!</button>
+  <div id="mgMe"></div>
+  <div id="mgBoard"></div>
+</div>
+<div id="mgToast"></div>
 <div class="offline" id="offline">📶 Reconnecting…</div>
 <header id="hdr" style="display:none">
   <img src="stream-logo.png" alt="NGH">
@@ -605,12 +653,110 @@
     main.innerHTML += standRowsHTML(rows);
   }
 
+  /* ---------------- Reflex Rally (sweep minigame) ---------------- */
+  var MGC = { d0: 2000, f: 0.93, min: 700 };
+  function mgSweepAt(tms) {
+    var t = tms, i = 0, d = MGC.d0;
+    while (t >= d) { t -= d; i++; d = Math.max(MGC.min, Math.round(MGC.d0 * Math.pow(MGC.f, i))); }
+    return { sweep: i, x: t / d, dur: d };
+  }
+  function mgZonePts(x) {
+    var a = Math.abs(x - 0.5);
+    return a <= 0.05 ? 100 : a <= 0.12 ? 50 : a <= 0.20 ? 20 : -10;
+  }
+  var mgRaf = null, mgId = null, mgTappedSweep = -1, mgTotal = 0, mgToastT = null;
+  function mgEl(id) { return document.getElementById(id); }
+  function mgToast(txt, cls) {
+    var t = mgEl("mgToast");
+    t.textContent = txt; t.className = cls + " show";
+    if (mgToastT) clearTimeout(mgToastT);
+    mgToastT = setTimeout(function () { t.className = cls; }, 650);
+  }
+  function stopMg() {
+    if (mgRaf) { cancelAnimationFrame(mgRaf); mgRaf = null; }
+    mgEl("mgWrap").classList.remove("on");
+  }
+  function mgFrame() {
+    var mg = st && st.mg;
+    if (!mg) { stopMg(); return; }
+    var rel = serverNow() - Number(mg.startAt);
+    var btn = mgEl("mgTapBtn"), clock = mgEl("mgClock"), cur = mgEl("mgCur");
+    if (mg.phase === "scored") {
+      clock.textContent = "🏆 Points awarded!";
+      btn.disabled = true; btn.textContent = "DONE";
+    } else if (rel < 0) {
+      clock.textContent = "Ready… " + Math.ceil(-rel / 1000);
+      btn.disabled = true; btn.textContent = "GET READY";
+      cur.style.left = "0%";
+    } else if (rel <= Number(mg.dur)) {
+      var s = mgSweepAt(rel);
+      cur.style.left = (s.x * 100) + "%";
+      clock.textContent = Math.ceil((Number(mg.dur) - rel) / 1000) + "s";
+      if (mgTappedSweep === s.sweep) { btn.disabled = true; btn.textContent = "TAPPED ✔"; }
+      else { btn.disabled = false; btn.textContent = "TAP!"; }
+    } else {
+      clock.textContent = "⏱️ TIME!";
+      btn.disabled = true; btn.textContent = "TIME!";
+    }
+    mgRaf = requestAnimationFrame(mgFrame);
+  }
+  function mgTap() {
+    var mg = st && st.mg; if (!mg || mg.phase !== "run") return;
+    var t = serverNow();
+    var rel = t - Number(mg.startAt);
+    if (rel < 0 || rel > Number(mg.dur)) return;
+    var s = mgSweepAt(rel);
+    if (mgTappedSweep === s.sweep) return;
+    mgTappedSweep = s.sweep;
+    var pts = mgZonePts(s.x);
+    mgTotal += pts;
+    if (navigator.vibrate) navigator.vibrate(pts >= 100 ? [20, 30, 20] : pts > 0 ? 20 : [60, 40, 60]);
+    mgToast((pts > 0 ? "+" : "") + pts, pts >= 100 ? "good" : pts > 0 ? "mid" : "bad");
+    mgEl("mgMe").innerHTML = "Your raw score: <span class='pts'>" + mgTotal + "</span>";
+    fetch(API + "/games/" + encodeURIComponent(GAME) + "/mgtap", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: team.token, t: t })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && isFinite(j.pts) && j.sweep === s.sweep && j.pts !== pts) {
+        mgTotal += (j.pts - pts); // reconcile to server-authoritative score
+        mgEl("mgMe").innerHTML = "Your raw score: <span class='pts'>" + mgTotal + "</span>";
+      }
+    }).catch(function () {});
+  }
+  mgEl("mgTapBtn").addEventListener("touchstart", function (e) { e.preventDefault(); mgTap(); }, { passive: false });
+  mgEl("mgTapBtn").addEventListener("click", function () { mgTap(); });
+  function mgBoardHTML(rows, resultMode) {
+    var h = "";
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i], me = r.teamId === team.teamId ? " me" : "";
+      h += '<div class="r' + me + '"><span>' + (i + 1) + ". " + esc(r.name) + "</span><span>" +
+        (resultMode ? ("+" + r.pts + " pts (" + r.total + " raw)") : (r.total + " raw")) + "</span></div>";
+    }
+    return h || '<div class="r"><span>No taps yet…</span><span></span></div>';
+  }
+  function renderMg() {
+    var mg = st.mg;
+    mgEl("mgWrap").classList.add("on");
+    if (mg.id !== mgId) { mgId = mg.id; mgTappedSweep = -1; mgTotal = 0; mgEl("mgMe").textContent = ""; }
+    if (mg.phase === "scored" && mg.results) {
+      mgEl("mgBoard").innerHTML = mgBoardHTML(mg.results, true);
+      var mine = null;
+      for (var i = 0; i < mg.results.length; i++) if (mg.results[i].teamId === team.teamId) mine = mg.results[i];
+      if (mine) mgEl("mgMe").innerHTML = "🏆 <span class='pts'>+" + mine.pts + " trivia points</span> (" + mine.total + " raw)";
+    } else {
+      mgEl("mgBoard").innerHTML = mgBoardHTML(mg.live || [], false);
+    }
+    if (!mgRaf) mgFrame();
+  }
+
   /* ---------------- render root ---------------- */
   var lastQKey = null;
   function render() {
     stopCountdown();
     if (!st) return;
     updHeader();
+    if (st.mg && team) { renderMg(); return; }
+    stopMg();
     if (st.q && st.q.key !== lastQKey) {
       lastQKey = st.q.key;
       // new question: refresh my answer from the server (reconnect / second-device safety)

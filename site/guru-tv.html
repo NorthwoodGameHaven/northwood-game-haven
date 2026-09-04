@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- NGH-BUILD 2026-08-24d — Guru TV Network console
+     Controls every in-store TV (tv.html displays on Google TV Streamers).
+     Staff-only. Unlisted: noindex, not in sitemap. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH · TV Network</title>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{--forest:#1e3d2b;--forest-dk:#132a1d;--gold:#c9973a;--gold-lt:#e8b84b;
+    --maroon:#7a2431;--cream:#f6efdd;--ink:#26211a}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Nunito,sans-serif;background:var(--forest-dk);color:var(--cream)}
+  .wrap{max-width:1040px;margin:0 auto;padding:18px 14px 60px}
+  h1{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:1.7rem;margin:.4em 0 .2em}
+  h2{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:1.15rem;margin:1.4em 0 .5em}
+  .card{background:var(--forest);border:2px solid var(--gold);border-radius:12px;
+    padding:14px;margin:12px 0}
+  button{font-family:Nunito,sans-serif;font-weight:800;border:0;border-radius:8px;
+    padding:9px 14px;cursor:pointer;font-size:.95rem}
+  .btn-gold{background:var(--gold);color:var(--ink)}
+  .btn-dk{background:var(--forest-dk);color:var(--cream);border:1.5px solid var(--gold)}
+  .btn-red{background:var(--maroon);color:var(--cream)}
+  input,select,textarea{font-family:Nunito,sans-serif;font-size:.95rem;border-radius:8px;
+    border:1.5px solid var(--gold);background:var(--forest-dk);color:var(--cream);padding:8px 10px}
+  input::placeholder{color:#9db6a6}
+  label{font-weight:800;font-size:.85rem;color:var(--gold-lt)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .muted{opacity:.75;font-size:.85rem}
+  .devgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+  .dev{background:var(--forest-dk);border:1.5px solid var(--gold);border-radius:10px;padding:10px}
+  .dev .nm{font-weight:800;font-size:1.05rem}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:baseline}
+  .on{background:#3fbf6f}.off{background:#c0392b}
+  .pill{display:inline-block;background:var(--maroon);color:var(--cream);border-radius:999px;
+    padding:2px 10px;font-size:.75rem;font-weight:800;margin-left:6px}
+  .slide{display:grid;grid-template-columns:28px 1fr 90px 1fr 92px 76px;gap:6px;align-items:center;margin:6px 0}
+  .slide img{width:100%;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--gold)}
+  .slide .thumb{width:64px}
+  .mini{padding:5px 8px;font-size:.8rem}
+  #msg{min-height:1.2em;font-weight:800}
+  #msg.ok{color:#7fe0a4}#msg.err{color:#ff9b8a}
+  .modebar{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  .modebar button{opacity:.7}.modebar button.sel{opacity:1;outline:3px solid var(--gold-lt)}
+  #login{max-width:380px;margin:12vh auto;text-align:center}
+  a{color:var(--gold-lt)}
+  @media(max-width:640px){.slide{grid-template-columns:24px 1fr 70px;grid-auto-rows:auto}
+    .slide input.cap{grid-column:2/4}.slide .thumb{display:none}}
+</style>
+</head>
+<body>
+<script src="guru-common.js"></script>
+
+<div id="login" style="display:none">
+  <h1>📺 TV Network</h1>
+  <p class="muted">Enter the Guru code to continue.</p>
+  <div class="row" style="justify-content:center">
+    <input id="admin-code" type="password" placeholder="Guru code" autocomplete="current-password">
+    <button class="btn-gold" id="loginBtn">Sign in</button>
+  </div>
+  <p id="loginErr" style="color:#ff9b8a;font-weight:800"></p>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+  <h1>📺 TV Network</h1>
+  <p class="muted">Every TV runs <code>/tv?d=&lt;name&gt;</code>. Publish below and all
+    displays update within ~5 seconds — slideshows stay frame-synchronized across the room.</p>
+
+  <h2>Displays</h2>
+  <div class="card">
+    <div class="devgrid" id="devices"><span class="muted">Loading…</span></div>
+    <p class="muted" style="margin-bottom:0">Green = seen in the last 20 s. A display named the
+      same as a channel below follows that channel; everything else follows <b>All TVs</b>.</p>
+  </div>
+
+  <h2>Publish</h2>
+  <div class="card">
+    <div class="row">
+      <label for="target">Target</label>
+      <select id="target"><option value="all">All TVs</option></select>
+      <span class="muted">Pick a device name to override just that TV.</span>
+    </div>
+
+    <div class="modebar" id="modes">
+      <button data-m="deck" class="btn-dk">🗂️ Deck</button>
+      <button data-m="slideshow" class="btn-dk">🖼️ Slideshow</button>
+      <button data-m="trivia" class="btn-dk">🧠 Trivia</button>
+      <button data-m="arcade" class="btn-dk">🕹️ Arcade</button>
+      <button data-m="announce" class="btn-dk">📢 Announce</button>
+      <button data-m="url" class="btn-dk">🔗 Page URL</button>
+      <button data-m="idle" class="btn-dk">🦦 Idle</button>
+    </div>
+
+    <div id="paneDeck" style="display:none">
+      <div class="row">
+        <label for="deckPick">Deck</label>
+        <select id="deckPick"><option value="">— pick a deck —</option></select>
+        <a href="guru-studio.html" target="_blank" rel="noopener"><button class="btn-dk mini">🎨 Open Slide Studio</button></a>
+      </div>
+      <p class="muted">Decks are built in the Studio: auto event slides (weekly calendar,
+        every-weekday, specials with QR codes), Stay &amp; Play, products/sales, Google
+        Slides, and fully custom layouts. Saving a deck in the Studio updates every TV
+        showing it within ~5 s — no republish needed.</p>
+    </div>
+
+    <div id="paneSlideshow" style="display:none">
+      <div id="slides"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn-dk mini" id="addSlide">+ Add slide</button>
+        <select id="quickPick"><option value="">Quick-add site image…</option></select>
+        <label for="trans">Transition</label>
+        <select id="trans"><option value="kenburns">Ken Burns (pan &amp; zoom)</option>
+          <option value="fade">Crossfade only</option></select>
+        <label><input type="checkbox" id="resync" checked> Re-sync from slide 1 on publish</label>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label for="qrUrl">QR overlay</label>
+        <input id="qrUrl" placeholder="Optional link (e.g. /events.html)" style="min-width:220px">
+        <input id="qrLabelIn" placeholder="Label (e.g. Scan for events!)" style="min-width:180px">
+      </div>
+      <p class="muted">Images can be site files (e.g. <code>/stash-fall-logo.png</code>) or any
+        https URL. Landscape 16:9 around 1920×1080 looks best. Durations are seconds.</p>
+    </div>
+
+    <div id="paneTrivia" style="display:none">
+      <div class="row"><label for="triviaGame">Game ID</label>
+        <input id="triviaGame" placeholder="e.g. trivia game id" style="min-width:220px">
+        <select id="triviaPick" style="display:none"></select></div>
+      <label style="display:block;margin-top:6px"><input type="checkbox" id="triviaQr" checked>
+        Show a "Scan to join" QR on the TVs (links phones to the play page)</label>
+      <p class="muted">Shows the big-screen Event Stream display for that game on every targeted TV.</p>
+    </div>
+
+    <div id="paneArcade" style="display:none">
+      <div class="row">
+        <label for="arcadeSess">Session</label>
+        <select id="arcadeSess"><option value="">— pick or create —</option></select>
+        <button class="btn-dk mini" id="newBuzzer">＋ New Buzzer</button>
+        <button class="btn-dk mini" id="newQa">＋ New Q&amp;A</button>
+      </div>
+      <div id="hostBox" style="display:none;margin-top:10px;border-top:1px solid rgba(201,151,58,.35);padding-top:10px">
+        <div class="row" style="justify-content:space-between">
+          <b id="hostHead"></b><span class="muted" id="hostPlayers"></span>
+        </div>
+
+        <!-- buzzer host -->
+        <div id="hostBuzzer" style="display:none">
+          <div class="row" style="margin-top:8px">
+            <input id="armQ" placeholder="Question / prompt (optional, shows on TV)" style="min-width:260px">
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn-gold" id="armBtn" style="font-size:1.05rem">⚡ ARM ROUND</button>
+            <button class="btn-dk" id="resultsBtn">🏁 Show results</button>
+            <button class="btn-dk" id="awardFastBtn">🥇 +1 fastest</button>
+            <button class="btn-dk mini" id="lobbyBtn">Lobby</button>
+            <button class="btn-red mini" id="resetBtn">Reset scores</button>
+          </div>
+          <div id="buzzLive" class="muted" style="margin-top:8px"></div>
+        </div>
+
+        <!-- qa host -->
+        <div id="hostQa" style="display:none">
+          <div class="row" style="margin-top:8px">
+            <input id="qaTitleIn" placeholder="Wall title (e.g. Ask the Designer!)" style="min-width:240px">
+            <button class="btn-dk mini" id="qaTitleSave">Save title</button>
+          </div>
+          <div style="margin-top:8px"><b>🕐 Waiting for review</b><div id="qaPending" class="muted">—</div></div>
+          <div style="margin-top:8px"><b>📺 On the wall</b><div id="qaLiveList" class="muted">—</div></div>
+        </div>
+      </div>
+      <p class="muted">Publish sends the big-screen Arcade display (with its join QR + code) to the
+        targeted TVs. Host the game right here — phones and TVs follow within a second.</p>
+    </div>
+
+    <div id="paneAnnounce" style="display:none">
+      <div class="row"><label for="annText">Headline</label>
+        <input id="annText" maxlength="120" placeholder="Team Trivia starts in 10 minutes!" style="min-width:320px"></div>
+      <div class="row" style="margin-top:6px"><label for="annSub">Sub-line</label>
+        <input id="annSub" maxlength="200" placeholder="Grab a float and find a seat 🦦 (optional)" style="min-width:320px"></div>
+      <p class="muted">Instant full-screen banner on the targeted TVs. Pair with a QR overlay below if you like.</p>
+      <div class="row" style="margin-top:6px">
+        <label for="annQrUrl">QR overlay</label>
+        <input id="annQrUrl" placeholder="Optional link" style="min-width:200px">
+        <input id="annQrLabel" placeholder="Label" style="min-width:150px">
+      </div>
+    </div>
+
+    <div id="paneUrl" style="display:none">
+      <div class="row"><label for="urlIn">URL</label>
+        <input id="urlIn" placeholder="https://… or /page.html" style="min-width:320px"></div>
+    </div>
+
+    <div id="paneIdle" style="display:none">
+      <p class="muted">Branded idle screen: crest, clock, “Stay curious.”</p>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <button class="btn-gold" id="publish">🚀 Publish</button>
+      <button class="btn-red" id="removeOverride" style="display:none">Remove this TV's override</button>
+      <span id="msg"></span>
+    </div>
+  </div>
+
+  <h2>Channels in effect</h2>
+  <div class="card" id="channels"><span class="muted">Loading…</span></div>
+
+  <p class="muted">Preview any config on this device: open
+    <a href="tv.html?d=preview" target="_blank" rel="noopener">/tv?d=preview</a> and publish to
+    target <b>preview</b>.</p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var API = "/api/tv";
+  function $(id){ return document.getElementById(id); }
+  function token(){ return (window.GuruAuth && GuruAuth.get()) || ""; }
+  function hdrs(){ return { "Content-Type":"application/json", "Authorization":"Bearer "+token() }; }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+
+  var QUICK = ["/stash-fall-logo.png","/stashs-portage.jpg","/logo.png","/stash-vault.png","/stream-logo.png","/birthday-lockup.png"];
+
+  var state = { devices:[], channels:[], mode:"slideshow", editing:"all",
+    arcade:{ sessions:[], sel:"", kind:"", v:0, st:null, timer:null } };
+
+  /* ---------- login gate ---------- */
+  function gate(){
+    if (token()){ $("login").style.display="none"; $("app").style.display=""; boot(); }
+    else { $("login").style.display=""; $("app").style.display="none"; }
+  }
+  $("loginBtn").addEventListener("click", doLogin);
+  $("admin-code").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
+  function doLogin(){
+    fetch("/api/admin-login",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({code:$("admin-code").value})})
+      .then(function(r){return r.json();})
+      .then(function(j){
+        if (j && j.token){ GuruAuth.set(j.token); $("admin-code").value=""; gate(); }
+        else $("loginErr").textContent = "That code didn't work.";
+      })
+      .catch(function(){ $("loginErr").textContent = "Login failed — try again."; });
+  }
+
+  /* ---------- overview ---------- */
+  function loadOverview(){
+    return fetch(API+"/admin/overview",{headers:hdrs()})
+      .then(function(r){ if(r.status===401){ GuruAuth.clear(); gate(); throw 0; } return r.json(); })
+      .then(function(j){
+        state.devices = j.devices||[]; state.channels = j.channels||[];
+        renderDevices(); renderChannels(); renderTargets();
+      }).catch(function(){});
+  }
+
+  function chanFor(devId){
+    for (var i=0;i<state.channels.length;i++) if (state.channels[i].id===devId) return state.channels[i];
+    return null;
+  }
+  function modeLabel(d){
+    if (!d) return "—";
+    if (d.mode==="slideshow") return "🖼️ Slideshow ("+(d.slides?d.slides.length:0)+" slides)";
+    if (d.mode==="trivia") return "🧠 Trivia · "+esc(d.trivia);
+    if (d.mode==="arcade") return "🕹️ Arcade · "+esc(d.arcade);
+    if (d.mode==="announce") return "📢 "+esc(d.text);
+    if (d.mode==="deck") return "🗂️ Deck · "+esc(d.deck);
+    if (d.mode==="url") return "🔗 "+esc(d.url);
+    return "🦦 Idle";
+  }
+
+  function renderDevices(){
+    var el=$("devices");
+    if (!state.devices.length){ el.innerHTML='<span class="muted">No displays have checked in yet. Open <code>/tv?d=name</code> on a TV.</span>'; return; }
+    el.innerHTML = state.devices.map(function(d){
+      var ov = chanFor(d.id);
+      var seen = d.last_seen ? new Date(d.last_seen).toLocaleTimeString() : "";
+      return '<div class="dev"><span class="dot '+(d.online?'on':'off')+'"></span>'+
+        '<span class="nm">'+esc(d.id)+'</span>'+
+        (ov?'<span class="pill">override</span>':'')+
+        '<div class="muted">last seen '+esc(seen)+'</div>'+
+        '<div class="muted">'+modeLabel(ov?ov.data:(chanFor("all")||{}).data)+'</div>'+
+        '<div class="row" style="margin-top:6px"><button class="btn-dk mini" data-edit="'+esc(d.id)+'">Edit</button>'+
+        '<button class="btn-red mini" data-forget="'+esc(d.id)+'">Forget</button></div></div>';
+    }).join("");
+    el.querySelectorAll("[data-edit]").forEach(function(b){
+      b.addEventListener("click",function(){ selectTarget(b.getAttribute("data-edit")); });
+    });
+    el.querySelectorAll("[data-forget]").forEach(function(b){
+      b.addEventListener("click",function(){
+        if(!confirm("Forget display '"+b.getAttribute("data-forget")+"'? (It re-registers on next check-in.)")) return;
+        fetch(API+"/admin/device/"+encodeURIComponent(b.getAttribute("data-forget")),{method:"DELETE",headers:hdrs()})
+          .then(loadOverview);
+      });
+    });
+  }
+
+  function renderChannels(){
+    var el=$("channels");
+    el.innerHTML = state.channels.map(function(c){
+      return '<div class="row" style="justify-content:space-between;border-bottom:1px solid rgba(201,151,58,.35);padding:6px 0">'+
+        '<div><b>'+(c.id==="all"?"All TVs":esc(c.id))+'</b> <span class="muted">v'+c.version+'</span></div>'+
+        '<div>'+modeLabel(c.data)+'</div></div>';
+    }).join("") || '<span class="muted">No channels yet.</span>';
+  }
+
+  function renderTargets(){
+    var sel=$("target"), cur=sel.value||state.editing;
+    var opts=['<option value="all">All TVs</option>'];
+    var names={};
+    state.devices.forEach(function(d){ names[d.id]=1; });
+    state.channels.forEach(function(c){ if(c.id!=="all") names[c.id]=1; });
+    Object.keys(names).sort().forEach(function(n){
+      opts.push('<option value="'+esc(n)+'">'+esc(n)+'</option>');
+    });
+    opts.push('<option value="__new">＋ New name…</option>');
+    sel.innerHTML=opts.join("");
+    sel.value = names[cur]||cur==="all" ? cur : "all";
+  }
+
+  /* ---------- editor ---------- */
+  $("target").addEventListener("change",function(){
+    var v=$("target").value;
+    if (v==="__new"){
+      var n=prompt("Device / channel name (lowercase, dashes ok):","");
+      n=String(n||"").toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"");
+      if(!n){ $("target").value=state.editing; return; }
+      var o=document.createElement("option"); o.value=n; o.textContent=n;
+      $("target").insertBefore(o,$("target").lastElementChild); $("target").value=n;
+      v=n;
+    }
+    selectTarget(v);
+  });
+
+  function selectTarget(id){
+    state.editing=id;
+    if ($("target").value!==id) $("target").value=id;
+    var c=chanFor(id);
+    var d=(c&&c.data)||((id!=="all"&&chanFor("all"))?chanFor("all").data:null)||{mode:"slideshow"};
+    setMode(d.mode||"slideshow");
+    // hydrate panes
+    slidesFrom((d.mode==="slideshow"&&d.slides)?d.slides:[]);
+    $("trans").value = d.transition==="fade"?"fade":"kenburns";
+    $("triviaGame").value = d.trivia||"";
+    $("triviaQr").checked = d.qr !== false;
+    $("urlIn").value = d.url||"";
+    $("qrUrl").value = (d.qr&&d.qr.url)||"";
+    $("qrLabelIn").value = (d.qr&&d.qr.label)||"";
+    $("annText").value = d.text||"";
+    $("annSub").value = d.sub||"";
+    $("annQrUrl").value = (d.qr&&d.qr.url)||"";
+    $("annQrLabel").value = (d.qr&&d.qr.label)||"";
+    if (d.mode==="deck" && d.deck) window.__deckSel = d.deck;
+    loadDeckList();
+    if (d.mode==="arcade" && d.arcade){ state.arcade.sel = d.arcade; syncArcadeSel(); }
+    $("removeOverride").style.display = (id!=="all"&&c)?"":"none";
+    window.__anchor = (d.mode==="slideshow"&&d.anchor)?d.anchor:null;
+  }
+
+  document.querySelectorAll("#modes button").forEach(function(b){
+    b.addEventListener("click",function(){ setMode(b.getAttribute("data-m")); });
+  });
+  function setMode(m){
+    state.mode=m;
+    document.querySelectorAll("#modes button").forEach(function(b){
+      b.classList.toggle("sel", b.getAttribute("data-m")===m);
+    });
+    $("paneDeck").style.display      = m==="deck"?"":"none";
+    if (m==="deck") loadDeckList();
+    $("paneSlideshow").style.display = m==="slideshow"?"":"none";
+    $("paneTrivia").style.display    = m==="trivia"?"":"none";
+    $("paneArcade").style.display    = m==="arcade"?"":"none";
+    $("paneAnnounce").style.display  = m==="announce"?"":"none";
+    $("paneUrl").style.display       = m==="url"?"":"none";
+    $("paneIdle").style.display      = m==="idle"?"":"none";
+    if (m==="arcade"){ loadArcadeSessions(); startArcadePoll(); } else stopArcadePoll();
+  }
+
+  /* ---------- slideshow builder ---------- */
+  function slideRow(s){
+    var div=document.createElement("div");
+    div.className="slide";
+    div.innerHTML =
+      '<div class="row" style="flex-direction:column;gap:2px">'+
+        '<button class="btn-dk mini" data-up>▲</button><button class="btn-dk mini" data-dn>▼</button></div>'+
+      '<input class="url" placeholder="/image.png or https://…" value="'+esc(s.url||"")+'">'+
+      '<input class="dur" type="number" min="3" max="120" value="'+(s.dur||10)+'" title="seconds">'+
+      '<input class="cap" placeholder="Caption (optional)" value="'+esc(s.caption||"")+'">'+
+      '<select class="fit"><option value="cover"'+(s.fit!=="contain"?" selected":"")+'>Fill</option>'+
+        '<option value="contain"'+(s.fit==="contain"?" selected":"")+'>Fit</option></select>'+
+      '<button class="btn-red mini" data-del>✕</button>';
+    div.querySelector("[data-del]").addEventListener("click",function(){ div.remove(); });
+    div.querySelector("[data-up]").addEventListener("click",function(){
+      if (div.previousElementSibling) $("slides").insertBefore(div,div.previousElementSibling);
+    });
+    div.querySelector("[data-dn]").addEventListener("click",function(){
+      if (div.nextElementSibling) $("slides").insertBefore(div.nextElementSibling,div);
+    });
+    return div;
+  }
+  function slidesFrom(arr){
+    var box=$("slides"); box.innerHTML="";
+    (arr.length?arr:[{url:"",dur:10}]).forEach(function(s){ box.appendChild(slideRow(s)); });
+  }
+  function slidesTo(){
+    var out=[];
+    $("slides").querySelectorAll(".slide").forEach(function(r){
+      var url=r.querySelector(".url").value.trim();
+      if(!url) return;
+      out.push({ url:url, dur:Number(r.querySelector(".dur").value)||10,
+        caption:r.querySelector(".cap").value.trim(),
+        fit:r.querySelector(".fit").value });
+    });
+    return out;
+  }
+  $("addSlide").addEventListener("click",function(){ $("slides").appendChild(slideRow({url:"",dur:10})); });
+  QUICK.forEach(function(u){
+    var o=document.createElement("option"); o.value=u; o.textContent=u; $("quickPick").appendChild(o);
+  });
+  $("quickPick").addEventListener("change",function(){
+    if(this.value){ $("slides").appendChild(slideRow({url:this.value,dur:10})); this.value=""; }
+  });
+
+  /* ---------- trivia game picker (best-effort) ---------- */
+  function tryLoadGames(){
+    fetch("/api/trivia/games",{headers:hdrs()})
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        var games = Array.isArray(j)?j:(j.games||[]);
+        if(!games.length) return;
+        var sel=$("triviaPick");
+        sel.innerHTML='<option value="">Pick a game…</option>'+games.map(function(g){
+          var id=g.id||g.game_id||""; var nm=g.name||(g.data&&g.data.name)||id;
+          return '<option value="'+esc(id)+'">'+esc(nm)+'</option>';
+        }).join("");
+        sel.style.display="";
+        sel.addEventListener("change",function(){ if(sel.value) $("triviaGame").value=sel.value; });
+      }).catch(function(){});
+  }
+
+  /* ---------- publish ---------- */
+  $("publish").addEventListener("click",function(){
+    var body={ mode:state.mode };
+    if (state.mode==="deck"){
+      body.deck=$("deckPick").value;
+      if(!body.deck){ msg("Pick a deck (build one in the Studio).","err"); return; }
+    } else if (state.mode==="slideshow"){
+      body.slides=slidesTo();
+      body.transition=$("trans").value;
+      if (!$("resync").checked && window.__anchor) body.anchor=window.__anchor;
+      if (!body.slides.length){ msg("Add at least one slide image.","err"); return; }
+    } else if (state.mode==="trivia"){
+      body.trivia=$("triviaGame").value.trim();
+      if(!body.trivia){ msg("Enter a trivia game id.","err"); return; }
+      if(!$("triviaQr").checked) body.qr=false;
+    } else if (state.mode==="arcade"){
+      body.arcade=state.arcade.sel;
+      if(!body.arcade){ msg("Pick or create an Arcade session first.","err"); return; }
+    } else if (state.mode==="announce"){
+      body.text=$("annText").value.trim();
+      body.sub=$("annSub").value.trim();
+      if(!body.text){ msg("Give the announcement a headline.","err"); return; }
+      var aq=$("annQrUrl").value.trim();
+      if (aq) body.qr={ url:aq, label:$("annQrLabel").value.trim() };
+    } else if (state.mode==="url"){
+      body.url=$("urlIn").value.trim();
+      if(!body.url){ msg("Enter a URL.","err"); return; }
+    }
+    if (state.mode==="slideshow" || state.mode==="url" || state.mode==="idle"){
+      var qu=$("qrUrl").value.trim();
+      if (qu) body.qr={ url:qu, label:$("qrLabelIn").value.trim() };
+    }
+    fetch(API+"/admin/channel/"+encodeURIComponent(state.editing),
+      { method:"PUT", headers:hdrs(), body:JSON.stringify(body) })
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+      .then(function(res){
+        if(!res.ok){ msg(res.j&&res.j.error?res.j.error:"Publish failed.","err"); return; }
+        msg("Published v"+res.j.version+" to "+(state.editing==="all"?"All TVs":state.editing)+
+            " — displays update within ~5 s.","ok");
+        loadOverview();
+      })
+      .catch(function(){ msg("Publish failed — network error.","err"); });
+  });
+
+  $("removeOverride").addEventListener("click",function(){
+    if(!confirm("Remove the override for '"+state.editing+"'? That TV goes back to All TVs.")) return;
+    fetch(API+"/admin/channel/"+encodeURIComponent(state.editing),{method:"DELETE",headers:hdrs()})
+      .then(function(){ msg("Override removed.","ok"); selectTarget("all"); loadOverview(); });
+  });
+
+  function msg(t,c){ var m=$("msg"); m.textContent=t; m.className=c||""; }
+
+  /* ---------- deck list ---------- */
+  function loadDeckList(){
+    fetch(API+"/admin/decks",{headers:hdrs()})
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        var sel=$("deckPick"), cur=sel.value||window.__deckSel||"";
+        sel.innerHTML='<option value="">— pick a deck —</option>'+(j.decks||[]).map(function(d){
+          return '<option value="'+esc(d.id)+'">'+esc(d.name)+' ('+d.slides+' slides, v'+d.version+')</option>';
+        }).join("");
+        if (cur) sel.value=cur;
+      }).catch(function(){});
+  }
+
+  /* ---------- Arcade hosting ---------- */
+  var AAPI = "/api/arcade";
+  function loadArcadeSessions(){
+    fetch(AAPI+"/sessions",{headers:hdrs()})
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        state.arcade.sessions = j.sessions||[];
+        syncArcadeSel();
+      }).catch(function(){});
+  }
+  function syncArcadeSel(){
+    var sel=$("arcadeSess");
+    sel.innerHTML='<option value="">— pick or create —</option>'+
+      state.arcade.sessions.map(function(s){
+        var nm = s.kind==="qa" ? ("💬 "+((s.state&&s.state.title)||"Q&A")) : "⚡ Buzzer";
+        return '<option value="'+esc(s.id)+'">'+esc(s.id)+' · '+nm+' · '+s.players+' joined</option>';
+      }).join("");
+    if (state.arcade.sel) sel.value = state.arcade.sel;
+    onArcadePick();
+  }
+  $("arcadeSess").addEventListener("change", function(){
+    state.arcade.sel = this.value; state.arcade.v = 0; state.arcade.st = null;
+    onArcadePick();
+  });
+  function onArcadePick(){
+    var s = null;
+    for (var i=0;i<state.arcade.sessions.length;i++)
+      if (state.arcade.sessions[i].id===state.arcade.sel) s=state.arcade.sessions[i];
+    state.arcade.kind = s ? s.kind : "";
+    $("hostBox").style.display = s ? "" : "none";
+    if (!s) return;
+    $("hostHead").textContent = (s.kind==="qa"?"💬 Q&A · ":"⚡ Buzzer · ")+s.id+
+      "   (players join at gamehaven.guru/buzz · code "+s.id+")";
+    $("hostBuzzer").style.display = s.kind==="buzzer" ? "" : "none";
+    $("hostQa").style.display     = s.kind==="qa" ? "" : "none";
+    if (s.kind==="qa" && s.state && s.state.title) $("qaTitleIn").value = s.state.title;
+    pollArcade();
+  }
+  function newSession(kind){
+    var body = { kind:kind };
+    if (kind==="qa"){
+      var t = prompt("Wall title (optional):",""); if (t) body.title=t;
+    }
+    fetch(AAPI+"/sessions",{method:"POST",headers:hdrs(),body:JSON.stringify(body)})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (!j || !j.id){ msg((j&&j.error)||"Couldn't create session.","err"); return; }
+        state.arcade.sel = j.id; state.arcade.v=0; state.arcade.st=null;
+        loadArcadeSessions();
+        msg("Session "+j.id+" ready — publish it to the TVs when you like.","ok");
+      }).catch(function(){ msg("Couldn't create session.","err"); });
+  }
+  $("newBuzzer").addEventListener("click", function(){ newSession("buzzer"); });
+  $("newQa").addEventListener("click", function(){ newSession("qa"); });
+
+  function startArcadePoll(){
+    stopArcadePoll();
+    state.arcade.timer = setInterval(pollArcade, 1000);
+  }
+  function stopArcadePoll(){
+    if (state.arcade.timer){ clearInterval(state.arcade.timer); state.arcade.timer=null; }
+  }
+  function pollArcade(){
+    if (!state.arcade.sel) return;
+    fetch(AAPI+"/sessions/"+encodeURIComponent(state.arcade.sel)+"/state?v="+state.arcade.v)
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        if (j.unchanged) return;
+        state.arcade.v=j.version; state.arcade.st=j;
+        renderHost();
+        if (state.arcade.kind==="qa") loadQaPending();
+      }).catch(function(){});
+  }
+  function renderHost(){
+    var st=state.arcade.st; if(!st) return;
+    $("hostPlayers").textContent = st.players+" joined · "+(st.phase?("phase: "+st.phase+" · round "+st.round):"live");
+    if (state.arcade.kind==="buzzer"){
+      var b=st.buzzes||[], html="";
+      for (var i=0;i<Math.min(b.length,8);i++){
+        var x=b[i];
+        html += '<div>'+(x.jumped?('🚫 '+esc(x.name)+' jumped')
+          :((i===0?'⚡ ':'')+esc(x.name)+' — '+x.rt+' ms'+
+            ' <button class="btn-dk mini" data-award="'+esc(x.playerId)+'">+1</button>'))+'</div>';
+      }
+      var sc=st.scores||{}, arr=[];
+      Object.keys(sc).forEach(function(k){ arr.push(sc[k]); });
+      arr.sort(function(a,b){ return b.pts-a.pts; });
+      if (arr.length) html += '<div style="margin-top:6px">🏆 '+arr.map(function(p){
+        return esc(p.name)+' '+p.pts; }).join(' · ')+'</div>';
+      $("buzzLive").innerHTML = html || "No buzzes yet this round.";
+      $("buzzLive").querySelectorAll("[data-award]").forEach(function(btn){
+        btn.addEventListener("click", function(){ arcadeOp({op:"award", playerId:btn.getAttribute("data-award"), pts:1}); });
+      });
+    }
+    if (state.arcade.kind==="qa") renderQaLive();
+  }
+  function arcadeOp(body){
+    fetch(AAPI+"/sessions/"+encodeURIComponent(state.arcade.sel)+"/state",
+      {method:"POST",headers:hdrs(),body:JSON.stringify(body)})
+      .then(function(r){ return r.json(); })
+      .then(function(j){ if(j&&j.error) msg(j.error,"err"); else pollArcade(); })
+      .catch(function(){ msg("Arcade op failed.","err"); });
+  }
+  $("armBtn").addEventListener("click", function(){ arcadeOp({op:"arm", question:$("armQ").value.trim()}); });
+  $("resultsBtn").addEventListener("click", function(){ arcadeOp({op:"results"}); });
+  $("lobbyBtn").addEventListener("click", function(){ arcadeOp({op:"lobby"}); });
+  $("resetBtn").addEventListener("click", function(){
+    if (confirm("Reset all scores and rounds?")) arcadeOp({op:"reset"});
+  });
+  $("awardFastBtn").addEventListener("click", function(){
+    var st=state.arcade.st, b=(st&&st.buzzes)||[];
+    for (var i=0;i<b.length;i++){ if(!b[i].jumped){ arcadeOp({op:"award", playerId:b[i].playerId, pts:1}); return; } }
+    msg("No clean buzz to award yet.","err");
+  });
+  $("qaTitleSave").addEventListener("click", function(){ arcadeOp({op:"title", title:$("qaTitleIn").value.trim()}); });
+
+  function qaItemBtns(container){
+    container.querySelectorAll("[data-st]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        fetch(AAPI+"/sessions/"+encodeURIComponent(state.arcade.sel)+"/items/"+
+              encodeURIComponent(btn.getAttribute("data-id")),
+          {method:"POST",headers:hdrs(),body:JSON.stringify({status:btn.getAttribute("data-st")})})
+          .then(function(){ loadQaPending(); pollArcade(); });
+      });
+    });
+  }
+  function loadQaPending(){
+    fetch(AAPI+"/sessions/"+encodeURIComponent(state.arcade.sel)+"/items?status=new",{headers:hdrs()})
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        var items=j.items||[];
+        $("qaPending").innerHTML = items.length ? items.map(function(i){
+          var d=i.data||{};
+          return '<div style="margin:4px 0">"'+esc(d.text)+'" — '+esc(d.name)+
+            ' <button class="btn-dk mini" data-st="approved" data-id="'+esc(i.id)+'">✅ Approve</button>'+
+            ' <button class="btn-red mini" data-st="dismissed" data-id="'+esc(i.id)+'">✕</button></div>';
+        }).join("") : "Nothing waiting.";
+        qaItemBtns($("qaPending"));
+      }).catch(function(){});
+  }
+  function renderQaLive(){
+    var st=state.arcade.st, items=(st&&st.items)||[];
+    $("qaLiveList").innerHTML = items.length ? items.map(function(i){
+      return '<div style="margin:4px 0">'+(i.status==="pinned"?"📌 ":"")+
+        (i.status==="done"?"✅ ":"")+'👍'+i.votes+' "'+esc(i.text)+'" — '+esc(i.name)+
+        (i.status!=="pinned"?' <button class="btn-dk mini" data-st="pinned" data-id="'+esc(i.id)+'">📌 Pin</button>':
+          ' <button class="btn-dk mini" data-st="approved" data-id="'+esc(i.id)+'">Unpin</button>')+
+        (i.status!=="done"?' <button class="btn-dk mini" data-st="done" data-id="'+esc(i.id)+'">Answered</button>':"")+
+        ' <button class="btn-red mini" data-st="dismissed" data-id="'+esc(i.id)+'">✕</button></div>';
+    }).join("") : "Wall is empty.";
+    qaItemBtns($("qaLiveList"));
+  }
+
+  /* ---------- boot ---------- */
+  function boot(){
+    loadOverview().then(function(){ selectTarget("all"); });
+    tryLoadGames();
+    setInterval(loadOverview, 10000);
+  }
+  gate();
+})();
+</script>
+</body>
+</html>

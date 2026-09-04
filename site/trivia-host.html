@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 10a · 2026-09-04a — 💰 blind Collect-wagers flow; official-answer panel; Auto-run wager window -->
+<!-- NGH-BUILD 10b · 2026-09-04b — 10a + Reflex Rally re-port + TV-stack integration -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -262,6 +262,20 @@
             <div id="teamsBox" class="muted">—</div>
           </div>
           <div>
+            <div id="mgBox" style="background:#17281c;border-radius:10px;padding:10px 12px;margin-bottom:8px">
+          <h3 style="margin:0 0 6px">🎯 Reflex Rally
+            <span class="pill" id="mgStatus" style="margin-left:6px">idle</span></h3>
+          <div class="muted" style="margin-bottom:6px">30-second sweep minigame on every TV + phone.
+            Teams tap when the bar hits center; raw scores scale to trivia points like a normal round.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <label style="margin:0">Max pts <input id="mgMaxPts" type="number" min="1" max="100" value="15" style="width:64px"></label>
+            <button onclick="mgOp('start')" id="mgStartBtn">🚀 Launch (3-2-1 GO)</button>
+            <button class="sec" onclick="mgOp('award')" id="mgAwardBtn" style="display:none">🏆 Award points</button>
+            <button class="sec" onclick="mgOp('clear')" id="mgClearBtn" style="display:none">🧹 Clear</button>
+            <button class="sec" onclick="if(confirm('Abort the minigame? Taps are discarded.'))mgOp('abort')" id="mgAbortBtn" style="display:none">✖ Abort</button>
+          </div>
+          <div id="mgLive" class="muted" style="margin-top:6px"></div>
+        </div>
             <div id="buzzBox" style="display:none;background:#17281c;border-radius:10px;padding:10px 12px;margin-bottom:8px">
           <h3 style="margin:0 0 6px">🔔 Buzzer race <button class="sec" style="padding:4px 10px;font-size:12px" onclick="clearBuzzes()">↺ Clear</button></h3>
           <div class="muted" style="margin-bottom:4px">Live tap order — award points via the minigame scoring panel.</div>
@@ -311,6 +325,35 @@
               <button class="sec" style="padding:4px 10px;font-size:12px" onclick="addWalkin()">＋ Walk-in</button></h3>
             <div class="muted" style="margin-bottom:4px">Bold = checked in · grey = registered online, not yet here. No payment linkage — POS / online registration handle money separately.</div>
             <div id="rosterBox" class="muted">—</div>
+            <div style="background:#17281c;border-radius:10px;padding:10px 12px;margin-top:10px">
+              <h3 style="margin:0 0 6px">📺 Tournament TVs <span class="pill" id="tvxState">auto</span></h3>
+              <div class="muted" style="margin-bottom:6px">Pin what every TV shows, or leave
+                <b>auto</b> to rotate schedule → pairings → standings → floor map → bracket → promos.</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap" id="tvxBtns">
+                <button class="sec" data-tvx="auto">🔄 Auto</button>
+                <button class="sec" data-tvx="schedule">⏱ Schedule</button>
+                <button class="sec" data-tvx="pairings">🎯 Pairings</button>
+                <button class="sec" data-tvx="standings">📊 Standings</button>
+                <button class="sec" data-tvx="map">🗺️ Floor map</button>
+                <button class="sec" data-tvx="bracket">🏆 Bracket</button>
+                <button class="sec" data-tvx="promo">🎁 Promos</button>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+                <label style="margin:0">Floor map</label>
+                <select id="tvxMap"><option value="">— none —</option></select>
+                <a href="guru-floor.html" target="_blank" rel="noopener"><button class="sec" style="padding:4px 10px;font-size:12px">Edit maps</button></a>
+                <span class="muted">Pairing table numbers light up matching map tables.</span>
+              </div>
+              <h3 style="margin:10px 0 4px">🎁 Specials &amp; promos</h3>
+              <div class="muted" style="margin-bottom:4px">Rotating ticker on every tournament TV +
+                full-screen promo cards (e.g. "Free M&amp;M's all night — it's M&amp;M Night!",
+                flash sales, raffle reminders).</div>
+              <div id="tvxPromos"></div>
+              <div style="display:flex;gap:6px;margin-top:6px">
+                <button class="sec" onclick="tvxAddPromo()" style="padding:4px 10px;font-size:12px">＋ Add promo</button>
+                <button onclick="tvxSavePromos()" style="padding:4px 10px;font-size:12px">💾 Push to TVs</button>
+              </div>
+            </div>
           </div>
           <div>
             <h3>🏆 Brackets <span class="pill" id="brRound">no rounds</span></h3>
@@ -1104,8 +1147,122 @@ function pollRun() {
   if (!run) return;
   api("/games/" + run.game.id).then(function (j) {
     run.game = j.game; run.state = j.state || {};
-    if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); } else { updRunPhase(); updWheel(); renderBuzzes(); }
+    if ((run.game.kind || "trivia") === "timer") { updTimerPhase(); renderSchedRun(); tvxRefresh(); } else { updRunPhase(); updWheel(); renderBuzzes(); renderMgPanel(); }
   }).catch(function () {});
+}
+
+/* ---- Reflex Rally host controls (NGH-BUILD 2026-08-24c) ---- */
+function mgOp(op) {
+  if (!run) return;
+  var body = { op: op };
+  if (op === "start" || op === "award")
+    body.maxPts = Number(document.getElementById("mgMaxPts").value) || 15;
+  api("/games/" + run.game.id + "/mg", { method: "POST", body: JSON.stringify(body) })
+    .then(function () { pollRun(); })
+    .catch(function (e) { alert("Reflex Rally: " + (e && e.message ? e.message : "failed")); });
+}
+function renderMgPanel() {
+  if (!run) return;
+  var mg = run.state && run.state.mg;
+  var stEl = document.getElementById("mgStatus");
+  var live = document.getElementById("mgLive");
+  var startB = document.getElementById("mgStartBtn"),
+      awardB = document.getElementById("mgAwardBtn"),
+      clearB = document.getElementById("mgClearBtn"),
+      abortB = document.getElementById("mgAbortBtn");
+  if (!mg) {
+    stEl.textContent = "idle";
+    startB.style.display = ""; awardB.style.display = "none";
+    clearB.style.display = "none"; abortB.style.display = "none";
+    live.textContent = "";
+    return;
+  }
+  startB.style.display = "none";
+  if (mg.phase === "scored") {
+    stEl.textContent = "scored ✅";
+    awardB.style.display = "none"; abortB.style.display = "none"; clearB.style.display = "";
+    var res = mg.results || [];
+    live.innerHTML = res.map(function (r, i) {
+      return (i + 1) + ". " + r.name + " — +" + r.pts + " pts (" + r.total + " raw, " + r.taps + " taps)";
+    }).join("<br>") || "No taps.";
+    return;
+  }
+  var rel = Date.now() - Number(mg.startAt);
+  stEl.textContent = rel < 0 ? ("countdown " + Math.ceil(-rel / 1000))
+    : rel <= Number(mg.dur) ? ("RUNNING · " + Math.ceil((Number(mg.dur) - rel) / 1000) + "s left")
+    : "over — award when ready";
+  awardB.style.display = ""; abortB.style.display = ""; clearB.style.display = "none";
+  // live board via the public state (carries computed totals)
+  api("/games/" + run.game.id + "/state").then(function (j) {
+    var rows = (j && j.mg && j.mg.live) || [];
+    live.innerHTML = rows.length ? rows.map(function (r, i) {
+      return (i + 1) + ". " + r.name + " — " + r.total + " raw (" + r.taps + " taps)";
+    }).join("<br>") : "No taps yet…";
+  }).catch(function () {});
+}
+
+/* ---- Tournament TV extras (NGH-BUILD 2026-08-24e) ---- */
+function isDropped(pid){ return !!(run && run.state && run.state.drops && run.state.drops[pid]); }
+function dropAction(pid, drop){
+  api("/games/" + run.game.id + "/participant-drop",
+    { method:"POST", body: JSON.stringify({ participantId: pid, drop: drop }) })
+    .then(function(){ pollRun(); pollRoster(); })
+    .catch(function(e){ alert(e.message); });
+}
+function tvxSend(body){
+  api("/games/" + run.game.id + "/timer-extras", { method:"POST", body: JSON.stringify(body) })
+    .then(function(){ pollRun(); })
+    .catch(function(e){ alert(e.message); });
+}
+document.addEventListener("click", function(ev){
+  var b = ev.target.closest ? ev.target.closest("[data-tvx]") : null;
+  if (b && run) tvxSend({ tvView: b.getAttribute("data-tvx") });
+});
+var tvxMapsLoaded = false, tvxPromoRows = null;
+function tvxRefresh(){
+  if (!run || (run.game.kind||"trivia") !== "timer") return;
+  var stt = run.state || {};
+  var pill = document.getElementById("tvxState");
+  if (pill) pill.textContent = stt.tvView || "auto";
+  var sel = document.getElementById("tvxMap");
+  if (sel && !tvxMapsLoaded){
+    tvxMapsLoaded = true;
+    fetch("/api/tv/admin/floormaps", { headers: hdrs() })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        sel.innerHTML = '<option value="">— none —</option>' + (j.maps||[]).map(function(m){
+          return '<option value="' + m.id + '">' + m.name + ' (' + m.els + ' items)</option>';
+        }).join("");
+        sel.value = stt.mapId || "";
+        sel.addEventListener("change", function(){ tvxSend({ mapId: sel.value }); });
+      }).catch(function(){});
+  } else if (sel && document.activeElement !== sel) {
+    sel.value = stt.mapId || "";
+  }
+  if (tvxPromoRows === null) tvxRenderPromos(stt.promos || []);
+}
+function tvxRenderPromos(list){
+  tvxPromoRows = list.slice();
+  var box = document.getElementById("tvxPromos");
+  if (!box) return;
+  box.innerHTML = tvxPromoRows.map(function(p, i){
+    return '<div style="display:flex;gap:4px;margin:3px 0;flex-wrap:wrap">' +
+      '<input data-pf="text" data-pi="' + i + '" value="' + esc(p.text||"") + '" placeholder="Free candy all night — it\'s theme night!" style="flex:2;min-width:180px">' +
+      '<input data-pf="sub" data-pi="' + i + '" value="' + esc(p.sub||"") + '" placeholder="sub-line" style="flex:2;min-width:140px">' +
+      '<input data-pf="img" data-pi="' + i + '" value="' + esc(p.img||"") + '" placeholder="image URL" style="flex:1;min-width:110px">' +
+      '<input data-pf="qrUrl" data-pi="' + i + '" value="' + esc(p.qrUrl||"") + '" placeholder="QR link" style="flex:1;min-width:100px">' +
+      '<button class="sec" onclick="tvxDelPromo(' + i + ')" style="padding:2px 8px">✕</button></div>';
+  }).join("") || '<div class="muted">No promos yet.</div>';
+  box.querySelectorAll("[data-pf]").forEach(function(inp){
+    inp.addEventListener("input", function(){
+      tvxPromoRows[Number(inp.getAttribute("data-pi"))][inp.getAttribute("data-pf")] = inp.value;
+    });
+  });
+}
+function tvxAddPromo(){ tvxRenderPromos((tvxPromoRows||[]).concat([{text:""}])); }
+function tvxDelPromo(i){ tvxPromoRows.splice(i,1); tvxRenderPromos(tvxPromoRows); }
+function tvxSavePromos(){
+  tvxSend({ promos: (tvxPromoRows||[]).filter(function(p){ return p.text && p.text.trim(); }) });
 }
 
 function setPhase(phase, extra) {
@@ -1446,6 +1603,11 @@ function pollRoster() {
         (p.checkedIn
           ? '<button class="sec" onclick="checkinAction(' + JSON.stringify(JSON.stringify({ regId: p.regId, participantId: p.participantId, name: p.name, checkedIn: false })) + ')">↩ Undo</button>'
           : '<button onclick="checkinAction(' + JSON.stringify(JSON.stringify({ regId: p.regId, participantId: p.participantId, name: p.name, checkedIn: true })) + ')">✓ Check in</button>') +
+        (p.participantId && p.checkedIn
+          ? (isDropped(p.participantId)
+            ? ' <button onclick="dropAction(\'' + p.participantId + '\',false)" style="padding:4px 8px;font-size:12px">↩ Restore</button>'
+            : ' <button class="sec" onclick="dropAction(\'' + p.participantId + '\',true)" style="padding:4px 8px;font-size:12px">🚪 Drop</button>')
+          : "") +
         "</div>";
     }).join("");
   }).catch(function () {});

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 10a · 2026-09-04a — blind-wager screen; media fail-safe; Stash banner removed -->
+<!-- NGH-BUILD 10b · 2026-09-04b — 10a + Reflex Rally re-port + TV-stack integration -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -143,9 +143,121 @@
   .rosterName{font-size:3.1vmin;font-weight:800;text-shadow:0 .2vmin .6vmin rgba(0,0,0,.5)}
   .rosterName.ghost{opacity:.38;font-weight:400}
   .rosterName .tbl{color:var(--gold);font-size:2.2vmin;margin-left:.6vmin}
+/* ---- Reflex Rally big-screen overlay (NGH-BUILD 2026-08-24c) ---- */
+#mgStage{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;align-items:center;
+  justify-content:center;background:radial-gradient(110vmax 80vmax at 50% 35%, #24503a 0%, var(--forest-dk,#132a1d) 68%);
+  color:var(--cream,#f6efdd)}
+#mgStage.on{display:flex}
+#mgsTitle{font-family:'Alfa Slab One',serif;color:var(--gold-lt,#e8b84b);font-size:7vmin}
+#mgsSub{font-weight:800;font-size:2.8vmin;opacity:.9}
+#mgsClock{font-family:'Alfa Slab One',serif;font-size:14vmin;color:var(--gold-lt,#e8b84b);line-height:1;min-height:1em}
+#mgsClock.count{font-size:24vmin;color:#8dffb8}
+#mgsBarWrap{width:84vw;margin:3vmin 0 1vmin}
+#mgsTrack{position:relative;height:11vmin;border-radius:2.4vmin;border:.7vmin solid var(--gold,#c9973a);overflow:hidden;
+  background:linear-gradient(90deg,
+    #5a1f28 0%,#5a1f28 30%, #c9973a 30%,#c9973a 38%, #e8b84b 38%,#e8b84b 45%,
+    #3fbf6f 45%,#3fbf6f 55%, #e8b84b 55%,#e8b84b 62%, #c9973a 62%,#c9973a 70%,
+    #5a1f28 70%,#5a1f28 100%)}
+#mgsCur{position:absolute;top:-1vmin;bottom:-1vmin;width:1.3vmin;left:0;background:#f6efdd;
+  border-radius:.8vmin;box-shadow:0 0 2vmin rgba(0,0,0,.7)}
+#mgsMeta{display:flex;gap:5vmin;font-size:2.6vmin;font-weight:800;color:var(--gold-lt,#e8b84b)}
+#mgsBoard{position:absolute;right:2.5vmin;top:2.5vmin;bottom:2.5vmin;width:26vmin;overflow:hidden;
+  font-size:2.3vmin;font-weight:800;text-align:left}
+#mgsBoard h3{font-family:'Alfa Slab One',serif;color:var(--gold,#c9973a);font-size:2.6vmin;margin:0 0 1vmin}
+#mgsBoard .r{display:flex;justify-content:space-between;padding:.5vmin 0;border-bottom:1px solid rgba(201,151,58,.35)}
+#mgsBoard .r span:last-child{color:var(--gold-lt,#e8b84b)}
+#mgsPod{display:flex;flex-direction:column;gap:1.2vmin;min-width:52vmin;margin-top:2vmin}
+#mgsPod .r{display:flex;justify-content:space-between;gap:4vmin;background:var(--forest,#1e3d2b);
+  border:.5vmin solid var(--gold,#c9973a);border-radius:1.6vmin;padding:1.2vmin 2.4vmin;font-size:3.4vmin;font-weight:800}
+#mgsPod .r.first{border-color:var(--gold-lt,#e8b84b);background:#2a5a3f;font-size:4.2vmin}
+#mgsPod .r span:last-child{color:var(--gold-lt,#e8b84b)}
+#mgConfetti{position:fixed;inset:0;z-index:90;pointer-events:none;display:none}
+/* ---- Tournament TV suite (NGH-BUILD 2026-08-24f) ---- */
+#tourStage{position:fixed;inset:0;z-index:70;display:none;flex-direction:column;
+  background:radial-gradient(120vmax 80vmax at 50% 25%, #24503a, var(--forest-dk,#132a1d) 70%);
+  color:var(--cream,#f6efdd);padding:3vmin 3.5vmin}
+#tourStage.on{display:flex}
+#tourHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.6vmin}
+#tourTitle{font-family:'Alfa Slab One',serif;color:var(--gold-lt,#e8b84b);font-size:5vmin;
+  max-width:72%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#tourClock{font-family:'Alfa Slab One',serif;font-size:4.6vmin;color:var(--cream,#f6efdd);
+  background:var(--maroon,#7a2431);border-radius:1.4vmin;padding:.6vmin 2.4vmin}
+#tourBody{flex:1;position:relative;overflow:hidden}
+#tourBody::after{content:"";position:absolute;right:-5vmin;bottom:-7vmin;width:48vmin;height:48vmin;
+  background:url('/brand/stash-fullbody.png') center/contain no-repeat;opacity:.055;pointer-events:none}
+.tourGridStand{display:grid;grid-template-columns:1fr 1fr;gap:1.2vmin 4vmin;align-content:start}
+.tsRow{display:flex;align-items:center;gap:1.6vmin;font-size:3.1vmin;font-weight:800;
+  border-bottom:1px solid rgba(201,151,58,.35);padding:.7vmin 0}
+.tsRow .pos{color:var(--gold,#c9973a);min-width:5vmin;text-align:right}
+.tsRow .nm{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tsRow .rec{opacity:.75;font-size:2.3vmin}
+.tsRow .pts{color:var(--gold-lt,#e8b84b);min-width:6vmin;text-align:right}
+.tsRow .mv{min-width:6vmin;font-size:2.4vmin;text-align:center}
+.mv.up{color:#7fe0a4}.mv.dn{color:#ff9b8a}.mv.same{opacity:.35}
+.tsRow.drop{opacity:.45;text-decoration:line-through}
+.tourGridPair{display:grid;grid-template-columns:1fr 1fr;gap:1.4vmin 4vmin;align-content:start}
+.tpRow{display:flex;align-items:center;gap:1.8vmin;font-size:3.2vmin;font-weight:800;
+  background:rgba(19,42,29,.55);border:.4vmin solid var(--gold,#c9973a);border-radius:1.4vmin;
+  padding:1vmin 1.8vmin}
+.tpRow .tno{font-family:'Alfa Slab One',serif;color:var(--gold-lt,#e8b84b);min-width:9vmin}
+.tpRow span:last-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex:1}
+.tpRow.done{opacity:.55}
+.tourMapBox{position:absolute;inset:0}
+.tmStage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
+.tmTable{position:absolute;background:#3a6b4e;border:5px solid var(--gold,#c9973a);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.tmTable.round{border-radius:50%}
+.tmTable.rect{border-radius:16px}
+.tmTable.live{border-color:var(--gold-lt,#e8b84b);box-shadow:0 0 34px rgba(232,184,75,.5)}
+.tmTable.done{opacity:.55}
+.tmNo{font-family:'Alfa Slab One',serif;color:var(--gold-lt,#e8b84b);font-size:40px;line-height:1}
+.tmNames{font-size:23px;font-weight:800;text-align:center;padding:0 8px;line-height:1.15;
+  max-height:62%;overflow:hidden}
+.tmSeat{position:absolute;width:26px;height:26px;border-radius:50%;background:#c9973a;
+  border:3px solid #132a1d}
+.tmLabel{position:absolute;font-weight:800;color:var(--cream,#f6efdd);opacity:.85}
+.tmWall{position:absolute;background:rgba(201,151,58,.45);border-radius:6px}
+.brWrap{position:absolute;inset:0;display:flex;gap:3vmin;align-items:stretch;overflow:hidden}
+.brCol{flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:1.2vmin}
+.brColH{font-family:'Alfa Slab One',serif;color:var(--gold,#c9973a);font-size:2.6vmin;text-align:center}
+.brM{background:rgba(19,42,29,.6);border:.35vmin solid var(--gold,#c9973a);border-radius:1.2vmin;
+  padding:.8vmin 1.4vmin;font-size:2.5vmin;font-weight:800}
+.brM .w{color:var(--gold-lt,#e8b84b)}
+.brCol.dense .brM{font-size:1.75vmin;padding:.4vmin .9vmin;border-width:.25vmin}
+.brM{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.brM .l{opacity:.55}
+.brChamp{align-self:center;background:var(--maroon,#7a2431);border-radius:1.6vmin;
+  padding:2vmin 3vmin;font-size:3.6vmin;font-weight:800;text-align:center}
+.tourPromo{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:5vmin;padding:4vmin}
+.tourPromo img.art{max-width:46%;max-height:80%;border-radius:2vmin;
+  filter:drop-shadow(0 12px 30px rgba(0,0,0,.5))}
+.tourPromoTxt{max-width:52%}
+.tourPromoTxt .big{font-family:'Alfa Slab One',serif;color:var(--gold-lt,#e8b84b);font-size:7vmin;
+  line-height:1.1;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tourPromoTxt .sub{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.tourPromoTxt .sub{font-size:3.4vmin;font-weight:800;margin-top:1.6vmin}
+#promoTicker{position:fixed;left:0;right:0;bottom:0;z-index:60;display:none;
+  background:rgba(19,42,29,.92);border-top:.5vmin solid var(--gold,#c9973a);
+  padding:1.1vmin 3vmin;font-size:2.8vmin;font-weight:800;text-align:center}
+#promoTicker b{color:var(--gold-lt,#e8b84b)}
 </style>
 </head>
 <body>
+<div id="mgStage">
+  <div id="mgsTitle">🎯 REFLEX RALLY</div>
+  <div id="mgsSub">Tap on your phone when the bar hits the green center — one tap per sweep!</div>
+  <div id="mgsClock">–</div>
+  <div id="mgsBarWrap"><div id="mgsTrack"><div id="mgsCur"></div></div></div>
+  <div id="mgsMeta"><span id="mgsSweep"></span><span id="mgsSpeed"></span></div>
+  <div id="mgsBoard"><h3>LIVE</h3><div id="mgsRows"></div></div>
+  <div id="mgsPod"></div>
+</div>
+<canvas id="mgConfetti"></canvas>
+<div id="tourStage">
+  <div id="tourHead"><div id="tourTitle"></div><div id="tourClock"></div></div>
+  <div id="tourBody"></div>
+</div>
+<div id="promoTicker"></div>
 <div id="wxLayer"><div id="sunGlow"></div><div id="moon"></div></div>
 <div id="flash"></div>
 <div id="tHead">
@@ -627,7 +739,191 @@
     return h;
   }
 
+  /* ============ Tournament TV suite (24e): view rotation, floor map,
+     bracket, full standings, promos ============ */
+  var tourRotT = null, tourViewIdx = 0, tourPage = 0, tourPromoIdx = 0, tickerT = null, tickerIdx = 0;
+  var tourClkT = null;
+  var mapCache = {}, mapWant = "";
+  function tourEl(id){ return document.getElementById(id); }
+  function tourAvail(){
+    var a = ["schedule"];
+    if (st.pairings && st.pairings.length) a.push("pairings");
+    if (st.standings && st.standings.length) a.push("standings");
+    if (st.mapId && st.pairings && st.pairings.length) a.push("map");
+    if ((st.allRounds||[]).some(function(r){ return r.mode==="single-elim"; })) a.push("bracket");
+    if (st.promos && st.promos.length) a.push("promo");
+    return a;
+  }
+  function fetchMap(id){
+    if (mapCache[id]) return Promise.resolve(mapCache[id]);
+    return fetch("/api/tv/floormaps/"+encodeURIComponent(id))
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){ mapCache[id]=j; return j; });
+  }
+  function tourClockTxt(){
+    function fmt(ms){ var s=Math.max(0,Math.ceil(ms/1000)),m=Math.floor(s/60);
+      return m+":"+String(s%60).padStart(2,"0"); }
+    if (st.phase==="timer-paused") return "⏸ "+fmt(st.remainMs||0);
+    if (st.deadline){
+      var left = Number(st.deadline)-serverNow();
+      if (left <= 0 && st.intMs) return "☕ next round soon";
+      return fmt(left);
+    }
+    return st.timerLabel ? esc(st.timerLabel) : "—";
+  }
+  function drawMapHTML(mapj){
+    // pairing lookup by table number for the CURRENT round
+    var byT = {};
+    (st.pairings||[]).forEach(function(m){ byT[String(m.table)] = m; });
+    var h = '<div class="tmStage" id="tmStage">';
+    (mapj.els||[]).forEach(function(e){
+      var box = 'left:'+e.x+'px;top:'+e.y+'px;width:'+e.w+'px;height:'+e.h+'px;';
+      if (e.t==="wall"){ h += '<div class="tmWall" style="'+box+'"></div>'; }
+      else if (e.t==="label"){
+        h += '<div class="tmLabel" style="'+box+'font-size:'+e.size+'px">'+esc(e.txt)+'</div>';
+      } else if (e.t==="table"){
+        var m = byT[String(e.n)];
+        var cls = "tmTable "+(e.shape==="round"?"round":"rect")+
+          (m ? (m.result ? " done" : " live") : "");
+        var inner = '<div class="tmNo">T'+esc(String(e.n))+'</div>'+
+          (m ? '<div class="tmNames">'+esc(m.aName)+(m.bName?"<br>vs "+esc(m.bName):"<br>BYE")+'</div>' : "");
+        h += '<div class="'+cls+'" style="'+box+'">'+inner+'</div>';
+        // seats around the perimeter
+        var cx=e.x+e.w/2, cy=e.y+e.h/2, rx=e.w/2+22, ry=e.h/2+22;
+        for (var i2=0;i2<e.seats;i2++){
+          var ang = (Math.PI*2*i2)/e.seats - Math.PI/2;
+          h += '<div class="tmSeat" style="left:'+Math.round(cx+Math.cos(ang)*rx-13)+
+               'px;top:'+Math.round(cy+Math.sin(ang)*ry-13)+'px"></div>';
+        }
+      }
+    });
+    h += '</div>';
+    return h;
+  }
+  function scaleTm(){
+    var stg = tourEl("tmStage"), body = tourEl("tourBody");
+    if (!stg || !body) return;
+    var s = Math.min(body.clientWidth/1920, body.clientHeight/1080);
+    stg.style.transform = "scale("+s+")";
+    stg.style.left = ((body.clientWidth-1920*s)/2)+"px";
+    stg.style.top = ((body.clientHeight-1080*s)/2)+"px";
+  }
+  function tourRender(view){
+    var body = tourEl("tourBody");
+    tourEl("tourTitle").textContent =
+      view==="standings" ? "📊 STANDINGS" :
+      view==="pairings" ? ("🎯 ROUND "+(st.pairRound||"")+" PAIRINGS") :
+      view==="map" ? ("🗺️ FIND YOUR TABLE — ROUND "+(st.pairRound||"")) :
+      view==="bracket" ? "🏆 BRACKET" :
+      view==="promo" ? "🎁 TONIGHT AT THE HAVEN" : "";
+    tourEl("tourClock").textContent = tourClockTxt();
+    if (view==="standings"){
+      var rows = st.standings||[], per=16;
+      var pages = Math.max(1, Math.ceil(rows.length/per));
+      tourPage = tourPage % pages;
+      var slice = rows.slice(tourPage*per, tourPage*per+per);
+      body.innerHTML = '<div class="tourGridStand">'+ slice.map(function(s2){
+        var mv = s2.mv>0 ? '<span class="mv up">▲'+s2.mv+'</span>' :
+                 s2.mv<0 ? '<span class="mv dn">▼'+(-s2.mv)+'</span>' : '<span class="mv same">—</span>';
+        return '<div class="tsRow'+(s2.dropped?" drop":"")+'"><span class="pos">'+s2.standing+'.</span>'+
+          '<span class="nm">'+esc(s2.name)+'</span><span class="rec">'+s2.w+'-'+s2.l+'-'+s2.d+
+          ' · '+(s2.omw*100).toFixed(0)+'%</span>'+mv+'<span class="pts">'+s2.pts+'</span></div>';
+      }).join("")+'</div>'+
+      (pages>1?'<div style="position:absolute;right:1vmin;bottom:0;font-weight:800;opacity:.7">page '+(tourPage+1)+' / '+pages+'</div>':'');
+    }
+    else if (view==="pairings"){
+      body.innerHTML = '<div class="tourGridPair">'+ (st.pairings||[]).map(function(m){
+        return '<div class="tpRow'+(m.result?" done":"")+'"><span class="tno">T'+esc(String(m.table))+'</span>'+
+          '<span>'+esc(m.aName)+(m.bName?" vs "+esc(m.bName):" — BYE")+
+          (m.result?' ✓':'')+'</span></div>';
+      }).join("")+'</div>';
+    }
+    else if (view==="map"){
+      body.innerHTML = '<div class="tourMapBox">Loading map…</div>';
+      fetchMap(st.mapId).then(function(mj){
+        body.innerHTML = '<div class="tourMapBox">'+drawMapHTML(mj)+'</div>';
+        scaleTm();
+      }).catch(function(){ body.innerHTML='<div class="tourMapBox">Map unavailable.</div>'; });
+    }
+    else if (view==="bracket"){
+      var rounds = (st.allRounds||[]).filter(function(r){ return r.mode==="single-elim"; });
+      var h = '<div class="brWrap">'+ rounds.map(function(r){
+        return '<div class="brCol'+(r.tables.length>8?" dense":"")+'"><div class="brColH">'+
+          (r.tables.length===1?"FINAL":r.tables.length===2?"SEMIFINALS":"ROUND "+r.round)+'</div>'+
+          r.tables.map(function(m){
+            var aw = m.result==="a", bw = m.result==="b";
+            return '<div class="brM"><span class="'+(aw?"w":(bw?"l":""))+'">'+esc(m.aName)+'</span><br>'+
+              (m.bName?'<span class="'+(bw?"w":(aw?"l":""))+'">'+esc(m.bName)+'</span>':'<span class="l">BYE</span>')+'</div>';
+          }).join("")+'</div>';
+      }).join("");
+      if (st.champion && st.champion.name)
+        h += '<div class="brCol"><div class="brChamp">🏆<br>'+esc(st.champion.name)+'</div></div>';
+      body.innerHTML = h+'</div>';
+    }
+    else if (view==="promo"){
+      var ps = st.promos||[]; if(!ps.length){ body.innerHTML=""; return; }
+      tourPromoIdx = tourPromoIdx % ps.length;
+      var p2 = ps[tourPromoIdx];
+      body.innerHTML = '<div class="tourPromo">'+
+        (p2.img?'<img class="art" src="'+esc(p2.img)+'">':'')+
+        '<div class="tourPromoTxt"><div class="big">'+esc(p2.text)+'</div>'+
+        (p2.sub?'<div class="sub">'+esc(p2.sub)+'</div>':'')+
+        (p2.qrUrl?'<div style="margin-top:2.5vmin;display:flex;align-items:center;gap:2.5vmin">'+
+          '<img style="width:20vmin;height:20vmin;background:#f6efdd;border:.7vmin solid #c9973a;border-radius:1.6vmin" src="/api/tv/qr.png?data='+
+          encodeURIComponent(p2.qrUrl)+'&s=420"><div class="sub">Scan for details</div></div>':'')+
+        '</div></div>';
+    }
+  }
+  function tourManage(){
+    var pinned = st.tvView || "auto";
+    var avail = tourAvail();
+    var active;
+    if (pinned !== "auto" && avail.indexOf(pinned) >= 0) active = pinned;
+    else if (pinned !== "auto") active = "schedule";
+    else active = avail[tourViewIdx % avail.length];
+    // ticker: rotating promo strip whenever the promo panel itself isn't up
+    var tk = tourEl("promoTicker");
+    if (st.promos && st.promos.length && active !== "promo" && active !== "schedule"){
+      tk.style.display = "block";
+      if (!tickerT) tickerT = setInterval(function(){
+        if (!st || !st.promos || !st.promos.length) return;
+        tickerIdx = (tickerIdx+1) % st.promos.length;
+        var p2 = st.promos[tickerIdx];
+        tk.innerHTML = '🎁 <b>'+esc(p2.text)+'</b>'+(p2.sub?' — '+esc(p2.sub):'');
+      }, 7000);
+      var p0 = st.promos[tickerIdx % st.promos.length];
+      tk.innerHTML = '🎁 <b>'+esc(p0.text)+'</b>'+(p0.sub?' — '+esc(p0.sub):'');
+    } else { tk.style.display = "none"; }
+    // rotation clock
+    if (!tourClkT) tourClkT = setInterval(function(){
+      if (st && st.kind === "timer" && tourEl("tourStage").classList.contains("on"))
+        tourEl("tourClock").textContent = tourClockTxt();
+    }, 1000);
+    if (!tourRotT) tourRotT = setInterval(function(){
+      if (!st || st.kind!=="timer") return;
+      var a = tourAvail(), pin = st.tvView||"auto";
+      if (pin === "auto"){ tourViewIdx = (tourViewIdx+1) % a.length; }
+      tourPage++; tourPromoIdx++;
+      tourManage();
+    }, 12000);
+    if (active === "schedule"){
+      tourEl("tourStage").classList.remove("on");
+    } else {
+      tourEl("tourStage").classList.add("on");
+      tourRender(active);
+    }
+  }
+  function tourStop(){
+    if (tourRotT){ clearInterval(tourRotT); tourRotT=null; }
+    if (tickerT){ clearInterval(tickerT); tickerT=null; }
+    if (tourClkT){ clearInterval(tourClkT); tourClkT=null; }
+    tourEl("tourStage").classList.remove("on");
+    tourEl("promoTicker").style.display="none";
+  }
+  addEventListener("resize", scaleTm);
+
   function renderTimerMode() {
+    tourManage();
     var tHead = document.getElementById("tHead");
     var sp = document.getElementById("schedPanel");
     roundTag.style.display = "none"; wagerTag.style.display = "none";
@@ -775,13 +1071,122 @@
     return;
   }
 
+  /* ---------------- Reflex Rally overlay ---------------- */
+  var MGC = { d0: 2000, f: 0.93, min: 700 };
+  function mgSweepAt(tms) {
+    var t = tms, i = 0, d = MGC.d0;
+    while (t >= d) { t -= d; i++; d = Math.max(MGC.min, Math.round(MGC.d0 * Math.pow(MGC.f, i))); }
+    return { sweep: i, x: t / d, dur: d };
+  }
+  var mgRaf = null, mgLastSweep = -1, mgLastCount = -1, mgConfettiDone = false, mgCurId = null;
+  var mgAC = null;
+  function mgAudioOn() { return !!(st && st.settings && st.settings.tvAudio); }
+  function mgBeep(freq, ms, vol) {
+    if (!mgAudioOn()) return;
+    try {
+      if (!mgAC) mgAC = new (window.AudioContext || window.webkitAudioContext)();
+      var o = mgAC.createOscillator(), g = mgAC.createGain();
+      o.frequency.value = freq; o.type = "square";
+      g.gain.value = vol || 0.12;
+      o.connect(g); g.connect(mgAC.destination);
+      var t0 = mgAC.currentTime;
+      o.start(t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
+      o.stop(t0 + ms / 1000 + 0.02);
+    } catch (e) {}
+  }
+  function mgStop() {
+    if (mgRaf) { cancelAnimationFrame(mgRaf); mgRaf = null; }
+    document.getElementById("mgStage").classList.remove("on");
+    document.getElementById("mgConfetti").style.display = "none";
+  }
+  function mgConfettiBurst() {
+    var cv = document.getElementById("mgConfetti"), ctx = cv.getContext("2d");
+    cv.width = innerWidth; cv.height = innerHeight; cv.style.display = "block";
+    var cols = ["#e8b84b", "#c9973a", "#3fbf6f", "#f6efdd", "#7a2431"], ps = [];
+    for (var i = 0; i < 140; i++) ps.push({
+      x: cv.width / 2, y: cv.height * 0.35,
+      vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 12 - 4,
+      s: 6 + Math.random() * 8, c: cols[i % cols.length], r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.4
+    });
+    var frames = 0;
+    (function fall() {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      for (var i = 0; i < ps.length; i++) {
+        var q = ps[i]; q.x += q.vx; q.y += q.vy; q.vy += 0.35; q.r += q.vr;
+        ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r);
+        ctx.fillStyle = q.c; ctx.fillRect(-q.s / 2, -q.s / 2, q.s, q.s * 0.6); ctx.restore();
+      }
+      if (++frames < 140) requestAnimationFrame(fall);
+      else cv.style.display = "none";
+    })();
+  }
+  function mgFrame() {
+    var mg = st && st.mg;
+    if (!mg) { mgStop(); return; }
+    var rel = serverNow() - Number(mg.startAt);
+    var clock = document.getElementById("mgsClock");
+    if (mg.phase === "scored") {
+      clock.className = ""; clock.textContent = "🏆 POINTS AWARDED";
+    } else if (rel < 0) {
+      var c = Math.ceil(-rel / 1000);
+      clock.className = "count"; clock.textContent = c;
+      if (c !== mgLastCount) { mgLastCount = c; mgBeep(880, 90); }
+      document.getElementById("mgsCur").style.left = "0%";
+    } else if (rel <= Number(mg.dur)) {
+      if (mgLastCount !== -99) { mgLastCount = -99; mgBeep(1320, 350, 0.16); } // GO!
+      var s = mgSweepAt(rel);
+      document.getElementById("mgsCur").style.left = (s.x * 100) + "%";
+      clock.className = ""; clock.textContent = Math.ceil((Number(mg.dur) - rel) / 1000);
+      document.getElementById("mgsSweep").textContent = "Sweep " + (s.sweep + 1);
+      document.getElementById("mgsSpeed").textContent = "⚡ " + (MGC.d0 / s.dur).toFixed(1) + "× speed";
+      if (s.sweep !== mgLastSweep) { mgLastSweep = s.sweep; if (s.sweep > 0) mgBeep(660, 40, 0.07); }
+    } else {
+      clock.className = ""; clock.textContent = "⏱️ TIME!";
+    }
+    mgRaf = requestAnimationFrame(mgFrame);
+  }
+  function renderMgStage() {
+    var mg = st.mg;
+    document.getElementById("mgStage").classList.add("on");
+    if (mg.id !== mgCurId) { mgCurId = mg.id; mgLastSweep = -1; mgLastCount = -1; mgConfettiDone = false; }
+    var pod = document.getElementById("mgsPod"), rows = document.getElementById("mgsRows");
+    if (mg.phase === "scored" && mg.results) {
+      document.getElementById("mgsBoard").style.display = "none";
+      document.getElementById("mgsBarWrap").style.display = "none";
+      document.getElementById("mgsMeta").style.display = "none";
+      document.getElementById("mgsSub").textContent = "Trivia points banked — back to the game!";
+      var medals = ["🥇", "🥈", "🥉"], h = "";
+      for (var i = 0; i < Math.min(mg.results.length, 8); i++) {
+        var r = mg.results[i];
+        h += '<div class="r' + (i === 0 ? " first" : "") + '"><span>' + (medals[i] || ("#" + (i + 1))) + " " +
+          esc(r.name) + '</span><span>+' + r.pts + " pts · " + r.total + " raw</span></div>";
+      }
+      pod.innerHTML = h || '<div class="r"><span>No taps recorded</span><span>—</span></div>';
+      if (!mgConfettiDone && mg.results.length) { mgConfettiDone = true; mgConfettiBurst(); mgBeep(990, 120); mgBeep(1188, 160); }
+    } else {
+      document.getElementById("mgsBoard").style.display = "";
+      document.getElementById("mgsBarWrap").style.display = "";
+      document.getElementById("mgsMeta").style.display = "";
+      document.getElementById("mgsSub").textContent = "Tap on your phone when the bar hits the green center — one tap per sweep!";
+      pod.innerHTML = "";
+      var live = mg.live || [], lh = "";
+      for (var j = 0; j < Math.min(live.length, 9); j++)
+        lh += '<div class="r"><span>' + (j + 1) + ". " + esc(live[j].name) + "</span><span>" + live[j].total + "</span></div>";
+      rows.innerHTML = lh || '<div class="r"><span>Waiting for taps…</span><span></span></div>';
+    }
+    if (!mgRaf) mgFrame();
+  }
+
   function render() {
     clearTimers();
+    if (st && st.mg && st.kind !== "timer") { renderMgStage(); return; }
+    mgStop();
     timerEl.style.display = "none";
     timerEl.classList.remove("hot");
 
     // ---- tournament timer sessions ----
     if (st.kind === "timer") { renderTimerMode(); return; }
+    tourStop();
     document.getElementById("tHead").style.display = "none";
     document.getElementById("schedPanel").style.display = "none";
     document.getElementById("pairPanel").style.display = "none";

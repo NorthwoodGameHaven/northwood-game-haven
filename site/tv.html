@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- NGH-BUILD 2026-08-24f — NGH TV Network display client
+     Runs fullscreen on each Google TV Streamer (kiosk browser).
+     Start URL per device:  https://gamehaven.guru/tv?d=<device-name>
+     e.g. /tv?d=holt   /tv?d=den   /tv?d=depths   /tv?d=raft
+     Unlisted: noindex, not in sitemap, no internal links. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH TV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --forest:#1e3d2b; --forest-dk:#132a1d; --gold:#c9973a; --gold-lt:#e8b84b;
+    --maroon:#7a2431; --cream:#f6efdd; --ink:#26211a;
+  }
+  html,body{margin:0;padding:0;width:100%;height:100%;background:var(--forest-dk);
+    overflow:hidden;font-family:Nunito,sans-serif;color:var(--cream);cursor:none}
+  iframe{border:0}
+
+  /* ---- slideshow ---- */
+  #show{position:fixed;inset:0;background:#000;display:none}
+  .layer{position:absolute;top:0;left:0;width:100%;height:100%;
+    opacity:0;transition:opacity 1.2s ease}
+  .layer.on{opacity:1}
+  .layer img{width:100%;height:100%;object-fit:cover;display:block;
+    will-change:transform;transform-origin:center center}
+  .layer.contain img{object-fit:contain;background:var(--forest-dk)}
+  /* Ken Burns variants — direction chosen deterministically per slide index,
+     negative animation-delay aligns mid-slide joins with every other TV. */
+  @keyframes kb0{from{transform:scale(1.04) translate(0,0)}to{transform:scale(1.14) translate(-1.6%,-1.2%)}}
+  @keyframes kb1{from{transform:scale(1.14) translate(1.6%,-1.2%)}to{transform:scale(1.04) translate(0,0)}}
+  @keyframes kb2{from{transform:scale(1.04) translate(0,0)}to{transform:scale(1.14) translate(1.4%,1.4%)}}
+  @keyframes kb3{from{transform:scale(1.14) translate(-1.4%,1.2%)}to{transform:scale(1.04) translate(0,0)}}
+  .kb0 img{animation:kb0 linear both}.kb1 img{animation:kb1 linear both}
+  .kb2 img{animation:kb2 linear both}.kb3 img{animation:kb3 linear both}
+  .caption{position:absolute;left:0;right:0;bottom:0;padding:2.2vmin 3vmin 2.6vmin;
+    background:linear-gradient(transparent, rgba(19,42,29,.88) 55%);
+    font-size:3.4vmin;font-weight:800;color:var(--cream);text-align:center;
+    text-shadow:0 2px 8px rgba(0,0,0,.6);opacity:0;transition:opacity .8s ease}
+  .layer.on .caption{opacity:1}
+  .caption b{color:var(--gold-lt)}
+
+  /* ---- embedded modes (trivia / url) ---- */
+  #frameWrap{position:fixed;inset:0;display:none;background:var(--forest-dk)}
+  #frameWrap iframe{width:100%;height:100%}
+
+  /* ---- idle / branding ---- */
+  #idle{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;gap:3vmin;background:
+    radial-gradient(120vmax 90vmax at 50% 30%, #24503a 0%, var(--forest-dk) 62%)}
+  #idle img{width:34vmin;max-width:60vw;filter:drop-shadow(0 10px 30px rgba(0,0,0,.5))}
+  #idleClock{font-family:'Alfa Slab One',serif;font-size:12vmin;color:var(--gold-lt);
+    letter-spacing:.02em;text-shadow:0 4px 18px rgba(0,0,0,.55);line-height:1}
+  #idleDate{font-size:3.6vmin;font-weight:800;color:var(--cream);opacity:.9}
+  #idleTag{font-family:Caveat,cursive;font-size:5vmin;color:var(--gold);opacity:.95}
+
+  /* ---- setup screen (no device name yet) ---- */
+  #setup{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;gap:2.2vmin;background:var(--forest);text-align:center;padding:5vmin}
+  #setup h1{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:6vmin;margin:0}
+  #setup p{font-size:3vmin;max-width:80vw;margin:0;font-weight:700}
+  #setup code{background:var(--forest-dk);border:2px solid var(--gold);border-radius:1vmin;
+    padding:.6vmin 1.4vmin;color:var(--gold-lt);font-size:3.2vmin}
+
+  /* ---- deck engine (1920x1080 logical stage, scaled to fit) ---- */
+  #deckWrap{position:fixed;inset:0;background:var(--forest-dk);display:none;overflow:hidden}
+  #deckStage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
+  .dlayer{position:absolute;inset:0;opacity:0;transition:opacity 1s ease;overflow:hidden;
+    font-family:Nunito,sans-serif;color:var(--cream)}
+  .dlayer.on{opacity:1}
+  .dl-img{width:100%;height:100%;object-fit:cover;display:block}
+  .dl-img.contain{object-fit:contain;background:var(--forest-dk)}
+  .dl-cap{position:absolute;left:0;right:0;bottom:0;padding:36px 48px 44px;text-align:center;
+    background:linear-gradient(transparent, rgba(19,42,29,.9) 60%);font-size:52px;font-weight:800;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .d-alfa{font-family:'Alfa Slab One',serif}
+  .d-caveat{font-family:Caveat,cursive}
+  .dhead{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:96px;line-height:1.05;
+    text-shadow:0 6px 24px rgba(0,0,0,.5);display:-webkit-box;-webkit-line-clamp:2;
+    -webkit-box-orient:vertical;overflow:hidden}
+  .dsub{font-size:38px;font-weight:800;color:var(--cream);opacity:.9}
+  .dbadge{display:inline-block;background:var(--maroon);color:var(--cream);border-radius:999px;
+    padding:10px 34px;font-weight:800;font-size:34px}
+  .dcard{background:var(--forest);border:6px solid var(--gold);border-radius:26px}
+  .dqr{background:var(--cream);border:8px solid var(--gold);border-radius:22px;display:block}
+  .dqrLbl{font-size:28px;font-weight:800;color:var(--gold-lt);text-align:center;margin-top:12px}
+  /* weekly grid */
+  .wk{position:absolute;inset:0;padding:56px 64px;display:flex;flex-direction:column;
+    background:radial-gradient(1600px 1000px at 50% 0%, #24503a, var(--forest-dk) 70%)}
+  .wkgrid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:22px;margin-top:36px}
+  .wkday{background:var(--forest);border:5px solid var(--gold);border-radius:22px;padding:18px 16px;
+    display:flex;flex-direction:column;gap:10px;overflow:hidden}
+  .wkday.today{border-color:var(--gold-lt);box-shadow:0 0 40px rgba(232,184,75,.35);background:#2a5a3f}
+  .wkdow{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:34px;text-align:center}
+  .wkdate{font-size:24px;font-weight:800;text-align:center;opacity:.8;margin-top:-6px}
+  .wkev{font-size:24px;font-weight:800;line-height:1.2;border-top:2px solid rgba(201,151,58,.4);
+    padding-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .wkev .t{color:var(--gold-lt);font-size:21px}
+  .wkempty{opacity:.55;font-size:24px;font-weight:800;text-align:center;margin-top:20px}
+  /* recurring / event feature */
+  .ftr{position:absolute;inset:0;display:flex;
+    background:radial-gradient(1600px 1000px at 30% 20%, #24503a, var(--forest-dk) 70%)}
+  .ftrL{width:44%;position:relative;overflow:hidden}
+  .ftrL img{width:100%;height:100%;object-fit:cover}
+  .ftrL .shade{position:absolute;inset:0;background:linear-gradient(90deg,transparent 60%, rgba(19,42,29,1))}
+  .ftrR{flex:1;padding:70px 80px 60px 60px;display:flex;flex-direction:column;gap:26px;justify-content:center;position:relative}
+  .ftrQR{position:absolute;right:64px;bottom:56px;text-align:center}
+  .ftrList{display:flex;flex-direction:column;gap:18px;margin-top:6px;padding-right:310px}
+  .ftrRow{background:rgba(19,42,29,.55);border:4px solid var(--gold);border-radius:18px;
+    padding:16px 26px;font-size:36px;font-weight:800}
+  .ftrRow .t{color:var(--gold-lt)}
+  .ftrRow{overflow:hidden}
+  .ftrRow .b{font-size:26px;font-weight:700;opacity:.85;margin-top:4px;display:-webkit-box;
+    -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  /* product */
+  .prod{position:absolute;inset:0;display:flex;background:
+    radial-gradient(1400px 900px at 70% 30%, #24503a, var(--forest-dk) 72%)}
+  .prodL{flex:1;padding:80px 60px 70px 80px;display:flex;flex-direction:column;justify-content:center;gap:26px}
+  .prodR{width:42%;display:flex;align-items:center;justify-content:center;position:relative;padding:60px}
+  .prodR img{max-width:100%;max-height:100%;filter:drop-shadow(0 18px 40px rgba(0,0,0,.5))}
+  .price{font-family:'Alfa Slab One',serif;font-size:110px;color:var(--gold-lt);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .price .was{font-size:56px;color:var(--cream);opacity:.7;text-decoration:line-through;margin-right:28px}
+  .ribbon{position:absolute;top:54px;right:-8px;background:var(--maroon);color:var(--cream);
+    font-family:'Alfa Slab One',serif;font-size:44px;padding:14px 46px;border-radius:16px 0 0 16px;
+    box-shadow:0 8px 22px rgba(0,0,0,.4)}
+  /* stay & play */
+  .stay{position:absolute;inset:0;display:flex;background:
+    linear-gradient(120deg,#0e2217 0%, #1e3d2b 55%, #24503a 100%)}
+  .stayL{flex:1;padding:80px 40px 70px 90px;display:flex;flex-direction:column;gap:28px;justify-content:center}
+  .stayR{width:36%;position:relative}
+  .stayR img{position:absolute;bottom:0;right:40px;height:92%;filter:drop-shadow(0 16px 36px rgba(0,0,0,.5))}
+  .suites{display:flex;gap:26px;margin-top:8px}
+  .suite{flex:1;background:rgba(19,42,29,.6);border:5px solid var(--gold);border-radius:22px;padding:26px 30px}
+  .suite h4{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:40px;margin:0 0 10px}
+  .suite div{font-size:27px;font-weight:700;opacity:.9}
+  .suite{overflow:hidden}
+  .dsub{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+  /* ---- announce ---- */
+  #announce{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:6vmin;gap:2.5vmin;background:
+    radial-gradient(120vmax 90vmax at 50% 30%, #7a2431 0%, var(--forest-dk) 70%)}
+  #announceText{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:9vmin;
+    line-height:1.15;text-shadow:0 5px 20px rgba(0,0,0,.55);max-width:88vw;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  #announceSub{font-size:3.6vmin;font-weight:800;color:var(--cream);max-width:80vw;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+  /* ---- QR overlay (join links) ---- */
+  #qrBox{position:fixed;right:2vmin;bottom:2vmin;z-index:40;display:none;
+    text-align:center;background:rgba(19,42,29,.82);border:.45vmin solid var(--gold);
+    border-radius:1.6vmin;padding:1.2vmin 1.2vmin .9vmin}
+  #qrBox img{width:15vmin;height:15vmin;display:block;border-radius:1vmin;background:var(--cream)}
+  #qrBox div{font-size:1.8vmin;font-weight:800;color:var(--gold-lt);margin-top:.6vmin;max-width:16vmin}
+
+  /* ---- status dot (connection health) ---- */
+  #dot{position:fixed;right:1.2vmin;bottom:1.2vmin;width:1.3vmin;height:1.3vmin;
+    border-radius:50%;background:#c0392b;opacity:0;transition:opacity .4s;z-index:99}
+  #dot.bad{opacity:.85}
+</style>
+</head>
+<body>
+  <div id="show">
+    <div class="layer" id="layerA"><img alt=""><div class="caption"></div></div>
+    <div class="layer" id="layerB"><img alt=""><div class="caption"></div></div>
+  </div>
+
+  <div id="frameWrap"><iframe id="frame" allow="autoplay; fullscreen" title="NGH TV content"></iframe></div>
+
+  <div id="deckWrap"><div id="deckStage">
+    <div class="dlayer" id="dA"></div><div class="dlayer" id="dB"></div>
+  </div></div>
+
+  <div id="idle">
+    <img src="/brand/crest.png" alt="Northwood Game Haven">
+    <div id="idleClock">--:--</div>
+    <div id="idleDate"></div>
+    <div id="idleTag">Stay curious.</div>
+  </div>
+
+  <div id="setup">
+    <h1>NGH TV</h1>
+    <p>This display has no name yet. Set the kiosk start URL to include one:</p>
+    <p><code id="setupUrl"></code></p>
+    <p>Suggested names: holt &nbsp;•&nbsp; den &nbsp;•&nbsp; depths &nbsp;•&nbsp; raft &nbsp;•&nbsp; deck</p>
+    <p style="opacity:.8">Falling back to <code id="setupFallback"></code> in <span id="setupCount">20</span>s…</p>
+  </div>
+
+  <div id="announce"><div id="announceText"></div><div id="announceSub"></div></div>
+
+  <div id="qrBox"><img id="qrImg" alt="Scan"><div id="qrLabel"></div></div>
+
+  <div id="dot"></div>
+
+<script>
+(function () {
+  "use strict";
+  var API = "/api/tv";
+  var params = new URLSearchParams(location.search);
+
+  // ---- device identity ----
+  function cleanId(s){return String(s||"").toLowerCase().trim().replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40);}
+  var DEV = cleanId(params.get("d") || (location.hash||"").replace(/^#/,""));
+  var stored = null;
+  try { stored = localStorage.getItem("ngh_tv_name"); } catch(e){}
+  if (!DEV && stored) DEV = cleanId(stored);
+  var generated = "tv-" + Math.random().toString(36).slice(2,6);
+
+  var elShow = document.getElementById("show");
+  var A = document.getElementById("layerA"), B = document.getElementById("layerB");
+  var elFrameWrap = document.getElementById("frameWrap");
+  var elFrame = document.getElementById("frame");
+  var elIdle = document.getElementById("idle");
+  var elAnnounce = document.getElementById("announce");
+  var elDeck = document.getElementById("deckWrap");
+  var dA = document.getElementById("dA"), dB = document.getElementById("dB");
+  var elSetup = document.getElementById("setup");
+  var dot = document.getElementById("dot");
+  var qrBox = document.getElementById("qrBox");
+  var qrImg = document.getElementById("qrImg");
+  var qrLabel = document.getElementById("qrLabel");
+
+  function showOnly(el){
+    [elShow, elFrameWrap, elIdle, elSetup, elAnnounce, elDeck].forEach(function(x){
+      x.style.display = (x === el) ? (x === elShow ? "block" : "flex") : "none";
+    });
+    if (el === elFrameWrap) elFrameWrap.style.display = "block";
+    if (el === elDeck) elDeck.style.display = "block";
+  }
+
+  // ---- server clock sync (median of ping samples, same as trivia) ----
+  var offset = 0; // serverNow - localNow
+  function sample(){
+    var t0 = Date.now();
+    return fetch(API + "/time").then(function(r){return r.json();}).then(function(j){
+      var t1 = Date.now();
+      return j.serverNow + (t1 - t0)/2 - t1;
+    });
+  }
+  function syncClock(n){
+    var ps = []; for (var i=0;i<n;i++) ps.push(sample().catch(function(){return null;}));
+    return Promise.all(ps).then(function(vals){
+      vals = vals.filter(function(v){return v !== null;}).sort(function(a,b){return a-b;});
+      if (vals.length) offset = vals[Math.floor(vals.length/2)];
+    });
+  }
+  function now(){ return Date.now() + offset; }
+
+  // ---- state ----
+  var channel = "", version = 0, cfg = null, deckV = 0;
+  var slideTimer = null, kbCounter = 0;
+  var preloaded = {};
+
+  // ---- slideshow engine (deterministic sync) ----
+  function totalDur(slides){var t=0;for(var i=0;i<slides.length;i++)t+=slides[i].dur;return t;}
+  function slideAt(slides, elapsed){
+    var t = elapsed, i = 0;
+    while (i < slides.length && t >= slides[i].dur) { t -= slides[i].dur; i++; }
+    return { index: i % slides.length, into: t };
+  }
+  function preload(url){
+    if (preloaded[url]) return;
+    var im = new Image(); im.src = url; preloaded[url] = im;
+  }
+  var curIndex = -1, front = A;
+  function paintLayer(layer, slide, idx, into, useKb){
+    var img = layer.querySelector("img");
+    var cap = layer.querySelector(".caption");
+    layer.className = "layer" + (slide.fit === "contain" ? " contain" : "");
+    img.style.animation = "";
+    if (useKb){
+      layer.classList.add("kb" + (idx % 4));
+      img.style.animationDuration = (slide.dur + 1.4) + "s";
+      img.style.animationDelay = (-into) + "s"; // join mid-slide in phase
+    }
+    cap.innerHTML = slide.caption ? slide.caption.replace(/&/g,"&amp;").replace(/</g,"&lt;") : "";
+    cap.style.display = slide.caption ? "" : "none";
+    if (img.getAttribute("src") !== slide.url) img.setAttribute("src", slide.url);
+  }
+  function tickShow(){
+    if (!cfg || cfg.mode !== "slideshow") return;
+    var slides = cfg.slides || [];
+    if (!slides.length) return;
+    var total = totalDur(slides);
+    var elapsed = ((now() - (cfg.anchor || 0)) / 1000) % total;
+    if (elapsed < 0) elapsed += total;
+    var pos = slideAt(slides, elapsed);
+    if (pos.index !== curIndex){
+      curIndex = pos.index;
+      var back = (front === A) ? B : A;
+      paintLayer(back, slides[pos.index], pos.index, pos.into, cfg.transition !== "fade");
+      // crossfade
+      back.classList.add("on"); front.classList.remove("on");
+      front = back;
+      preload(slides[(pos.index + 1) % slides.length].url);
+    }
+  }
+  function startShow(){
+    stopShow();
+    curIndex = -1;
+    (cfg.slides || []).slice(0,3).forEach(function(s){ preload(s.url); });
+    tickShow();
+    slideTimer = setInterval(tickShow, 250);
+  }
+  function stopShow(){ if (slideTimer){ clearInterval(slideTimer); slideTimer = null; } }
+
+  // ---- idle clock ----
+  function tickIdle(){
+    var d = new Date(now());
+    var h = d.getHours(), m = d.getMinutes();
+    var ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+    document.getElementById("idleClock").textContent = h + ":" + (m<10?"0":"") + m + " " + ap;
+    document.getElementById("idleDate").textContent =
+      d.toLocaleDateString(undefined, { weekday:"long", month:"long", day:"numeric" });
+  }
+  setInterval(tickIdle, 1000); tickIdle();
+
+  /* ================= DECK ENGINE (NGH-BUILD 2026-08-24d) =================
+     1920x1080 logical stage scaled to the viewport. Timing is the same
+     deterministic server-anchored engine as the image slideshow, so every
+     TV shows the same slide at the same moment. Auto slides render live
+     event data (5-min cached feed); empty auto slides drop out of the
+     rotation identically on every display (same feed -> same filter). */
+  var deckSlides = null, deckLoadedFor = "", eff = [], feed = null, feedAt = 0;
+  var fmCache = {};
+  function fetchFloormap(id){
+    if (fmCache[id]) return Promise.resolve(fmCache[id]);
+    return fetch(API + "/floormaps/" + encodeURIComponent(id))
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){ fmCache[id]=j; return j; });
+  }
+  function floormapInner(mapj){
+    var h = "";
+    (mapj.els||[]).forEach(function(e){
+      var box='position:absolute;left:'+e.x+'px;top:'+e.y+'px;width:'+e.w+'px;height:'+e.h+'px;';
+      if (e.t==="wall") h+='<div style="'+box+'background:rgba(201,151,58,.45);border-radius:6px"></div>';
+      else if (e.t==="label") h+='<div style="'+box+'font-weight:800;color:var(--cream);opacity:.85;font-size:'+e.size+'px">'+esc(e.txt)+'</div>';
+      else if (e.t==="table"){
+        h+='<div style="'+box+'background:#3a6b4e;border:5px solid var(--gold);'+
+          (e.shape==="round"?'border-radius:50%;':'border-radius:16px;')+
+          'display:flex;align-items:center;justify-content:center">'+
+          '<span class="d-alfa" style="color:var(--gold-lt);font-size:44px">T'+esc(String(e.n))+'</span></div>';
+        var cx=e.x+e.w/2, cy=e.y+e.h/2, rx=e.w/2+22, ry=e.h/2+22;
+        for(var i=0;i<e.seats;i++){
+          var a=(Math.PI*2*i)/e.seats - Math.PI/2;
+          h+='<div style="position:absolute;left:'+Math.round(cx+Math.cos(a)*rx-13)+
+             'px;top:'+Math.round(cy+Math.sin(a)*ry-13)+
+             'px;width:26px;height:26px;border-radius:50%;background:var(--gold);border:3px solid var(--forest-dk)"></div>';
+        }
+      }
+    });
+    return h;
+  }
+  var dCur = -1, dFront = dA, deckTimer = null, feedTimer = null;
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+  function scaleDeck(){
+    var s = Math.min(innerWidth/1920, innerHeight/1080);
+    var st = document.getElementById("deckStage");
+    st.style.transform = "scale(" + s + ")";
+    st.style.left = ((innerWidth - 1920*s)/2) + "px";
+    st.style.top = ((innerHeight - 1080*s)/2) + "px";
+  }
+  addEventListener("resize", scaleDeck);
+
+  function fetchDeck(id, v){
+    return fetch(API + "/decks/" + encodeURIComponent(id))
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){ deckSlides = j.slides || []; deckLoadedFor = id + ":" + (j.version||v||0); });
+  }
+  function needFeed(){
+    return (deckSlides||[]).some(function(s){ return s.kind.indexOf("auto:")===0; });
+  }
+  function loadFeed(){
+    return fetch(API + "/eventfeed")
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){ feed = j; feedAt = Date.now(); });
+  }
+  function computeEff(){
+    var out = [];
+    (deckSlides||[]).forEach(function(s){
+      if (s.kind === "auto:recurring"){
+        if (feed && feed.recurring && (feed.recurring[s.dow]||[]).length) out.push(s);
+      } else if (s.kind === "auto:event"){
+        if (feed && (feed.specials||[]).some(function(x){ return x.id === s.event; })) out.push(s);
+      } else out.push(s);
+    });
+    eff = out;
+  }
+  var DOWS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var MONS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function fmtDate(d){ var x=new Date(d+"T12:00:00");
+    return DOWS[x.getDay()].slice(0,3)+" · "+MONS[x.getMonth()]+" "+x.getDate(); }
+  function fmtTime(t){
+    if(!t) return ""; var p=String(t).split(":"), h=+p[0], m=p[1]||"00";
+    var ap=h>=12?"PM":"AM"; h=h%12||12; return h+":"+m+" "+ap;
+  }
+  function qrImg(u,sz){ return '<img class="dqr" width="'+sz+'" height="'+sz+
+    '" src="/api/tv/qr.png?data='+encodeURIComponent(u)+'&s='+Math.min(960,sz*2)+'" alt="QR">'; }
+
+  function renderSlide(el, s){
+    var h = "";
+    if (s.kind === "image"){
+      h = '<img class="dl-img'+(s.fit==="contain"?" contain":"")+'" src="'+esc(s.url)+'">'+
+          (s.caption?'<div class="dl-cap">'+esc(s.caption)+'</div>':'');
+    }
+    else if (s.kind === "gslides"){
+      h = '<iframe src="'+esc(s.url)+'" style="width:1920px;height:1080px;border:0" allowfullscreen></iframe>';
+    }
+    else if (s.kind === "custom"){
+      var bg = s.bg || "#1e3d2b", bgcss;
+      if (bg.indexOf("grad:")===0){
+        bgcss = bg==="grad:gold" ? "linear-gradient(120deg,#7a5a1e,#c9973a)" :
+                bg==="grad:maroon" ? "linear-gradient(120deg,#3d1218,#7a2431)" :
+                "radial-gradient(1600px 1000px at 50% 20%, #24503a, #132a1d 75%)";
+        h += '<div style="position:absolute;inset:0;background:'+bgcss+'"></div>';
+      } else if (/^(https?:\/\/|\/)/i.test(bg)){
+        h += '<img class="dl-img" src="'+esc(bg)+'">';
+      } else {
+        h += '<div style="position:absolute;inset:0;background:'+esc(bg)+'"></div>';
+      }
+      (s.els||[]).forEach(function(e){
+        var st = 'position:absolute;left:'+e.x+'px;top:'+e.y+'px;width:'+e.w+'px;height:'+e.h+'px;';
+        if (e.t==="text"){
+          var fam = e.font==="alfa" ? "'Alfa Slab One',serif" : e.font==="caveat" ? "Caveat,cursive" : "Nunito,sans-serif";
+          h += '<div style="'+st+'font-family:'+fam+';font-size:'+e.size+'px;color:'+esc(e.color||"#f6efdd")+
+               ';text-align:'+e.align+';font-weight:'+(e.bold?800:700)+';line-height:1.15;overflow:hidden">'+
+               esc(e.txt).replace(/\n/g,"<br>")+'</div>';
+        } else if (e.t==="img"){
+          h += '<img src="'+esc(e.url)+'" style="'+st+'object-fit:'+(e.fit||"contain")+'">';
+        } else if (e.t==="qr"){
+          h += '<div style="'+st+'text-align:center">'+qrImg(e.url, Math.min(e.w, e.h - (e.label?44:0)))+
+               (e.label?'<div class="dqrLbl">'+esc(e.label)+'</div>':'')+'</div>';
+        } else if (e.t==="panel"){
+          h += '<div style="'+st+'background:'+esc(e.color||"#132a1d")+';opacity:'+e.alpha+
+               ';border-radius:'+e.radius+'px;border:5px solid #c9973a"></div>';
+        }
+      });
+    }
+    else if (s.kind === "stayplay"){
+      h = '<div class="stay"><div class="stayL">'+
+        '<div class="dbadge">🌙 STAY &amp; PLAY</div>'+
+        '<div class="dhead" style="font-size:104px">Premium Overnight<br>Game Suites</div>'+
+        '<div class="dsub">Sleep steps from the game floor — wake up and keep playing.</div>'+
+        '<div class="suites"><div class="suite"><h4>The Lodge</h4><div>Roomy group suite · game-night ready</div></div>'+
+        '<div class="suite"><h4>The Adventurer\u2019s Rest</h4><div>Cozy hideaway · perfect for two</div></div></div>'+
+        '<div style="display:flex;align-items:center;gap:34px;margin-top:10px">'+qrImg(s.qrUrl||"/",210)+
+        '<div class="dsub" style="max-width:520px">Scan to book your stay at <span class="d-alfa" style="color:var(--gold-lt)">gamehaven.guru</span></div></div>'+
+        '</div><div class="stayR"><img src="/brand/stash-fullbody.png" alt=""></div></div>';
+    }
+    else if (s.kind === "product"){
+      h = '<div class="prod"><div class="prodL">'+
+        (s.badge?'<div class="dbadge">'+esc(s.badge)+'</div>':'')+
+        '<div class="dhead" style="font-size:100px">'+esc(s.name)+'</div>'+
+        (s.blurb?'<div class="dsub" style="max-width:820px">'+esc(s.blurb)+'</div>':'')+
+        '<div class="price">'+(s.salePrice?'<span class="was">'+esc(s.price)+'</span>'+esc(s.salePrice):esc(s.price))+'</div>'+
+        (s.qrUrl?'<div style="display:flex;align-items:center;gap:30px">'+qrImg(s.qrUrl,190)+
+          '<div class="dsub">Scan for details</div></div>':'')+
+        '</div><div class="prodR">'+
+        (s.salePrice?'<div class="ribbon">SALE</div>':'')+
+        (s.img?'<img src="'+esc(s.img)+'">':'<img src="/brand/logo-forest.png">')+
+        '</div></div>';
+    }
+    else if (s.kind === "floormap"){
+      el.innerHTML = '<div class="wk"><div style="display:flex;justify-content:space-between;align-items:flex-end">'+
+        '<div class="dhead">'+esc(s.title||"Find Your Table")+'</div></div>'+
+        '<div style="flex:1;position:relative" id="fmBox_'+esc(s.map)+'">Loading map…</div></div>';
+      (function(mapid){
+        fetchFloormap(mapid).then(function(mj){
+          var box = el.querySelector("#fmBox_"+CSS.escape(mapid));
+          if (!box) return;
+          box.innerHTML = '<div style="position:absolute;left:50%;top:50%;width:1920px;height:1080px;'+
+            'transform:translate(-50%,-50%) scale(0.62);transform-origin:center center">'+
+            floormapInner(mj)+'</div>';
+        }).catch(function(){});
+      })(s.map);
+      return;
+    }
+    else if (s.kind === "auto:weekly"){
+      var days = (feed && feed.weekly) || [];
+      h = '<div class="wk"><div style="display:flex;justify-content:space-between;align-items:flex-end">'+
+        '<div class="dhead">This Week at the Haven</div>'+
+        '<div style="text-align:center">'+qrImg("/events.html",170)+'<div class="dqrLbl">Full calendar</div></div></div>'+
+        '<div class="wkgrid">'+ days.map(function(d){
+          var evs = d.events.slice(0,5).map(function(e){
+            return '<div class="wkev">'+esc(e.title)+(e.allDay?' <span class="t">All day</span>'
+              :(e.start?' <span class="t">'+fmtTime(e.start)+'</span>':''))+'</div>';
+          }).join("");
+          return '<div class="wkday'+(feed && d.date===feed.today?" today":"")+'">'+
+            '<div class="wkdow">'+DOWS[d.dow].slice(0,3).toUpperCase()+'</div>'+
+            '<div class="wkdate">'+MONS[new Date(d.date+"T12:00:00").getMonth()]+' '+new Date(d.date+"T12:00:00").getDate()+'</div>'+
+            (evs||'<div class="wkempty">Open play 🦦</div>')+'</div>';
+        }).join("")+'</div></div>';
+    }
+    else if (s.kind === "auto:recurring"){
+      var list = (feed && feed.recurring && feed.recurring[s.dow]) || [];
+      var lead = list[0] || {};
+      var img = lead.hasPhoto ? ("/event/"+encodeURIComponent(lead.id)+"/photo") : "/brand/logo-forest.png";
+      h = '<div class="ftr"><div class="ftrL"><img src="'+esc(img)+'"><div class="shade"></div></div>'+
+        '<div class="ftrR"><div class="dbadge">EVERY WEEK</div>'+
+        '<div class="dhead">'+DOWS[s.dow]+'s</div>'+
+        '<div class="ftrList">'+ list.slice(0,4).map(function(e){
+          return '<div class="ftrRow">'+esc(e.title)+' <span class="t">'+
+            (e.allDay?"All day":fmtTime(e.start))+(e.cadence==="biweekly"?" · every other week":"")+'</span>'+
+            (e.blurb?'<span class="b">'+esc(e.blurb)+'</span>':'')+'</div>';
+        }).join("")+'</div>'+
+        '<div class="ftrQR">'+qrImg("/events.html",190)+'<div class="dqrLbl">Details &amp; sign-ups</div></div>'+
+        '</div></div>';
+    }
+    else if (s.kind === "auto:event"){
+      var ev = null;
+      if (feed) (feed.specials||[]).forEach(function(x){ if (x.id===s.event) ev=x; });
+      ev = ev || { title:"Special Event", date:"", blurb:"" };
+      var eimg = ev.hasPhoto ? ("/event/"+encodeURIComponent(ev.id)+"/photo") : "/brand/logo-forest.png";
+      var qurl = "/event/"+encodeURIComponent(ev.id||"");
+      h = '<div class="ftr"><div class="ftrL"><img src="'+esc(eimg)+'"><div class="shade"></div></div>'+
+        '<div class="ftrR">'+
+        (ev.date?'<div class="dbadge">'+fmtDate(ev.date)+(ev.allDay?' · All day':(ev.start?' · '+fmtTime(ev.start):''))+'</div>':'')+
+        '<div class="dhead">'+esc(ev.title)+'</div>'+
+        (ev.blurb?'<div class="dsub" style="max-width:860px">'+esc(ev.blurb)+'</div>':'')+
+        '<div class="d-caveat" style="font-size:52px;color:var(--gold)">Stay curious.</div>'+
+        '<div class="ftrQR">'+qrImg(qurl,210)+'<div class="dqrLbl">Details &amp; tickets</div></div>'+
+        '</div></div>';
+    }
+    el.innerHTML = h;
+  }
+
+  function deckTotal(){ var t=0; eff.forEach(function(s){ t+=s.dur; }); return t; }
+  function tickDeck(){
+    if (!cfg || cfg.mode !== "deck") return;
+    if (!eff.length){ return; }
+    var total = deckTotal();
+    var elapsed = ((now() - (cfg.anchor||0))/1000) % total;
+    if (elapsed < 0) elapsed += total;
+    var t = elapsed, i = 0;
+    while (i < eff.length && t >= eff[i].dur){ t -= eff[i].dur; i++; }
+    i = i % eff.length;
+    if (i !== dCur){
+      dCur = i;
+      var back = (dFront === dA) ? dB : dA;
+      renderSlide(back, eff[i]);
+      back.classList.add("on"); dFront.classList.remove("on");
+      dFront = back;
+    }
+  }
+  function startDeck(){
+    stopDeck();
+    scaleDeck();
+    dCur = -1;
+    var key = cfg.deck + ":" + deckV;
+    var p = (deckLoadedFor === key) ? Promise.resolve() : fetchDeck(cfg.deck, deckV);
+    p.then(function(){
+      var fp = (needFeed() && (!feed || Date.now()-feedAt > 300000)) ? loadFeed() : Promise.resolve();
+      return fp;
+    }).catch(function(){}).then(function(){
+      computeEff();
+      if (!eff.length){
+        dA.innerHTML='<div class="wk"><div class="dhead">Deck is empty</div></div>';
+        dA.classList.add("on"); dFront=dA;
+      }
+      tickDeck();
+      deckTimer = setInterval(tickDeck, 250);
+      if (feedTimer) clearInterval(feedTimer);
+      if (needFeed()) feedTimer = setInterval(function(){
+        loadFeed().then(computeEff).catch(function(){});
+      }, 300000);
+    });
+  }
+  function stopDeck(){
+    if (deckTimer){ clearInterval(deckTimer); deckTimer=null; }
+    if (feedTimer){ clearInterval(feedTimer); feedTimer=null; }
+  }
+
+  // ---- QR overlay ----
+  function setQr(url, label){
+    if (!url){ qrBox.style.display = "none"; return; }
+    qrImg.src = "/api/tv/qr.png?data=" + encodeURIComponent(url) + "&s=320";
+    qrLabel.textContent = label || "Scan me!";
+    qrBox.style.display = "block";
+  }
+  function applyQr(){
+    // custom overlay wins; trivia gets an automatic join QR unless qr === false
+    if (cfg && cfg.qr && cfg.qr.url){ setQr(cfg.qr.url, cfg.qr.label); return; }
+    if (cfg && cfg.mode === "trivia" && cfg.qr !== false){
+      setQr("/trivia-play.html?game=" + encodeURIComponent(cfg.trivia || ""), "📱 Scan to join!");
+      return;
+    }
+    setQr(null);
+  }
+
+  // ---- apply config ----
+  function apply(){
+    stopShow();
+    stopDeck();
+    if (!cfg){ showOnly(elIdle); setQr(null); return; }
+    applyQr();
+    if (cfg.mode === "deck"){ showOnly(elDeck); startDeck(); }
+    else if (cfg.mode === "slideshow"){ showOnly(elShow); startShow(); }
+    else if (cfg.mode === "trivia"){
+      var src = "trivia-display.html?game=" + encodeURIComponent(cfg.trivia || "") +
+                "&display=" + encodeURIComponent("TV-" + (DEV || "x"));
+      if (elFrame.getAttribute("src") !== src) elFrame.setAttribute("src", src);
+      showOnly(elFrameWrap);
+    }
+    else if (cfg.mode === "arcade"){
+      var asrc = "arcade-display.html?s=" + encodeURIComponent(cfg.arcade || "");
+      if (elFrame.getAttribute("src") !== asrc) elFrame.setAttribute("src", asrc);
+      showOnly(elFrameWrap);
+    }
+    else if (cfg.mode === "url"){
+      if (elFrame.getAttribute("src") !== cfg.url) elFrame.setAttribute("src", cfg.url || "about:blank");
+      showOnly(elFrameWrap);
+    }
+    else if (cfg.mode === "announce"){
+      document.getElementById("announceText").textContent = cfg.text || "";
+      document.getElementById("announceSub").textContent = cfg.sub || "";
+      showOnly(elAnnounce);
+    }
+    else { elFrame.setAttribute("src","about:blank"); showOnly(elIdle); }
+  }
+
+  // ---- polling ----
+  var misses = 0;
+  function poll(){
+    fetch(API + "/config?d=" + encodeURIComponent(DEV) +
+          "&c=" + encodeURIComponent(channel) + "&v=" + version + "&dv=" + deckV)
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        misses = 0; dot.className = "";
+        if (j.unchanged) return;
+        channel = j.channel; version = j.version; deckV = Number(j.deckV)||0;
+        cfg = j.config || { mode:"idle" };
+        apply();
+      })
+      .catch(function(){ misses++; if (misses >= 3) dot.className = "bad"; });
+  }
+
+  // ---- keep-awake (kiosk browser is the real guarantee; this helps too) ----
+  function wake(){
+    if (navigator.wakeLock && navigator.wakeLock.request){
+      navigator.wakeLock.request("screen").catch(function(){});
+    }
+  }
+  document.addEventListener("visibilitychange", function(){ if (!document.hidden) wake(); });
+
+  // ---- boot ----
+  function boot(){
+    try { localStorage.setItem("ngh_tv_name", DEV); } catch(e){}
+    showOnly(elIdle);
+    syncClock(3).then(function(){
+      poll();
+      setInterval(poll, 5000);
+      setInterval(function(){ syncClock(2); }, 60000);
+      wake();
+    });
+  }
+
+  if (DEV){ boot(); }
+  else {
+    // No name: show setup instructions, then fall back to a generated name
+    document.getElementById("setupUrl").textContent =
+      location.origin + "/tv?d=holt";
+    document.getElementById("setupFallback").textContent = generated;
+    showOnly(elSetup);
+    var left = 20;
+    var t = setInterval(function(){
+      left--; document.getElementById("setupCount").textContent = left;
+      if (left <= 0){ clearInterval(t); DEV = generated; boot(); }
+    }, 1000);
+  }
+})();
+</script>
+</body>
+</html>

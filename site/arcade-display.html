@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- NGH-BUILD 2026-08-24f — NGH Arcade big-screen display
+     Shown on the TV Network (tv.html mode 'arcade' iframes this) or cast
+     standalone:  /arcade-display.html?s=CODE
+     Unlisted: noindex, not in sitemap. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH Arcade</title>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{--forest:#1e3d2b;--forest-dk:#132a1d;--gold:#c9973a;--gold-lt:#e8b84b;
+    --maroon:#7a2431;--cream:#f6efdd;--ink:#26211a;--go:#2ecc71;--ready:#c0392b}
+  html,body{margin:0;height:100%;background:var(--forest-dk);color:var(--cream);
+    font-family:Nunito,sans-serif;overflow:hidden;cursor:none}
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:4vmin}
+  h1{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:7vmin;margin:0 0 1vmin;
+    text-shadow:0 4px 16px rgba(0,0,0,.5)}
+  .sub{font-size:3vmin;font-weight:800;opacity:.9}
+  .tag{font-family:Caveat,cursive;font-size:4.2vmin;color:var(--gold)}
+
+  /* lobby */
+  #lobby .join{display:flex;gap:6vmin;align-items:center;margin:3vmin 0;flex-wrap:wrap;justify-content:center}
+  #lobby img.qr{width:34vmin;height:34vmin;border-radius:2vmin;border:1vmin solid var(--gold);
+    background:var(--cream)}
+  #lobby .code{font-family:'Alfa Slab One',serif;font-size:9vmin;color:var(--cream);
+    background:var(--maroon);padding:1vmin 4vmin;border-radius:2vmin;letter-spacing:.14em}
+  #roster{font-size:2.6vmin;font-weight:800;opacity:.85;max-width:80vw;min-height:3.5vmin;
+    max-height:7vmin;overflow:hidden}
+  #lobbyCrest{width:13vmin;filter:drop-shadow(0 6px 18px rgba(0,0,0,.5))}
+  #pcount{font-size:3.2vmin;color:var(--gold-lt);font-weight:800}
+
+  /* buzzer */
+  #armed{transition:background .2s}
+  #armed.ready{background:radial-gradient(100vmax 80vmax at 50% 40%, #5c1b1b, var(--forest-dk) 70%)}
+  #armed.go{background:radial-gradient(100vmax 80vmax at 50% 40%, #14803f, var(--forest-dk) 75%)}
+  #bigword{font-family:'Alfa Slab One',serif;font-size:16vmin;line-height:1;margin:1vmin 0}
+  #armed.ready #bigword{color:#ff8a7a}
+  #armed.go #bigword{color:#8dffb8;animation:pop .35s ease}
+  @keyframes pop{from{transform:scale(.6)}60%{transform:scale(1.12)}to{transform:scale(1)}}
+  #qtext{font-size:4vmin;font-weight:800;max-width:84vw}
+  #livebuzz{margin-top:2.5vmin;font-size:3vmin;font-weight:800;min-height:12vmin}
+  #livebuzz .b{margin:.4vmin 0}
+  #livebuzz .rt{color:var(--gold-lt)}
+  #livebuzz .jump{color:#ff8a7a}
+
+  /* results */
+  .podium{display:flex;flex-direction:column;gap:1.2vmin;margin:2vmin 0;min-width:56vmin}
+  .prow{display:flex;justify-content:space-between;gap:4vmin;background:var(--forest);
+    border:.5vmin solid var(--gold);border-radius:1.5vmin;padding:1.2vmin 2.4vmin;
+    font-size:3.6vmin;font-weight:800}
+  .prow.first{border-color:var(--gold-lt);background:#2a5a3f;font-size:4.4vmin}
+  .prow .rt{color:var(--gold-lt)}
+  .prow.jumped{opacity:.55}.prow.jumped .rt{color:#ff8a7a}
+  #scores{margin-top:2vmin;font-size:2.8vmin;font-weight:800;color:var(--gold-lt)}
+
+  /* qa */
+  #qa{justify-content:flex-start;padding-top:5vmin}
+  #qawall{display:grid;grid-template-columns:repeat(auto-fit,minmax(38vmin,1fr));gap:2vmin;
+    width:92vw;margin-top:2vmin;align-content:start;max-height:calc(100vh - 34vmin);
+    overflow:hidden;padding-right:20vmin}
+  .qcard .t2{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  .qcard{background:var(--forest);border:.45vmin solid var(--gold);border-radius:1.6vmin;
+    padding:1.8vmin 2.2vmin;text-align:left;font-size:2.9vmin;font-weight:700}
+  .qcard.pinned{border-color:var(--gold-lt);background:#2a5a3f}
+  .qcard.done{opacity:.45}
+  .qcard .who{color:var(--gold-lt);font-size:2.2vmin;font-weight:800;margin-top:.8vmin}
+  .qcard .v{float:right;color:var(--gold)}
+  #qaside{position:fixed;right:2vmin;bottom:2vmin;text-align:center}
+  #qaside img{width:16vmin;height:16vmin;border-radius:1.4vmin;border:.6vmin solid var(--gold);
+    background:var(--cream)}
+  #qaside div{font-size:1.9vmin;font-weight:800;color:var(--gold-lt)}
+
+  #err{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    font-size:4vmin;font-weight:800;color:#ff9b8a;text-align:center;padding:6vmin}
+</style>
+</head>
+<body>
+  <div class="screen" id="lobby">
+    <img id="lobbyCrest" src="/brand/crest.png" alt="Northwood Game Haven">
+    <h1 id="lobbyTitle">⚡ Speed Buzzer</h1>
+    <div class="sub">Grab your phone and jump in!</div>
+    <div class="join">
+      <img class="qr" id="qrImg" alt="Scan to join">
+      <div>
+        <div class="sub">Scan, or go to <b>gamehaven.guru/buzz</b><br>and enter the code:</div>
+        <div class="code" id="codeEl">----</div>
+      </div>
+    </div>
+    <div id="pcount">0 players</div>
+    <div id="roster"></div>
+    <div class="tag">Stay curious.</div>
+  </div>
+
+  <div class="screen" id="armed">
+    <div id="qtext"></div>
+    <div id="bigword">GET READY…</div>
+    <div class="sub" id="roundTag"></div>
+    <div id="livebuzz"></div>
+  </div>
+
+  <div class="screen" id="results">
+    <h1>🏁 Results</h1>
+    <div class="sub" id="resRound"></div>
+    <div class="podium" id="podium"></div>
+    <div id="scores"></div>
+  </div>
+
+  <div class="screen" id="qa">
+    <h1 id="qaTitle">💬 Ask Away</h1>
+    <div class="sub">Scan the QR to send a question — 👍 votes float the best to the top.</div>
+    <div id="qawall"></div>
+    <div id="qaside"><img id="qaQr" alt="Scan to ask"><div>Scan to ask / vote</div></div>
+  </div>
+
+  <div id="err"></div>
+
+<script>
+(function(){
+  "use strict";
+  var API = "/api/arcade";
+  var params = new URLSearchParams(location.search);
+  var S = String(params.get("s")||"").toUpperCase();
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+
+  if (!S){ $("err").style.display="flex"; $("err").textContent="Missing session code (?s=CODE)"; return; }
+  var joinUrl = location.origin + "/buzz?s=" + encodeURIComponent(S);
+  $("qrImg").src = "/api/tv/qr.png?data=" + encodeURIComponent("/buzz?s="+S) + "&s=520";
+  $("qaQr").src  = "/api/tv/qr.png?data=" + encodeURIComponent("/buzz?s="+S) + "&s=300";
+  $("codeEl").textContent = S;
+
+  // ---- clock sync ----
+  var offset = 0;
+  function sample(){
+    var t0=Date.now();
+    return fetch(API+"/time").then(function(r){return r.json();}).then(function(j){
+      var t1=Date.now(); return j.serverNow+(t1-t0)/2-t1;
+    });
+  }
+  function syncClock(n){
+    var ps=[]; for(var i=0;i<n;i++) ps.push(sample().catch(function(){return null;}));
+    return Promise.all(ps).then(function(v){
+      v=v.filter(function(x){return x!==null;}).sort(function(a,b){return a-b;});
+      if(v.length) offset=v[Math.floor(v.length/2)];
+    });
+  }
+  function now(){ return Date.now()+offset; }
+
+  var v=0, st=null, goTimer=null;
+  var MUTE = params.get("mute")==="1", AC=null, wasGo=false;
+  function beep(f,ms,vol){
+    if (MUTE) return;
+    try{
+      if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)();
+      var o=AC.createOscillator(),g=AC.createGain();
+      o.frequency.value=f;o.type="square";g.gain.value=vol||0.14;
+      o.connect(g);g.connect(AC.destination);
+      var t0=AC.currentTime;o.start(t0);
+      g.gain.exponentialRampToValueAtTime(0.0001,t0+ms/1000);o.stop(t0+ms/1000+0.02);
+    }catch(e){}
+  }
+
+  function show(id){
+    ["lobby","armed","results","qa"].forEach(function(x){
+      $(x).style.display = (x===id)?"flex":"none";
+    });
+  }
+
+  function renderLobby(){
+    $("lobbyTitle").textContent = st.kind==="qa" ? "💬 "+(st.title||"Ask Away") : "⚡ Speed Buzzer";
+    $("pcount").textContent = st.players + (st.players===1?" player":" players");
+    $("roster").textContent = (st.roster||[]).join("  ·  ");
+    show("lobby");
+  }
+
+  function renderArmed(){
+    show("armed");
+    $("qtext").textContent = st.question || "";
+    $("roundTag").textContent = "Round " + st.round;
+    paintGo();
+    if (goTimer) clearInterval(goTimer);
+    goTimer = setInterval(paintGo, 60);
+    renderLive();
+  }
+  function paintGo(){
+    var el=$("armed");
+    if (now() >= st.goAt){
+      if (!el.classList.contains("go")){
+        el.classList.remove("ready"); el.classList.add("go");
+        $("bigword").textContent = "BUZZ NOW!";
+        if (!wasGo){ wasGo=true; beep(1320,320,0.18); }
+      }
+    } else {
+      wasGo=false;
+      el.classList.remove("go"); el.classList.add("ready");
+      $("bigword").textContent = "GET READY…";
+    }
+  }
+  function renderLive(){
+    var b = st.buzzes||[];
+    var html = "";
+    for (var i=0;i<Math.min(b.length,6);i++){
+      var x=b[i];
+      html += '<div class="b">'+(x.jumped?'🚫 <span class="jump">'+esc(x.name)+' jumped!</span>'
+        : (i===0&&!x.jumped?'⚡ ':'')+esc(x.name)+' — <span class="rt">'+x.rt+' ms</span>')+'</div>';
+    }
+    $("livebuzz").innerHTML = html;
+  }
+
+  function renderResults(){
+    show("results");
+    if (goTimer){ clearInterval(goTimer); goTimer=null; }
+    $("resRound").textContent = (st.question?('“'+st.question+'” — '):'') + "Round " + st.round;
+    var b = st.buzzes||[], html="";
+    var medals=["🥇","🥈","🥉"], place=0;
+    for (var i=0;i<Math.min(b.length,8);i++){
+      var x=b[i];
+      if (x.jumped){
+        html += '<div class="prow jumped"><span>🚫 '+esc(x.name)+'</span><span class="rt">jumped</span></div>';
+      } else {
+        var m = medals[place]||("#"+(place+1)); place++;
+        html += '<div class="prow'+(place===1?' first':'')+'"><span>'+m+' '+esc(x.name)+
+          '</span><span class="rt">'+x.rt+' ms</span></div>';
+      }
+    }
+    if (!b.length) html = '<div class="prow"><span>No buzzes!</span><span class="rt">—</span></div>';
+    $("podium").innerHTML = html;
+    var sc = st.scores||{}, arr=[];
+    Object.keys(sc).forEach(function(k){ arr.push(sc[k]); });
+    arr.sort(function(a,b){ return b.pts-a.pts; });
+    $("scores").textContent = arr.length
+      ? "🏆 " + arr.slice(0,6).map(function(p){ return p.name+" "+p.pts; }).join("   ·   ")
+      : "";
+  }
+
+  function renderQa(){
+    show("qa");
+    $("qaTitle").textContent = "💬 " + (st.title||"Ask Away");
+    var html = (st.items||[]).map(function(i){
+      return '<div class="qcard '+i.status+'">'+
+        (i.votes?'<span class="v">👍 '+i.votes+'</span>':'')+
+        '<span class="t2">'+esc(i.text)+'</span><div class="who">— '+esc(i.name)+(i.status==="done"?" · answered ✅":"")+'</div></div>';
+    }).slice(0,12).join("");
+    $("qawall").innerHTML = html ||
+      '<div class="qcard">Be the first — scan the QR and ask anything! 🦦</div>';
+  }
+
+  function render(){
+    if (!st) return;
+    if (st.kind === "qa"){ renderQa(); return; }
+    if (st.phase === "armed") renderArmed();
+    else if (st.phase === "results") renderResults();
+    else renderLobby();
+  }
+
+  function poll(){
+    fetch(API+"/sessions/"+encodeURIComponent(S)+"/state?v="+v)
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        if (j.unchanged) return;
+        v = j.version; st = j; render();
+      }).catch(function(){});
+  }
+
+  syncClock(3).then(function(){
+    poll(); setInterval(poll, 1000);
+    setInterval(function(){ syncClock(2); }, 60000);
+  });
+})();
+</script>
+</body>
+</html>
