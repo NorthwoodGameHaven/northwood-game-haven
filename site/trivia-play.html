@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH TRIVIA PLAY — NGH-BUILD 09a -->
+<!-- NGH TRIVIA PLAY — NGH-BUILD 10a · 2026-09-04a — blind wagers; verdict-true reveal colors -->
 <!-- Phone client: join via QR, answer + change anytime before lock, buzzer races,
      minigame self-reporting, live standings tab, suggestion link. -->
 <html lang="en">
@@ -49,6 +49,7 @@
   .statusbar{border-radius:10px;padding:10px 12px;font-weight:800;font-size:14px;margin-top:10px;text-align:center}
   .st-open{background:rgba(47,122,68,.25);border:1px solid var(--green)}
   .st-locked{background:rgba(122,43,53,.3);border:1px solid var(--maroon)}
+  .st-adj{background:rgba(46,109,164,.25);border:1px solid #4a90d9} /* 10a: pending Guru ruling */
   .st-saved{background:rgba(231,193,91,.16);border:1px solid var(--gold-dk)}
   .bigcount{font-family:'Alfa Slab One',serif;font-size:44px;color:var(--gold);text-align:center;margin:4px 0}
   .bigcount.hot{color:#ff8f7a}
@@ -213,12 +214,12 @@
     document.getElementById("nav").style.display = "flex";
     document.getElementById("hTeam").textContent = team.teamName;
     var sub = "";
-    if (st && st.round && st.round.title && ["preload", "live", "answering", "locked", "reveal"].indexOf(st.phase) >= 0) {
+    if (st && st.round && st.round.title && ["preload", "live", "answering", "locked", "reveal", "wager"].indexOf(st.phase) >= 0) {
       sub = st.round.title;
       if (st.q && st.round.qCount) sub += " · Q" + ((st.qIdx | 0) + 1) + "/" + st.round.qCount;
       if (st.round.isWager) sub += " · 💰";
     } else if (st) {
-      sub = ({ lobby: "Waiting to start", intermission: "Intermission", scoreboard: "Scores", ended: "Final" })[st.phase] || "";
+      sub = ({ lobby: "Waiting to start", intermission: "Intermission", scoreboard: "Scores", ended: "Final", wager: "💰 Place your wagers" })[st.phase] || "";
     }
     document.getElementById("hSub").textContent = sub;
     var mine = myStanding();
@@ -300,6 +301,21 @@
     return '<div class="statusbar st-open">Answers open — pick or type, change any time</div>';
   }
 
+  /* 10a: after reveal, keep checking until the Guru has ruled so the box
+     flips from blue (with the judges) to green/red the moment it's decided. */
+  var verdictTimer = null;
+  function scheduleVerdictRefresh(qKey) {
+    if (verdictTimer || !team) return;
+    verdictTimer = setTimeout(function () {
+      verdictTimer = null;
+      fetchMyAnswer(qKey).then(function (j) {
+        if (st.phase !== "reveal") return;
+        renderPlay();
+        if (j && j.answered && !j.verdict) scheduleVerdictRefresh(qKey);
+      });
+    }, 3000);
+  }
+
   function renderPlay() {
     var ph = st.phase;
     var h = "";
@@ -316,6 +332,41 @@
         '<div class="hook">' + esc((st.round && st.round.title) || "Next question") + "</div>" +
         (st.round && st.round.isWager ? '<div class="pill gold">💰 ' + esc(st.wagerLabel) + " round</div>" : "") +
         '<div class="devban">📵 Eyes up — the clue plays on the big screen!</div></div>';
+      return;
+    }
+    if (ph === "wager") { // 10a: blind wager — stake before the question shows
+      var wq = st.q, wKey = wq && wq.key;
+      var savedW = (wKey && myAns[wKey] && myAns[wKey].wager != null) ? myAns[wKey].wager : null;
+      main.innerHTML = '<div class="center" style="padding-top:10px">' +
+        (st.deadline ? '<div class="bigcount" id="count">–</div>' : "") +
+        "<h1>💰 " + esc(st.wagerLabel || "Final Wager") + "</h1>" +
+        '<div class="hook">Category: ' + esc((st.round && st.round.title) || "Final") + "</div>" +
+        '<div class="muted">Stake your points BEFORE you see the question. Right = win the stake. Wrong = lose it (score floor 10).</div></div>' +
+        '<div class="card" style="border-color:var(--pink)"><label style="color:var(--pink)">Your wager</label>' +
+        '<input type="number" id="blindWager" inputmode="numeric" min="0" placeholder="0 = play it safe" value="' + (savedW != null ? esc(String(savedW)) : "") + '">' +
+        '<button class="primary" id="blindSave">' + (savedW != null ? "🔁 Update wager" : "💰 Lock it in") + "</button>" +
+        (savedW != null ? '<div class="muted" style="margin-top:6px">Staked: <b>' + esc(String(savedW)) + '</b> — updatable until the question shows.</div>' : "") +
+        "</div>";
+      var bs = document.getElementById("blindSave");
+      if (bs) bs.onclick = function () {
+        if (!wKey) { toast("Hold on — the host is setting up."); return; }
+        var val = Number(document.getElementById("blindWager").value);
+        if (isNaN(val) || val < 0) { toast("Enter 0 or more."); return; }
+        bs.disabled = true; haptic();
+        fetch(API + "/games/" + encodeURIComponent(GAME) + "/wager", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: team.token, qKey: wKey, wager: val })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            bs.disabled = false;
+            if (res.ok) {
+              myAns[wKey] = myAns[wKey] || {};
+              myAns[wKey].wager = val; myAns[wKey].blindWager = true;
+              renderPlay(); toast("Wager locked ✓");
+            } else toast(res.j.error || "Couldn\u2019t save wager.");
+          }).catch(function () { bs.disabled = false; toast("Network error — try again."); });
+      };
+      startCountdown();
       return;
     }
     if (ph === "intermission") {
@@ -429,7 +480,11 @@
     var isWager = st.round && st.round.isWager;
     var mine = myAns[qKey] || {};
     var wagerBox = "";
-    if (isWager && answering) {
+    if (isWager && answering && mine.blindWager) {
+      // 10a: staked blind before the question showed — display only, no edits
+      wagerBox = '<div class="card" style="border-color:var(--pink)"><label style="color:var(--pink)">💰 ' + esc(st.wagerLabel) +
+        '</label><div class="hook" style="margin:2px 0 0">Locked in: ' + esc(String(mine.wager != null ? mine.wager : 0)) + ' pts</div></div>';
+    } else if (isWager && answering) {
       var wv = (pendingSel["w:" + qKey] != null) ? pendingSel["w:" + qKey] : (mine.wager != null ? mine.wager : "");
       wagerBox = '<div class="card" style="border-color:var(--pink)"><label style="color:var(--pink)">💰 ' + esc(st.wagerLabel) +
         " — stake your points</label>" +
@@ -452,9 +507,11 @@
       }).join("");
       if (!reveal) h += statusBarHTML(qKey, locked);
       else {
-        var right = chosen != null && chosen === st.q.answer;
+        var vdm = mine.verdict; // 10a: the Guru's ruling wins over raw string match
+        var right = vdm === "correct" || (vdm !== "incorrect" && chosen != null && chosen === st.q.answer);
         h += '<div class="statusbar ' + (right ? "st-open" : "st-locked") + '">' +
           (chosen == null ? "No answer this round." : (right ? "✅ Nailed it!" : "❌ Not this time — it was \u201c" + esc(st.q.answer) + "\u201d")) + "</div>";
+        if (chosen != null && !vdm) scheduleVerdictRefresh(qKey); // 10a: pick up late rulings
       }
       main.innerHTML = h;
       if (answering) {
@@ -488,10 +545,13 @@
         '<button class="primary" id="fillSave">' + (mine.answer ? "🔁 Update answer" : "💾 Save answer") + "</button></div>" +
         statusBarHTML(qKey, false);
     } else if (reveal) {
-      var vd = mine.verdict;
-      h += '<div class="statusbar ' + (vd === "correct" ? "st-open" : "st-locked") + '">' +
+      var vd = mine.verdict; // 10a: green ✓ / red ✗ / BLUE while the Guru rules
+      var stCls = vd === "correct" ? "st-open" : (vd === "incorrect" ? "st-locked" : (mine.answer ? "st-adj" : "st-locked"));
+      var lead = vd === "correct" ? "✅ " : (vd === "incorrect" ? "❌ " : (mine.answer ? "⚖️ With the judges — " : ""));
+      h += '<div class="statusbar ' + stCls + '">' + lead +
         (mine.answer ? "You said: \u201c" + esc(mine.answer) + "\u201d" : "No answer this round.") +
         (st.q.answer ? " · Correct: \u201c" + esc(st.q.answer) + "\u201d" : "") + "</div>";
+      if (mine.answer && !vd) scheduleVerdictRefresh(qKey); // 10a
     } else {
       h += statusBarHTML(qKey, true);
     }

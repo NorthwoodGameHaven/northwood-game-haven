@@ -1,5 +1,6 @@
 // netlify/functions/trivia.mjs
 // NGH-BUILD 09e — Event Stream engine: + YouTube clue media (clip window, audio-only mode).
+// NGH-BUILD 10a — blind 'wager' phase, /wager + /control endpoints, per-entry adjudication tolerance.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
@@ -123,7 +124,7 @@ function normalize(s) {
 }
 
 // ---- game helpers ----
-const PHASES = ['lobby', 'preload', 'live', 'answering', 'locked', 'reveal', 'intermission', 'scoreboard', 'ended', 'timer', 'timer-paused'];
+const PHASES = ['lobby', 'preload', 'live', 'answering', 'locked', 'reveal', 'intermission', 'scoreboard', 'ended', 'timer', 'timer-paused', 'wager'];
 
 // Damerau-lite Levenshtein for adjudication suggestions.
 function levenshtein(a, b) {
@@ -147,10 +148,13 @@ function suggestVerdict(answer, q) {
   const n = normalize(answer);
   if (!n) return 'incorrect';
   const pool = [q.answer].concat(Array.isArray(q.alternates) ? q.alternates : []).map(normalize).filter(Boolean);
-  let best = Infinity;
-  for (const p of pool) best = Math.min(best, levenshtein(n, p));
-  const tol = Math.max(1, Math.round(Math.min(...pool.map(p => p.length), 99) / 5));
-  return best <= tol ? 'correct' : 'incorrect';
+  // 10a: per-entry tolerance. A 1-3 char official answer must match EXACTLY —
+  // ('k' vs 'j' is one edit apart, which suggested ✓ for every wrong letter).
+  for (const p of pool) {
+    const tol = p.length <= 3 ? 0 : (p.length <= 6 ? 1 : Math.round(p.length / 5));
+    if (levenshtein(n, p) <= tol) return 'correct';
+  }
+  return 'incorrect';
 }
 
 // Media payload for clients. YouTube clues carry an id + optional clip window.
@@ -256,6 +260,10 @@ function publicState(game, st, version) {
       if (q.type === 'minigame-buzzer') out.buzzes = (st.buzzes || []).map(x => ({ teamId: x.teamId, name: x.name }));
       if (phase === 'reveal') out.q.answer = q.answer == null ? '' : String(q.answer);
     }
+  }
+  if (phase === 'wager') { // 10a: blind wager — category only, the prompt stays hidden
+    if (q) out.q = { key: q.key, points: Number(q.points) || 10 };
+    out.wagersIn = st.wagersIn | 0;
   }
   if (phase === 'scoreboard' || phase === 'ended') out.scoreboard = st.scoreboard || [];
   if (phase === 'intermission') {
@@ -645,6 +653,80 @@ const _handler = async (req) => {
     return bad('bad media request', 400);
   }
 
+  // ================= show control (Companion / Stream Deck / GT15 Max) — NGH-BUILD 10a =================
+  // POST /api/trivia/control  { code, action, gameId?, secs?, breakSecs? }
+  // Auth: 'code' must equal env ADMIN_CODE (also accepted via x-admin-code header).
+  // Actions: show | advance | reveal | lock | wager | scoreboard | intermission | lobby
+  // gameId optional — defaults to the most recently created game that isn't ended.
+  if (head === 'control' && req.method === 'POST') {
+    let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+    const code = String(b.code || req.headers.get('x-admin-code') || '');
+    if (!code || code !== String(process.env.ADMIN_CODE || '')) return bad('unauthorized', 401);
+    let gameId = b.gameId || null;
+    if (!gameId) {
+      const cand = await sql`SELECT id, state FROM trivia_games ORDER BY created_at DESC LIMIT 10`;
+      for (const c of cand) {
+        if (((c.state && c.state.phase) || 'lobby') !== 'ended') { gameId = c.id; break; }
+      }
+      if (!gameId) return bad('no active game', 404);
+    }
+    const rows = await sql`SELECT data, state FROM trivia_games WHERE id = ${gameId}`;
+    if (!rows.length) return bad('game not found', 404);
+    const game = rows[0].data, st = rows[0].state || {};
+    const now = Date.now();
+    const act = String(b.action || '');
+    const rounds = game.rounds || [];
+    let ri = st.roundIdx | 0, qi = st.qIdx | 0;
+    function goLiveSt() {
+      st.roundIdx = ri; st.qIdx = qi; st.buzzes = [];
+      st.phase = 'live';
+      st.startAt = now + 1500;
+      const secs = Math.min(600, Math.max(0, Number(b.secs) || 45));
+      st.deadline = secs > 0 ? st.startAt + secs * 1000 : null;
+    }
+    if (act === 'show') {
+      goLiveSt();
+      const f1 = findQuestion(game, ri, qi);
+      await markUsage(game, f1.q);
+    } else if (act === 'advance') {
+      qi++;
+      if (!rounds[ri] || qi >= ((rounds[ri] || {}).questions || []).length) { ri++; qi = 0; }
+      if (ri >= rounds.length) {
+        st.phase = 'scoreboard'; st.scoreboard = await computeScoreboard(gameId); st.deadline = null;
+      } else {
+        goLiveSt();
+        const f2 = findQuestion(game, ri, qi);
+        await markUsage(game, f2.q);
+      }
+    } else if (act === 'reveal') {
+      const f3 = findQuestion(game, ri, qi);
+      await autoScoreQuestion(gameId, f3.q, !!(f3.round && f3.round.isWager));
+      st.phase = 'reveal'; st.deadline = null;
+    } else if (act === 'lock') {
+      st.phase = 'locked'; st.deadline = st.deadline && st.deadline < now ? st.deadline : now;
+    } else if (act === 'wager') {
+      const f4 = findQuestion(game, ri, qi);
+      st.phase = 'wager'; st.startAt = null; st.buzzes = [];
+      const wsecs = Number(b.secs);
+      st.deadline = wsecs > 0 ? now + Math.min(600, Math.max(5, wsecs)) * 1000 : null;
+      const wn = await sql`SELECT COUNT(*)::int AS n FROM trivia_answers WHERE game_id = ${gameId} AND q_key = ${f4.q ? f4.q.key : ''} AND (data->>'wager') IS NOT NULL`;
+      st.wagersIn = wn.length ? wn[0].n : 0;
+    } else if (act === 'scoreboard') {
+      st.phase = 'scoreboard'; st.scoreboard = await computeScoreboard(gameId); st.deadline = null;
+    } else if (act === 'intermission') {
+      st.phase = 'intermission';
+      st.deadline = now + Math.min(3600, Math.max(30, Number(b.breakSecs) || 300)) * 1000;
+      st.startAt = null;
+      st.scoreboard = await computeScoreboard(gameId);
+      const nr = rounds[ri + 1];
+      st.next = nr ? { roundIdx: ri + 1, title: nr.title || '', isWager: !!nr.isWager } : null;
+    } else if (act === 'lobby') {
+      st.phase = 'lobby'; st.deadline = null; st.startAt = null;
+    } else return bad('bad action');
+    const v = await bumpState(gameId, st);
+    return json({ ok: true, gameId, v, phase: st.phase, roundIdx: st.roundIdx | 0, qIdx: st.qIdx | 0 });
+  }
+
   // ================= games =================
   if (head === 'games') {
     const gameId = parts[1] ? decodeURIComponent(parts[1]) : null;
@@ -676,6 +758,38 @@ const _handler = async (req) => {
       return json({ teamId: team.id, teamName: name, token: teamToken(team.id) }, 201);
     }
 
+    // ----- PUBLIC: blind wager (phase 'wager' — stake before the question shows) — 10a -----
+    if (req.method === 'POST' && gameId && action === 'wager') {
+      let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
+      const teamId = verifyTeamToken(String(b.token || ''));
+      if (!teamId) return bad('unauthorized', 401);
+      const rows = await sql`SELECT data, state FROM trivia_games WHERE id = ${gameId}`;
+      if (!rows.length) return bad('not found', 404);
+      const game = rows[0].data, st = rows[0].state || {};
+      const { q } = findQuestion(game, st.roundIdx | 0, st.qIdx | 0);
+      if (!q || q.key !== String(b.qKey || '')) return bad('Not the live question', 409);
+      if (st.phase !== 'wager') return bad('Wagers are closed', 409);
+      if (st.deadline && Date.now() > Number(st.deadline) + 1500) return bad('Time is up', 409);
+      const wager = Math.max(0, Number(b.wager) || 0);
+      const existing = await sql`SELECT id, data FROM trivia_answers
+        WHERE game_id = ${gameId} AND team_id = ${teamId} AND q_key = ${q.key}`;
+      if (existing.length) {
+        const d0 = existing[0].data || {};
+        if (d0.verdict) return bad('Already scored', 409);
+        const had = d0.wager != null;
+        d0.wager = wager; d0.blindWager = true;
+        await sql`UPDATE trivia_answers SET data = ${JSON.stringify(d0)}::jsonb WHERE id = ${existing[0].id}`;
+        if (!had) { st.wagersIn = (st.wagersIn | 0) + 1; await bumpState(gameId, st); }
+      } else {
+        const d = { answer: '', wager, blindWager: true, value: null, submittedAt: Date.now(), verdict: null, points: null };
+        await sql`INSERT INTO trivia_answers (id, game_id, team_id, q_key, data)
+          VALUES (${newId('ANS')}, ${gameId}, ${teamId}, ${q.key}, ${JSON.stringify(d)}::jsonb)`;
+        st.wagersIn = (st.wagersIn | 0) + 1;
+        await bumpState(gameId, st);
+      }
+      return json({ ok: true, qKey: q.key, wager });
+    }
+
     // ----- PUBLIC: submit/replace answer -----
     if (req.method === 'POST' && gameId && action === 'answer') {
       let b; try { b = await req.json(); } catch { return bad('Invalid JSON'); }
@@ -693,11 +807,14 @@ const _handler = async (req) => {
       if (existing.length && existing[0].data && existing[0].data.verdict) return bad('Already scored', 409);
       const d = {
         answer: String(b.answer == null ? '' : b.answer).slice(0, 300),
-        wager: b.wager == null ? null : Math.max(0, Number(b.wager) || 0),
+        wager: b.wager == null // 10a: an answer without a wager keeps the blind wager already staked
+          ? ((existing.length && existing[0].data && existing[0].data.wager != null) ? existing[0].data.wager : null)
+          : Math.max(0, Number(b.wager) || 0),
         value: b.value == null ? null : Math.max(0, Math.min(9999, Number(b.value) || 0)),
         submittedAt: Date.now(),
         verdict: null, points: null
       };
+      if (existing.length && existing[0].data && existing[0].data.blindWager) d.blindWager = true; // 10a
       if (existing.length) {
         await sql`UPDATE trivia_answers SET data = ${JSON.stringify(d)}::jsonb WHERE id = ${existing[0].id}`;
       } else {
@@ -976,6 +1093,13 @@ const _handler = async (req) => {
       const { round, q } = findQuestion(game, st.roundIdx | 0, st.qIdx | 0);
 
       if (phase === 'preload') { st.startAt = null; st.deadline = null; }
+      if (phase === 'wager') { // 10a: blind-wager window — wagers open, question hidden
+        st.startAt = null;
+        const wsecs = Number(b.wagerSecs);
+        st.deadline = (wsecs > 0) ? now + Math.min(600, Math.max(5, wsecs)) * 1000 : null;
+        const wn = await sql`SELECT COUNT(*)::int AS n FROM trivia_answers WHERE game_id = ${gameId} AND q_key = ${q ? q.key : ''} AND (data->>'wager') IS NOT NULL`;
+        st.wagersIn = wn.length ? wn[0].n : 0;
+      }
       if (phase === 'live') {
         const lead = Math.min(30000, Math.max(1500, Number(b.leadMs) || 4000));
         st.startAt = now + lead;
@@ -1264,7 +1388,7 @@ const _handler = async (req) => {
         WHERE game_id = ${gameId} AND team_id = ${teamId} AND q_key = ${qKey}`;
       if (!rows.length) return json({ answered: false });
       const d = rows[0].data || {};
-      return json({ answered: true, answer: d.answer, wager: d.wager, verdict: d.verdict || null, points: d.points });
+      return json({ answered: true, answer: d.answer, wager: d.wager, blindWager: !!d.blindWager, verdict: d.verdict || null, points: d.points });
     }
 
     return bad('not found', 404);

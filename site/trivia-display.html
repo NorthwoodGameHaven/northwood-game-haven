@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 09e -->
+<!-- NGH-BUILD 10a · 2026-09-04a — blind-wager screen; media fail-safe; Stash banner removed -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -443,13 +443,22 @@
         '<div id="ytCover">🎵<div style="font-size:4vmin;margin-top:1vmin">LISTEN…</div></div>' +
         '<div id="ytBlock"></div></div>');
     }
-    return preloadAsset(q.media.url).then(function (src) {
-      readyQKey = q.key;
+    function renderSrc(src) { // 10a
       if (ph === "preload") return "";
       if (q.media.kind === "image") return '<img class="clue" id="clueMedia" src="' + src + '">';
       if (q.media.kind === "audio") return '<audio id="clueMedia" src="' + src + '" preload="auto"></audio>' +
         '<div class="brand" style="font-size:9vmin;margin:3vmin 0">🎵 LISTEN…</div>';
       return '<video id="clueMedia" src="' + src + '" preload="auto" playsinline></video>';
+    }
+    return preloadAsset(q.media.url).then(function (src) {
+      readyQKey = q.key;
+      return renderSrc(src);
+    }).catch(function () {
+      // 10a: cache/CORS fetch failed — fall back to the raw URL. An <img>/<video>
+      // tag renders cross-origin fine even when fetch() can't; the question must
+      // NEVER be held hostage by a clue that won't load.
+      readyQKey = q.key;
+      return renderSrc(q.media.url);
     });
   }
 
@@ -797,6 +806,17 @@
       return;
     }
 
+    if (ph === "wager") { // 10a: blind wager — category up, question hidden
+      stage.innerHTML =
+        '<div class="brand" style="font-size:7vmin">💰 ' + esc(st.wagerLabel || "FINAL WAGER") + '</div>' +
+        (st.round ? '<div class="sub" style="font-size:6vmin;margin-top:2vmin">Category: ' + esc(st.round.title) + '</div>' : "") +
+        '<div class="sub" style="font-size:4.2vmin;margin-top:3vmin">Stake your points on your phones — the question stays hidden until every stash is staked.</div>' +
+        '<div class="brand" style="font-size:12vmin;margin-top:4vmin;color:var(--gold)">' + (st.wagersIn | 0) + '</div>' +
+        '<div class="small">wager' + ((st.wagersIn | 0) === 1 ? "" : "s") + ' in</div>';
+      startCountdown();
+      return;
+    }
+
     if (ph === "preload") {
       stage.innerHTML =
         '<div class="brand" style="font-size:7vmin">GET READY…</div>' +
@@ -828,6 +848,10 @@
         if (q.media && q.media.kind === "youtube" && document.getElementById("ytHost")) {
           ytMount(q.media, ph === "live" || ph === "answering");
         }
+        if (ph !== "locked") startCountdown();
+      }).catch(function () {
+        // 10a: last-resort — show the question text even if media rendering throws
+        stage.innerHTML = '<div class="prompt" style="margin-top:2.5vmin">' + esc(q.prompt || "") + "</div>";
         if (ph !== "locked") startCountdown();
       });
       return;
@@ -882,7 +906,6 @@
         h += "</div>";
       }
       h += "</div>";
-      h += '<div class="devban devban-bottom">📵 Stash is watching — keep it fair, keep it fun</div>';
       stage.innerHTML = h;
       // centered M:SS break clock off the shared deadline
       if (st.deadline) {

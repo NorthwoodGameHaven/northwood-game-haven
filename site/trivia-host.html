@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NGH-BUILD 09i · 2026-09-03a — fix Show-question crash (runAnswer→runSecs); one-tap ⏭ Next; 🚦 Auto-run loop -->
+<!-- NGH-BUILD 10a · 2026-09-04a — 💰 blind Collect-wagers flow; official-answer panel; Auto-run wager window -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -248,6 +248,7 @@
           <span class="muted" style="align-self:center;font-size:12px">Other screens:</span>
           <button class="sec" onclick="setPhase('lobby')">🦦 Lobby</button>
           <button class="sec" onclick="setPhase('preload')">📦 Preload media</button>
+          <button class="sec" onclick="collectWagers()">💰 Collect wagers</button>
           <button class="sec" onclick="startIntermission()">☕ Intermission</button>
           <button class="sec" onclick="setPhase('scoreboard')">🏆 Scoreboard</button>
           <button class="danger" onclick="endGameConfirm()">🏁 End game</button>
@@ -1126,6 +1127,9 @@ function setPhase(phase, extra) {
 function goLive() {
   setPhase("live", { leadMs: 4000, answerSecs: Number(document.getElementById("runSecs").value) || 0 });
 }
+function collectWagers() { // 10a: blind wager window — question stays hidden, wagers open
+  setPhase("wager", { wagerSecs: Number(document.getElementById("runSecs").value) || 0 });
+}
 function startIntermission() {
   setPhase("intermission", {
     breakSecs: Number(document.getElementById("runBreak").value) || 300,
@@ -1242,6 +1246,7 @@ function oneTapNext() {
     return;
   }
   if (ph === "live" || ph === "answering" || ph === "locked") { setPhase("reveal"); return; }
+  if (ph === "wager") { goLiveDirect(); return; } // 10a: wagers in — show the question
   // lobby / preload / intermission / scoreboard → show the question the selectors point at
   goLiveDirect();
 }
@@ -1261,6 +1266,20 @@ function autoTick() {
   if (!run) return;
   if ((run.game.kind || "trivia") === "timer") return;
   var st = run.state || {}, ph = st.phase, now = autoNow(), key = autoKey();
+  if (ph === "wager") { // 10a: hands-free blind-wager window
+    autoRevealAt = 0;
+    if (st.deadline && now > Number(st.deadline) + 1200) {
+      if (autoFired === key) return;
+      autoFired = key;
+      setAutoStatus("💰 Wagers closed — showing the question.");
+      syncSelectorsToState();
+      goLiveDirect();
+    } else {
+      setAutoStatus("💰 Collecting wagers — " + (st.wagersIn | 0) + " in" +
+        (st.deadline ? ", question in " + Math.max(0, Math.ceil((Number(st.deadline) - now) / 1000)) + "s" : " — tap ⏭ Next to show the question") + ".");
+    }
+    return;
+  }
   if (ph === "live" || ph === "answering") {
     autoRevealAt = 0;
     if (!st.deadline) { setAutoStatus("No answer clock on this question — tap ⏭ Next to reveal."); return; }
@@ -1639,6 +1658,13 @@ function clearBuzzes() {
   if (!confirm("Clear the buzz order for this question?")) return;
   setPhase(run.state.phase, { clearBuzzes: true });
 }
+function officialAnswerHTML(q) { // 10a: the host sees the truth right under the answers
+  if (!q || !q.answer) return "";
+  var alts = (q.alternates && q.alternates.length)
+    ? ' <span class="muted">(also accepted: ' + esc(q.alternates.join(", ")) + ")</span>" : "";
+  return '<div style="margin-top:8px;padding:8px 10px;background:#17281c;border-radius:8px">✅ <b>Official answer:</b> ' +
+    '<span style="color:var(--gold);font-weight:800">' + esc(String(q.answer)) + "</span>" + alts + "</div>";
+}
 function pollAnswers() {
   if (!run || (run.game.kind || "trivia") === "timer") return;
   var q = currentQ();
@@ -1686,7 +1712,7 @@ function pollAnswers() {
   box.removeAttribute("data-mgkey");
 
   api("/games/" + run.game.id + "/answers?qKey=" + encodeURIComponent(qKey)).then(function (list) {
-    if (!list.length) { box.textContent = "No answers yet."; }
+    if (!list.length) { box.innerHTML = '<span class="muted">No answers yet.</span>' + officialAnswerHTML(q); }
     else {
       box.innerHTML = "<table><tr><th>Team</th><th>Answer</th><th>Wager</th><th>Verdict</th></tr>" +
         list.map(function (a) {
@@ -1695,7 +1721,7 @@ function pollAnswers() {
             : '<span class="verdict-p">pending</span>';
           return "<tr><td>" + esc(a.team) + "</td><td>" + esc(a.answer) + "</td><td>" +
             (a.wager == null ? "—" : a.wager) + "</td><td>" + v + "</td></tr>";
-        }).join("") + "</table>";
+        }).join("") + "</table>" + officialAnswerHTML(q); // 10a: official answer between answers and the queue
     }
     var pend = list.filter(function (a) { return !a.verdict; });
     document.getElementById("adjCount").textContent = String(pend.length);
