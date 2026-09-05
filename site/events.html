@@ -668,6 +668,9 @@
     var min=reg.min||0, max=reg.max||0, approved=cnt.approved||0;
     var fired = min>0 ? approved>=min : true;
     var full = max>0 && approved>=max;
+    /* NGH-BUILD 11a: Box Office settings — online sales switch + first-N promo */
+    var onlineOff = reg.salesOnline===false, pub=null;
+    if(reg.promo && reg.promo.firstN){ try{ if(API){ var pr=await fetch(API+"/boxoffice/public?event="+encodeURIComponent(e.id)+(occDate?("&date="+encodeURIComponent(occDate)):"")); if(pr.ok) pub=await pr.json(); } }catch(_){} }
     var costLabel = reg.cost>0 ? ("$"+reg.cost.toFixed(2)+" per person") : "Free";
     var bar='';
     if(min>0){ var pct=Math.min(100, Math.round(approved/min*100));
@@ -675,9 +678,11 @@
     var banner='';
     if(fired){ banner='<div style="background:#e7f5e8;border:1px solid #b6dcb8;color:#2e7d32;border-radius:10px;padding:10px 14px;font-family:\'Cinzel\',serif;font-size:0.84rem;margin-bottom:10px;">✅ This event has enough players and is confirmed to happen!</div>'; }
     else if(min>0){ banner='<div style="background:#fbf6ea;border:1px solid #e8d9b0;color:#8a6d1f;border-radius:10px;padding:10px 14px;font-size:0.84rem;margin-bottom:10px;">'+approved+' of '+min+' players registered — '+(min-approved)+' more needed to confirm this event.</div>'; }
-    var summary='<div style="font-size:0.84rem;color:#4a4a35;margin-bottom:4px;"><strong>Registration:</strong> '+costLabel+' · '+approved+' registered'+(max?(" / "+max+" max"):"")+(min?(" · min "+min+" to confirm"):"")+'</div>';
+    if(pub && pub.promo && pub.promo.left>0 && !full){ banner+='<div style="background:#fff4d6;border:1px solid #e8c77a;color:#6b4f12;border-radius:10px;padding:10px 14px;font-size:0.84rem;margin-bottom:10px;">🎁 <strong>First '+pub.promo.firstN+' tickets get a '+esc(pub.promo.label)+'</strong> — '+pub.promo.left+' left!</div>'; }
+    var summary='<div style="font-size:0.84rem;color:#4a4a35;margin-bottom:4px;"><strong>'+(reg.cost>0?'Tickets':'Registration')+':</strong> '+costLabel+' · '+approved+(reg.cost>0?' sold':' registered')+(max?(" of "+max+" seats"):"")+(min?(" · min "+min+" to confirm"):"")+'</div>';
     statusEl.innerHTML=banner+bar+summary;
-    if(full){ formEl.innerHTML='<div style="background:#fdecea;border:1px solid #f0c5be;color:#9a3b2e;border-radius:10px;padding:10px 14px;font-size:0.84rem;margin-top:8px;">This event is full. Contact us to join the waitlist.</div>'+myRegsLink(e); return; }
+    if(full){ formEl.innerHTML='<div style="background:#fdecea;border:1px solid #f0c5be;color:#9a3b2e;border-radius:10px;padding:10px 14px;font-size:0.84rem;margin-top:8px;">'+(reg.cost>0?'🎟️ <strong>Sold out.</strong> Contact us to join the waitlist — cancellations do happen.':'This event is full. Contact us to join the waitlist.')+'</div>'+myRegsLink(e); return; }
+    if(onlineOff){ formEl.innerHTML='<div style="background:#eef6ef;border:1px solid #b6dcb8;color:#2e5b32;border-radius:10px;padding:10px 14px;font-size:0.84rem;margin-top:8px;">🎟️ Tickets for this event are sold <strong>in store</strong> at Northwood Game Haven'+((reg.doorPrice!=null&&reg.doorPrice!=="")?(' — $'+Number(reg.doorPrice).toFixed(2)+' at the door'):'')+'. Stop by the counter or call ahead to hold seats.</div>'+myRegsLink(e); return; }
     var payNote = reg.cost>0 ? ('<p style="font-size:0.74rem;color:#8a8a6a;margin-top:8px;">Payment of '+costLabel+' is '+(reg.payWhen==="now"?"collected now to hold your spot.":"due once the event is confirmed — we\u2019ll email a secure payment link.")+' You must pay no later than <strong>1 hour before</strong> the event. You can also pay in person.</p>') : '';
     var remainCap = max>0 ? Math.max(1, max-approved) : 10; if(remainCap>10) remainCap=10;
     var qtyOpts=""; for(var qi=1;qi<=remainCap;qi++) qtyOpts+='<option value="'+qi+'">'+qi+(qi===1?" ticket":" tickets")+'</option>';
@@ -978,4 +983,5 @@
 })();
 </script>
 </body>
+<!-- NGH-BUILD 11a -->
 </html>

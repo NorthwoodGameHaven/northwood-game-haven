@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- NGH-BUILD 11a — Guru Box Office
+     Sell tickets in store / at the door / comp, track online + in-person totals
+     against a real capacity, set min-to-fire, run "first N" promos with
+     one-time coupons, resend tickets, and hand off to the door scanner.
+     Staff-only. Unlisted: noindex, not in sitemap. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NGH · Box Office</title>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Nunito:wght@400;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root{--forest:#1e3d2b;--forest-dk:#132a1d;--gold:#c9973a;--gold-lt:#e8b84b;--maroon:#7a2431;--cream:#f6efdd;--ink:#26211a;--green:#2e7d32;--blue:#2e6da4}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Nunito,sans-serif;background:var(--forest-dk);color:var(--cream)}
+  .wrap{max-width:1180px;margin:0 auto;padding:16px}
+  h1{font-family:'Alfa Slab One',serif;color:var(--gold-lt);font-size:1.7rem;margin:.4em 0 .2em}
+  h2{font-family:'Alfa Slab One',serif;color:var(--gold);font-size:1.15rem;margin:1.2em 0 .5em}
+  .card{background:var(--forest);border:2px solid var(--gold);border-radius:12px;padding:14px 16px;margin:12px 0}
+  button{font-family:Nunito,sans-serif;font-weight:800;border:0;border-radius:8px;padding:9px 14px;cursor:pointer;font-size:.95rem}
+  button:disabled{opacity:.5;cursor:default}
+  .btn-gold{background:var(--gold);color:var(--ink)}
+  .btn-dk{background:var(--forest-dk);color:var(--cream);border:1.5px solid var(--gold)}
+  .btn-green{background:var(--green);color:#fff}
+  .btn-red{background:var(--maroon);color:#fff}
+  .btn-sm{padding:5px 9px;font-size:.8rem}
+  input,select,textarea{font-family:Nunito,sans-serif;font-size:.95rem;border-radius:8px;border:1.5px solid var(--gold);background:var(--forest-dk);color:var(--cream);padding:8px 10px;width:100%}
+  label{display:block;font-size:.8rem;color:var(--gold-lt);font-weight:800;margin:8px 0 3px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:150px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .tile{background:var(--forest-dk);border:1.5px solid var(--gold);border-radius:10px;padding:10px 12px}
+  .tile .n{font-family:'Alfa Slab One',serif;font-size:1.9rem;color:var(--gold-lt);line-height:1.1}
+  .tile .l{font-size:.78rem;opacity:.85}
+  .bar{background:#0d1d14;border-radius:50px;height:12px;overflow:hidden;margin:6px 0}.bar>div{height:100%;border-radius:50px;transition:width .4s}
+  .muted{opacity:.75;font-size:.85rem}
+  .chip{display:inline-block;padding:2px 8px;border-radius:50px;font-size:.72rem;font-weight:800;margin-right:4px}
+  .c-on{background:var(--blue);color:#fff}.c-in{background:var(--gold);color:var(--ink)}.c-door{background:#b2622b;color:#fff}.c-comp{background:#555;color:#fff}
+  .c-paid{background:var(--green);color:#fff}.c-un{background:var(--maroon);color:#fff}.c-x{background:#333;color:#ccc}
+  table{width:100%;border-collapse:collapse;font-size:.86rem}th,td{text-align:left;padding:6px 6px;border-bottom:1px solid #2f5a40;vertical-align:top}th{color:var(--gold-lt);font-size:.75rem}
+  .tabs{display:flex;gap:6px;margin-bottom:8px}.tabs button{flex:1}.tabs .on{background:var(--gold);color:var(--ink)}
+  .check{display:flex;align-items:center;gap:8px;font-size:.9rem;margin-top:8px}.check input{width:auto}
+  .ok{color:#8fe0a0;font-weight:800}.err{color:#ff9a9a;font-weight:800}
+  .qrbig{background:#fff;padding:12px;border-radius:12px;display:inline-block}.qrbig img{width:220px;height:220px;display:block}
+  .flash{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--gold);color:var(--ink);padding:10px 18px;border-radius:50px;font-weight:800;display:none;z-index:9}
+  a{color:var(--gold-lt)}
+  @media print{body{background:#fff;color:#000}.noprint{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="login" class="card" style="max-width:420px;margin:60px auto">
+    <h1>🎟️ Box Office</h1>
+    <p class="muted">Guru sign-in to sell and manage tickets.</p>
+    <input id="admin-code" type="password" placeholder="Admin code" autocomplete="off">
+    <div style="margin-top:10px"><button class="btn-gold" id="loginBtn">Sign in</button> <span id="loginErr" class="err"></span></div>
+  </div>
+
+  <div id="app" style="display:none">
+    <h1>🎟️ Box Office</h1>
+    <div class="card">
+      <div class="row">
+        <div style="flex:3"><label>Ticketed event</label><select id="evSel"></select></div>
+        <div><label>Occurrence date</label><input id="occDate" type="date"></div>
+        <div style="flex:0;align-self:end"><button class="btn-dk" onclick="BO.refresh()">↻ Refresh</button></div>
+        <div style="flex:0;align-self:end"><a href="checkin.html" target="_blank"><button class="btn-dk">📷 Door scanner</button></a></div>
+      </div>
+      <div class="muted" style="margin-top:6px">Only events with registration enabled appear here. Turn it on in the Events editor (guru.html) first.</div>
+    </div>
+
+    <div id="dash" class="card" style="display:none">
+      <h2 style="margin-top:0" id="dashTitle"></h2>
+      <div class="grid" id="tiles"></div>
+      <div id="bars" style="margin-top:10px"></div>
+    </div>
+
+    <div class="row">
+      <div class="card" style="flex:1;min-width:300px" id="settings" hidden>
+        <h2 style="margin-top:0">⚙️ Ticket settings</h2>
+        <div class="row">
+          <div><label>Capacity (max seats — 0 = unlimited)</label><input id="sMax" type="number" min="0"></div>
+          <div><label>Minimum to confirm (fires the event)</label><input id="sMin" type="number" min="0"></div>
+        </div>
+        <div class="row">
+          <div><label>Online price ($ per person)</label><input id="sCost" type="number" min="0" step="0.01"></div>
+          <div><label>Door price ($ per person, blank = same)</label><input id="sDoor" type="number" min="0" step="0.01"></div>
+        </div>
+        <div class="check"><input type="checkbox" id="sOnline"> <span>Sell online (website form)</span></div>
+        <div class="check"><input type="checkbox" id="sInStore"> <span>Sell in store (Box Office)</span></div>
+        <h2>🎁 First-buyers promo</h2>
+        <div class="row">
+          <div><label>First N tickets get…</label><input id="pN" type="number" min="0" placeholder="0 = no promo"></div>
+          <div><label>Reward label</label><input id="pLabel" placeholder="Free soda"></div>
+          <div><label>Kind</label><select id="pKind"><option value="soda">Craft soda / float (The Raft)</option><option value="drink">Drink</option><option value="snack">Snack</option><option value="merch">Merch</option><option value="custom">Custom</option></select></div>
+        </div>
+        <div class="muted">Coupons are issued to the first N <b>paid</b> seats in the order payment lands — online, in store, or at the door — one per ticket, one-time use, scanned at the counter. Buyers with an email get the coupon QR by email; door buyers get it on screen (redeem right there).</div>
+        <div style="margin-top:10px"><button class="btn-gold" onclick="BO.saveSettings()">💾 Save settings</button> <span id="sMsg"></span></div>
+      </div>
+
+      <div class="card" style="flex:1;min-width:300px" id="sell" hidden>
+        <h2 style="margin-top:0">🧾 Sell tickets</h2>
+        <div class="tabs">
+          <button id="tab-instore" onclick="BO.mode('instore')">🏪 In store</button>
+          <button id="tab-door" onclick="BO.mode('door')">🚪 Door</button>
+          <button id="tab-comp" onclick="BO.mode('comp')">🎫 Comp</button>
+        </div>
+        <div id="sellHint" class="muted"></div>
+        <div class="row">
+          <div style="flex:2"><label>Name <span id="nameReq"></span></label><input id="xName" placeholder="Buyer name"></div>
+          <div><label>Tickets</label><input id="xQty" type="number" min="1" max="50" value="1"></div>
+        </div>
+        <div class="row" id="contactRow">
+          <div><label>Email (sends the ticket)</label><input id="xEmail" type="email" placeholder="optional"></div>
+          <div><label>Phone</label><input id="xPhone" placeholder="optional"></div>
+        </div>
+        <div id="attRow"></div>
+        <div class="row" id="payRow">
+          <div><label>Price each ($)</label><input id="xPrice" type="number" min="0" step="0.01"></div>
+          <div><label>Payment</label><select id="xVia"><option value="cash">Cash</option><option value="card">Card (counter)</option><option value="pos">Lightspeed POS</option><option value="other">Other</option></select></div>
+          <div><label>POS receipt # (optional)</label><input id="xPos" placeholder="for reconciliation"></div>
+        </div>
+        <div class="check" id="paidRow"><input type="checkbox" id="xPaid" checked> <span>Paid now</span></div>
+        <div class="check"><input type="checkbox" id="xAdmit"> <span>Admit now (check in immediately — door sales)</span></div>
+        <div class="check"><input type="checkbox" id="xOverride"> <span>Override capacity (oversell on purpose)</span></div>
+        <div style="margin-top:12px"><button class="btn-gold" id="sellBtn" onclick="BO.sell()">🎟️ Sell</button> <span id="sellMsg"></span></div>
+        <div id="sellResult" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <div class="card" id="regsCard" hidden>
+      <h2 style="margin-top:0">👥 Ticket holders <span class="muted" id="regCount"></span></h2>
+      <div style="overflow:auto"><table id="regs"></table></div>
+    </div>
+
+    <div class="card" id="cpnCard" hidden>
+      <h2 style="margin-top:0">🎁 Promo coupons <span class="muted" id="cpnCount"></span></h2>
+      <div class="row">
+        <div style="flex:3"><input id="redeemCode" placeholder="Paste or type a coupon code / link to redeem"></div>
+        <div style="flex:0"><button class="btn-green" onclick="BO.redeemManual()">✅ Redeem</button></div>
+      </div>
+      <div id="redeemMsg" style="margin-top:6px"></div>
+      <div style="overflow:auto;margin-top:8px"><table id="cpns"></table></div>
+    </div>
+  </div>
+</div>
+<div class="flash" id="flash"></div>
+
+<script src="guru-common.js"></script>
+<script>
+(function(){
+  "use strict";
+  var API = "/api";
+  function $(id){ return document.getElementById(id); }
+  function token(){ return (window.GuruAuth && GuruAuth.get()) || ""; }
+  function hdrs(){ return { "Content-Type":"application/json", "Authorization":"Bearer "+token() }; }
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+  function money(c){ return "$"+(Number(c||0)/100).toFixed(2); }
+  function flash(t){ var f=$("flash"); f.textContent=t; f.style.display="block"; clearTimeout(f._t); f._t=setTimeout(function(){ f.style.display="none"; },2600); }
+  function api(path, opts){
+    opts=opts||{}; opts.headers=Object.assign(hdrs(), opts.headers||{});
+    return fetch(API+path, opts).then(function(r){
+      if(r.status===401){ GuruAuth.clear(); gate(); throw new Error("Session expired — sign in again."); }
+      return r.json().catch(function(){return {};}).then(function(j){ if(!r.ok) throw new Error(j.error||("Error "+r.status)); return j; });
+    });
+  }
+
+  var S = { events:[], ev:null, sum:null, mode:"instore" };
+
+  function gate(){
+    if (token()){ $("login").style.display="none"; $("app").style.display=""; boot(); }
+    else { $("login").style.display=""; $("app").style.display="none"; }
+  }
+  $("loginBtn").addEventListener("click", doLogin);
+  $("admin-code").addEventListener("keydown", function(e){ if(e.key==="Enter") doLogin(); });
+  function doLogin(){
+    fetch(API+"/admin-login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:$("admin-code").value})})
+      .then(function(r){return r.json();})
+      .then(function(j){ if(j&&j.token){ GuruAuth.set(j.token); $("admin-code").value=""; gate(); } else $("loginErr").textContent="That code didn't work."; })
+      .catch(function(){ $("loginErr").textContent="Login failed — try again."; });
+  }
+
+  function boot(){
+    api("/events").then(function(list){
+      var today = new Date().toISOString().slice(0,10);
+      S.events = (list||[]).filter(function(e){ return e.registration && e.registration.enabled; })
+        .sort(function(a,b){ return String(a.date||"").localeCompare(String(b.date||"")); });
+      var sel=$("evSel"), h="";
+      var pick = null;
+      S.events.forEach(function(e){ var past = (e.date||"") < today; h+='<option value="'+esc(e.id)+'">'+(past?"(past) ":"")+esc(e.date||"")+" — "+esc(e.title)+'</option>'; if(!pick && !past) pick=e.id; });
+      sel.innerHTML = h || '<option value="">No ticketed events yet</option>';
+      var q = new URLSearchParams(location.search).get("event");
+      if (q) pick = q;
+      if (pick) sel.value = pick;
+      sel.onchange = function(){ pickEvent(); };
+      pickEvent();
+    }).catch(function(e){ flash(e.message); });
+  }
+  function pickEvent(){
+    var id=$("evSel").value; S.ev = S.events.filter(function(e){return e.id===id;})[0]||null;
+    if(!S.ev){ ["dash","settings","sell","regsCard","cpnCard"].forEach(function(i){ $(i).hidden=true; $(i).style.display="none"; }); return; }
+    $("occDate").value = S.ev.date || "";
+    fillSettings(); mode(S.mode); refresh();
+  }
+  function occ(){ return $("occDate").value || null; }
+
+  /* ---------- settings ---------- */
+  function fillSettings(){
+    var r=S.ev.registration||{};
+    $("sMax").value=r.max||0; $("sMin").value=r.min||0; $("sCost").value=r.cost!=null?r.cost:0;
+    $("sDoor").value=(r.doorPrice!=null&&r.doorPrice!=="")?r.doorPrice:"";
+    $("sOnline").checked = r.salesOnline!==false; $("sInStore").checked = r.salesInStore!==false;
+    var p=r.promo||{}; $("pN").value=p.firstN||0; $("pLabel").value=p.label||"Free soda"; $("pKind").value=p.kind||"soda";
+    $("settings").hidden=false; $("settings").style.display="";
+  }
+  function saveSettings(){
+    var ev = JSON.parse(JSON.stringify(S.ev)); var r = ev.registration = ev.registration||{};
+    r.max = Math.max(0, parseInt($("sMax").value,10)||0);
+    r.min = Math.max(0, parseInt($("sMin").value,10)||0);
+    r.cost = Math.max(0, Number($("sCost").value)||0);
+    r.doorPrice = $("sDoor").value==="" ? null : Math.max(0, Number($("sDoor").value)||0);
+    r.salesOnline = $("sOnline").checked; r.salesInStore = $("sInStore").checked;
+    var n=Math.max(0,parseInt($("pN").value,10)||0);
+    r.promo = n ? { firstN:n, label:($("pLabel").value||"Free soda").trim(), kind:$("pKind").value } : null;
+    if (r.min && r.max && r.min > r.max) { $("sMsg").innerHTML='<span class="err">Minimum can\u2019t exceed capacity.</span>'; return; }
+    ev.allowTight = true; ev.allowPendingOverlap = true;
+    $("sMsg").textContent="Saving…";
+    api("/events/"+encodeURIComponent(ev.id),{method:"PUT",body:JSON.stringify(ev)})
+      .then(function(saved){ S.ev = saved; var i=S.events.findIndex(function(e){return e.id===saved.id;}); if(i>=0) S.events[i]=saved;
+        $("sMsg").innerHTML='<span class="ok">Saved ✓</span>'; flash("Ticket settings saved"); refresh(); })
+      .catch(function(e){ $("sMsg").innerHTML='<span class="err">'+esc(e.message)+'</span>'; });
+  }
+
+  /* ---------- dashboard ---------- */
+  function refresh(){
+    if(!S.ev) return;
+    api("/boxoffice/summary?event="+encodeURIComponent(S.ev.id)+(occ()?("&date="+encodeURIComponent(occ())):""))
+      .then(function(s){ S.sum=s; renderDash(); renderRegs(); loadCoupons(); })
+      .catch(function(e){ flash(e.message); });
+  }
+  function renderDash(){
+    var s=S.sum; $("dash").style.display="";
+    $("dashTitle").textContent = s.title+" — "+(s.date||"");
+    var cap = s.capacity ? s.sold+" / "+s.capacity : String(s.sold);
+    var t = "";
+    t+='<div class="tile"><div class="n">'+cap+'</div><div class="l">sold'+(s.capacity?(' · '+s.remaining+' left'):' · no cap')+(s.soldOut?' · <b style="color:#ff9a9a">SOLD OUT</b>':'')+'</div></div>';
+    t+='<div class="tile"><div class="n">'+(s.min? (s.fired?'✅':'⏳') : '—')+'</div><div class="l">'+(s.min?('min '+s.min+' — '+(s.fired?'confirmed':(s.min-s.sold)+' more to fire')):'no minimum')+'</div></div>';
+    t+='<div class="tile"><div class="n">'+s.bySource.online+'</div><div class="l">online</div></div>';
+    t+='<div class="tile"><div class="n">'+(s.bySource.instore+s.bySource.door)+'</div><div class="l">in person · '+s.bySource.instore+' store / '+s.bySource.door+' door'+(s.bySource.comp?(' · '+s.bySource.comp+' comp'):'')+'</div></div>';
+    t+='<div class="tile"><div class="n">'+s.paidSeats+'</div><div class="l">paid seats · '+s.unpaidSeats+' unpaid</div></div>';
+    t+='<div class="tile"><div class="n">'+s.checkedIn+'</div><div class="l">checked in</div></div>';
+    t+='<div class="tile"><div class="n">'+money(s.revenueCents)+'</div><div class="l">collected (all channels)</div></div>';
+    if(s.promo) t+='<div class="tile"><div class="n">'+s.promo.issued+'/'+s.promo.firstN+'</div><div class="l">🎁 '+esc(s.promo.label)+' · '+s.promo.redeemed+' redeemed · '+s.promo.left+' left</div></div>';
+    $("tiles").innerHTML=t;
+    var b="";
+    if(s.min){ var pm=Math.min(100,Math.round(s.sold/s.min*100)); b+='<div class="muted">Minimum to confirm</div><div class="bar"><div style="width:'+pm+'%;background:'+(s.fired?'var(--green)':'var(--gold)')+'"></div></div>'; }
+    if(s.capacity){ var pc=Math.min(100,Math.round(s.sold/s.capacity*100)); b+='<div class="muted">Capacity</div><div class="bar"><div style="width:'+pc+'%;background:'+(s.soldOut?'var(--maroon)':'var(--blue)')+'"></div></div>'; }
+    $("bars").innerHTML=b;
+    $("sell").hidden=false; $("sell").style.display = s.salesInStore ? "" : "none";
+    if(!s.salesInStore) $("sellHint").textContent="";
+  }
+
+  /* ---------- sell ---------- */
+  function mode(m){
+    S.mode=m; ["instore","door","comp"].forEach(function(k){ $("tab-"+k).className = (k===m?"on":""); });
+    var s=S.sum||{}, r=S.ev.registration||{};
+    var price = m==="door" ? (s.doorPrice!=null?s.doorPrice:(r.cost||0)) : (m==="comp"?0:(r.cost||0));
+    $("xPrice").value = Number(price).toFixed(2);
+    $("xAdmit").checked = (m==="door");
+    $("paidRow").style.display = m==="comp"?"none":"";
+    $("payRow").style.display = m==="comp"?"none":"";
+    $("nameReq").textContent = m==="instore" ? "*" : "(optional)";
+    $("sellHint").innerHTML = m==="instore" ? "Counter sale: name required; email sends the ticket QR automatically."
+      : (m==="door" ? "Walk-up at the door: no contact needed. Ticket QR shows on screen; Admit now checks them in on the spot. Door price applies." : "Complimentary ticket (guest list, staff, artist comps). Free, marked paid.");
+    attRows();
+  }
+  $("xQty").addEventListener("input", attRows);
+  function attRows(){
+    var q=Math.max(1,Math.min(50,parseInt($("xQty").value,10)||1)); var h="";
+    if(q>1 && S.mode!=="door"){ h+='<label>Attendee names (optional)</label>'; for(var i=2;i<=q;i++) h+='<input class="att" placeholder="Ticket '+i+' name" style="margin-bottom:5px">'; }
+    $("attRow").innerHTML=h;
+  }
+  function sell(){
+    var name=$("xName").value.trim();
+    if(S.mode==="instore" && !name){ $("sellMsg").innerHTML='<span class="err">Name required for in-store sales.</span>'; return; }
+    var att=[]; Array.prototype.forEach.call(document.querySelectorAll("#attRow .att"),function(i){ if(i.value.trim()) att.push(i.value.trim()); });
+    var body={ eventId:S.ev.id, occDate:occ(), mode:S.mode, name:name, email:$("xEmail").value.trim(), phone:$("xPhone").value.trim(),
+      qty:parseInt($("xQty").value,10)||1, attendees:[name].concat(att), priceEach:$("xPrice").value, paid:$("xPaid").checked,
+      paidVia:$("xVia").value, posRef:$("xPos").value.trim(), admitNow:$("xAdmit").checked, override:$("xOverride").checked, by:"guru" };
+    $("sellBtn").disabled=true; $("sellMsg").textContent="Selling…";
+    api("/boxoffice/sell",{method:"POST",body:JSON.stringify(body)}).then(function(j){
+      $("sellBtn").disabled=false; $("sellMsg").innerHTML='<span class="ok">Sold ✓</span>';
+      var r=j.reg, h='<div class="tile"><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start">';
+      h+='<div class="qrbig"><img src="'+esc(r.qrUrl)+'" alt="ticket QR"></div><div style="flex:1;min-width:200px">';
+      h+='<div style="font-family:\'Alfa Slab One\',serif;color:var(--gold-lt);font-size:1.2rem">'+esc(r.name)+' · '+r.qty+' ticket'+(r.qty===1?"":"s")+'</div>';
+      h+='<div class="muted">'+esc(r.id)+' · '+esc(S.mode)+' · '+(r.feePaid?('paid '+money(r.amountPaidCents)+' '+esc(r.paidVia)):'UNPAID')+(r.checkedIn?' · admitted':'')+'</div>';
+      h+='<div style="margin-top:6px">'+(j.emailed?'<span class="ok">📧 '+(r.feePaid?'Ticket':'Hold notice')+' emailed to '+esc(r.email)+'</span>':'<span class="muted">No email — show this QR, or <a href="'+esc(r.ticketUrl)+'" target="_blank">open the printable ticket</a>.</span>')+'</div>';
+      h+='<div style="margin-top:8px"><a href="'+esc(r.ticketUrl)+'" target="_blank"><button class="btn-dk btn-sm">🖨️ Print ticket</button></a> <button class="btn-dk btn-sm" onclick="BO.copy(\''+esc(r.ticketUrl)+'\')">🔗 Copy link</button></div>';
+      if(j.coupons&&j.coupons.length){ h+='<div style="margin-top:10px;padding:8px;border:1.5px dashed var(--gold);border-radius:8px"><b>🎁 First-buyer promo!</b> '+j.coupons.length+' coupon'+(j.coupons.length===1?"":"s")+' issued'+(r.email?' (emailed)':'')+':<br>';
+        j.coupons.forEach(function(c){ h+='<div style="margin-top:4px">'+esc(c.id)+' <button class="btn-green btn-sm" onclick="BO.redeem(\''+esc(c.url)+'\')">✅ Redeem now</button> <a href="'+esc(c.url)+'" target="_blank">open</a></div>'; });
+        h+='</div>'; }
+      h+='</div></div></div>';
+      $("sellResult").innerHTML=h;
+      $("xName").value=""; $("xEmail").value=""; $("xPhone").value=""; $("xPos").value=""; $("xQty").value="1"; attRows();
+      S.sum=j.summary; renderDash(); renderRegsLater();
+    }).catch(function(e){ $("sellBtn").disabled=false; $("sellMsg").innerHTML='<span class="err">'+esc(e.message)+'</span>'; });
+  }
+  function renderRegsLater(){ setTimeout(refresh, 300); }
+
+  /* ---------- ticket holders ---------- */
+  function renderRegs(){
+    var s=S.sum, regs=s.regs||[]; $("regsCard").hidden=false; $("regsCard").style.display="";
+    $("regCount").textContent = regs.length ? ("("+regs.length+" orders)") : "";
+    if(!regs.length){ $("regs").innerHTML='<tr><td class="muted">No tickets sold yet.</td></tr>'; return; }
+    var h='<tr><th>Name</th><th>Contact</th><th>Qty</th><th>Source</th><th>Paid</th><th>In</th><th>🎁</th><th>Actions</th></tr>';
+    regs.slice().reverse().forEach(function(r){
+      var src={online:"c-on",instore:"c-in",door:"c-door",comp:"c-comp"}[r.source]||"c-on";
+      var paid = r.status==="canceled" ? '<span class="chip c-x">canceled</span>' : (r.feePaid ? '<span class="chip c-paid">'+esc(r.paidVia||"paid")+'</span> '+money(r.amountPaidCents) : (r.cost>0?'<span class="chip c-un">unpaid</span>':'<span class="chip c-paid">free</span>'));
+      h+='<tr><td><b>'+esc(r.name)+'</b><div class="muted" style="font-size:.72rem">'+esc(r.id)+(r.posRef?' · POS '+esc(r.posRef):'')+'</div></td>';
+      h+='<td style="font-size:.8rem">'+esc(r.email||"—")+'<br>'+esc(r.phone||"")+'</td>';
+      h+='<td>'+r.qty+'</td><td><span class="chip '+src+'">'+esc(r.source)+'</span></td><td>'+paid+'</td><td>'+r.checkedIn+'/'+r.qty+'</td>';
+      h+='<td>'+(r.promoCoupons.length?('🎁×'+r.promoCoupons.length):'')+'</td><td style="white-space:nowrap">';
+      if(r.status!=="canceled"){
+        if(!r.feePaid && r.cost>0) h+='<button class="btn-green btn-sm" onclick="BO.markPaid(\''+esc(r.id)+'\')">💵 Paid</button> ';
+        h+='<button class="btn-dk btn-sm" onclick="BO.resend(\''+esc(r.id)+'\',\''+esc(r.email)+'\')">📧</button> ';
+        h+='<a href="'+esc(r.ticketUrl)+'" target="_blank"><button class="btn-dk btn-sm">🎟️</button></a> ';
+        h+='<button class="btn-red btn-sm" onclick="BO.cancel(\''+esc(r.id)+'\',\''+esc(r.name)+'\')">✕</button>';
+      }
+      h+='</td></tr>';
+    });
+    $("regs").innerHTML=h;
+  }
+  function markPaid(id){
+    var via = prompt("Paid how? cash / card / pos / other", "cash"); if(via===null) return;
+    api("/boxoffice/paid",{method:"POST",body:JSON.stringify({regId:id,paidVia:via.trim()||"cash"})})
+      .then(function(j){ flash("Marked paid"+(j.emailed?" — ticket emailed":"")+(j.coupons.length?" — 🎁 coupon issued":"")); refresh(); })
+      .catch(function(e){ flash(e.message); });
+  }
+  function resend(id, email){
+    var to = prompt("Send ticket to:", email||""); if(to===null) return;
+    api("/boxoffice/resend",{method:"POST",body:JSON.stringify({regId:id,email:to.trim()})})
+      .then(function(j){ flash((j.kind==="ticket"?"Ticket":"Hold notice")+" sent to "+j.sent); refresh(); })
+      .catch(function(e){ flash(e.message); });
+  }
+  function cancel(id, name){
+    if(!confirm("Cancel "+name+"'s registration? Paid online orders are refunded automatically; in-store payments must be refunded at the register.")) return;
+    api("/registrations/"+encodeURIComponent(id),{method:"PATCH",body:JSON.stringify({status:"canceled"})})
+      .then(function(){ flash("Canceled"); refresh(); }).catch(function(e){ flash(e.message); });
+  }
+
+  /* ---------- coupons ---------- */
+  function loadCoupons(){
+    var s=S.sum; if(!s.promo){ $("cpnCard").hidden=true; $("cpnCard").style.display="none"; return; }
+    $("cpnCard").hidden=false; $("cpnCard").style.display="";
+    api("/boxoffice/coupons?event="+encodeURIComponent(S.ev.id)).then(function(list){
+      $("cpnCount").textContent="("+list.length+" issued)";
+      if(!list.length){ $("cpns").innerHTML='<tr><td class="muted">None issued yet — the first '+s.promo.firstN+' paid seats will get one.</td></tr>'; return; }
+      var h='<tr><th>#</th><th>Coupon</th><th>Holder</th><th>Status</th><th></th></tr>';
+      list.forEach(function(c){
+        h+='<tr><td>'+esc(c.rank||"")+'</td><td>'+esc(c.id)+'</td><td>'+esc(c.name||"")+'</td><td>'+(c.status==="redeemed"?'<span class="chip c-x">redeemed '+esc(String(c.redeemedAt||"").slice(0,16).replace("T"," "))+'</span>':'<span class="chip c-paid">live</span>')+'</td>';
+        h+='<td>'+(c.status==="issued"?'<button class="btn-green btn-sm" onclick="BO.redeem(\''+esc(c.url)+'\')">✅ Redeem</button> ':'')+'<a href="'+esc(c.url)+'" target="_blank">open</a></td></tr>';
+      });
+      $("cpns").innerHTML=h;
+    }).catch(function(){});
+  }
+  function redeem(code){
+    api("/boxoffice/redeem",{method:"POST",body:JSON.stringify({code:code,by:"boxoffice"})})
+      .then(function(j){ $("redeemMsg").innerHTML='<span class="ok">✅ '+esc(j.label)+' redeemed'+(j.name?(' — '+esc(j.name)):'')+'</span>'; flash("Coupon redeemed"); refresh(); })
+      .catch(function(e){ $("redeemMsg").innerHTML='<span class="err">'+esc(e.message)+'</span>'; });
+  }
+  function redeemManual(){ var c=$("redeemCode").value.trim(); if(c){ redeem(c); $("redeemCode").value=""; } }
+  function copy(t){ navigator.clipboard&&navigator.clipboard.writeText(t).then(function(){ flash("Link copied"); }); }
+
+  window.BO = { refresh:refresh, saveSettings:saveSettings, mode:mode, sell:sell, markPaid:markPaid, resend:resend, cancel:cancel, redeem:redeem, redeemManual:redeemManual, copy:copy };
+  $("occDate").addEventListener("change", refresh);
+  gate();
+})();
+</script>
+</body>
+</html>

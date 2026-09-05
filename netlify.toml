@@ -97,6 +97,20 @@
   to   = "/.netlify/functions/checkin"
   status = 200
 
+# Box Office (NGH-BUILD 11a): in-store/door sales, promo coupons
+[[redirects]]
+  from = "/api/boxoffice/*"
+  to   = "/.netlify/functions/boxoffice/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/boxoffice"
+  to   = "/.netlify/functions/boxoffice"
+  status = 200
+[[redirects]]
+  from = "/coupon/*"
+  to   = "/.netlify/functions/boxoffice/coupon/:splat"
+  status = 200
+
 # Team Trivia engine (NGH-BUILD 07a)
 [[redirects]]
   from = "/api/trivia/*"
@@ -229,3 +243,5 @@
   status = 200
 
 # NGH-BUILD 10b — TV Network + Arcade redirects integrated onto current main
+
+# NGH-BUILD 11a

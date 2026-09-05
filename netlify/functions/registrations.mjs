@@ -94,6 +94,8 @@ const _handler = async (req) => {
     const ev = evRows[0].data;
     const r = ev.registration || {};
     if (!r.enabled) return bad('registration is not open for this event', 400);
+    // NGH-BUILD 11a: Box Office can close the website form while in-store sales continue
+    if (r.salesOnline === false && !isAdmin) return bad('Online ticket sales are closed for this event — tickets are available in store at Northwood Game Haven.', 400);
     // Capacity: customers are hard-blocked at the cap; admin may intentionally overbook.
     // Counts PEOPLE (sum of qty across registrations), not rows.
     if (r.max && !adminManual) {
@@ -113,6 +115,7 @@ const _handler = async (req) => {
     reg.checkedIn = 0;
     reg.submitted = new Date().toISOString();
     if (adminManual) { reg.source = 'admin'; reg.manual = true; }
+    else if (!reg.source) reg.source = 'online'; // NGH-BUILD 11a
     // Always record per-person cost + title so a payment link/invoice can be generated later.
     if (reg.cost == null) reg.cost = Number(r.cost) || 0;
     if (!reg.eventTitle) reg.eventTitle = ev.title || 'NGH Event';
@@ -325,3 +328,5 @@ async function maybeRefund(reg) {
     reg.refundError = String(e && e.message || e);
   }
 }
+
+// NGH-BUILD 11a

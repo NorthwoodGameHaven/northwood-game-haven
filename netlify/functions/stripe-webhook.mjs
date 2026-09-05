@@ -10,6 +10,7 @@
 // verification — do not JSON.parse before verifying.
 import { sql, ensureSchema, json, bad } from './_shared/db.mjs';
 import { verifyWebhook } from './_shared/stripe.mjs';
+import { issuePromoCoupons } from './_shared/boxoffice.mjs'; // NGH-BUILD 11a
 import { sendBrandedMail } from './_shared/email.mjs';
 import { ticketUrl, walletConfigured, money } from './_shared/ticket.mjs';
 
@@ -68,6 +69,11 @@ export default async (req) => {
             try { await sendTicketEmail(r); }
             catch (e) { console.error('[stripe-webhook] ticket email failed', e); }
           }
+          // NGH-BUILD 11a: first-N buyer promo coupons (event carries the promo settings)
+          try {
+            const evRows = await sql`SELECT data FROM events WHERE id = ${r.eventId}`;
+            if (evRows.length) await issuePromoCoupons(r, evRows[0].data);
+          } catch (e) { console.error('[stripe-webhook] promo coupon failed', e); }
         }
       }
     }
@@ -110,3 +116,5 @@ async function sendTicketEmail(r) {
     buttons
   });
 }
+
+// NGH-BUILD 11a
