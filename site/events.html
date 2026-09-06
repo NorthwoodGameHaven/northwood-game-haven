@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- NGH-BUILD 2026-09-06c · share export renders vertical labels via 90° CCW transform -->
 <!-- NGH-BUILD 2026-09-06b · event-desc pre-line + measured lane-split vertical labels (90° CCW) -->
 <!-- NGH-BUILD 2026-07-21c · lightbox + registrant-qty + discord-refresh -->
 <!-- NGH-BUILD 2026-08-06a · week view vertical titles + tiled fill images -->
@@ -135,7 +136,12 @@
   .tg-ev.wk.vert .vtxt { writing-mode:vertical-rl; -webkit-writing-mode:vertical-rl; transform:rotate(180deg);
     line-height:1.15; max-height:100%; max-width:100%; overflow:hidden; }
   .share-export .tg-ev { display:block !important; padding:2px 5px !important; }
-  .share-export .tg-ev .vtxt { writing-mode:horizontal-tb !important; -webkit-writing-mode:horizontal-tb !important; transform:none !important; font-size:0.6rem !important; }
+  .share-export .tg-ev:not(.vert) .vtxt { writing-mode:horizontal-tb !important; -webkit-writing-mode:horizontal-tb !important; transform:none !important; font-size:0.6rem !important; }
+  /* NGH-BUILD 2026-09-06c: html2canvas can't draw writing-mode but CAN draw transforms —
+     vert labels export as horizontal text rotated 90° CCW; exportVertLabels()
+     sizes each span to its block. */
+  .share-export .tg-ev.vert { display:block !important; }
+  .share-export .tg-ev.vert .vtxt { writing-mode:horizontal-tb !important; -webkit-writing-mode:horizontal-tb !important; display:block; text-align:left; white-space:normal; }
   .tg-fill { position:absolute; left:3px; right:3px; overflow:hidden; z-index:1; }
   .tg-fill .tg-img { width:100%; aspect-ratio:1200/630; background-size:contain; background-repeat:no-repeat; background-position:top center;
     border-radius:6px; margin-bottom:4px; cursor:pointer; opacity:0.42; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.45); transition:opacity 0.18s; }
@@ -859,7 +865,7 @@
   }
   function exportNode(){
     var node=document.createElement('div');
-    node.className="share-export";   // forces horizontal labels — html2canvas can't render vertical text
+    node.className="share-export";   // non-vert labels forced horizontal; vert labels rotated via transform (exportVertLabels) — NGH-BUILD 2026-09-06c
     node.style.cssText="position:fixed;left:-10000px;top:0;width:760px;background:#fff;font-family:'Lato',sans-serif;";
     var viewLabel=view.charAt(0).toUpperCase()+view.slice(1);
     node.innerHTML=
@@ -872,12 +878,33 @@
       '<div style="background:#1a1a12;color:#e8b84b;text-align:center;padding:13px;font-family:\'Cinzel\',serif;font-size:0.82rem;letter-spacing:0.06em;">gamehaven.guru/events</div>';
     return node;
   }
+  /* NGH-BUILD 2026-09-06c: in the export clone, rewrite each .vert label as a horizontal
+     span rotated 90° CCW (reads bottom-to-top, same as the live view). Span
+     length = block height; font steps down until the wrapped text fits the
+     lane width. Runs after the clone is attached, before html2canvas. */
+  function exportVertLabels(node){
+    try{
+      var evs=node.querySelectorAll(".tg-ev.vert");
+      for(var i=0;i<evs.length;i++){
+        var el=evs[i], v=el.querySelector(".vtxt"); if(!v) continue;
+        var W=el.clientWidth, H=el.clientHeight; if(!W||!H) continue;
+        v.style.position="absolute";
+        v.style.top="50%"; v.style.left="50%";
+        v.style.width=Math.max(10,H-8)+"px";
+        v.style.lineHeight="1.1";
+        v.style.transform="translate(-50%,-50%) rotate(-90deg)";
+        var fs=Math.min(12, Math.max(8, W-4)); v.style.fontSize=fs+"px";
+        var g=0;
+        while(g++<12 && fs>7 && v.scrollHeight>W-2){ fs-=0.75; v.style.fontSize=fs+"px"; }
+      }
+    }catch(_e){}
+  }
   function shareImg(){
     document.getElementById("share-body").innerHTML='<p style="text-align:center;color:#8a8a6a;padding:34px;font-size:0.9rem;">🖼️ Generating your share image…</p>';
     document.getElementById("share-modal").style.display="block";
     ensureH2C(function(err){
       if(err){ shareErr(err.message); return; }
-      var node=exportNode(); document.body.appendChild(node);
+      var node=exportNode(); document.body.appendChild(node); exportVertLabels(node);
       try {
         window.html2canvas(node,{backgroundColor:"#ffffff",scale:2,logging:false,useCORS:true}).then(function(canvas){
           if(node.parentNode) node.parentNode.removeChild(node);
