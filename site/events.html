@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- NGH-BUILD 2026-09-06b · event-desc pre-line + measured lane-split vertical labels (90° CCW) -->
 <!-- NGH-BUILD 2026-07-21c · lightbox + registrant-qty + discord-refresh -->
 <!-- NGH-BUILD 2026-08-06a · week view vertical titles + tiled fill images -->
 <!-- NGH-BUILD 2026-08-06b · horizontal title-only week labels + export footer fix -->
@@ -125,11 +126,16 @@
   /* Phone: vertical only where horizontal can't fit (tall blocks in skinny
      columns); fitLabels() then shrinks anything that still overflows. */
   @media (max-width:760px){
-    .tg-ev.wk { display:flex; justify-content:center; align-items:flex-start; padding:6px 1px 4px; font-size:0.7rem; }
-    .tg-ev.wk .vtxt { writing-mode:vertical-rl; -webkit-writing-mode:vertical-rl; line-height:1.15; max-height:100%; max-width:100%; overflow:hidden; }
+    .tg-ev.wk { display:flex; justify-content:center; align-items:flex-end; padding:6px 1px 4px; font-size:0.7rem; }
+    .tg-ev.wk .vtxt { writing-mode:vertical-rl; -webkit-writing-mode:vertical-rl; transform:rotate(180deg); line-height:1.15; max-height:100%; max-width:100%; overflow:hidden; }
   }
+  /* NGH-BUILD 2026-09-06b: measured lane-split vertical labels — any viewport. fitLabels()
+     adds .vert only when horizontal text can't fit the lane (90° CCW). */
+  .tg-ev.wk.vert { display:flex; justify-content:center; align-items:flex-end; padding:6px 1px 4px; }
+  .tg-ev.wk.vert .vtxt { writing-mode:vertical-rl; -webkit-writing-mode:vertical-rl; transform:rotate(180deg);
+    line-height:1.15; max-height:100%; max-width:100%; overflow:hidden; }
   .share-export .tg-ev { display:block !important; padding:2px 5px !important; }
-  .share-export .tg-ev .vtxt { writing-mode:horizontal-tb !important; -webkit-writing-mode:horizontal-tb !important; font-size:0.6rem !important; }
+  .share-export .tg-ev .vtxt { writing-mode:horizontal-tb !important; -webkit-writing-mode:horizontal-tb !important; transform:none !important; font-size:0.6rem !important; }
   .tg-fill { position:absolute; left:3px; right:3px; overflow:hidden; z-index:1; }
   .tg-fill .tg-img { width:100%; aspect-ratio:1200/630; background-size:contain; background-repeat:no-repeat; background-position:top center;
     border-radius:6px; margin-bottom:4px; cursor:pointer; opacity:0.42; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.45); transition:opacity 0.18s; }
@@ -372,7 +378,13 @@
   function fitLabels(){
     var els=document.querySelectorAll("#cal-body .tg-ev.wk");
     for(var i=0;i<els.length;i++){
-      var el=els[i]; el.style.fontSize="";
+      var el=els[i]; el.style.fontSize=""; el.classList.remove("vert");
+      /* NGH-BUILD 2026-09-06b: go vertical (90° CCW) only when space requires it —
+         horizontal text overflows AND the lane is skinny AND the block is
+         tall enough for an upright label. Wide lanes stay horizontal. */
+      if(labelOverflows(el) && el.clientWidth<64 && el.clientHeight>el.clientWidth*1.3){
+        el.classList.add("vert");
+      }
       var fs=parseFloat(window.getComputedStyle(el).fontSize)||12, g=0;
       while(g++<16 && fs>8 && labelOverflows(el)){
         fs-=0.75; el.style.fontSize=fs+"px";
@@ -610,8 +622,8 @@
     h+='<div style="padding:24px 26px;">';
     h+='<h2 style="font-family:\'Cinzel Decorative\',serif;color:'+FOREST+';font-size:1.5rem;margin-bottom:6px;">'+esc(e.title)+'</h2>';
     h+='<div style="font-family:\'Cinzel\',serif;color:'+GOLD+';font-size:0.82rem;letter-spacing:0.04em;margin-bottom:14px;">'+esc(when)+'</div>';
-    if(e.notes) h+='<p style="font-size:0.92rem;color:#4a4a35;line-height:1.7;margin-bottom:16px;">'+esc(e.notes)+'</p>';
-    var _on=(e.occNotes||{})[ds||e.date]; if(_on) h+='<div style="background:#fff7e8;border:1px solid #f0dcae;color:#7a5a14;border-radius:10px;padding:10px 14px;font-size:0.86rem;margin-bottom:16px;">📌 <b>This date:</b> '+esc(_on)+'</div>';
+    if(e.notes) h+='<p style="font-size:0.92rem;color:#4a4a35;line-height:1.7;margin-bottom:16px;white-space:pre-line;">'+esc(e.notes)+'</p>';
+    var _on=(e.occNotes||{})[ds||e.date]; if(_on) h+='<div style="background:#fff7e8;border:1px solid #f0dcae;color:#7a5a14;border-radius:10px;padding:10px 14px;font-size:0.86rem;margin-bottom:16px;white-space:pre-line;">📌 <b>This date:</b> '+esc(_on)+'</div>';
     /* NGH-BUILD 07f — published Trivia Night round themes */
     var _tp=e.triviaPlan||null;
     if(_tp && _tp.publish && _tp.rounds && _tp.rounds.length && (!_tp.occDate || _tp.occDate===(ds||e.date))){
