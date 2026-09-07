@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- NGH-BUILD 2026-09-06f · share-export painter: context sanitizer + pixel verification -->
 <!-- NGH-BUILD 2026-09-06e · fail-safe share-export vert labels: validate-then-hide + diag -->
 <!-- NGH-BUILD 2026-09-06d · share export paints vert labels onto the canvas (rotated fillText) -->
 <!-- NGH-BUILD 2026-09-06c · share export renders vertical labels via 90° CCW transform -->
@@ -917,11 +918,19 @@
      (reads bottom-to-top), word-wrapped along the block height, font stepped
      down to fit the lane, clipped to the block. Each item fault-isolated. */
   function drawVertLabels(canvas, items){
-    var painted=0, k=0;
+    var painted=0, k=0, _fp=null, vOK="na";
     try{
       if(items&&items.length){
         k=canvas.width/(items.nodeW||760);
         var ctx=canvas.getContext("2d");
+        /* NGH-BUILD 2026-09-06f: html2canvas can leave its context with an unbalanced
+           save() holding an active clip, plus transform/alpha — which swallowed
+           every fill invisibly (reproduced). Pop stray saves and hard-reset. */
+        for(var sI=0;sI<24;sI++){ ctx.restore(); }
+        ctx.setTransform(1,0,0,1,0,0);
+        ctx.globalAlpha=1; ctx.globalCompositeOperation="source-over";
+        ctx.shadowBlur=0; ctx.shadowColor="rgba(0,0,0,0)";
+        try{ ctx.filter="none"; }catch(_ef){}
         for(var i=0;i<items.length;i++){
           try{
             var it=items[i], t=(it.t||""); if(!t) continue;
@@ -952,12 +961,24 @@
             var lh=fs*1.15, y0=-((lines.length-1)/2)*lh;
             for(var dI=0;dI<lines.length;dI++){ ctx.fillText(lines[dI], -len/2, y0+dI*lh); }
             ctx.restore();
-            painted++;
+            painted++; if(!_fp) _fp=it;
           }catch(_e1){}
         }
       }
     }catch(_e){}
-    try{ window._nghVertDiag="v06e found="+((items&&items.found)||0)+" valid="+((items&&items.valid)||0)+" painted="+painted+" k="+(k?k.toFixed(2):"0")+" nodeW="+((items&&items.nodeW)||0)+" first="+((items&&items.first)||"-"); }catch(_e2){}
+    /* NGH-BUILD 2026-09-06f: verify pixels actually landed — sample the first painted
+       block for near-white text pixels. A lying counter can't hide a blank. */
+    try{
+      if(painted>0 && _fp){
+        var _vc=canvas.getContext("2d");
+        var _sx=Math.max(0,Math.floor((_fp.x+_fp.w*0.2)*k)), _sy=Math.max(0,Math.floor((_fp.y+_fp.h*0.2)*k));
+        var _sw=Math.max(4,Math.floor(_fp.w*k*0.6)), _sh=Math.max(4,Math.floor(_fp.h*k*0.6));
+        var _px=_vc.getImageData(_sx,_sy,_sw,_sh).data, _wc=0;
+        for(var _pI=0;_pI<_px.length;_pI+=4){ if(_px[_pI]>235&&_px[_pI+1]>235&&_px[_pI+2]>235){ _wc++; if(_wc>40) break; } }
+        vOK=(_wc>40)?"pass":"fail";
+      }
+    }catch(_ev){}
+    try{ window._nghVertDiag="v06f found="+((items&&items.found)||0)+" valid="+((items&&items.valid)||0)+" painted="+painted+" ok="+vOK+" k="+(k?k.toFixed(2):"0")+" nodeW="+((items&&items.nodeW)||0)+" first="+((items&&items.first)||"-"); }catch(_e2){}
   }
   function shareImg(){
     document.getElementById("share-body").innerHTML='<p style="text-align:center;color:#8a8a6a;padding:34px;font-size:0.9rem;">🖼️ Generating your share image…</p>';
@@ -972,7 +993,7 @@
             _shareBlob=blob;
             _shareUrl=location.origin+"/events?view="+view+"&date="+ymd(ref);
             _shareText="What's happening at Northwood Game Haven 🎲 — "+titleText()+". See details & register:";
-            showSharePreview(canvas.toDataURL("image/png")); try{ var _d=window._nghVertDiag||""; var _m=/found=(\d+).*painted=(\d+)/.exec(_d); if(_m&&+_m[1]>0&&+_m[2]<+_m[1]){ var _sb=document.getElementById("share-body"); if(_sb) _sb.insertAdjacentHTML("beforeend",'<p style="font-size:0.6rem;color:#9a9a80;text-align:center;margin-top:6px;">diag: '+_d+'</p>'); } }catch(_e3){}
+            showSharePreview(canvas.toDataURL("image/png")); try{ var _d=window._nghVertDiag||""; var _m=/found=(\d+).*painted=(\d+)/.exec(_d); var _bad=_m&&+_m[1]>0&&(+_m[2]<+_m[1]||/ ok=fail/.test(_d)); if(_bad){ var _sb=document.getElementById("share-body"); if(_sb) _sb.insertAdjacentHTML("beforeend",'<p style="font-size:0.6rem;color:#9a9a80;text-align:center;margin-top:6px;">diag: '+_d+'</p>'); } }catch(_e3){}
           },"image/png");
         }).catch(function(e){ if(node.parentNode) node.parentNode.removeChild(node); shareErr(e&&e.message); });
       } catch(e){ if(node.parentNode) node.parentNode.removeChild(node); shareErr(e&&e.message); }
