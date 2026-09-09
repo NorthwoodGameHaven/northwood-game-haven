@@ -1,9 +1,11 @@
 // netlify/functions/trivia.mjs
 // NGH-BUILD 09e — Event Stream engine: + YouTube clue media (clip window, audio-only mode).
 // NGH-BUILD 10b — 10a (blind wager, /wager + /control, adjudication tolerance) + Reflex Rally re-port.
+// NGH-BUILD 10c — + GET /trivia/active (public: most recent non-ended game) for the rack PC audio player / Companion.
 //
 // Routes (via /api/trivia/* alias in netlify.toml):
 //   GET  /trivia/time                          public  — server clock for client offset sync
+//   GET  /trivia/active                        PUBLIC  — {id, kind, phase, v} of the current (non-ended) game — 10c
 //   GET  /trivia/games                         admin   — list games
 //   POST /trivia/games                         admin   — create game
 //   GET  /trivia/games/:id                     admin   — full game (def + state)
@@ -638,6 +640,21 @@ const _handler = async (req) => {
   }
 
   await ensureTriviaSchema();
+
+  // ================= PUBLIC: active game — NGH-BUILD 10c =================
+  // GET /api/trivia/active -> { id, gameId, kind, phase, v } for the most recently
+  // created game that isn't ended (same rule /control uses), or 404 when none.
+  // Used by the rack PC audio player ("gameId":"auto") so a night needs no setup.
+  if (head === 'active' && req.method === 'GET') {
+    const cand = await sql`SELECT id, data, state, version FROM trivia_games ORDER BY created_at DESC LIMIT 10`;
+    for (const c of cand) {
+      const stA = c.state || {};
+      if ((stA.phase || 'lobby') !== 'ended') {
+        return json({ id: c.id, gameId: c.id, kind: (c.data && c.data.kind) || 'trivia', phase: stA.phase || 'lobby', v: c.version, serverNow: Date.now() });
+      }
+    }
+    return bad('no active game', 404);
+  }
 
   // ================= PUBLIC: theme suggestions =================
   if (head === 'suggest' && req.method === 'POST') {
