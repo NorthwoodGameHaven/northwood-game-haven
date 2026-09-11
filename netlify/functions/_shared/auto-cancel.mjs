@@ -30,7 +30,14 @@ export default async () => {
 
   for (const row of rows) {
     const r = row.data;
-    if (r.payment === 'paid') continue;
+    // NGH-BUILD 2026-09-10c: never auto-cancel a booking that has received ANY payment
+    // (fee OR deposit). The webhook marks fee/deposit independently and only
+    // sets payment='paid' when BOTH are paid; the old fully-paid-only guard
+    // wrongly cancelled fee-paid/deposit-unpaid bookings. Leave for staff.
+    if (r.payment === 'paid' || r.feePaid === true || r.depositPaid === true) {
+      if (r.payment !== 'paid') console.log('[auto-cancel] SPARED partially-paid booking', r.id, '(fee:' + (r.feePaid === true) + ' deposit:' + (r.depositPaid === true) + ') — needs staff follow-up');
+      continue;
+    }
     const deadline = new Date(r.date + 'T00:00:00');
     deadline.setDate(deadline.getDate() - 1);
     deadline.setHours(23, 59, 59);

@@ -1997,7 +1997,7 @@ async function autoCancelUnpaid(){
   var now=new Date(), changed=false;
   for(var i=0;i<cache.bookings.length;i++){
     var r=cache.bookings[i];
-    if(r.status==="approved" && !fullyPaid(r)){
+    if(r.status==="approved" && !feeIsPaid(r) && !depIsPaid(r)){ /* NGH-BUILD 2026-09-10c: was !fullyPaid(r); now cancel only when NEITHER fee nor deposit is paid */
       var deadline=new Date(r.date+"T00:00:00"); deadline.setDate(deadline.getDate()-1); deadline.setHours(23,59,59);
       if(now>deadline){
         await Store.updateBooking(r.id, {status:"rejected", autoCanceled:true});
