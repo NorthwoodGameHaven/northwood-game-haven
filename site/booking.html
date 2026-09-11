@@ -1605,6 +1605,35 @@ function renderAdmin(filter){
   el.innerHTML=list.map(reqCardHtml).join("");
 }
 function getReq(id){ for(var i=0;i<cache.bookings.length;i++) if(cache.bookings[i].id===id) return cache.bookings[i]; return null; }
+
+/* NGH-BUILD 2026-09-10d: inline date/time/duration editor for booking review cards. */
+function bkEditWhen(id){ var p=document.getElementById('when-edit-'+id); if(p) p.style.display='block'; }
+function bkCancelWhen(id){ var p=document.getElementById('when-edit-'+id); if(p) p.style.display='none'; }
+async function bkSaveWhen(id){
+  var r=getReq(id); if(!r){ alert('Booking not found in cache — refresh and retry.'); return; }
+  var dEl=document.getElementById('we-date-'+id), sEl=document.getElementById('we-start-'+id), hEl=document.getElementById('we-hours-'+id);
+  if(!dEl||!sEl||!hEl) return;
+  var date=(dEl.value||'').trim();
+  var start=(sEl.value||'').trim();
+  var hours=parseInt(hEl.value,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ alert('Please pick a valid date.'); return; }
+  if(!/^\d{2}:\d{2}$/.test(start)){ alert('Please pick a valid start time.'); return; }
+  if(isNaN(hours)||hours<1||hours>14){ alert('Hours must be between 1 and 14.'); return; }
+  // Recompute endLabel exactly like the public booking form (bk-end): fmtTime(start+hours), with next-day marker past midnight.
+  var em=timeToMins(start)+hours*60;
+  var endLabel = em>=1440 ? (fmtTime(em-1440)+' (next day)') : fmtTime(em);
+  var same = (date===r.date && start===r.start && hours===Number(r.hours));
+  if(same){ bkCancelWhen(id); return; }
+  var msg='Change schedule for '+id+'?\n\nFrom: '+r.date+' '+fmtTime(timeToMins(r.start))+' ('+r.hours+'h)\nTo:   '+date+' '+fmtTime(timeToMins(start))+' – '+endLabel+' ('+hours+'h)';
+  if(!confirm(msg)) return;
+  try{
+    await Store.updateBooking(id, { date:date, start:start, hours:hours, endLabel:endLabel });
+    await refreshCache();
+    if(typeof renderAdmin==='function') renderAdmin(adminFilter);
+    alert('Schedule updated. If this booking is already approved, use “(Re)send Approval Email” so the guest gets the corrected date/time.');
+  }catch(e){ alert('Could not save the change: '+(e&&e.message?e.message:e)); }
+}
+
 function dayBefore(dateStr){ var d=new Date(dateStr+"T12:00:00"); d.setDate(d.getDate()-1); return d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'}); }
 
 function milBadge(r){
@@ -1687,7 +1716,7 @@ function reqCardHtml(r){
     '</div>'+
     '<h2 style="margin-top:10px;">'+esc(r.name)+' · '+roomList(r)+'</h2>'+
     (r.groupId?'<div class="kv"><b>Recurring group</b> '+r.groupId+' — occurrence '+r.recIndex+' of '+r.recTotal+' <a href="#" onclick="showGroup(\''+r.groupId+'\');return false;">view all in group</a></div>':'')+
-    '<div class="kv"><b>When</b> '+r.date+' · '+when+' ('+r.hours+'h)</div>'+
+    '<div class="kv" id="when-'+r.id+'"><b>When</b> '+r.date+' · '+when+' ('+r.hours+'h)'+((r.status==="pending"||r.status==="hold"||r.status==="approved")?(' <a href="#" onclick="bkEditWhen(\''+r.id+'\');return false;" style="font-size:.85em;color:var(--teal,#2a6b74);text-decoration:none;">✎ Edit</a>'):'')+'</div>'+'<div id="when-edit-'+r.id+'" style="display:none;margin:6px 0 4px;padding:10px 12px;background:#f4f7f8;border:1px solid #cfe0e4;border-radius:10px;">'+'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">'+'<label style="font-size:.82rem;">Date<br><input type="date" id="we-date-'+r.id+'" value="'+r.date+'" style="padding:5px;"></label>'+'<label style="font-size:.82rem;">Start<br><input type="time" id="we-start-'+r.id+'" value="'+(r.start||'')+'" step="900" style="padding:5px;"></label>'+'<label style="font-size:.82rem;">Hours<br><input type="number" id="we-hours-'+r.id+'" value="'+(r.hours||4)+'" min="1" max="14" step="1" style="padding:5px;width:70px;"></label>'+'<button class="btn btn-sm btn-teal" onclick="bkSaveWhen(\''+r.id+'\')">Save date/time</button>'+'<button class="btn btn-sm btn-ghost" onclick="bkCancelWhen(\''+r.id+'\')">Cancel</button>'+'</div>'+'<div class="hint" style="margin:7px 0 0;font-size:.8rem;">Changing the schedule updates the guest-facing time. Re-send the approval email afterward so they get the corrected details. Double-check room availability for the new slot.</div>'+'</div>'+
     conflictLine+
     '<div class="kv"><b>Contact</b> '+esc(r.phone)+' · '+esc(r.email)+'</div>'+
     '<div class="kv"><b>Max guests</b> '+esc(r.guests)+'</div>'+
