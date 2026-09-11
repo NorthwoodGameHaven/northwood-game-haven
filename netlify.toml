@@ -204,6 +204,16 @@
   to   = "/.netlify/functions/registrations/:splat"
   status = 200
 
+# NGH-BUILD 2026-09-08a — FAQ page pretty URL
+[[redirects]]
+  from = "/faq"
+  to   = "/faq.html"
+  status = 200
+[[redirects]]
+  from = "/faq/"
+  to   = "/faq.html"
+  status = 200
+
 # Nightly auto-cancel of unpaid approved bookings.
 [functions."auto-cancel"]
   schedule = "@daily"
