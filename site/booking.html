@@ -1630,7 +1630,8 @@ async function bkSaveWhen(id){
     await Store.updateBooking(id, { date:date, start:start, hours:hours, endLabel:endLabel });
     await refreshCache();
     if(typeof renderAdmin==='function') renderAdmin(adminFilter);
-    alert('Schedule updated. If this booking is already approved, use “(Re)send Approval Email” so the guest gets the corrected date/time.');
+    if(getReq(id) && getReq(id).status==='approved'){ await maybeResendAfterChange(id); } /* NGH-BUILD 2026-09-10e */
+    else { alert('Schedule updated.'); }
   }catch(e){ alert('Could not save the change: '+(e&&e.message?e.message:e)); }
 }
 
@@ -1675,6 +1676,7 @@ function reqCardHtml(r){
     if(!feeIsPaid(r)) actions+='<button class="btn btn-sm btn-ghost" onclick="genPayLink(\''+r.id+'\',\'fee\')">🔗 Fee pay-link</button>';
     if(!depIsPaid(r)) actions+='<button class="btn btn-sm btn-ghost" onclick="genPayLink(\''+r.id+'\',\'deposit\')">🔗 Deposit pay-link</button>';
     actions+='<button class="btn btn-sm btn-ghost" onclick="issueDoorCode(\''+r.id+'\')">🔑 '+(r.doorCode?("Door code: "+r.doorCode):"Issue door code")+'</button>';
+    actions+='<button class="btn btn-sm btn-ghost" onclick="setManualDoorCode(\''+r.id+'\')">✏️ '+(r.doorCode?"Change door code":"Set door code (manual)")+'</button>';
     actions+='<button class="btn btn-sm btn-danger" onclick="reject(\''+r.id+'\')">Cancel / Reject</button>';
   } else if(r.status==="rejected"){
     actions+='<button class="btn btn-sm btn-ghost" onclick="approve(\''+r.id+'\')">Re-approve</button>';
@@ -1808,6 +1810,7 @@ async function resendApproval(id, silent){
   if(!depIsPaid(r)) buttons.push({label:"Pay Refundable Deposit Now", url:payLinkUrl("booking", id, "deposit"), primary:false});
   await Store.sendEmail(r.email, "Your Northwood Game Haven booking "+id+" is APPROVED ✅", body,
     { heading:"Your booking is approved! 🎉", buttons:buttons });
+  try{ await Store.updateBooking(id, { notifiedSnapshot: notifyFieldsOf(getReq(id)||r) }); }catch(e){ console.warn('notify snapshot failed', e); } /* NGH-BUILD 2026-09-10e */
   if(!silent){ alert("Approval email sent to "+r.email+(buttons.length?(" with "+buttons.length+" pay button(s)"):"")+(r.doorCode?(". Door code "+r.doorCode+" was auto-issued (after-hours)."):".")); }
   renderAdmin(adminFilter);
 }
@@ -1824,6 +1827,7 @@ function buildApprovalEmail(r){
   var depLine = (r.depositAdjusted && r.deposit<depBase)
     ? ("\n🎉 DEPOSIT DISCOUNT: As a valued guest, your refundable deposit has been "+(r.deposit===0?"WAIVED in full":("reduced to "+fmtMoney(r.deposit)+" (from the standard "+fmtMoney(depBase)+")"))+". Enjoy!\n")
     : "";
+  var arrivalLine = buildArrivalInstructions(r);
   var doorLine = r.doorCode
     ? ("\n🔑 DOOR ACCESS CODE: "+r.doorCode+"\nThis code unlocks the door(s) for your reserved room(s). It only works during your booking window (from 1 hour before your start time until 1 hour after you finish). Please don't share it.\n")
     : "";
@@ -1836,7 +1840,7 @@ function buildApprovalEmail(r){
   return "Hi "+r.name+",\n\nGreat news — your booking request is APPROVED! Here are the details:\n\n"+
   "Ref: "+r.id+"\nRooms: "+roomList(r)+"\nDate: "+r.date+"\nTime: "+fmtTime(timeToMins(r.start))+" – "+r.endLabel+" ("+r.hours+"h)\n\n"+
   "Booking fee: "+fmtMoney(r.costBooking)+"\n"+taxLine+"Booking fee + tax: "+fmtMoney(feeWithTax)+"\nRefundable deposit (hold, not taxed): "+fmtMoney(r.deposit)+"\nTOTAL DUE: "+fmtMoney(grandTotal)+"\n"+
-  milLine+depLine+doorLine+invoiceLine+"\n"+
+  milLine+depLine+doorLine+arrivalLine+invoiceLine+"\n"+
   "PAYMENT:\n• Use the secure payment buttons below to pay your booking fee and refundable deposit online (card, Apple Pay, or Google Pay).\n• Payment in full — including the deposit hold — is due no later than the calendar day BEFORE your booking ("+dayBefore(r.date)+").\n"+
   "• If not paid by then, the booking is automatically canceled.\n• Prefer to pay in person? You can pay by cash, card, or check at the shop — but no later than the end of the day before your reservation.\n\n"+
   "The deposit is refunded in full as long as nothing is damaged/stolen and the room(s) are left reasonably cleaned, per our Terms & Conditions.\n\n"+
@@ -1919,6 +1923,80 @@ async function listSeamLocks(){
 }
 
 // Issue (or revoke) a time-bound door access code (via Seam) for a booking.
+/* NGH-BUILD 2026-09-10e: room-specific arrival instructions for the approval email. */
+function buildArrivalInstructions(r){
+  var rooms=(r.rooms||[]).slice();
+  var has=function(id){ return rooms.indexOf(id)>=0; };
+  var L=[];
+  L.push('ARRIVAL & PARKING:');
+  L.push('• Parking is available behind the building — take the driveway to the right of the building when accessing from Spring Street. Additional parking is in the municipal lot on the corner of W Spring and Island Streets.');
+  if(r.doorCode){
+    L.push('• Use your door code below on the front/lobby door and on all of your reserved rooms.');
+    // Per-room entry notes. Holt covers Holt-alone and Holt+Den (same right-hand door).
+    if(has('depths')) L.push('• The Depths: after you enter the main lobby, use your code on the door just ahead of you — the basement door, just to the left of the stairs to the upper level.');
+    if(has('holt'))   L.push('• The Holt'+(has('den')?' + Stash\u2019s Den':'')+': after you enter the main lobby, use your code on the door to your right.');
+    if(has('den') && !has('holt')) L.push('• Stash\u2019s Den: access from the back deck — up the stairs from the ground/parking level to the 1st floor (same level as the main Northwood Game Haven retail store), then use your code on the door furthest down the deck, opposite the stairs.');
+  } else {
+    L.push('• Your door access code will be sent before your visit. It unlocks the front/lobby door and your reserved room(s).');
+  }
+  return '\n'+L.join('\n')+'\n';
+}
+
+/* NGH-BUILD 2026-09-10e: snapshot of the guest-facing details at the moment we email them,
+   so later edits can detect what changed and force a re-notify. */
+function notifyFieldsOf(r){ return { date:r.date||'', start:r.start||'', hours:Number(r.hours)||0, doorCode:r.doorCode||'' }; }
+async function markNotified(id){
+  var r=getReq(id); if(!r) return;
+  try{ await Store.updateBooking(id, { notifiedSnapshot: notifyFieldsOf(r) }); }catch(e){ console.warn('snapshot save failed', e); }
+}
+/* Returns a human list of which notify-relevant fields changed since last email. */
+function changedSinceNotified(r){
+  var s=r.notifiedSnapshot; if(!s) return [];
+  var now=notifyFieldsOf(r), diff=[];
+  if(String(s.date)!==String(now.date)) diff.push('date');
+  if(String(s.start)!==String(now.start)) diff.push('start time');
+  if(Number(s.hours)!==Number(now.hours)) diff.push('duration');
+  if(String(s.doorCode||'')!==String(now.doorCode||'')) diff.push('door code');
+  return diff;
+}
+/* If an APPROVED booking's date/time/door code changed since we last emailed,
+   the guest MUST get an updated email. Offers to resend now (default yes). */
+async function maybeResendAfterChange(id){
+  var r=getReq(id); if(!r) return;
+  if(r.status!=='approved') return;              // pending/hold: no email sent yet
+  var diff=changedSinceNotified(r);
+  if(!diff.length) return;
+  var msg='This APPROVED booking\u2019s '+diff.join(', ')+' changed since the guest was last emailed.\n\nThe guest\u2019s arrival instructions are now out of date. Send them an updated approval email now?\n\nOK = send updated email  ·  Cancel = I\u2019ll send it later';
+  if(confirm(msg)){
+    await resendApproval(id, false);              // resendApproval calls markNotified on success
+  } else {
+    alert('Reminder: the guest still has the OLD '+diff.join(', ')+'. Use “(Re)send Approval Email” on the card before the event date.');
+  }
+}
+
+/* NGH-BUILD 2026-09-10e: manually attach the door code you programmed into the locks.
+   Available on pending/hold/approved. For approved bookings, prompts to
+   re-email the guest with the corrected code + arrival instructions. */
+async function setManualDoorCode(id){
+  var r=getReq(id); if(!r){ alert('Booking not found — refresh and retry.'); return; }
+  var cur=r.doorCode||'';
+  var val=window.prompt('Enter the door code you set on the lock(s) for '+roomList(r)+'.\n\nThis exact code goes to the guest in their approval/arrival email. Use the SAME code on the front door and each reserved room.\n\n(Leave blank and OK to CLEAR the code.)', cur);
+  if(val===null) return;                          // cancelled
+  val=(val||'').trim();
+  if(val && !/^[0-9]{4,8}$/.test(val)){ if(!confirm('That code isn\u2019t 4–8 digits. Save it anyway as entered?')) return; }
+  if(val===cur){ alert('Door code unchanged.'); return; }
+  try{
+    await Store.updateBooking(id, { doorCode: val, doorCodeManual: !!val, doorCodeSetAt: new Date().toISOString() });
+    await refreshCache();
+    if(typeof renderAdmin==='function') renderAdmin(adminFilter);
+    if(!val){ alert('Door code cleared.'); return; }
+    await maybeResendAfterChange(id);
+    if(getReq(id) && getReq(id).status!=='approved'){
+      alert('Door code '+val+' saved. It will be included automatically in the approval email when you approve this booking.');
+    }
+  }catch(e){ alert('Could not save the door code: '+(e&&e.message?e.message:e)); }
+}
+
 async function issueDoorCode(id){
   var r=getReq(id); if(!r) return;
   if(r.doorCode){
