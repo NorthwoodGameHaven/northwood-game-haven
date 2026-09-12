@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>First Player — Game Companion</title>
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+/* ---- page frame: header / controls / arena / footer fill the viewport ---- */
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+.fp{display:flex;flex-direction:column;height:100vh;height:100dvh;padding-bottom:0}
+.fp .app-header{margin-bottom:0;position:relative;flex:none}
+.fp .app-header .actions{margin-right:2px}
+#soundBtn{font-size:17px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#soundBtn[aria-pressed="true"]{border-color:var(--gold);background:rgba(232,184,75,.16)}
+
+.fp-controls{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap;padding:9px 0}
+.fp-controls .chips{gap:5px;flex-wrap:nowrap}
+.fp-controls .chip{font-family:var(--font-body);padding:7px 10px;font-size:.84rem;line-height:1.2;appearance:none;-webkit-appearance:none;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation;transition:background .15s,color .15s}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);overflow:hidden;margin-left:auto}
+.stepper button{width:34px;height:32px;border:0;background:transparent;color:var(--gold-lt);font:800 1.2rem/1 var(--font-body);cursor:pointer;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;padding:0}
+.stepper button:active{background:rgba(232,184,75,.18)}
+.stepper button:disabled{opacity:.28}
+.stepper .v{min-width:66px;text-align:center;font-size:.78rem;font-weight:800;color:var(--cream);letter-spacing:.02em;white-space:nowrap}
+
+/* ---- arena ---- */
+.arena{position:relative;flex:1;min-height:0;margin:0 -16px;overflow:hidden;overflow:clip;touch-action:none;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;cursor:pointer;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  background:radial-gradient(ellipse at 50% 42%,rgba(61,122,84,.30),transparent 62%),
+    radial-gradient(circle at 50% 105%,rgba(201,151,58,.12),transparent 48%),#0e2016}
+.arena::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(rgba(246,239,221,.075) 1px,transparent 1.6px);background-size:22px 22px}
+.arena>*{pointer-events:none}
+#fx{position:absolute;inset:0;width:100%;height:100%;z-index:6}
+
+.hint{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  text-align:center;padding:20px 24px;transition:opacity .25s}
+.hint img{height:140px;width:auto;opacity:.32;filter:drop-shadow(0 8px 14px rgba(0,0,0,.55));margin-bottom:4px}
+.hint .h1{font-family:var(--font-head);font-weight:600;font-size:1.15rem;line-height:1.3;color:var(--gold-lt);max-width:300px;
+  text-shadow:0 2px 8px rgba(0,0,0,.55)}
+.hint .h2{font-size:.86rem;color:var(--muted);max-width:300px}
+.hint .h3{margin-top:6px;font-size:.72rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(232,184,75,.55)}
+.arena.busy .hint{opacity:0}
+
+.status{position:absolute;top:12px;left:0;right:0;z-index:4;text-align:center;padding:0 16px;
+  font-family:var(--font-head);font-weight:600;font-size:1.02rem;letter-spacing:.05em;color:var(--muted);
+  text-shadow:0 2px 6px rgba(0,0,0,.65);opacity:0;transition:opacity .2s}
+.status.on{opacity:1}
+.arena.picked .status{color:var(--gold-lt);font-size:1.32rem;animation:pop .4s ease-out}
+
+.again{position:absolute;left:0;right:0;bottom:16px;width:max-content;margin:0 auto;z-index:7;opacity:0;transition:opacity .25s;pointer-events:none!important}
+.arena.picked .again{opacity:1;pointer-events:auto!important}
+
+/* ---- finger rings ---- */
+.rings{position:absolute;inset:0;z-index:3}
+.ring{position:absolute;left:0;top:0;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;will-change:transform;--c:#fff;--tc:#fff}
+.ring .glow{position:absolute;inset:-24px;border-radius:50%;background:radial-gradient(circle,var(--c) 0%,transparent 68%);opacity:.3;
+  animation:glowPulse 1.6s ease-in-out infinite}
+.ring .core{position:absolute;inset:0;border-radius:50%;border:6px solid var(--c);background:rgba(0,0,0,.2);
+  box-shadow:0 0 16px 2px var(--c),inset 0 0 14px rgba(0,0,0,.4);animation:ringPulse 1.6s ease-in-out infinite;
+  transition:background-color .35s,border-color .35s,transform .5s cubic-bezier(.2,1.5,.4,1),box-shadow .35s}
+.ring.pop-in .core{animation:ringIn .28s cubic-bezier(.2,1.4,.4,1),ringPulse 1.6s ease-in-out .28s infinite}
+@keyframes ringIn{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes ringPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+@keyframes glowPulse{0%,100%{opacity:.24;transform:scale(1)}50%{opacity:.46;transform:scale(1.12)}}
+.ring svg{position:absolute;left:-8px;top:-8px;width:126px;height:126px;transform:rotate(-90deg);overflow:visible}
+.ring .prog{fill:none;stroke:var(--cream);stroke-width:4;stroke-linecap:round;stroke-dasharray:364.4;stroke-dashoffset:364.4;opacity:0;transition:opacity .2s}
+.arena.arming .ring .prog{opacity:.9}
+.ring .arc{fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;stroke-dasharray:80 284.4;opacity:0;transform-origin:50% 50%;transform-box:fill-box}
+.arena.spinning .ring .arc{opacity:1;animation:sweep .45s linear infinite}
+.arena.spinning .ring .core{animation-duration:.38s}
+.arena.spinning .ring .glow{animation-duration:.38s}
+@keyframes sweep{to{transform:rotate(360deg)}}
+.ring .lbl{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--font-head);font-weight:600;font-size:50px;line-height:1;
+  color:var(--tc);text-shadow:0 2px 4px rgba(0,0,0,.3);opacity:0;transform:scale(.4);transition:opacity .3s,transform .45s cubic-bezier(.2,1.5,.4,1)}
+.ring.show-lbl .lbl{opacity:1;transform:scale(1)}
+.ring.win .lbl{transform:scale(1.35)}
+.ring .cap{position:absolute;left:50%;top:100%;transform:translate(-50%,12px);white-space:nowrap;font-family:var(--font-head);font-weight:600;
+  font-size:1rem;letter-spacing:.07em;color:var(--gold-lt);text-shadow:0 2px 6px rgba(0,0,0,.8),0 0 14px rgba(0,0,0,.6);opacity:0;transition:opacity .3s .12s}
+.ring.cap-up .cap{top:auto;bottom:100%;transform:translate(-50%,-12px)}
+.ring.win .cap{transform:translate(-50%,40px)}
+.ring.win.cap-up .cap{transform:translate(-50%,-40px)}
+.ring.show-cap .cap{opacity:1}
+.ring.filled .core{background:var(--c)}
+.ring.win{z-index:5}
+.ring.win .core{background:var(--c);transform:scale(1.5);animation:none;box-shadow:0 0 34px 8px var(--c),inset 0 0 0 rgba(0,0,0,0)}
+.ring.win .glow{opacity:.5;animation:none;transform:scale(1.6)}
+.ring.lose{opacity:.2;transition:opacity .5s}
+.arena.picked .ring .core,.arena.picked .ring .glow{animation:none}
+
+.fp-foot{flex:none;padding:6px 0 calc(8px + var(--safe-b));letter-spacing:.06em}
+@media (max-height:480px){.fp-foot{display:none}.fp-controls{padding:5px 0}.hint img{height:80px}}
+@media (min-width:720px){.arena{margin:0;border:1px solid var(--line);border-radius:var(--radius);margin-bottom:0}}
+</style>
+</head>
+<body>
+<div class="app fp">
+  <header class="app-header">
+    <a class="back" href="/app/companion/" aria-label="Back">‹</a>
+    <div class="title">First Player</div>
+    <div class="actions"><button class="icon-btn" id="soundBtn" type="button" aria-pressed="false" aria-label="Sound off">🔇</button></div>
+    <img class="logo" src="/brand/crest.png" alt="">
+  </header>
+
+  <div class="fp-controls">
+    <div class="chips" id="modeChips" role="group" aria-label="Mode">
+      <button type="button" class="chip" data-mode="single">Single</button>
+      <button type="button" class="chip" data-mode="groups">Groups</button>
+      <button type="button" class="chip" data-mode="order">Order</button>
+    </div>
+    <div class="stepper" id="stepWinners" aria-label="Number of winners">
+      <button type="button" data-k="winners" data-d="-1" aria-label="Fewer winners">−</button>
+      <span class="v" id="winnersVal">1 winner</span>
+      <button type="button" data-k="winners" data-d="1" aria-label="More winners">+</button>
+    </div>
+    <div class="stepper" id="stepGroups" aria-label="Number of teams" hidden>
+      <button type="button" data-k="groups" data-d="-1" aria-label="Fewer teams">−</button>
+      <span class="v" id="groupsVal">2 teams</span>
+      <button type="button" data-k="groups" data-d="1" aria-label="More teams">+</button>
+    </div>
+  </div>
+
+  <div class="arena" id="arena" aria-label="Touch arena">
+    <canvas id="fx" aria-hidden="true"></canvas>
+    <div class="hint" id="hint">
+      <img src="/brand/stash-fullbody.png" alt="">
+      <div class="h1">Everyone put one finger on the screen</div>
+      <div class="h2" id="hintSub">Hold still — one finger wins.</div>
+      <div class="h3">Needs at least 2 fingers</div>
+    </div>
+    <div class="status" id="status" aria-live="polite"></div>
+    <div class="rings" id="rings"></div>
+    <button type="button" class="btn sm again" id="againBtn">Again</button>
+  </div>
+
+  <div class="fp-foot tiny muted center">Fingers down · hold still · the Haven picks.</div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var N = window.NGH, $ = N.$;
+  var arena = $('arena'), ringsEl = $('rings'), statusEl = $('status'), hintSub = $('hintSub'),
+      fx = $('fx'), againBtn = $('againBtn'), soundBtn = $('soundBtn'), modeChips = $('modeChips');
+
+  var PALETTE = ['#ff4d4d', '#ff8c1a', '#ffd21f', '#b5ff3a', '#3dff8f', '#2ef2e2',
+                 '#33c4ff', '#5c7cff', '#a366ff', '#ff5cf0', '#ff7aa8', '#ffffff'];
+  var GROUPS = [{ l: 'A', c: '#e8b84b', t: '#26211a' }, { l: 'B', c: '#1aa3c7', t: '#ffffff' },
+                { l: 'C', c: '#e04a6a', t: '#ffffff' }, { l: 'D', c: '#a366ff', t: '#ffffff' }];
+  var ARM_MS = 2500, SPIN_MS = 1500, RESET_MS = 1500, TICK_MS = 100, CIRC = 364.4;
+
+  // ---- settings (persisted) ----
+  var modeStore = N.store('ngh_fp_mode'), optStore = N.store('ngh_fp_opts'), soundStore = N.store('ngh_fp_sound');
+  var mode = modeStore.get('single');
+  if (['single', 'groups', 'order'].indexOf(mode) < 0) mode = 'single';
+  var opts = optStore.get({}) || {};
+  var winners = clamp(parseInt(opts.winners, 10) || 1, 1, 3);
+  var groups = clamp(parseInt(opts.groups, 10) || 2, 2, 4);
+  var soundOn = soundStore.get(false) === true;
+
+  // ---- state ----
+  var state = 'idle';            // idle | arming | spinning | result
+  var pointers = new Map();      // pointerId -> ring   (fingers currently down)
+  var rings = new Map();         // pointerId -> ring   (rings on screen; survives lifts in result state)
+  var lastChange = 0, spinStart = 0, allUpAt = 0, lastTick = 0, rafId = 0, rect = null;
+
+  function now() { return performance.now(); }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function rnd(n) {
+    try { var a = new Uint32Array(1); (window.crypto || window.msCrypto).getRandomValues(a); return a[0] % n; }
+    catch (e) { return Math.floor(Math.random() * n); }
+  }
+  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = rnd(i + 1), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function ordinal(n) {
+    var s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+  function textOn(hex) {
+    var h = hex.replace('#', ''), r = parseInt(h.substr(0, 2), 16), g = parseInt(h.substr(2, 2), 16), b = parseInt(h.substr(4, 2), 16);
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62 ? '#26211a' : '#ffffff';
+  }
+  function measure() { rect = arena.getBoundingClientRect(); return rect; }
+  // Chrome refuses navigator.vibrate before the page has had a real tap; skip quietly until then
+  function buzz(kind) {
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+    N.haptic(kind);
+  }
+
+  // ---- rings ----
+  function pickColour() {
+    var free = [];
+    for (var i = 0; i < PALETTE.length; i++) free.push(i);
+    rings.forEach(function (r) { var k = free.indexOf(r.ci); if (k >= 0) free.splice(k, 1); });
+    if (!free.length) return rnd(PALETTE.length);
+    return free[rnd(free.length)];
+  }
+  function makeRing(id, x, y) {
+    var ci = pickColour(), el = document.createElement('div');
+    el.className = 'ring pop-in';
+    el.style.setProperty('--c', PALETTE[ci]);
+    el.style.setProperty('--tc', textOn(PALETTE[ci]));
+    el.innerHTML = '<div class="glow"></div><div class="core"></div>' +
+      '<svg viewBox="0 0 126 126" aria-hidden="true"><circle class="prog" cx="63" cy="63" r="58"/><circle class="arc" cx="63" cy="63" r="58"/></svg>' +
+      '<div class="lbl"></div><div class="cap"></div>';
+    var r = { id: id, x: x, y: y, ci: ci, el: el, prog: el.querySelector('.prog'), lbl: el.querySelector('.lbl'), cap: el.querySelector('.cap') };
+    moveRing(r, x, y);
+    ringsEl.appendChild(el);
+    return r;
+  }
+  function moveRing(r, x, y) {
+    r.x = x; r.y = y;
+    r.el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px)';
+    if (rect) r.el.classList.toggle('cap-up', y > rect.height - 118);
+  }
+  function setProgress(p) {
+    var off = (CIRC * (1 - p)).toFixed(1);
+    rings.forEach(function (r) { r.prog.style.strokeDashoffset = off; });
+  }
+  function setCap(r, text) {
+    r.cap.textContent = text;
+    r.el.classList.add('show-cap');
+    // keep the caption inside the arena when the finger is near a side edge
+    var half = r.cap.offsetWidth / 2, W = (rect || measure()).width, dx = 0;
+    if (r.x - half < 10) dx = 10 - (r.x - half);
+    else if (r.x + half > W - 10) dx = (W - 10) - (r.x + half);
+    r.cap.style.marginLeft = dx ? dx.toFixed(0) + 'px' : '';
+  }
+
+  // ---- state machine ----
+  function status(text) { statusEl.textContent = text || ''; statusEl.classList.toggle('on', !!text); }
+  function setState(s) {
+    state = s;
+    arena.classList.toggle('arming', s === 'arming');
+    arena.classList.toggle('spinning', s === 'spinning');
+    arena.classList.toggle('picked', s === 'result');
+    arena.classList.toggle('busy', rings.size > 0 || s !== 'idle');
+    if (s === 'idle') status(rings.size === 1 ? 'One more finger…' : '');
+    else if (s === 'arming') status('Hold still…');
+    else if (s === 'spinning') status('Picking…');
+  }
+  function changed() {
+    lastChange = now();
+    setState(pointers.size >= 2 ? 'arming' : 'idle');
+    ensureLoop();
+  }
+  function ensureLoop() { if (!rafId) rafId = requestAnimationFrame(loop); }
+  function loop() {
+    rafId = 0;
+    var t = now();
+    if (state === 'idle' || state === 'arming') {
+      var p = state === 'arming' ? clamp((t - lastChange) / ARM_MS, 0, 1) : 0;
+      setProgress(p);
+      if (state === 'arming' && p >= 1) startSpin(t);
+    } else if (state === 'spinning') {
+      if (t - lastTick >= TICK_MS) { lastTick = t; if (soundOn) tick(); }
+      if (t - spinStart >= SPIN_MS) pick();
+    } else if (state === 'result') {
+      if (pointers.size === 0 && allUpAt && t - allUpAt >= RESET_MS) { reset(); return; }
+    }
+    if (rings.size > 0 || state !== 'idle') rafId = requestAnimationFrame(loop);
+  }
+  function startSpin(t) {
+    spinStart = t; lastTick = 0;
+    setProgress(1);
+    setState('spinning');
+    buzz('light');
+  }
+  function pick() {
+    var list = shuffle(Array.from(rings.values())), n = list.length, banner = '';
+    if (mode === 'single') {
+      var k = clamp(winners, 1, Math.max(1, n - 1));
+      list.forEach(function (r, i) {
+        if (i < k) { r.el.classList.add('win'); setCap(r, k === 1 ? 'YOU GO FIRST!' : 'PICKED!'); burst(r.x, r.y, PALETTE[r.ci]); }
+        else r.el.classList.add('lose');
+      });
+      banner = k === 1 ? 'We have a winner!' : k + ' picked!';
+    } else if (mode === 'groups') {
+      var g = clamp(groups, 2, Math.max(2, n));
+      list.forEach(function (r, i) {
+        var G = GROUPS[i % g];
+        r.el.style.setProperty('--c', G.c); r.el.style.setProperty('--tc', G.t);
+        r.el.classList.add('filled', 'show-lbl');
+        r.lbl.textContent = G.l;
+        setCap(r, 'Team ' + G.l);
+      });
+      banner = 'Teams picked!';
+    } else {
+      list.forEach(function (r, i) {
+        var rank = i + 1;
+        r.lbl.textContent = String(rank);
+        r.el.classList.add('filled', 'show-lbl');
+        if (rank === 1) { r.el.classList.add('win'); setCap(r, 'YOU GO FIRST!'); burst(r.x, r.y, PALETTE[r.ci]); }
+        else setCap(r, ordinal(rank));
+      });
+      banner = 'Turn order set!';
+    }
+    setState('result');
+    status(banner);
+    buzz('success');
+    if (soundOn) chime();
+    allUpAt = pointers.size === 0 ? now() : 0;
+    ensureLoop();
+  }
+  function reset() {
+    ringsEl.innerHTML = '';
+    rings.clear();
+    allUpAt = 0;
+    parts.length = 0;
+    // fingers still resting on the glass when "Again" is tapped start the next round
+    var keep = Array.from(pointers.entries());
+    pointers.clear();
+    setState('idle');
+    keep.forEach(function (kv) { var r = makeRing(kv[0], kv[1].x, kv[1].y); pointers.set(kv[0], r); rings.set(kv[0], r); });
+    changed();
+  }
+
+  // ---- pointer handling (touch + mouse, one ring per pointerId) ----
+  arena.addEventListener('pointerdown', function (e) {
+    if (e.target && e.target.closest && e.target.closest('button')) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    if (state === 'result') return;
+    try { arena.setPointerCapture(e.pointerId); } catch (err) { /* synthetic / already released */ }
+    measure();
+    if (pointers.has(e.pointerId)) return;
+    var r = makeRing(e.pointerId, e.clientX - rect.left, e.clientY - rect.top);
+    pointers.set(e.pointerId, r); rings.set(e.pointerId, r);
+    buzz('light');
+    if (soundOn) audio();
+    changed();
+  });
+  arena.addEventListener('pointermove', function (e) {
+    var r = pointers.get(e.pointerId);
+    if (!r) return;
+    if (!rect) measure();
+    moveRing(r, e.clientX - rect.left, e.clientY - rect.top);
+  });
+  function lift(e) {
+    var r = pointers.get(e.pointerId);
+    if (!r) return;
+    pointers.delete(e.pointerId);
+    if (state === 'result') { if (pointers.size === 0) allUpAt = now(); ensureLoop(); return; }
+    rings.delete(e.pointerId);
+    r.el.remove();
+    changed();
+  }
+  arena.addEventListener('pointerup', lift);
+  arena.addEventListener('pointercancel', lift);
+  arena.addEventListener('lostpointercapture', lift);
+  function dropAll() {
+    if (state === 'result' || !pointers.size) return;
+    pointers.forEach(function (r) { r.el.remove(); rings.delete(r.id); });
+    pointers.clear();
+    changed();
+  }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) dropAll(); });
+  window.addEventListener('blur', dropAll);
+
+  // no context menus, no pull-to-refresh, no pinch zoom while playing
+  arena.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  arena.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
+  arena.addEventListener('dragstart', function (e) { e.preventDefault(); });
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+
+  againBtn.addEventListener('click', function () { buzz('light'); reset(); });
+
+  // ---- confetti ----
+  var ctx = fx.getContext('2d'), parts = [], fxRaf = 0, dpr = 1;
+  function sizeFx() {
+    measure();
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    fx.width = Math.max(1, Math.round(rect.width * dpr));
+    fx.height = Math.max(1, Math.round(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rings.forEach(function (r) { moveRing(r, r.x, r.y); });
+  }
+  function burst(x, y, c) {
+    var cols = [c, '#e8b84b', '#f6efdd', '#ffffff', c, '#c9973a'];
+    for (var i = 0; i < 110; i++) {
+      var a = Math.random() * Math.PI * 2, v = 3 + Math.random() * 10;
+      parts.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 3.5, w: 5 + Math.random() * 6, h: 3 + Math.random() * 4,
+        rot: Math.random() * Math.PI, vr: (Math.random() - .5) * .4, c: cols[i % cols.length], life: 70 + Math.random() * 45 });
+    }
+    if (!fxRaf) fxRaf = requestAnimationFrame(fxLoop);
+  }
+  function fxLoop() {
+    fxRaf = 0;
+    var W = fx.width / dpr, H = fx.height / dpr;
+    ctx.clearRect(0, 0, W, H);
+    for (var i = parts.length - 1; i >= 0; i--) {
+      var p = parts[i];
+      p.x += p.vx; p.y += p.vy; p.vy += .24; p.vx *= .985; p.rot += p.vr; p.life--;
+      if (p.life <= 0 || p.y > H + 30) { parts.splice(i, 1); continue; }
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, p.life / 25);
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    if (parts.length) fxRaf = requestAnimationFrame(fxLoop);
+    else ctx.clearRect(0, 0, W, H);
+  }
+  window.addEventListener('resize', sizeFx);
+  window.addEventListener('orientationchange', function () { setTimeout(sizeFx, 250); });
+
+  // ---- sound (WebAudio, off by default) ----
+  var AC = null;
+  function audio() {
+    if (!AC) {
+      var C = window.AudioContext || window.webkitAudioContext;
+      if (!C) return null;
+      try { AC = new C(); } catch (e) { return null; }
+    }
+    if (AC.state === 'suspended') { try { AC.resume().catch(function () {}); } catch (e) {} }
+    return AC;
+  }
+  function tick() {
+    var ac = audio(); if (!ac || ac.state !== 'running') return;
+    var t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(1500, t); o.frequency.exponentialRampToValueAtTime(900, t + .045);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.16, t + .004); g.gain.exponentialRampToValueAtTime(.0001, t + .05);
+    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + .06);
+  }
+  function chime() {
+    var ac = audio(); if (!ac || ac.state !== 'running') return;
+    var t = ac.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach(function (f, i) {
+      var o = ac.createOscillator(), g = ac.createGain(), s = t + i * .09;
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(.0001, s); g.gain.exponentialRampToValueAtTime(.2, s + .015); g.gain.exponentialRampToValueAtTime(.0001, s + .6);
+      o.connect(g); g.connect(ac.destination); o.start(s); o.stop(s + .65);
+    });
+  }
+  function renderSound() {
+    soundBtn.textContent = soundOn ? '🔊' : '🔇';
+    soundBtn.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+    soundBtn.setAttribute('aria-label', soundOn ? 'Sound on' : 'Sound off');
+  }
+  soundBtn.addEventListener('click', function () {
+    soundOn = !soundOn; soundStore.set(soundOn); renderSound();
+    if (soundOn) { audio(); setTimeout(tick, 30); }
+    N.toast(soundOn ? 'Sound on' : 'Sound off', 1200);
+  });
+
+  // ---- mode & options ----
+  var SUBS = { single: 'Hold still — one finger wins.', groups: 'Hold still — we\'ll split you into teams.', order: 'Hold still — we\'ll set the turn order.' };
+  function renderMode() {
+    Array.prototype.forEach.call(modeChips.querySelectorAll('.chip'), function (c) {
+      var on = c.getAttribute('data-mode') === mode;
+      c.classList.toggle('sel', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    $('stepWinners').hidden = mode !== 'single';
+    $('stepGroups').hidden = mode !== 'groups';
+    $('winnersVal').textContent = winners + (winners === 1 ? ' winner' : ' winners');
+    $('groupsVal').textContent = groups + ' teams';
+    $('stepWinners').querySelector('[data-d="-1"]').disabled = winners <= 1;
+    $('stepWinners').querySelector('[data-d="1"]').disabled = winners >= 3;
+    $('stepGroups').querySelector('[data-d="-1"]').disabled = groups <= 2;
+    $('stepGroups').querySelector('[data-d="1"]').disabled = groups >= 4;
+    hintSub.textContent = mode === 'groups' ? 'Hold still — we\'ll split you into ' + groups + ' teams.' : SUBS[mode];
+  }
+  modeChips.addEventListener('click', function (e) {
+    var c = e.target && e.target.closest ? e.target.closest('.chip') : null;
+    if (!c) return;
+    var m = c.getAttribute('data-mode');
+    if (m === mode) return;
+    mode = m; modeStore.set(mode); renderMode(); buzz('light');
+    if (state === 'result') reset(); else if (state !== 'idle') changed();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.stepper button'), function (b) {
+    b.addEventListener('click', function () {
+      var d = parseInt(b.getAttribute('data-d'), 10);
+      if (b.getAttribute('data-k') === 'winners') winners = clamp(winners + d, 1, 3);
+      else groups = clamp(groups + d, 2, 4);
+      optStore.set({ winners: winners, groups: groups });
+      renderMode(); buzz('light');
+      if (state === 'result') reset(); else if (state !== 'idle') changed();
+    });
+  });
+
+  // ---- boot ----
+  renderMode();
+  renderSound();
+  sizeFx();
+  setState('idle');
+  N.wakeLock();
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

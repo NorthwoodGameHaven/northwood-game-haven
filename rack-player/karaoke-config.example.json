@@ -1,0 +1,12 @@
+{
+  "site": "https://gamehaven.guru",
+  "playerKey": "PASTE-KARAOKE_PLAYER_KEY-HERE",
+  "adminCode": "PASTE-GURU-ADMIN-CODE-HERE",
+  "name": "rack",
+  "mpv": "C:\\NGH\\mpv\\mpv.com",
+  "audioDevice": "PASTE-FROM-RUN-KARAOKE-DEVICES",
+  "mediaDir": "C:\\NGH\\karaoke\\media",
+  "servePort": 8766,
+  "mediaBaseUrl": "http://127.0.0.1:8766/media",
+  "volume": 100
+}

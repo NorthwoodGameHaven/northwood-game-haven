@@ -1,0 +1,25 @@
+{
+  "name": "Northwood Game Haven",
+  "short_name": "Game Haven",
+  "description": "Book rooms, join Karaoke Battle and trivia, browse the game libraries, and run your tabletop night with the Game Companion.",
+  "id": "/app/",
+  "start_url": "/app/?source=pwa",
+  "scope": "/app/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#132a1d",
+  "theme_color": "#132a1d",
+  "lang": "en-US",
+  "categories": ["entertainment", "games", "lifestyle"],
+  "icons": [
+    { "src": "/app/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/app/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/app/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Karaoke Battle", "url": "/app/karaoke/", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Game Companion", "url": "/app/companion/", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Book a Room", "url": "/booking.html", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Events", "url": "/events.html", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

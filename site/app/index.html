@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Northwood Game Haven — App</title>
+<meta name="description" content="The Northwood Game Haven app: book party rooms and overnight stays, join Karaoke Battle and trivia, browse the tabletop and video game libraries, and run your game night with the Game Companion.">
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/app/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Game Haven">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .hero{padding:18px 0 4px}
+  .status{display:inline-flex;align-items:center;gap:8px;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-weight:800;font-size:.86rem;margin-top:10px}
+  .tonight .list li{padding:9px 0}
+  .tonight .when{font-family:var(--font-head);font-weight:600;color:var(--gold-lt);font-size:.82rem;width:74px;flex:none}
+  .install{display:none;align-items:center;gap:12px}
+  .install.show{display:flex}
+  .contact a{display:block;color:var(--cream);text-decoration:none;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .contact a:last-child{border-bottom:0}
+  .contact b{color:var(--gold-lt);display:inline-block;width:28px}
+  .hours td{padding:3px 6px 3px 0;font-size:.92rem}
+  .hours td:last-child{color:var(--gold-lt);font-weight:800;text-align:right}
+  .hours tr.today td{color:#fff}
+  .socials{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+  .socials a{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;text-decoration:none;font-size:20px;background:rgba(255,255,255,.04)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <img class="logo" src="/brand/crest.png" alt="">
+    <div class="title">Northwood Game Haven</div>
+    <div class="actions">
+      <button class="icon-btn" id="btnShare" title="Share the app" aria-label="Share">⤴</button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <img src="/brand/crest.png" alt="Northwood Game Haven crest">
+    <div class="display">Welcome to the Haven</div>
+    <div class="tag">Board game café · TCG &amp; retro shop · Event rooms · Overnight suites</div>
+    <div class="status" id="openStatus"><span class="dot idle"></span><span>Checking hours…</span></div>
+  </section>
+
+  <div class="card install" id="installCard">
+    <div style="flex:1"><b>Add the app to your home screen</b><div class="small muted">One tap to Karaoke, trivia and your game-night tools.</div></div>
+    <button class="btn sm" id="btnInstall">Install</button>
+  </div>
+
+  <section class="grid">
+    <a class="tile accent" href="/booking.html"><span class="ic">🎉</span><span class="t">Book a Party Room</span><span class="s">The Holt · Stash's Den · The Depths</span></a>
+    <a class="tile accent" href="#overnight" id="tileOvernight"><span class="ic">🛏️</span><span class="t">Book an Overnight Stay</span><span class="s">The Lodge · The Adventurer's Rest</span></a>
+    <a class="tile" href="/app/specials.html?cat=food"><span class="ic">🥤</span><span class="t">Food &amp; Drink Specials</span><span class="s">Sodas, floats, snacks &amp; deals</span></a>
+    <a class="tile" href="/app/specials.html?cat=retail"><span class="ic">🏷️</span><span class="t">Retail Specials</span><span class="s">TCG, games &amp; retro deals</span></a>
+    <a class="tile" href="/app/account.html"><span class="ic">🏅</span><span class="t">Haven Rewards</span><span class="s">Points, perks &amp; your customer code</span></a>
+    <a class="tile" href="/app/shop.html"><span class="ic">🛍️</span><span class="t">Order Ahead</span><span class="s">Browse the shop, pick up in store</span></a>
+    <a class="tile" href="/board-game-library.html"><span class="ic">🎲</span><span class="t">Tabletop Game Library</span><span class="s">600+ games to play in-store</span></a>
+    <a class="tile" href="/video-game-equipment.html"><span class="ic">🕹️</span><span class="t">Video Game Library</span><span class="s">Consoles, CRTs &amp; 700+ titles</span></a>
+    <a class="tile accent wide" href="/app/companion/"><span class="ic">🧭</span><span style="flex:1"><span class="t">Game Companion</span><br><span class="s">First-player randomizer · Turn tracker · CCG life counter · RPG toolkit</span></span><span class="badge">Free</span></a>
+    <a class="tile accent" href="/app/karaoke/"><span class="ic">🎤</span><span class="t">Karaoke Battle</span><span class="s">Scan the TV QR to join · lyrics on your phone</span></a>
+    <a class="tile" href="/app/trivia/play.html"><span class="ic">🧠</span><span class="t">Trivia &amp; Event Stream</span><span class="s">Join tonight's game from your seat</span></a>
+    <a class="tile" href="/events.html"><span class="ic">📅</span><span class="t">Event Calendar</span><span class="s">Game nights, tournaments, leagues</span></a>
+    <a class="tile" href="/#request-event"><span class="ic">✨</span><span class="t">Request an Event</span><span class="s">Pitch a night; a Guru reviews it</span></a>
+    <a class="tile wide" href="https://gamehaven.guru" target="_blank" rel="noopener"><span class="ic">🌐</span><span style="flex:1"><span class="t">gamehaven.guru</span><br><span class="s">Hours, FAQs, meet the Gurus, shop online (Lightspeed &amp; TCGplayer)</span></span></a>
+  </section>
+
+  <section class="card tonight" id="tonightCard" hidden>
+    <h2>📅 Coming up</h2>
+    <ul class="list" id="tonightList"></ul>
+    <a class="btn ghost sm" href="/events.html" style="margin-top:8px">Full calendar →</a>
+  </section>
+
+  <section class="card" id="overnight">
+    <h2>🛏️ Overnight at the Haven</h2>
+    <p class="small muted">Two private upstairs suites with their own game rooms. Book on VRBO, or take the whole building with a Haven Takeover party.</p>
+    <div class="btn-row">
+      <a class="btn" href="https://www.vrbo.com/5183022" target="_blank" rel="noopener">The Lodge</a>
+      <a class="btn" href="https://www.vrbo.com/5183156" target="_blank" rel="noopener">Adventurer's Rest</a>
+    </div>
+    <a class="btn ghost block" href="/birthday">🎂 Haven Takeover &amp; birthday packages</a>
+  </section>
+
+  <section class="card">
+    <h2>🕒 Hours</h2>
+    <table class="hours" id="hoursTable">
+      <tr data-d="1"><td>Monday – Thursday</td><td>5 – 9 PM</td></tr>
+      <tr data-d="5"><td>Friday</td><td>4 – 10 PM</td></tr>
+      <tr data-d="6"><td>Saturday</td><td>10 AM – 10 PM</td></tr>
+      <tr data-d="0"><td>Sunday</td><td>12 – 8 PM</td></tr>
+    </table>
+    <div class="small muted" style="margin-top:8px">Party rooms and suites can be booked 24/7 — after-hours bookings get a door code automatically.</div>
+  </section>
+
+  <section class="card contact">
+    <h2>📍 Find us</h2>
+    <a href="https://maps.google.com/?q=115+W+Spring+St,+Chippewa+Falls,+WI+54729" target="_blank" rel="noopener"><b>🗺️</b> 115 W Spring St, Chippewa Falls, WI 54729</a>
+    <a href="tel:+17158613214"><b>📞</b> (715) 861-3214</a>
+    <a href="mailto:stash@northwoodgamehaven.com"><b>✉️</b> stash@northwoodgamehaven.com</a>
+    <a href="/faq"><b>❓</b> Frequently asked questions</a>
+    <a href="https://northwoodgamehaven.company.site" target="_blank" rel="noopener"><b>🛒</b> Shop online (Lightspeed)</a>
+    <a href="https://www.tcgplayer.com/sellers/Northwood-Game-Haven/ef370221" target="_blank" rel="noopener"><b>🃏</b> Our TCGplayer store</a>
+    <div class="socials">
+      <a href="https://www.facebook.com/profile.php?id=61579663353904" target="_blank" rel="noopener" title="Facebook">📘</a>
+      <a href="https://www.instagram.com/northwoodgamehaven" target="_blank" rel="noopener" title="Instagram">📸</a>
+      <a href="https://discord.gg/tYpUJugkea" target="_blank" rel="noopener" title="Discord">💬</a>
+    </div>
+  </section>
+
+  <div class="footer-links">
+    <a href="/terms.html">Terms</a> · <a href="/guru.html">Guru Hub (staff)</a> · <a href="/app/karaoke/host.html">Karaoke host</a>
+    <div class="tiny" style="margin-top:6px">© Northwood Game Haven · Veteran-owned · Chippewa Falls, WI</div>
+  </div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function(){
+  // ---- open/closed status from the hours table ----
+  var HOURS = { 0:[12,20], 1:[17,21], 2:[17,21], 3:[17,21], 4:[17,21], 5:[16,22], 6:[10,22] };
+  function fmtH(h){ var s=h%12||12; return s+(h>=12?' PM':' AM'); }
+  function status(){
+    var now=new Date(), d=now.getDay(), h=now.getHours()+now.getMinutes()/60, w=HOURS[d];
+    var el=NGH.$('openStatus'), open=h>=w[0]&&h<w[1];
+    var next = open ? 'Closes '+fmtH(w[1]) : (h<w[0] ? 'Opens today '+fmtH(w[0]) : 'Opens '+fmtH(HOURS[(d+1)%7][0])+' tomorrow');
+    el.innerHTML='<span class="dot '+(open?'':'bad')+'"></span><span>'+(open?'Open now':'Closed')+' · '+next+'</span>';
+    var rows=document.querySelectorAll('#hoursTable tr'); rows.forEach(function(r){ r.classList.remove('today'); });
+    var key = (d>=1&&d<=4)?'1':String(d); var tr=document.querySelector('#hoursTable tr[data-d="'+key+'"]'); if(tr) tr.classList.add('today');
+  }
+  status(); setInterval(status, 60000);
+
+  // ---- coming up (next 5 public events) ----
+  function ymd(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); }
+  function addDays(s,n){ var d=new Date(s+'T12:00:00'); d.setDate(d.getDate()+n); return ymd(d); }
+  function expand(e){
+    if(!e.recurrence) return [e];
+    var out=[], cur=e.date, f=e.recurrence.freq, c=Math.min(60,e.recurrence.count||1), exc=e.exceptions||[];
+    for(var i=0;i<c;i++){ if(exc.indexOf(cur)<0){ var x=Object.assign({},e); x.date=cur; out.push(x); }
+      if(f==='weekly') cur=addDays(cur,7); else if(f==='biweekly') cur=addDays(cur,14); else { var d=new Date(e.date+'T12:00:00'); d.setMonth(d.getMonth()+i+1); cur=ymd(d); } }
+    return out;
+  }
+  function t12(t){ if(!t) return ''; var p=t.split(':'), h=+p[0], m=p[1]||'00'; return (h%12||12)+(m!=='00'?':'+m:'')+(h>=12?'pm':'am'); }
+  NGH.fetchJSON('/api/events').then(function(list){
+    var today=ymd(new Date()), horizon=addDays(today,14), occ=[];
+    (list||[]).forEach(function(e){ if(!e||e.status==='draft'||e.private) return; expand(e).forEach(function(x){ if(x.date>=today&&x.date<=horizon) occ.push(x); }); });
+    occ.sort(function(a,b){ return (a.date+(a.start||'')).localeCompare(b.date+(b.start||'')); });
+    occ=occ.slice(0,5); if(!occ.length) return;
+    var ul=NGH.$('tonightList'); ul.innerHTML='';
+    occ.forEach(function(e){
+      var d=new Date(e.date+'T12:00:00'); var lab = e.date===today?'Today':e.date===addDays(today,1)?'Tomorrow':d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+      var li=document.createElement('li');
+      li.innerHTML='<span class="when">'+NGH.esc(lab)+'</span><span class="body"><b>'+NGH.esc(e.title)+'</b><span class="small muted">'+(e.allDay?'All day':NGH.esc(t12(e.start))+(e.end?' – '+NGH.esc(t12(e.end)):''))+'</span></span>';
+      li.style.cursor='pointer'; li.onclick=function(){ NGH.go('/events.html?event='+encodeURIComponent(e.id)+'&date='+e.date); };
+      ul.appendChild(li);
+    });
+    NGH.$('tonightCard').hidden=false;
+  }).catch(function(){});
+
+  // ---- install + share ----
+  document.addEventListener('ngh:caninstall', function(){ NGH.$('installCard').classList.add('show'); });
+  NGH.$('btnInstall').onclick=function(){ NGH.promptInstall().then(function(ok){ if(ok) NGH.$('installCard').classList.remove('show'); }); };
+  NGH.$('btnShare').onclick=function(){ NGH.share({ title:'Northwood Game Haven', text:'Game night HQ in Chippewa Falls — book rooms, join Karaoke Battle & trivia', url:'https://gamehaven.guru/app/' }); };
+  NGH.$('tileOvernight').onclick=function(e){ e.preventDefault(); NGH.$('overnight').scrollIntoView({behavior:'smooth'}); };
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

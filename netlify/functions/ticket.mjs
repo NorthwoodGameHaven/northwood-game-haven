@@ -76,6 +76,7 @@ export default async (req) => {
     let statusChip;
     if (canceled) statusChip = '<span style="background:#fdecea;color:#9a3b2e;border:1px solid #f0c5be;padding:5px 14px;border-radius:50px;font-size:0.8rem;font-weight:bold;">CANCELED — not valid for entry</span>';
     else if (paid) statusChip = '<span style="background:#e7f5e8;color:#2e7d32;border:1px solid #b6dcb8;padding:5px 14px;border-radius:50px;font-size:0.8rem;font-weight:bold;">✅ PAID</span>';
+    else if (r.payment === 'onaccount') statusChip = '<span style="background:#e8f2f6;color:#1f6f8b;border:1px solid #bcd9e4;padding:5px 14px;border-radius:50px;font-size:0.8rem;font-weight:bold;">🧾 ON ACCOUNT — pay at the counter or via your Lightspeed pay link</span>';   // NGH-BUILD 2026-09-11a
     else if (pendingPaid) statusChip = '<span style="background:#fbf6ea;color:#8a6d1f;border:1px solid #e8d9b0;padding:5px 14px;border-radius:50px;font-size:0.8rem;font-weight:bold;">⏳ Payment received — confirming…</span>';
     else if (cost > 0) statusChip = '<span style="background:#fbf6ea;color:#8a6d1f;border:1px solid #e8d9b0;padding:5px 14px;border-radius:50px;font-size:0.8rem;font-weight:bold;">Payment due before the event</span>';
     else statusChip = '<span style="background:#e7f5e8;color:#2e7d32;border:1px solid #b6dcb8;padding:5px 14px;border-radius:50px;font-size:0.8rem;font-weight:bold;">FREE EVENT</span>';

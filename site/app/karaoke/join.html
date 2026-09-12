@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karaoke Battle — Northwood Game Haven</title>
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  body.has-tabbar .app{padding-bottom:calc(90px + var(--safe-b))}
+  .panel{display:none}.panel.on{display:block}
+  #stage{position:relative;height:38vh;min-height:220px;border-radius:var(--radius);overflow:hidden;background:rgba(0,0,0,.35);border:1px solid var(--line);margin-bottom:12px}
+  #lyricsBox{position:absolute;inset:0;--k-size:clamp(22px,6.2vw,34px);padding:10px 12px}
+  #cdgCanvas{position:absolute;inset:0;width:100%;height:100%;display:none}
+  #stageMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:20px;color:var(--muted)}
+  #stageMsg b{font-family:var(--font-head);color:var(--gold-lt);font-size:1.2rem;margin-bottom:6px}
+  .np{display:flex;gap:12px;align-items:center}
+  .np .t{flex:1;min-width:0}
+  .np .t b{display:block;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .np .t span{display:block;color:var(--muted);font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .prog{height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:8px}
+  .prog>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--gold-lt))}
+  .room-chip{display:flex;align-items:center;gap:8px;padding:12px 14px;border-radius:14px;border:2px solid transparent;color:#fff;font-weight:900;cursor:pointer;opacity:.85}
+  .room-chip.sel{border-color:#fff;opacity:1;box-shadow:0 0 0 3px rgba(255,255,255,.25)}
+  .rooms{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .song{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .song .t{flex:1;min-width:0}.song .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.song .t span{color:var(--muted);font-size:.84rem}
+  .mine{border-left:3px solid var(--gold);padding-left:8px}
+  .vote .cat{margin:14px 0}.vote .cat .l{font-family:var(--font-head);color:var(--gold-lt);text-align:center;margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase;font-size:.9rem}
+  .banner{background:var(--gold);color:var(--ink);font-weight:900;text-align:center;padding:10px;border-radius:12px;margin-bottom:12px;animation:pop .4s}
+  .banner.live{background:#6bd48a}
+  .lb td{padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.07)}.lb td.pts{text-align:right;font-weight:900;color:var(--gold-lt);font-size:1.15rem}
+  .sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:8px;vertical-align:-1px}
+  .res{font-size:.88rem;color:var(--muted)}
+  .code-entry{max-width:360px;margin:0 auto}
+  .who{font-size:.86rem;color:var(--muted);text-align:center;margin-top:6px}
+</style>
+</head>
+<body class="has-tabbar">
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/app/karaoke/" aria-label="Back">‹</a>
+    <div class="title">Karaoke Battle <span id="hdrCode" class="pill" style="margin-left:6px"></span></div>
+    <span class="dot idle" id="dot"></span>
+  </header>
+
+  <!-- ===== code entry ===== -->
+  <section class="panel on" id="pCode">
+    <div class="hero" style="padding-top:0"><img src="/brand/crest.png" alt="" style="width:110px;height:110px"><div class="display" style="font-size:1.2rem">Join the battle</div><div class="tag">Enter the 4-letter code on the TV</div></div>
+    <div class="code-entry">
+      <input class="f code" id="codeIn" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="CODE">
+      <button class="btn big" id="btnCode" style="margin-top:12px">Join →</button>
+      <button class="btn ghost block" id="btnScan" style="margin-top:10px" hidden>📷 Scan the TV code</button>
+      <video id="scanVid" playsinline muted style="width:100%;border-radius:14px;margin-top:10px;display:none"></video>
+    </div>
+    <div class="card" style="margin-top:22px" id="activeCard" hidden><b>🎤 A battle is on right now</b><div class="small muted" id="activeSub"></div><button class="btn sm" id="btnActive" style="margin-top:8px">Join it</button></div>
+  </section>
+
+  <!-- ===== join form ===== -->
+  <section class="panel" id="pJoin">
+    <h2>Pick your room</h2>
+    <div class="rooms" id="roomChips"></div>
+    <label class="f" for="nameIn">Your name</label>
+    <input class="f" id="nameIn" maxlength="30" placeholder="Stash the Otter" autocomplete="nickname">
+    <button class="btn big" id="btnJoin" style="margin-top:16px">Let's sing 🎤</button>
+    <p class="small muted center" style="margin-top:10px">Your room is your team. Score the other rooms after every song.</p>
+  </section>
+
+  <!-- ===== main: Now ===== -->
+  <section class="panel" id="pNow">
+    <div id="alert"></div>
+    <div id="stage"><div id="lyricsBox"></div><canvas id="cdgCanvas" width="800" height="500"></canvas><div id="stageMsg"><b>Nothing playing</b><span>Add a song to get the party going</span></div></div>
+    <div class="card" id="npCard">
+      <div class="np"><span style="font-size:30px">🎤</span><div class="t"><b id="npSong">—</b><span id="npWho"></span></div><span class="pill room" id="npRoom" style="display:none"></span></div>
+      <div class="prog"><i id="npProg"></i></div>
+      <div class="row" style="margin-top:8px"><span class="small muted" id="npTime"></span><span class="small muted" style="text-align:right" id="npAudioHint"></span></div>
+    </div>
+    <div class="card"><h2>🎶 On deck</h2><div id="deckList"></div></div>
+    <div class="card"><h2>🙋 My songs</h2><div id="mySongs"></div><button class="btn ghost block sm" id="btnGoAdd" style="margin-top:8px">＋ Add a song</button></div>
+    <div class="who" id="whoAmI"></div>
+  </section>
+
+  <!-- ===== main: Add ===== -->
+  <section class="panel" id="pAdd">
+    <h2>Add a song</h2>
+    <input class="f" id="q" placeholder="Search title or artist…" autocomplete="off">
+    <div id="results" style="margin-top:8px"></div>
+    <div class="sep"></div>
+    <details><summary class="small muted" style="cursor:pointer">Can't find it? Request a song not in the library</summary>
+      <label class="f">Title</label><input class="f" id="cTitle" maxlength="120"><label class="f">Artist</label><input class="f" id="cArtist" maxlength="120">
+      <button class="btn ghost block" id="btnCustom" style="margin-top:10px">Request it</button></details>
+  </section>
+
+  <!-- ===== main: Scores ===== -->
+  <section class="panel" id="pScores">
+    <h2>🏆 Scoreboard</h2>
+    <div class="card"><table class="lb" style="width:100%;border-collapse:collapse"><tbody id="lbBody"></tbody></table></div>
+    <div class="card"><h2>Recent songs</h2><div id="resList" class="res"></div></div>
+    <div class="card small muted">Song choice = average stars (up to 5 pts). Delivery = average stars × 2 (up to 10 pts). Only the other rooms vote.</div>
+  </section>
+
+  <!-- ===== main: Vote ===== -->
+  <section class="panel" id="pVote">
+    <h2>⭐ Rate that song</h2>
+    <div class="card vote">
+      <div class="np"><span style="font-size:30px">🎤</span><div class="t"><b id="vSong">—</b><span id="vWho"></span></div></div>
+      <div class="cat"><div class="l">Song choice</div><div class="stars" id="stChoice"></div></div>
+      <div class="cat"><div class="l">Delivery</div><div class="stars" id="stDelivery"></div></div>
+      <button class="btn big" id="btnVote" disabled>Submit stars</button>
+      <div class="center small muted" id="vTimer" style="margin-top:8px"></div>
+    </div>
+    <div class="card" id="vNone" hidden><b>Nothing to rate right now</b><div class="small muted">Voting opens the moment a song from another room ends.</div></div>
+  </section>
+</div>
+
+<nav class="tabbar" id="tabs" hidden>
+  <a href="#now" data-p="pNow" class="on"><span class="ic">🎤</span>Now</a>
+  <a href="#add" data-p="pAdd"><span class="ic">➕</span>Add song</a>
+  <a href="#vote" data-p="pVote"><span class="ic">⭐</span>Vote</a>
+  <a href="#scores" data-p="pScores"><span class="ic">🏆</span>Scores</a>
+</nav>
+
+<script src="/app/ngh-app.js"></script>
+<script src="/app/karaoke/karaoke-lyrics.js"></script>
+<script src="/app/karaoke/cdg.js"></script>
+<script src="/app/karaoke/karaoke-client.js"></script>
+<script>
+(function(){
+  var $ = NGH.$, esc = NGH.esc;
+  var qs = new URLSearchParams(location.search);
+  var CODE = (qs.get('s') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  var state = null, me = null, pollH = null, lastSeq = -1, lyricType = 'none', lastNotified = null, votedFor = null, myStars = { choice: 0, delivery: 0 };
+  var renderer = KLyrics.Renderer($('lyricsBox'), { idleText: '' }), cdg = CDG.Player($('cdgCanvas')), loader = KClient.LyricLoader();
+  var memStore = function(){ return NGH.store('ngh_karaoke_' + CODE); };
+
+  function panel(id){ document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('on', p.id === id); }); document.querySelectorAll('#tabs a').forEach(function(a){ a.classList.toggle('on', a.getAttribute('data-p') === id); }); window.scrollTo(0, 0); }
+  document.querySelectorAll('#tabs a').forEach(function(a){ a.onclick = function(e){ e.preventDefault(); panel(a.getAttribute('data-p')); if (a.getAttribute('data-p') === 'pAdd') setTimeout(function(){ $('q').focus(); }, 50); }; });
+  $('btnGoAdd').onclick = function(){ panel('pAdd'); $('q').focus(); };
+
+  // ---- code entry ----
+  $('btnCode').onclick = function(){ var c = $('codeIn').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length < 3) { NGH.toast('Enter the code from the TV'); return; } location.search = '?s=' + c; };
+  $('codeIn').addEventListener('keydown', function(e){ if (e.key === 'Enter') $('btnCode').click(); });
+  if (!CODE){
+    NGH.fetchJSON(KClient.API + '/active').then(function(j){ if (j && j.code && j.status !== 'ended'){ $('activeCard').hidden = false; $('activeSub').textContent = 'Code ' + j.code + (j.mode === 'battle' ? ' · Karaoke Battle' : ' · Open mic'); $('btnActive').onclick = function(){ location.search = '?s=' + j.code; }; } }).catch(function(){});
+    if ('BarcodeDetector' in window && navigator.mediaDevices){ $('btnScan').hidden = false; $('btnScan').onclick = startScan; }
+  }
+  function startScan(){
+    var v = $('scanVid'); v.style.display = 'block';
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function(stream){
+      v.srcObject = stream; v.play(); var det = new BarcodeDetector({ formats: ['qr_code'] });
+      var iv = setInterval(function(){ det.detect(v).then(function(codes){ if (!codes.length) return; var m = String(codes[0].rawValue).match(/[?&]s=([A-Za-z0-9]+)/); if (m){ clearInterval(iv); stream.getTracks().forEach(function(t){ t.stop(); }); location.search = '?s=' + m[1].toUpperCase(); } }).catch(function(){}); }, 400);
+    }).catch(function(){ NGH.toast('Camera not available — type the code'); v.style.display = 'none'; });
+  }
+
+  // ---- boot with code ----
+  if (CODE){
+    $('hdrCode').textContent = CODE;
+    NGH.clock.sync(KClient.API + '/time', 2).then(function(){
+      NGH.fetchJSON(KClient.sessionUrl(CODE) + '/state').then(function(st){
+        state = st; me = memStore().get(null);
+        if (me && me.token && st.members.some(function(m){ return m.id === me.id; })) enterMain(); else showJoin();
+      }).catch(function(e){ panel('pCode'); NGH.toast(e.status === 404 ? 'No session with code ' + CODE : 'Could not reach the Haven'); });
+    });
+  }
+  function showJoin(){
+    panel('pJoin');
+    var rooms = Object.keys(state.rooms || {});
+    var sel = (me && me.room) || rooms[0];
+    $('roomChips').innerHTML = rooms.map(function(id){ var r = KClient.roomMeta(id, state); return '<div class="room-chip' + (id === sel ? ' sel' : '') + '" data-r="' + id + '" style="background:' + r.color + ';color:' + r.text + '">🏠 ' + esc(r.name) + '<span class="small" style="opacity:.8;margin-left:auto">' + state.members.filter(function(m){ return m.room === id; }).length + '</span></div>'; }).join('');
+    document.querySelectorAll('.room-chip').forEach(function(c){ c.onclick = function(){ document.querySelectorAll('.room-chip').forEach(function(x){ x.classList.remove('sel'); }); c.classList.add('sel'); NGH.haptic('light'); }; });
+    $('nameIn').value = (me && me.name) || NGH.store('ngh_display_name').get('') || '';
+    $('btnJoin').onclick = function(){
+      var room = (document.querySelector('.room-chip.sel') || {}).getAttribute ? document.querySelector('.room-chip.sel').getAttribute('data-r') : null;
+      var name = $('nameIn').value.trim(); if (!name){ NGH.toast('What should we call you?'); return; }
+      if (!room){ NGH.toast('Pick a room'); return; }
+      $('btnJoin').disabled = true;
+      NGH.fetchJSON(KClient.sessionUrl(CODE) + '/join', { method: 'POST', body: { name: name, room: room, deviceId: NGH.DEVICE_ID } }).then(function(j){
+        me = { id: j.memberId, token: j.token, name: j.name, room: j.room }; memStore().set(me); NGH.store('ngh_display_name').set(name); state = j.state; NGH.haptic('success'); enterMain();
+      }).catch(function(e){ NGH.toast(e.message); }).then(function(){ $('btnJoin').disabled = false; });
+    };
+  }
+  function enterMain(){
+    $('tabs').hidden = false; panel(location.hash === '#add' ? 'pAdd' : 'pNow');
+    $('whoAmI').innerHTML = 'You are <b>' + esc(me.name) + '</b> in ' + esc(KClient.roomMeta(me.room, state).name) + ' · <a href="#" id="lnkSwitch">change</a>';
+    $('lnkSwitch').onclick = function(e){ e.preventDefault(); $('tabs').hidden = true; showJoin(); };
+    render();
+    pollH = KClient.poll(CODE, { interval: function(){ return (state && (state.nowPlaying || state.scoring)) ? 2000 : 5000; }, onState: function(st){ $('dot').className = 'dot'; state = st; render(); }, onError: function(){ $('dot').className = 'dot bad'; } });
+    setInterval(tick, 100);
+    NGH.wakeLock();
+  }
+
+  // ---- render ----
+  function render(){
+    var s = state, np = s.nowPlaying, mine = me && me.id;
+    var deck = (s.onDeck || []).map(function(id){ return s.queue.find(function(q){ return q.id === id; }); }).filter(Boolean);
+    // alerts
+    var al = '';
+    if (np && np.room === me.room && s.mode === 'battle') al = '<div class="banner live">🎤 Your room is singing — sing along!</div>';
+    else if (deck[0] && deck[0].room === me.room && s.mode === 'battle') al = '<div class="banner">You\'re up next: ' + esc(deck[0].singers.join(' & ')) + ' — head to the mic!</div>';
+    if (deck[0] && deck[0].requestedBy === mine && lastNotified !== deck[0].id){ lastNotified = deck[0].id; NGH.haptic('turn'); NGH.toast('Your song is up next!'); }
+    if (np && np.entryId && s.queue.some(function(q){ return q.id === np.entryId && q.requestedBy === mine; }) && lastNotified !== 'play' + np.entryId){ lastNotified = 'play' + np.entryId; NGH.haptic('turn'); }
+    if (s.status === 'ended') al = '<div class="banner">Thanks for singing — session over 🎉</div>';
+    if (s.status === 'lobby') al = '<div class="banner">Waiting for the host to start… add your songs now!</div>';
+    $('alert').innerHTML = al;
+    // now playing
+    if (np){
+      $('npSong').textContent = np.title + (np.artist ? ' — ' + np.artist : ''); $('npWho').textContent = '🎤 ' + (np.singers || []).join(' & ');
+      var r = KClient.roomMeta(np.room, s); $('npRoom').style.display = s.mode === 'battle' ? '' : 'none'; $('npRoom').textContent = r.team; $('npRoom').style.background = r.color; $('npRoom').style.color = r.text;
+      if (np.seq !== lastSeq){ lastSeq = np.seq; $('stageMsg').style.display = 'flex'; $('stageMsg').innerHTML = '<b>' + esc(np.title) + '</b><span>loading lyrics…</span>';
+        loader.load(np).then(function(res){ if (!state.nowPlaying || state.nowPlaying.entryId !== np.entryId) return; lyricType = res.type;
+          if (res.type === 'lrc'){ renderer.setLyrics(res.lyrics); $('cdgCanvas').style.display = 'none'; $('stageMsg').style.display = 'none'; }
+          else if (res.type === 'cdg'){ cdg.load(res.cdgBuf); $('cdgCanvas').style.display = 'block'; renderer.clear(); $('stageMsg').style.display = 'none'; }
+          else { renderer.clear(); $('cdgCanvas').style.display = 'none'; $('stageMsg').innerHTML = '<b>' + esc(np.title) + '</b><span>' + (res.type === 'pending' ? 'Loading lyrics…' : 'Lyrics are on the TV for this one') + '</span>'; if (res.type === 'pending') setTimeout(function(){ if (state && state.nowPlaying && state.nowPlaying.entryId === np.entryId) { lastSeq = -1; render(); } }, 3000); } }); }
+    } else { $('npSong').textContent = s.status === 'ended' ? 'Session over' : 'Nothing playing yet'; $('npWho').textContent = deck.length ? 'Up next: ' + deck[0].title : ''; $('npRoom').style.display = 'none'; if (lastSeq !== -1){ lastSeq = -1; renderer.clear(); cdg.clear(); $('cdgCanvas').style.display = 'none'; lyricType = 'none'; } $('stageMsg').style.display = 'flex'; $('stageMsg').innerHTML = '<b>' + (deck.length ? 'Up next' : 'Nothing playing') + '</b><span>' + (deck.length ? esc(deck[0].title + ' · ' + deck[0].singers.join(' & ')) : 'Add a song to get the party going') + '</span>'; }
+    // deck
+    $('deckList').innerHTML = deck.length ? deck.map(function(e, i){ return '<div class="song' + (e.requestedBy === mine ? ' mine' : '') + '"><span class="n" style="width:26px;height:26px;border-radius:50%;background:var(--gold);color:var(--ink);font-weight:900;display:grid;place-items:center;flex:none;font-size:.85rem">' + (i + 1) + '</span><div class="t"><b>' + esc(e.title) + '</b><span>🎤 ' + esc(e.singers.join(' & ')) + '</span></div>' + (s.mode === 'battle' ? KClient.roomBadge(e.room, s) : '') + '</div>'; }).join('') : '<div class="small muted">Queue is empty — be the first!</div>';
+    // my songs
+    var mineQ = s.queue.filter(function(q){ return q.requestedBy === mine && (q.status === 'queued' || q.status === 'playing' || q.status === 'scoring'); });
+    $('mySongs').innerHTML = mineQ.length ? mineQ.map(function(e){ var pos = (s.onDeck || []).indexOf(e.id); return '<div class="song"><div class="t"><b>' + esc(e.title) + '</b><span>' + (e.status === 'playing' ? '🎤 singing now' : e.status === 'scoring' ? '⭐ being scored' : (pos >= 0 ? '#' + (pos + 1) + ' on deck' : 'queued')) + ' · ' + esc(e.singers.join(' & ')) + '</span></div>' + (e.status === 'queued' ? '<button class="icon-btn" data-del="' + e.id + '" title="Remove">✕</button>' : '') + '</div>'; }).join('') : '<div class="small muted">You haven\'t added a song yet.</div>';
+    document.querySelectorAll('[data-del]').forEach(function(b){ b.onclick = function(){ if (!confirm('Remove this song from the queue?')) return; NGH.fetchJSON(KClient.sessionUrl(CODE) + '/queue/' + b.getAttribute('data-del') + '?token=' + me.token, { method: 'DELETE' }).then(function(j){ state = j.state; render(); }).catch(function(e){ NGH.toast(e.message); }); }; });
+    // scoreboard
+    var rooms = Object.keys(s.rooms || {}).map(function(id){ return KClient.roomMeta(id, s); }).sort(function(a, b){ return b.score - a.score; });
+    $('lbBody').innerHTML = rooms.map(function(r){ return '<tr' + (r.id === me.room ? ' style="background:rgba(232,184,75,.1)"' : '') + '><td><span class="sw" style="background:' + r.color + '"></span>' + esc(r.team) + '<div class="small muted">' + esc(r.name) + ' · ' + r.songs + ' song' + (r.songs === 1 ? '' : 's') + '</div></td><td class="pts">' + r.score.toFixed(1) + '</td></tr>'; }).join('');
+    $('resList').innerHTML = (s.results || []).slice().reverse().slice(0, 12).map(function(r){ var rm = KClient.roomMeta(r.room, s); return '<div class="song"><div class="t"><b>' + esc(r.title) + '</b><span>' + esc(r.singers.join(' & ')) + ' · <span style="color:' + rm.color + '">' + esc(rm.team) + '</span> · ' + KClient.stars(r.choiceAvg) + ' choice · ' + KClient.stars(r.deliveryAvg) + ' delivery · ' + r.votes + ' votes</span></div><b style="color:var(--gold-lt)">+' + r.points.toFixed(1) + '</b></div>'; }).join('') || '<div class="small muted">No songs scored yet.</div>';
+    // vote
+    var sc = s.scoring, canVote = sc && sc.room !== me.room && s.mode === 'battle';
+    $('vNone').hidden = !!canVote; document.querySelector('#pVote .vote').style.display = canVote ? '' : 'none';
+    if (canVote){
+      $('vSong').textContent = sc.title; var vr = KClient.roomMeta(sc.room, s); $('vWho').innerHTML = esc((sc.singers || []).join(' & ')) + ' · <span style="color:' + vr.color + '">' + esc(vr.team) + '</span>';
+      if (votedFor !== sc.entryId && $('pVote').classList.contains('on') === false && lastNotified !== 'vote' + sc.entryId){ lastNotified = 'vote' + sc.entryId; myStars = { choice: 0, delivery: 0 }; drawStars(); panel('pVote'); NGH.haptic('warn'); }
+      $('btnVote').textContent = votedFor === sc.entryId ? 'Update my stars' : 'Submit stars';
+    } else if (sc && sc.room === me.room){ $('vNone').hidden = false; $('vNone').innerHTML = '<b>Your room is being scored!</b><div class="small muted">Sit tight — the other rooms are voting.</div>'; }
+    else $('vNone').innerHTML = '<b>Nothing to rate right now</b><div class="small muted">Voting opens the moment a song from another room ends.</div>';
+  }
+  function drawStars(){
+    ['choice', 'delivery'].forEach(function(k){ var box = $(k === 'choice' ? 'stChoice' : 'stDelivery'); box.innerHTML = ''; for (var i = 1; i <= 5; i++){ (function(n){ var b = document.createElement('button'); b.textContent = '★'; b.className = n <= myStars[k] ? 'on' : ''; b.onclick = function(){ myStars[k] = n; drawStars(); NGH.haptic('light'); }; box.appendChild(b); })(i); } });
+    $('btnVote').disabled = !(myStars.choice && myStars.delivery);
+  }
+  drawStars();
+  $('btnVote').onclick = function(){
+    var sc = state && state.scoring; if (!sc) return;
+    $('btnVote').disabled = true;
+    NGH.fetchJSON(KClient.sessionUrl(CODE) + '/vote', { method: 'POST', body: { token: me.token, entryId: sc.entryId, choice: myStars.choice, delivery: myStars.delivery } }).then(function(){ votedFor = sc.entryId; NGH.toast('Stars in! ⭐'); NGH.haptic('success'); render(); pollH && pollH.kick(); }).catch(function(e){ NGH.toast(e.message); $('btnVote').disabled = false; });
+  };
+
+  // ---- add song ----
+  var qT = null;
+  $('q').addEventListener('input', function(){ clearTimeout(qT); qT = setTimeout(search, 250); });
+  function search(){
+    var q = $('q').value.trim();
+    NGH.fetchJSON(KClient.API + '/songs?q=' + encodeURIComponent(q) + '&limit=30').then(function(j){
+      var list = j.songs || [];
+      $('results').innerHTML = list.length ? list.map(function(sg){ return '<div class="song" data-id="' + esc(sg.id) + '"><div class="t"><b>' + esc(sg.title) + '</b><span>' + esc(sg.artist) + (sg.durationMs ? ' · ' + KClient.fmtTime(sg.durationMs) : '') + (sg.hasLyrics || sg.hasCdg ? ' · 📱 lyrics' : '') + '</span></div><button class="btn sm">Add</button></div>'; }).join('') : '<div class="small muted">' + (q ? 'No matches — try another spelling, or request it below.' : 'Type to search the library.') + '</div>';
+      document.querySelectorAll('#results .song').forEach(function(row){ row.querySelector('button').onclick = function(){ var sg = list.find(function(x){ return x.id === row.getAttribute('data-id'); }); openSingers(sg, null); }; });
+    }).catch(function(){ $('results').innerHTML = '<div class="small muted">Search failed — try again.</div>'; });
+  }
+  $('btnCustom').onclick = function(){ var t = $('cTitle').value.trim(); if (!t){ NGH.toast('Title please'); return; } openSingers(null, { title: t, artist: $('cArtist').value.trim() }); };
+  function openSingers(song, custom){
+    var max = (state.settings && state.settings.maxSingers) || 2;
+    var sheet = document.createElement('div'); sheet.className = 'sheet';
+    var inputs = ''; for (var i = 0; i < max; i++) inputs += '<input class="f" maxlength="30" placeholder="' + (i === 0 ? 'Singer 1 (you)' : 'Singer ' + (i + 1) + ' (optional)') + '" value="' + (i === 0 ? esc(me.name) : '') + '" style="margin-top:8px">';
+    sheet.innerHTML = '<div><h2>' + esc(song ? song.title : custom.title) + '</h2><div class="small muted">' + esc(song ? song.artist : (custom.artist || 'requested song')) + ' · singing for ' + esc(KClient.roomMeta(me.room, state).team) + '</div><label class="f">Who\'s singing? (up to ' + max + ')</label>' + inputs + '<div class="btn-row" style="margin-top:14px"><button class="btn ghost" id="shCancel">Cancel</button><button class="btn" id="shAdd">Add to queue</button></div></div>';
+    document.body.appendChild(sheet);
+    sheet.querySelector('#shCancel').onclick = function(){ sheet.remove(); };
+    sheet.querySelector('#shAdd').onclick = function(){
+      var singers = Array.prototype.map.call(sheet.querySelectorAll('input'), function(i){ return i.value.trim(); }).filter(Boolean);
+      if (!singers.length){ NGH.toast('Name at least one singer'); return; }
+      var body = { token: me.token, singers: singers }; if (song) body.songId = song.id; else body.custom = custom;
+      NGH.fetchJSON(KClient.sessionUrl(CODE) + '/queue', { method: 'POST', body: body }).then(function(j){ state = j.state; sheet.remove(); NGH.toast('Added! 🎶'); NGH.haptic('success'); $('q').value = ''; $('results').innerHTML = ''; $('cTitle').value = ''; $('cArtist').value = ''; panel('pNow'); render(); }).catch(function(e){ NGH.toast(e.message); });
+    };
+  }
+
+  // ---- tick ----
+  function tick(){
+    if (!state) return; var np = state.nowPlaying, nowMs = NGH.clock.now();
+    if (np){ var pos = KClient.position(np, nowMs); if (lyricType === 'lrc') renderer.setPosition(pos); else if (lyricType === 'cdg') cdg.setPosition(pos);
+      var dur = np.durationMs || 0; $('npProg').style.width = dur ? Math.min(100, Math.max(0, pos / dur * 100)) + '%' : '0%'; $('npTime').textContent = (pos < 0 ? 'starting in ' + Math.ceil(-pos / 1000) + '…' : KClient.fmtTime(pos) + (dur ? ' / ' + KClient.fmtTime(dur) : '')) + (np.pausedAt ? ' · paused' : ''); }
+    else { $('npProg').style.width = '0%'; $('npTime').textContent = ''; }
+    if (state.scoring){ var left = Math.max(0, Math.ceil((state.scoring.closesAt - nowMs) / 1000)); $('vTimer').textContent = left ? 'Voting closes in ' + left + ' s' : 'Counting votes…'; }
+  }
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

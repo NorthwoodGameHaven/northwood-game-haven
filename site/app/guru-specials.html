@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<!-- NGH APP · Guru Specials editor + coupon redeem — NGH-BUILD 2026-09-11a
+     Staff only (Guru code → Bearer token via NGH.admin). Talks to /api/specials/admin,
+     /api/specials/settings and /api/specials/redeem. Camera scanning uses the
+     BarcodeDetector API when the browser has it; typing the code always works. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Guru · Specials — Northwood Game Haven</title>
+<meta name="theme-color" content="#132a1d">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .result{border-radius:16px;padding:18px 16px;text-align:center;margin-top:12px;animation:pop .3s ease-out}
+  .result.ok{background:#2e7d32;color:#fff}
+  .result.no{background:#7a2431;color:#fff}
+  .result .big{font-family:var(--font-head);font-weight:600;font-size:1.6rem;line-height:1.15}
+  .result .sub{margin-top:6px;font-weight:700;opacity:.92}
+  .result .tiny{opacity:.8;margin-top:4px}
+  #scanBox{position:relative;margin-top:12px;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:1/1;max-height:56vh}
+  #scanBox video{width:100%;height:100%;object-fit:cover;display:block}
+  #scanBox .reticle{position:absolute;inset:14%;border:3px solid rgba(232,184,75,.85);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
+  #scanBox .stop{position:absolute;left:50%;bottom:12px;transform:translateX(-50%)}
+  .sp{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .sp:last-child{border-bottom:0}
+  .sp .thumb{width:56px;height:56px;border-radius:12px;object-fit:cover;background:rgba(0,0,0,.3);flex:none}
+  .sp .body{flex:1;min-width:0}
+  .sp .t{font-weight:800;line-height:1.25}
+  .sp .m{font-size:.8rem;color:var(--muted);margin-top:3px}
+  .sp .pills{margin-top:5px;display:flex;flex-wrap:wrap;gap:5px}
+  .pill.live{background:#2e7d32;color:#fff}
+  .pill.sched{background:var(--teal);color:#fff}
+  .pill.off{background:var(--maroon);color:#fff}
+  .pill.food{background:rgba(232,184,75,.22);color:var(--gold-lt)}
+  .pill.retail{background:rgba(20,136,166,.25);color:#8fd8ea}
+  .sp .btns{display:flex;flex-direction:column;gap:6px;flex:none}
+  .err{color:#ff9f95;font-weight:700;font-size:.9rem;margin-top:8px;min-height:1.2em}
+  .preview{width:100%;max-height:160px;object-fit:cover;border-radius:12px;margin-top:8px;display:none}
+  .preview.show{display:block}
+  .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+  .two>div{min-width:0}
+  .two input.f,.two select.f{min-width:0}
+  @media (max-width:420px){.two.dates{grid-template-columns:minmax(0,1fr)}}
+  @media (max-width:340px){.two{grid-template-columns:minmax(0,1fr)}}
+  .hint{font-size:.76rem;color:var(--muted);margin-top:4px}
+  h2 .cnt{font-family:var(--font-body);font-size:.8rem;color:var(--muted);font-weight:700;margin-left:auto}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/app/" aria-label="Back">‹</a>
+    <div class="title">Guru · Specials</div>
+    <img class="logo" src="/brand/crest.png" alt="">
+  </header>
+
+  <!-- login gate -->
+  <section class="card gold" id="loginCard" hidden>
+    <h2>🔐 Guru sign-in</h2>
+    <p class="small muted">Enter the Guru code to manage specials and redeem coupons.</p>
+    <form id="loginForm">
+      <label class="f" for="loginCode">Guru code</label>
+      <input class="f" id="loginCode" type="password" autocomplete="current-password" required>
+      <div class="err" id="loginErr"></div>
+      <button type="submit" class="btn block" id="loginBtn">Sign in</button>
+    </form>
+  </section>
+
+  <div id="main" hidden>
+    <!-- redeem -->
+    <section class="card gold">
+      <h2>🎟️ Redeem a coupon</h2>
+      <p class="small muted">Scan the customer's QR or type the code printed under it (SPC-XXXX-XXXX).</p>
+      <form id="redeemForm">
+        <input class="f code" id="redeemCode" type="text" placeholder="SPC-••••-••••" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="300">
+        <div class="btn-row">
+          <button type="button" class="btn ghost" id="scanBtn" hidden>📷 Scan</button>
+          <button type="submit" class="btn" id="redeemBtn">Redeem</button>
+        </div>
+        <div class="hint" id="scanHint" hidden>Camera scanning isn't available in this browser — type the code instead.</div>
+      </form>
+      <div id="scanBox" hidden>
+        <video id="scanVideo" playsinline muted autoplay></video>
+        <div class="reticle"></div>
+        <button type="button" class="btn sm stop" id="scanStop">Stop camera</button>
+      </div>
+      <div id="redeemResult"></div>
+    </section>
+
+    <!-- specials -->
+    <section class="card">
+      <h2>🏷️ Specials <span class="cnt" id="spCount"></span></h2>
+      <button type="button" class="btn block" id="newBtn">＋ New special</button>
+      <div id="spList" style="margin-top:8px"></div>
+      <div class="small muted center" id="spEmpty" hidden>No specials yet — create the first one.</div>
+    </section>
+
+    <!-- settings -->
+    <section class="card">
+      <h2>🍕 Order-food button</h2>
+      <p class="small muted">When set, the Food &amp; Drink tab shows a gold "Order food" button that opens this link (restaurant partner ordering page). Leave empty to hide it.</p>
+      <label class="f" for="foodOrderUrl">Order URL</label>
+      <input class="f" id="foodOrderUrl" type="url" placeholder="https://…" inputmode="url">
+      <div class="err" id="settingsErr"></div>
+      <button type="button" class="btn ghost block" id="settingsSave">Save settings</button>
+    </section>
+
+    <div class="footer-links"><a href="/guru.html">Guru Hub</a> · <a href="#" id="logoutLink">Sign out</a></div>
+  </div>
+</div>
+
+<!-- editor sheet -->
+<div class="sheet" id="editSheet" hidden>
+  <div>
+    <h2 id="editTitle">New special</h2>
+    <form id="editForm">
+      <input type="hidden" id="fId">
+      <div class="two">
+        <div><label class="f" for="fCat">Category</label>
+          <select class="f" id="fCat"><option value="food">Food &amp; Drink</option><option value="retail">Retail</option></select></div>
+        <div><label class="f" for="fRedeem">How it's redeemed</label>
+          <select class="f" id="fRedeem"><option value="show">Show at counter</option><option value="claim">Claim a coupon (QR)</option></select></div>
+      </div>
+      <label class="f" for="fTitle">Title</label>
+      <input class="f" id="fTitle" type="text" maxlength="80" required placeholder="Free soda with any pizza">
+      <div class="two">
+        <div><label class="f" for="fPrice">Price / value</label><input class="f" id="fPrice" type="text" maxlength="24" placeholder="$4.99"></div>
+        <div><label class="f" for="fBadge">Badge</label><input class="f" id="fBadge" type="text" maxlength="30" placeholder="Game night only"></div>
+      </div>
+      <label class="f" for="fBlurb">Blurb</label>
+      <textarea class="f" id="fBlurb" maxlength="300" placeholder="One line that sells it."></textarea>
+      <label class="f" for="fTerms">Terms (collapsible on the card)</label>
+      <textarea class="f" id="fTerms" maxlength="600" placeholder="One per customer. In-store only. Not valid with other offers."></textarea>
+      <label class="f" for="fImage">Image URL</label>
+      <input class="f" id="fImage" type="text" maxlength="500" placeholder="https://… or /img/…" inputmode="url">
+      <img class="preview" id="fPreview" alt="">
+      <div class="two dates">
+        <div><label class="f" for="fStart">Starts</label><input class="f" id="fStart" type="datetime-local"></div>
+        <div><label class="f" for="fEnd">Ends</label><input class="f" id="fEnd" type="datetime-local"></div>
+      </div>
+      <div class="hint">Leave either blank for open-ended. Claimed coupons expire at "Ends" (or 30 days after claiming when blank).</div>
+      <div class="two" id="claimRow">
+        <div><label class="f" for="fLimit">Claim limit</label><input class="f" id="fLimit" type="number" min="0" step="1" inputmode="numeric" placeholder="unlimited"></div>
+        <div><label class="f" for="fSort">Sort order</label><input class="f" id="fSort" type="number" step="1" inputmode="numeric" value="0"></div>
+      </div>
+      <label class="switch" style="margin-top:10px"><span><b>Active</b><div class="small muted">Off = hidden from the app</div></span><input type="checkbox" id="fActive" checked></label>
+      <div class="err" id="editErr"></div>
+      <div class="btn-row">
+        <button type="button" class="btn ghost" id="editCancel">Cancel</button>
+        <button type="submit" class="btn" id="editSave">Save</button>
+      </div>
+      <button type="button" class="btn danger block" id="editDelete" hidden style="margin-top:6px">Delete special</button>
+    </form>
+  </div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = NGH.$, esc = NGH.esc;
+  var specials = [];
+  var stream = null, scanning = false, lastScan = '', lastScanAt = 0;
+
+  function abs(u) { return u && u.charAt(0) === '/' ? NGH.SITE + u : (u || ''); }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function toLocalInput(iso) {
+    if (!iso) return '';
+    var d = new Date(iso); if (isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function fromLocalInput(v) { if (!v) return null; var d = new Date(v); return isNaN(d.getTime()) ? null : d.toISOString(); }
+  function fmt(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+  function authFail(e) {
+    if (e && e.status === 401) { NGH.admin.logout(); showLogin('Session expired — sign in again.'); return true; }
+    return false;
+  }
+
+  // ---- login gate ----
+  function showLogin(msg) { $('main').hidden = true; $('loginCard').hidden = false; $('loginErr').textContent = msg || ''; setTimeout(function () { $('loginCode').focus(); }, 50); }
+  $('loginForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var code = $('loginCode').value.trim(); if (!code) return;
+    $('loginBtn').disabled = true; $('loginErr').textContent = '';
+    NGH.admin.login(code).then(function () { $('loginCode').value = ''; $('loginBtn').disabled = false; boot(); })
+      .catch(function (err) { $('loginBtn').disabled = false; $('loginErr').textContent = (err && err.message) || 'Login failed'; NGH.haptic('warn'); });
+  });
+  $('logoutLink').onclick = function (e) { e.preventDefault(); NGH.admin.logout(); stopScan(); showLogin(); };
+
+  function boot() {
+    $('loginCard').hidden = true; $('main').hidden = false;
+    loadSpecials(); loadSettings();
+  }
+
+  // ---- redeem ----
+  function setResult(ok, big, sub, tiny) {
+    $('redeemResult').innerHTML = '<div class="result ' + (ok ? 'ok' : 'no') + '"><div class="big">' + esc(big) + '</div>' +
+      (sub ? '<div class="sub">' + esc(sub) + '</div>' : '') + (tiny ? '<div class="tiny">' + esc(tiny) + '</div>' : '') + '</div>';
+    NGH.haptic(ok ? 'success' : 'warn');
+  }
+  function redeem(raw) {
+    var code = String(raw || '').trim();
+    if (!code) { $('redeemCode').focus(); return; }
+    $('redeemBtn').disabled = true; $('redeemResult').innerHTML = '<div class="center" style="padding:12px"><span class="spinner"></span></div>';
+    NGH.admin.fetch('/api/specials/redeem', { method: 'POST', body: { code: code, by: 'guru-app' } }).then(function (r) {
+      $('redeemBtn').disabled = false;
+      var c = (r && r.coupon) || {}, sp = (r && r.special) || {};
+      setResult(true, '✅ REDEEMED', (c.title || sp.title || 'Coupon') + (sp.price ? ' · ' + sp.price : ''), (c.code || code) + (sp.terms ? ' · ' + sp.terms : ''));
+      $('redeemCode').value = '';
+      loadSpecials();
+    }).catch(function (err) {
+      $('redeemBtn').disabled = false;
+      if (authFail(err)) return;
+      var b = (err && err.body) || {}, c = b.coupon || {};
+      var st = b.status || '';
+      var big = st === 'redeemed' ? '❌ ALREADY REDEEMED' : st === 'expired' ? '⌛ EXPIRED' : st === 'void' ? '❌ VOIDED' : (err && err.status === 404 ? '❌ NOT FOUND' : '❌ ' + ((err && err.message) || 'Error'));
+      var sub = c.title ? c.title : (err && err.status === 404 ? 'Check the code and try again.' : (st ? (err.message || '') : ''));
+      var tiny = st === 'redeemed' && c.redeemedAt ? 'Used ' + fmt(c.redeemedAt) + (c.redeemedBy ? ' by ' + c.redeemedBy : '') : (st === 'expired' && c.expiresAt ? 'Expired ' + fmt(c.expiresAt) : '');
+      setResult(false, big, sub, tiny);
+    });
+  }
+  $('redeemForm').addEventListener('submit', function (e) { e.preventDefault(); redeem($('redeemCode').value); });
+  // pasted coupon URLs are long — drop the big spaced "code" styling for those
+  $('redeemCode').addEventListener('input', function () { this.classList.toggle('code', this.value.length <= 16); });
+
+  // ---- camera scan (BarcodeDetector; guarded) ----
+  var canScan = false;
+  try { canScan = ('BarcodeDetector' in window) && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); } catch (e) { canScan = false; }
+  if (canScan) $('scanBtn').hidden = false; else $('scanHint').hidden = false;
+  function startScan() {
+    if (!canScan || scanning) return;
+    var det;
+    try { det = new BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { NGH.toast('Scanner unavailable — type the code'); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(function (s) {
+      stream = s; var v = $('scanVideo'); v.srcObject = s; $('scanBox').hidden = false; scanning = true;
+      return v.play().catch(function () {});
+    }).then(function () {
+      var v = $('scanVideo');
+      (function loop() {
+        if (!scanning) return;
+        det.detect(v).then(function (codes) {
+          if (scanning && codes && codes.length && codes[0].rawValue) onScan(codes[0].rawValue);
+        }).catch(function () {}).then(function () { if (scanning) setTimeout(loop, 300); });
+      })();
+    }).catch(function (e) { scanning = false; NGH.toast('Camera unavailable: ' + ((e && e.message) || e)); });
+  }
+  function stopScan() {
+    scanning = false;
+    if (stream) { try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} stream = null; }
+    $('scanBox').hidden = true;
+  }
+  function onScan(raw) {
+    var now = Date.now();
+    if (raw === lastScan && now - lastScanAt < 4000) return;
+    lastScan = raw; lastScanAt = now;
+    NGH.haptic('light');
+    stopScan();
+    $('redeemCode').value = raw;
+    redeem(raw);
+  }
+  $('scanBtn').onclick = startScan;
+  $('scanStop').onclick = stopScan;
+  document.addEventListener('visibilitychange', function () { if (document.hidden) stopScan(); });
+
+  // ---- specials list ----
+  function loadSpecials() {
+    NGH.admin.fetch('/api/specials/admin').then(function (list) {
+      specials = Array.isArray(list) ? list : []; renderSpecials();
+    }).catch(function (e) { if (!authFail(e)) NGH.toast('Could not load specials: ' + (e.message || e)); });
+  }
+  function stateOf(sp) {
+    if (sp.active === false) return ['off', 'Hidden'];
+    var now = Date.now();
+    if (sp.startsAt && Date.parse(sp.startsAt) > now) return ['sched', 'Starts ' + fmt(sp.startsAt)];
+    if (sp.endsAt && Date.parse(sp.endsAt) < now) return ['off', 'Ended ' + fmt(sp.endsAt)];
+    return ['live', 'Live' + (sp.endsAt ? ' · through ' + fmt(sp.endsAt) : '')];
+  }
+  function renderSpecials() {
+    var box = $('spList'); box.innerHTML = '';
+    $('spEmpty').hidden = !!specials.length;
+    $('spCount').textContent = specials.length ? specials.length + ' total' : '';
+    specials.forEach(function (sp) {
+      var st = stateOf(sp);
+      var row = document.createElement('div'); row.className = 'sp'; row.setAttribute('data-id', sp.id);
+      row.innerHTML = (sp.imageUrl ? '<img class="thumb" src="' + esc(abs(sp.imageUrl)) + '" alt="">' : '<div class="thumb" style="display:grid;place-items:center;font-size:24px">' + (sp.cat === 'food' ? '🥤' : '🏷️') + '</div>') +
+        '<div class="body"><div class="t">' + esc(sp.title) + (sp.price ? ' <span class="gold">' + esc(sp.price) + '</span>' : '') + '</div>' +
+        '<div class="m">' + (sp.redeem === 'claim' ? '🎟️ Coupon · ' + (sp.claimed || 0) + ' claimed' + (sp.claimLimit ? ' of ' + sp.claimLimit : '') + ' · ' + (sp.redeemed || 0) + ' redeemed' : '📱 Show at counter') + '</div>' +
+        '<div class="pills"><span class="pill ' + esc(sp.cat) + '">' + (sp.cat === 'food' ? 'Food & Drink' : 'Retail') + '</span><span class="pill ' + st[0] + '">' + esc(st[1]) + '</span>' + (sp.badge ? '<span class="pill">' + esc(sp.badge) + '</span>' : '') + '</div></div>' +
+        '<div class="btns"><button type="button" class="btn sm ghost" data-act="edit">Edit</button></div>';
+      row.querySelector('[data-act="edit"]').onclick = function () { openEditor(sp); };
+      box.appendChild(row);
+    });
+  }
+
+  // ---- editor ----
+  var editing = null;
+  function openEditor(sp) {
+    editing = sp || null;
+    $('editTitle').textContent = sp ? 'Edit special' : 'New special';
+    $('fId').value = sp ? sp.id : '';
+    $('fCat').value = sp ? sp.cat : 'food';
+    $('fRedeem').value = sp ? (sp.redeem || 'show') : 'show';
+    $('fTitle').value = sp ? (sp.title || '') : '';
+    $('fPrice').value = sp ? (sp.price || '') : '';
+    $('fBadge').value = sp ? (sp.badge || '') : '';
+    $('fBlurb').value = sp ? (sp.blurb || '') : '';
+    $('fTerms').value = sp ? (sp.terms || '') : '';
+    $('fImage').value = sp ? (sp.imageUrl || '') : '';
+    $('fStart').value = sp ? toLocalInput(sp.startsAt) : '';
+    $('fEnd').value = sp ? toLocalInput(sp.endsAt) : '';
+    $('fLimit').value = sp && sp.claimLimit ? sp.claimLimit : '';
+    $('fSort').value = sp ? (sp.sort || 0) : 0;
+    $('fActive').checked = sp ? sp.active !== false : true;
+    $('editDelete').hidden = !sp;
+    $('editErr').textContent = ''; $('editSave').disabled = false;
+    preview(); toggleClaimRow();
+    $('editSheet').hidden = false;
+    setTimeout(function () { $('fTitle').focus(); }, 50);
+  }
+  function closeEditor() { $('editSheet').hidden = true; editing = null; }
+  function preview() { var u = $('fImage').value.trim(), img = $('fPreview'); if (u) { img.src = abs(u); img.classList.add('show'); } else { img.classList.remove('show'); img.removeAttribute('src'); } }
+  function toggleClaimRow() { $('fLimit').disabled = $('fRedeem').value !== 'claim'; }
+  $('fImage').addEventListener('change', preview); $('fImage').addEventListener('blur', preview);
+  $('fPreview').onerror = function () { $('fPreview').classList.remove('show'); };
+  $('fRedeem').addEventListener('change', toggleClaimRow);
+  $('editCancel').onclick = closeEditor;
+  $('editSheet').addEventListener('click', function (e) { if (e.target === $('editSheet')) closeEditor(); });
+  $('editForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var body = {
+      cat: $('fCat').value, redeem: $('fRedeem').value, title: $('fTitle').value.trim(), price: $('fPrice').value.trim(), badge: $('fBadge').value.trim(),
+      blurb: $('fBlurb').value.trim(), terms: $('fTerms').value.trim(), imageUrl: $('fImage').value.trim(),
+      startsAt: fromLocalInput($('fStart').value), endsAt: fromLocalInput($('fEnd').value),
+      claimLimit: $('fRedeem').value === 'claim' ? (parseInt($('fLimit').value, 10) || 0) : 0,
+      sort: parseInt($('fSort').value, 10) || 0, active: $('fActive').checked
+    };
+    if (!body.title) { $('editErr').textContent = 'Title is required.'; return; }
+    if (body.startsAt && body.endsAt && Date.parse(body.endsAt) < Date.parse(body.startsAt)) { $('editErr').textContent = 'Ends must be after Starts.'; return; }
+    $('editSave').disabled = true; $('editErr').textContent = '';
+    var id = $('fId').value;
+    var p = id ? NGH.admin.fetch('/api/specials/admin/' + encodeURIComponent(id), { method: 'PUT', body: body })
+               : NGH.admin.fetch('/api/specials/admin', { method: 'POST', body: body });
+    p.then(function () { closeEditor(); NGH.haptic('success'); NGH.toast(id ? 'Special updated' : 'Special created'); loadSpecials(); })
+     .catch(function (err) { $('editSave').disabled = false; if (!authFail(err)) $('editErr').textContent = (err && err.message) || 'Save failed'; });
+  });
+  $('editDelete').onclick = function () {
+    var id = $('fId').value; if (!id) return;
+    if (!confirm('Delete "' + $('fTitle').value + '"? Already-issued coupons stay redeemable.')) return;
+    NGH.admin.fetch('/api/specials/admin/' + encodeURIComponent(id), { method: 'DELETE' })
+      .then(function () { closeEditor(); NGH.toast('Deleted'); loadSpecials(); })
+      .catch(function (err) { if (!authFail(err)) $('editErr').textContent = (err && err.message) || 'Delete failed'; });
+  };
+  $('newBtn').onclick = function () { openEditor(null); };
+
+  // ---- settings ----
+  function loadSettings() {
+    NGH.fetchJSON('/api/specials/settings').then(function (s) { $('foodOrderUrl').value = (s && s.foodOrderUrl) || ''; }).catch(function () {});
+  }
+  $('settingsSave').onclick = function () {
+    var u = $('foodOrderUrl').value.trim();
+    if (u && !/^https?:\/\//i.test(u)) { $('settingsErr').textContent = 'Must start with http:// or https:// (or be empty).'; return; }
+    $('settingsErr').textContent = ''; $('settingsSave').disabled = true;
+    NGH.admin.fetch('/api/specials/settings', { method: 'PUT', body: { foodOrderUrl: u } })
+      .then(function () { $('settingsSave').disabled = false; NGH.toast(u ? 'Order button is on' : 'Order button hidden'); })
+      .catch(function (err) { $('settingsSave').disabled = false; if (!authFail(err)) $('settingsErr').textContent = (err && err.message) || 'Save failed'; });
+  };
+
+  // ---- boot ----
+  if (NGH.admin.isLoggedIn()) boot(); else showLogin();
+})();
+</script>
+</body>
+</html>

@@ -39,7 +39,15 @@ export default async () => {
 
   for (const row of rows) {
     const r = row.data;
-    if (r.payment === 'paid') continue;
+    // NGH-BUILD 2026-09-11a: never auto-cancel a booking that has received ANY payment
+    // (fee OR deposit) or was put on the customer's Lightspeed account. The
+    // 2026-09-10c version of this guard was committed to _shared/auto-cancel.mjs,
+    // which Netlify never runs — this scheduled file still had the old
+    // fully-paid-only check and kept cancelling fee-paid/deposit-unpaid bookings.
+    if (r.payment === 'paid' || r.payment === 'onaccount' || r.feePaid === true || r.depositPaid === true || r.feeOnAccount === true || r.depositOnAccount === true) {
+      if (r.payment !== 'paid') console.log('[auto-cancel] SPARED partially-paid / on-account booking', r.id, '(fee:' + (r.feePaid === true) + ' deposit:' + (r.depositPaid === true) + ' onaccount:' + (r.payment === 'onaccount') + ') — needs staff follow-up');
+      continue;
+    }
     // Same-day / past bookings are never auto-canceled (see header).
     if (!r.date || r.date <= chiToday) continue;
     const deadline = new Date(r.date + 'T00:00:00');
@@ -152,7 +160,7 @@ async function sendOpsDigest(now, canceledList, chiToday) {
     const ev = evById[g.eventId];
     const od = g.occDate || (ev && ev.date);
     return od && od >= ymd(now) && od <= ymd(in7);
-  }).map(g => `  • ${g.occDate || '—'} — "${g.eventTitle || g.eventId}" · ${g.name}${regQty(g) > 1 ? (' ×' + regQty(g)) : ''} (${g.email || 'no email'}) — $${(Number(g.cost) * regQty(g)).toFixed(2)} due`);
+  }).map(g => `  • ${g.occDate || '—'} — "${g.eventTitle || g.eventId}" · ${g.name}${regQty(g) > 1 ? (' ×' + regQty(g)) : ''} (${g.email || 'no email'}) — $${(Number(g.cost) * regQty(g)).toFixed(2)} ${g.payment === 'onaccount' ? 'ON ACCOUNT in Lightspeed (send the pay link from Sales history)' : 'due'}`);   // NGH-BUILD 2026-09-11a
   if (unpaid.length) {
     sections.push('🎟️ UNPAID SEATS — EVENT WITHIN 7 DAYS (' + unpaid.length + ')\n' + unpaid.join('\n') +
       '\n  → Chase with "Email payment link" per row (WI-105 §3). Releasing a seat is still a human decision — contact first, release second.');

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NGH Karaoke — TV</title>
+<meta name="robots" content="noindex">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@500;600&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{--forest-dk:#132a1d;--forest:#1e3d2b;--forest-mid:#2d5a3d;--gold:#c9973a;--gold-lt:#e8b84b;--cream:#f6efdd;--ink:#26211a;--maroon:#7a2431;--line:rgba(232,184,75,.3)}
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:'Nunito',system-ui,sans-serif;color:var(--cream)}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center center;
+    background:radial-gradient(1400px 800px at 30% 20%,#254a33,var(--forest-dk) 70%);display:grid;grid-template-columns:1300px 1fr;grid-template-rows:1fr 150px}
+  #left{position:relative;padding:40px 40px 20px 60px;display:flex;flex-direction:column}
+  #right{padding:40px 44px 20px 10px;display:flex;flex-direction:column;gap:20px;min-width:0}
+  #bottom{grid-column:1/-1;display:flex;align-items:center;gap:36px;padding:0 60px;border-top:1px solid var(--line);background:rgba(0,0,0,.25)}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:22px;padding:22px 26px;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+  .card h3{margin:0 0 10px;font:600 22px 'Cinzel',serif;color:var(--gold-lt);letter-spacing:.06em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
+  .pill{display:inline-block;padding:4px 14px;border-radius:999px;font-size:20px;font-weight:900;letter-spacing:.04em;white-space:nowrap;text-transform:uppercase}
+  #now .song{font:900 34px/1.15 'Nunito';margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #now .artist{font-size:24px;color:rgba(246,239,221,.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #now .singers{font:800 28px 'Nunito';color:var(--gold-lt);margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #now .roomline{margin-top:10px;display:flex;align-items:center;gap:12px;font-size:20px;color:rgba(246,239,221,.75)}
+  #deck ol{list-style:none;margin:0;padding:0}
+  #deck li{display:flex;align-items:center;gap:14px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:22px}
+  #deck li:last-child{border-bottom:0}
+  #deck .n{width:38px;height:38px;border-radius:50%;background:var(--gold);color:var(--ink);font-weight:900;display:grid;place-items:center;flex:none;font-size:20px}
+  #deck .t{flex:1;min-width:0}
+  #deck .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:23px}
+  #deck .t span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:rgba(246,239,221,.7);font-size:19px}
+  #deck .empty{color:rgba(246,239,221,.55);font-size:21px;padding:8px 0}
+  #score table{width:100%;border-collapse:collapse;font-size:24px}
+  #score td{padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.08)}
+  #score tr:last-child td{border-bottom:0}
+  #score td.pts{text-align:right;font-weight:900;font-size:30px;color:var(--gold-lt);width:110px}
+  #score tr.me td{background:rgba(232,184,75,.12)}
+  #score .sw{display:inline-block;width:16px;height:16px;border-radius:4px;margin-right:12px;vertical-align:-1px}
+  #score .sub{font-size:17px;color:rgba(246,239,221,.6)}
+  #lyricStage{flex:1;position:relative;border-radius:26px;overflow:hidden;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.06);display:flex}
+  #lyricsBox{position:absolute;inset:0;--k-size:84px;padding:20px 40px}
+  #cdgCanvas{position:absolute;inset:0;width:100%;height:100%;display:none}
+  #stageMsg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:60px}
+  #stageMsg .big{font:700 62px 'Cinzel Decorative',serif;color:var(--gold-lt);text-shadow:0 4px 0 rgba(0,0,0,.4)}
+  #stageMsg .sub{font-size:30px;color:rgba(246,239,221,.75);margin-top:14px}
+  #banner{position:absolute;top:0;left:0;right:0;padding:18px 0;text-align:center;font:900 36px 'Nunito';letter-spacing:.05em;text-transform:uppercase;display:none;background:var(--gold);color:var(--ink);z-index:5}
+  #progress{flex:1;height:18px;border-radius:9px;background:rgba(255,255,255,.12);overflow:hidden;position:relative}
+  #progress>i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--gold),var(--gold-lt));border-radius:9px;transition:width .5s linear}
+  #time{font:800 26px 'Nunito';min-width:150px;text-align:center;color:rgba(246,239,221,.8)}
+  .qrbox{display:flex;align-items:center;gap:16px}
+  .qrbox img{width:112px;height:112px;border-radius:12px;background:var(--cream);padding:6px;image-rendering:pixelated}
+  .qrbox .lab{font:800 20px 'Nunito';line-height:1.2}
+  .qrbox .lab b{display:block;font:900 30px 'Cinzel',serif;color:var(--gold-lt);letter-spacing:.2em}
+  .qrbox .lab span{color:rgba(246,239,221,.7);font-size:18px}
+  #brand{display:flex;align-items:center;gap:18px}
+  #brand img{width:104px;height:104px;border-radius:50%;border:3px solid var(--gold);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  #brand .t{font:700 28px 'Cinzel Decorative',serif;color:var(--gold-lt);line-height:1.1}
+  #brand .t span{display:block;font:600 16px 'Cinzel',serif;color:rgba(246,239,221,.7);letter-spacing:.15em;text-transform:uppercase}
+  .overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(19,42,29,.9);z-index:10;backdrop-filter:blur(6px)}
+  .overlay.show{display:flex}
+  #lobby .wrap{display:grid;grid-template-columns:640px 700px;gap:60px;align-items:center}
+  #lobby .qrbig{background:var(--cream);border-radius:28px;padding:22px;display:inline-block}
+  #lobby .qrbig img{width:520px;height:520px;display:block;image-rendering:pixelated}
+  #lobby h1{font:900 64px 'Cinzel Decorative',serif;color:var(--gold-lt);margin:0 0 10px;text-shadow:0 4px 0 rgba(0,0,0,.4)}
+  #lobby .code{font:600 40px 'Cinzel',serif;letter-spacing:.3em;margin:6px 0 26px;color:var(--cream)}
+  #lobby .steps{font-size:27px;line-height:1.5;color:rgba(246,239,221,.85)}
+  #lobby .steps b{color:var(--gold-lt)}
+  #lobby .lb{margin-top:26px;font-size:24px}
+  #lobby .lb .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+  #scoring .box{text-align:center;width:1400px}
+  #scoring h2{font:900 54px 'Cinzel Decorative',serif;color:var(--gold-lt);margin:0 0 8px}
+  #scoring .who{font:800 36px 'Nunito';margin-bottom:26px}
+  #scoring .cats{display:flex;gap:60px;justify-content:center;margin-top:20px}
+  #scoring .cat{background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:26px;padding:26px 44px;min-width:420px}
+  #scoring .cat .l{font:600 26px 'Cinzel',serif;color:var(--gold-lt);letter-spacing:.08em;text-transform:uppercase}
+  #scoring .cat .s{font-size:64px;letter-spacing:.06em;color:var(--gold-lt);margin:6px 0}
+  #scoring .cat .v{font-size:26px;color:rgba(246,239,221,.75)}
+  #scoring .count{margin-top:26px;font:900 44px 'Nunito';color:var(--cream)}
+  #scoring .count small{display:block;font:700 24px 'Nunito';color:rgba(246,239,221,.65);margin-top:6px}
+  #result .box{text-align:center}
+  #result h2{font:900 58px 'Cinzel Decorative',serif;color:var(--gold-lt);margin:0 0 14px}
+  #result .team{font:900 48px 'Nunito';margin-bottom:26px}
+  #result .pts{font:900 170px/1 'Nunito';color:var(--gold-lt);text-shadow:0 8px 0 rgba(0,0,0,.4)}
+  #result .pts small{font-size:44px;color:rgba(246,239,221,.75);display:block;margin-top:8px}
+  #result .br{display:flex;gap:50px;justify-content:center;margin-top:30px;font-size:30px}
+  #result .br b{color:var(--gold-lt)}
+  #paused{font:900 80px 'Cinzel Decorative',serif;color:var(--gold-lt)}
+  #status{position:absolute;right:16px;top:12px;width:12px;height:12px;border-radius:50%;background:#6bd48a;opacity:.7;z-index:20}
+  #status.bad{background:#c0392b}
+  @keyframes pop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+  .pop{animation:pop .5s ease-out}
+  #ended{font:900 60px 'Cinzel Decorative',serif;color:var(--gold-lt);text-align:center}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="left">
+    <div id="lyricStage">
+      <div id="banner"></div>
+      <div id="lyricsBox"></div>
+      <canvas id="cdgCanvas" width="1200" height="820"></canvas>
+      <div id="stageMsg"><div class="big" id="msgBig">Karaoke Battle</div><div class="sub" id="msgSub">Scan the code to join</div></div>
+    </div>
+  </div>
+  <div id="right">
+    <div class="card" id="now"><h3>Now Singing <span class="pill" id="nowRoom" style="display:none"></span></h3>
+      <div class="song" id="nowSong">—</div><div class="artist" id="nowArtist"></div><div class="singers" id="nowSingers"></div>
+      <div class="roomline" id="nowRoomLine"></div></div>
+    <div class="card" id="deck"><h3>On Deck</h3><ol id="deckList"></ol></div>
+    <div class="card" id="score" style="flex:1"><h3>Scoreboard <span style="font:700 16px 'Nunito';color:rgba(246,239,221,.6);letter-spacing:0;text-transform:none" id="scoreSub"></span></h3><table><tbody id="scoreBody"></tbody></table></div>
+  </div>
+  <div id="bottom">
+    <div id="brand"><img src="/brand/crest.png" alt=""><div class="t">Karaoke Battle<span>Northwood Game Haven</span></div></div>
+    <div id="progress"><i id="progBar"></i></div><div id="time">–:–– / –:––</div>
+    <div class="qrbox" id="joinQr"><img id="joinImg" alt=""><div class="lab">Join the battle<b id="joinCode">····</b><span>scan or gamehaven.guru/app/karaoke</span></div></div>
+    <div class="qrbox" id="wifiQr" style="display:none"><img id="wifiImg" alt=""><div class="lab">Free WiFi<span id="wifiSsid"></span></div></div>
+  </div>
+
+  <div class="overlay" id="lobby"><div class="wrap">
+    <div><div class="qrbig"><img id="lobbyImg" alt=""></div></div>
+    <div><h1>Karaoke Battle</h1><div class="code">CODE <span id="lobbyCode">····</span></div>
+      <div class="steps">1. Scan the code with your phone<br>2. Pick your room &amp; your name<br>3. Add a song — <b>lyrics show on your phone too</b><br>4. Rate the other rooms after every song</div>
+      <div class="lb" id="lobbyLb"></div></div>
+  </div></div>
+  <div class="overlay" id="scoring"><div class="box">
+    <h2>Rate that performance!</h2><div class="who" id="scWho"></div>
+    <div class="cats">
+      <div class="cat"><div class="l">Song choice</div><div class="s" id="scChoice">☆☆☆☆☆</div><div class="v">up to 5 points</div></div>
+      <div class="cat"><div class="l">Delivery</div><div class="s" id="scDelivery">☆☆☆☆☆</div><div class="v">up to 10 points</div></div>
+    </div>
+    <div class="count"><span id="scCount">0</span> votes in<small id="scTimer">Voting closes in 45 s</small></div>
+  </div></div>
+  <div class="overlay" id="result"><div class="box pop">
+    <h2 id="resTitle">Points awarded</h2><div class="team" id="resTeam"></div>
+    <div class="pts"><span id="resPts">0</span><small id="resSub"></small></div>
+    <div class="br"><div>Choice <b id="resChoice">0</b></div><div>Delivery <b id="resDelivery">0</b></div><div>Votes <b id="resVotes">0</b></div></div>
+  </div></div>
+  <div class="overlay" id="pausedOv"><div id="paused">⏸ Paused</div></div>
+  <div class="overlay" id="endedOv"><div id="ended">Thanks for singing!<br><span style="font:700 34px 'Nunito';color:var(--cream)">Final scores are on the right →</span></div></div>
+  <div id="status"></div>
+</div>
+<audio id="audio" preload="auto"></audio>
+
+<script src="/app/ngh-app.js"></script>
+<script src="/app/karaoke/karaoke-lyrics.js"></script>
+<script src="/app/karaoke/cdg.js"></script>
+<script src="/app/karaoke/karaoke-client.js"></script>
+<script>
+(function(){
+  var $ = NGH.$, esc = NGH.esc;
+  var qs = new URLSearchParams(location.search);
+  var CODE = (qs.get('s') || '').toUpperCase();
+  var DEV = (qs.get('room') || (function(){ try { return localStorage.getItem('ngh_tv_name') || ''; } catch(e){ return ''; } })()).toLowerCase();
+  var MY_ROOM = { commons:'commons', holt:'holt', depths:'depths', den:'den', raft:'commons', floor:'commons', deck:'den', lodge:null, rest:null }[DEV] || (NGH.roomsMeta[DEV] ? DEV : null);
+  var PLAY_AUDIO = qs.get('audio') === '1';
+
+  // ---- scale the 1920x1080 stage ----
+  function fit(){ var s = Math.min(innerWidth/1920, innerHeight/1080); $('stage').style.transform = 'translate(-50%,-50%) scale(' + s + ')'; }
+  addEventListener('resize', fit); fit();
+
+  var state = null, lastSeq = -1, lyricType = 'none', renderer = KLyrics.Renderer($('lyricsBox'), { idleText: '' }), cdg = CDG.Player($('cdgCanvas'));
+  var loader = KClient.LyricLoader(), audio = KClient.AudioPlayer($('audio'));
+  var resultShownFor = null, resultTimer = null, autoEndSent = null, tallySent = null;
+
+  function show(el, on){ el.classList.toggle('show', !!on); }
+  function setStageMsg(big, sub){ $('msgBig').textContent = big || ''; $('msgSub').textContent = sub || ''; $('stageMsg').style.display = big ? 'flex' : 'none'; }
+
+  // ---- boot: find session ----
+  function boot(){
+    NGH.clock.sync(KClient.API + '/time', 3).then(function(){
+      if (CODE) return start(CODE);
+      return NGH.fetchJSON(KClient.API + '/active').then(function(j){ if (j && j.code) start(j.code); else { setStageMsg('Karaoke Battle', 'No session running yet — ask a Guru to start one'); setTimeout(boot, 15000); } });
+    });
+  }
+  function start(code){
+    CODE = code;
+    var joinUrl = NGH.SITE + '/app/karaoke/join.html?s=' + code;
+    $('joinImg').src = NGH.qrUrl(joinUrl, 300); $('lobbyImg').src = NGH.qrUrl(joinUrl, 720);
+    $('joinCode').textContent = code; $('lobbyCode').textContent = code;
+    KClient.poll(code, {
+      interval: function(){ return (state && state.nowPlaying) ? 1500 : 3000; },
+      onState: function(st){ $('status').className = ''; state = st; render(); },
+      onError: function(){ $('status').className = 'bad'; }
+    });
+    setInterval(tick, 100);
+    setInterval(function(){ NGH.clock.sync(KClient.API + '/time', 2); }, 60000);
+  }
+
+  // ---- render on state change ----
+  function render(){
+    var s = state, np = s.nowPlaying;
+    // wifi
+    if (s.settings && s.settings.wifi && s.settings.wifi.hasQr){ $('wifiQr').style.display = 'flex'; $('wifiSsid').textContent = s.settings.wifi.ssid; if (!$('wifiImg').src) $('wifiImg').src = KClient.sessionUrl(CODE) + '/wifi-qr.png?s=300'; }
+    else $('wifiQr').style.display = 'none';
+    // now singing
+    if (np){
+      $('nowSong').textContent = np.title; $('nowArtist').textContent = np.artist || '';
+      $('nowSingers').textContent = '🎤 ' + (np.singers || []).join(' & ');
+      var rm = KClient.roomMeta(np.room, s);
+      $('nowRoom').style.display = ''; $('nowRoom').textContent = rm.team; $('nowRoom').style.background = rm.color; $('nowRoom').style.color = rm.text;
+      $('nowRoomLine').innerHTML = (s.mode === 'battle' ? '<span>singing for</span> <b style="color:' + rm.color + '">' + esc(rm.name) + '</b>' : '');
+    } else {
+      $('nowSong').textContent = s.status === 'ended' ? 'Session over' : 'Nobody yet — add a song!'; $('nowArtist').textContent = ''; $('nowSingers').textContent = ''; $('nowRoom').style.display = 'none'; $('nowRoomLine').innerHTML = '';
+    }
+    // on deck
+    var deck = (s.onDeck || []).map(function(id){ return s.queue.find(function(q){ return q.id === id; }); }).filter(Boolean);
+    $('deckList').innerHTML = deck.length ? deck.map(function(e, i){
+      var rm = KClient.roomMeta(e.room, s);
+      return '<li><span class="n">' + (i+1) + '</span><span class="t"><b>' + esc(e.title) + '</b><span>🎤 ' + esc(e.singers.join(' & ')) + '</span></span>' +
+             (s.mode === 'battle' ? '<span class="pill" style="background:' + rm.color + ';color:' + rm.text + '">' + esc(rm.team) + '</span>' : '') + '</li>';
+    }).join('') : '<div class="empty">Queue is empty — scan the code and add a song</div>';
+    // "you're up next" banner for this TV's room
+    var b = $('banner'); var next = deck[0];
+    if (s.mode === 'battle' && MY_ROOM && next && next.room === MY_ROOM && (!np || np.room !== MY_ROOM)){ b.style.display = 'block'; b.textContent = "You're up next — " + next.singers.join(' & ') + ' to the mic!'; }
+    else if (np && MY_ROOM && np.room === MY_ROOM){ b.style.display = 'block'; b.style.background = '#e8b84b'; b.textContent = '🎤 Sing it, ' + KClient.roomMeta(MY_ROOM, s).team + '!'; }
+    else b.style.display = 'none';
+    // scoreboard
+    var rooms = Object.keys(s.rooms || {}).map(function(id){ return KClient.roomMeta(id, s); }).sort(function(a, b){ return b.score - a.score; });
+    if (s.mode === 'battle'){
+      $('score').style.display = ''; $('scoreSub').textContent = rooms.reduce(function(a, r){ return a + r.songs; }, 0) + ' songs scored';
+      $('scoreBody').innerHTML = rooms.map(function(r, i){
+        return '<tr class="' + (r.id === MY_ROOM ? 'me' : '') + '"><td><span class="sw" style="background:' + r.color + '"></span>' + esc(r.team) + '<div class="sub">' + esc(r.name) + ' · ' + r.songs + ' song' + (r.songs === 1 ? '' : 's') + '</div></td><td class="pts">' + r.score.toFixed(1) + '</td></tr>';
+      }).join('');
+    } else $('score').style.display = 'none';
+    // overlays
+    show($('lobby'), s.status === 'lobby');
+    show($('endedOv'), s.status === 'ended');
+    if (s.status === 'lobby'){ $('lobbyLb').innerHTML = rooms.length && s.mode === 'battle' ? rooms.map(function(r){ return '<div class="row"><span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:' + r.color + ';margin-right:10px"></span>' + esc(r.team) + '</span><b>' + r.score.toFixed(1) + '</b></div>'; }).join('') : ''; }
+    show($('scoring'), !!s.scoring);
+    if (s.scoring){
+      var sc = s.scoring, srm = KClient.roomMeta(sc.room, s);
+      $('scWho').innerHTML = esc(sc.title) + ' — <span style="color:' + srm.color + '">' + esc(srm.team) + '</span> (' + esc((sc.singers || []).join(' & ')) + ')';
+      $('scChoice').textContent = KClient.stars(sc.tally.choiceAvg); $('scDelivery').textContent = KClient.stars(sc.tally.deliveryAvg); $('scCount').textContent = sc.tally.count;
+    }
+    if (s.lastResult && s.lastResult.entryId !== resultShownFor && !s.scoring && (NGH.clock.now() - s.lastResult.at) < 15000){
+      resultShownFor = s.lastResult.entryId; var r = s.lastResult, rrm = KClient.roomMeta(r.room, s);
+      $('resTeam').innerHTML = '<span style="color:' + rrm.color + '">' + esc(rrm.team) + '</span> — ' + esc(r.title);
+      $('resPts').textContent = r.points.toFixed(1); $('resSub').textContent = r.unscored ? 'no votes came in' : 'points';
+      $('resChoice').textContent = r.pointsChoice.toFixed(1) + ' / 5'; $('resDelivery').textContent = r.pointsDelivery.toFixed(1) + ' / 10'; $('resVotes').textContent = r.votes;
+      show($('result'), true); clearTimeout(resultTimer); resultTimer = setTimeout(function(){ show($('result'), false); }, 8000);
+    }
+    show($('pausedOv'), !!(np && np.pausedAt));
+    // lyrics / stage
+    if (!np){
+      renderer.clear(); cdg.clear(); $('cdgCanvas').style.display = 'none'; lyricType = 'none'; lastSeq = -1; audio.stop();
+      setStageMsg(s.status === 'ended' ? 'Thanks for singing!' : (deck.length ? 'Up next: ' + deck[0].title : 'Karaoke Battle'), s.status === 'ended' ? '' : (deck.length ? '🎤 ' + deck[0].singers.join(' & ') : 'Scan the code to join'));
+    } else {
+      if (np.seq !== lastSeq){
+        lastSeq = np.seq;
+        loader.load(np).then(function(res){
+          if (!state.nowPlaying || state.nowPlaying.entryId !== np.entryId) return;
+          lyricType = res.type;
+          if (res.type === 'lrc'){ renderer.setLyrics(res.lyrics); $('cdgCanvas').style.display = 'none'; setStageMsg(null); }
+          else if (res.type === 'cdg'){ cdg.load(res.cdgBuf); $('cdgCanvas').style.display = 'block'; renderer.clear(); setStageMsg(null); }
+          else { renderer.clear(); $('cdgCanvas').style.display = 'none'; setStageMsg(np.title, res.type === 'pending' ? 'Loading the lyric screen…' : (np.custom ? 'Sing it from the heart — no lyric file for this one!' : '🎤 ' + (np.singers || []).join(' & '))); if (res.type === 'pending') setTimeout(function(){ if (state && state.nowPlaying && state.nowPlaying.entryId === np.entryId) { lastSeq = -1; render(); } }, 3000); }
+        });
+      }
+      if (PLAY_AUDIO || (s.settings && s.settings.tvAudio)) audio.sync(np);
+    }
+  }
+
+  // ---- 10 Hz tick: position, progress, timers ----
+  function tick(){
+    if (!state) return;
+    var s = state, np = s.nowPlaying, nowMs = NGH.clock.now();
+    if (np){
+      var pos = KClient.position(np, nowMs);
+      if (lyricType === 'lrc') renderer.setPosition(pos);
+      else if (lyricType === 'cdg') cdg.setPosition(pos);
+      var dur = np.durationMs || 0;
+      $('progBar').style.width = dur ? Math.min(100, Math.max(0, pos / dur * 100)) + '%' : '0%';
+      $('time').textContent = (pos < 0 ? 'starts in ' + Math.ceil(-pos / 1000) : KClient.fmtTime(pos)) + ' / ' + KClient.fmtTime(dur);
+      if (dur && !np.pausedAt && pos > dur + 1500 && autoEndSent !== np.entryId){ autoEndSent = np.entryId; NGH.fetchJSON(KClient.sessionUrl(CODE) + '/autoend', { method: 'POST', body: {} }).catch(function(){}); }
+      audio.tick(np);
+    } else { $('progBar').style.width = '0%'; $('time').textContent = '–:–– / –:––'; }
+    if (s.scoring){
+      var left = Math.max(0, Math.ceil((s.scoring.closesAt - nowMs) / 1000));
+      $('scTimer').textContent = left ? 'Voting closes in ' + left + ' s' : 'Counting votes…';
+      if (!left && tallySent !== s.scoring.entryId){ tallySent = s.scoring.entryId; NGH.fetchJSON(KClient.sessionUrl(CODE) + '/tally', { method: 'POST', body: {} }).catch(function(){}); }
+    }
+  }
+
+  NGH.wakeLock();
+  boot();
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

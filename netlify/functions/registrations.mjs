@@ -164,7 +164,9 @@ const _handler = async (req) => {
           const aTotals = a.totals || computeRegTotals(Math.round((Number(a.cost) || 0) * 100), regQty(a));
           let payLine;
           let payBtns = [];
-          if (aTotals.totalCents > 0 && !a.feePaid) {
+          if (aTotals.totalCents > 0 && !a.feePaid && a.payment === 'onaccount') {   // NGH-BUILD 2026-09-11a
+            payLine = 'Your spot is on your Northwood Game Haven account (Lightspeed). Pay at the counter or with the secure pay link we email you — your ticket QR is your entry pass.';
+          } else if (aTotals.totalCents > 0 && !a.feePaid) {
             // Durable pay link: GET /create-checkout mints a fresh session on
             // every click, so the link never expires.
             const link = base + '/api/create-checkout?kind=registration&id=' + encodeURIComponent(a.id);
@@ -302,7 +304,8 @@ async function sendCancelEmail(reg) {
       { heading: 'Registration canceled' });
   }
   await sendMail(adminEmail, 'Registration canceled: ' + (reg.eventTitle || 'NGH Event'),
-    reg.name + ' (' + (reg.email || '—') + ') canceled registration ' + reg.id + (qty > 1 ? (' — ' + qty + ' seats released') : '') + '.' + (reg.refunded ? (' Refunded ' + money(reg.amountPaidCents || 0) + '.') : ''));
+    reg.name + ' (' + (reg.email || '—') + ') canceled registration ' + reg.id + (qty > 1 ? (' — ' + qty + ' seats released') : '') + '.' + (reg.refunded ? (' Refunded ' + money(reg.amountPaidCents || 0) + '.') : '') +
+    (reg.payment === 'onaccount' ? (' ⚠️ This registration was an ON-ACCOUNT Lightspeed sale' + (reg.onaccount && reg.onaccount.saleId ? (' (sale ' + reg.onaccount.saleId + ')') : '') + ' — void or refund it in Lightspeed Sales history so the customer is not billed.') : ''));   // NGH-BUILD 2026-09-11a
 }
 
 // Refund a registration's payment if one was made and not already refunded.

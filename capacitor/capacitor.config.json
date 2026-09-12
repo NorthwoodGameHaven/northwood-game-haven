@@ -1,0 +1,32 @@
+{
+  "appId": "guru.gamehaven.app",
+  "appName": "Game Haven",
+  "webDir": "www",
+  "backgroundColor": "#132a1d",
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": ["gamehaven.guru", "www.gamehaven.guru"]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#132a1d"
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#132a1d",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": false,
+      "backgroundColor": "#132a1d",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#132a1d"
+    },
+    "CapacitorHttp": { "enabled": false }
+  }
+}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karaoke — Northwood Game Haven</title>
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>.how li{margin:6px 0}.how b{color:var(--gold-lt)}</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header"><a class="back" href="/app/" aria-label="Back">‹</a><div class="title">Karaoke Battle</div><img class="logo" src="/brand/crest.png" alt=""></header>
+  <div class="hero" style="padding-top:4px"><img src="/brand/stash-fullbody.png" alt="" style="width:120px;height:120px;border:0;border-radius:0;box-shadow:none;object-fit:contain"><div class="display" style="font-size:1.25rem">Rooms vs rooms. Mic vs mic.</div><div class="tag">Every room is a team. Sing over the whole Haven, then get scored by everyone else.</div></div>
+  <div class="card gold" id="liveCard" hidden><h2>🎤 Live right now</h2><div id="liveSub" class="small muted"></div><a class="btn big" id="btnLive" href="#" style="margin-top:10px">Join the battle</a></div>
+  <div class="card"><h2>Join with a code</h2><div class="row"><input class="f code" id="codeIn" maxlength="6" placeholder="CODE" autocapitalize="characters" autocomplete="off"><button class="btn" id="btnGo">Go</button></div><div class="small muted" style="margin-top:8px">The code and QR are on every TV during karaoke.</div></div>
+  <div class="card how"><h2>How it works</h2><ol style="padding-left:20px;margin:0">
+    <li><b>Scan</b> the QR on the TV (or type the code), pick your room, add your name.</li>
+    <li><b>Add songs</b> — up to 2 singers per song. Rooms take turns, round-robin.</li>
+    <li><b>Sing</b> — the backing track plays over the whole Haven; lyrics on the TVs <i>and</i> on your phone.</li>
+    <li><b>Score</b> — after each song, every other room rates <b>song choice</b> (up to 5 pts) and <b>delivery</b> (average stars × 2, up to 10 pts).</li>
+    <li><b>Win</b> — the room with the most points when the host calls it takes the crown.</li></ol></div>
+  <div class="card"><h2>Book karaoke for your party</h2><p class="small muted">Stash's Den comes with karaoke as a party add-on. Book the room and tick karaoke.</p><a class="btn ghost block" href="/booking.html">Book a room</a></div>
+  <div class="footer-links"><a href="/app/karaoke/host.html">Host console (Gurus)</a> · <a href="/app/karaoke/tv.html">TV display</a></div>
+</div>
+<script src="/app/ngh-app.js"></script>
+<script>
+(function(){
+  NGH.$('btnGo').onclick = function(){ var c = NGH.$('codeIn').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length < 3){ NGH.toast('Enter the code on the TV'); return; } location.href = '/app/karaoke/join.html?s=' + c; };
+  NGH.$('codeIn').addEventListener('keydown', function(e){ if (e.key === 'Enter') NGH.$('btnGo').click(); });
+  NGH.fetchJSON(NGH.API + '/karaoke/active').then(function(j){ if (j && j.code){ NGH.$('liveCard').hidden = false; NGH.$('liveSub').textContent = (j.mode === 'battle' ? 'Karaoke Battle' : 'Open mic') + ' · code ' + j.code + (j.status === 'lobby' ? ' · starting soon' : ''); NGH.$('btnLive').href = '/app/karaoke/join.html?s=' + j.code; } }).catch(function(){});
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

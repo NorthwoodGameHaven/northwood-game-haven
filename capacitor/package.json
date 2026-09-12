@@ -1,0 +1,33 @@
+{
+  "name": "ngh-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Northwood Game Haven — iOS/Android app shell (Capacitor) around site/app. NGH-BUILD 2026-09-11a",
+  "type": "module",
+  "scripts": {
+    "sync-web": "node scripts/sync-web.mjs",
+    "assets": "npx @capacitor/assets generate --iconBackgroundColor '#132a1d' --splashBackgroundColor '#132a1d' --iconBackgroundColorDark '#132a1d' --splashBackgroundColorDark '#132a1d'",
+    "add:android": "npm run sync-web && npx cap add android && node scripts/patch-android.mjs",
+    "add:ios": "npm run sync-web && npx cap add ios",
+    "sync": "npm run sync-web && npx cap sync",
+    "open:android": "npx cap open android",
+    "open:ios": "npx cap open ios",
+    "build:android:debug": "npm run sync && cd android && ./gradlew assembleDebug",
+    "build:android:release": "npm run sync && cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/browser": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/haptics": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
+    "@capacitor/splash-screen": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.0.0"
+  },
+  "engines": { "node": ">=22" }
+}

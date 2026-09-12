@@ -6,6 +6,12 @@
 // POST /create-checkout
 //   { kind:"booking", id:<bookingId>, part:"fee"|"deposit" }
 //   { kind:"registration", id:<registrationId> }
+//   { kind:"order", id:<orderId> }                       NGH-BUILD 2026-09-11a: shop order-ahead
+//   + method:"onaccount" (bookings/registrations)        NGH-BUILD 2026-09-11a: Lightspeed on-account sale
+//     → the sale is written to X-Series as an on-account sale, the record is
+//       marked payment:'onaccount', and the customer is told a Lightspeed
+//       Payments pay link / counter payment will follow. Returns {onaccount:true}
+//       (POST) or 302 to the confirmation page (GET).
 //
 // Registrations charge: (per-person × qty) + sales tax + processing fee.
 // The processing fee is a gross-up so that after Stripe's cut
@@ -13,8 +19,10 @@
 // net deposit equals subtotal + tax exactly.
 import { sql, ensureSchema, json, bad, preflight } from './_shared/db.mjs';
 import { createCheckoutSession } from './_shared/stripe.mjs';
-import { loyaltyDiscountForEmail } from './_shared/lightspeed.mjs';
+import { loyaltyDiscountForEmail, recordSale, ensureLsSchema } from './_shared/lightspeed.mjs';   // NGH-BUILD 2026-09-11a: + recordSale
 import { computeRegTotals, taxPercent, ticketCode } from './_shared/ticket.mjs';
+import { sendBrandedMail } from './_shared/email.mjs';                                           // NGH-BUILD 2026-09-11a
+import * as lscore from './_shared/lightspeed-core.mjs';                                          // NGH-BUILD 2026-09-11a
 
 function siteBase(req) {
   // Prefer an explicit configured base; fall back to the request origin.
@@ -53,6 +61,23 @@ function payErrorPage(msg) {
   return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 }
 
+// NGH-BUILD 2026-09-11a: on-account = the same sale written to X-Series
+// with the "On Account" payment type. X-Series has no API to take a card or mint
+// a pay link, so a Guru sends the "Email receipt with pay link" from Sell →
+// Sales history (Lightspeed Payments) or the customer pays at the counter.
+function onAccountEnabled() { return !!process.env.LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT; }
+async function onAccountEmail(email, name, what, amountCents, ref) {
+  if (!email) return;
+  try {
+    await sendBrandedMail(email, 'Pay on account — ' + what, {
+      heading: 'We’ve put this on your account',
+      bodyText: 'Hi ' + (name || 'there') + ',\n\n' + what + ' (' + ref + ') — $' + (amountCents / 100).toFixed(2) + ' — has been added to your Northwood Game Haven customer account instead of being charged now.\n\n' +
+        'A Game Guru will email you a secure pay link from our register system (Lightspeed Payments), or you can simply pay at the counter on your next visit. ' +
+        'Your booking / registration stays confirmed in the meantime.\n\n— Northwood Game Haven'
+    });
+  } catch (e) { console.error('[create-checkout] on-account email failed', e && e.message); }
+}
+
 export default async (req) => {
   try {
     const res = await _handler(req);
@@ -74,6 +99,7 @@ export default async (req) => {
 const _handler = async (req) => {
   if (req.method === 'OPTIONS') return preflight();
   await ensureSchema();
+  try { await ensureLsSchema(); } catch (e) { console.error('[create-checkout] lightspeed schema (non-fatal)', e && e.message); }   // NGH-BUILD 2026-09-11a: card checkout must never depend on Lightspeed
 
   // Durable pay-links: a GET mints a FRESH Checkout Session on every click and
   // 302-redirects to Stripe, so links emailed days earlier never "expire".
@@ -81,7 +107,7 @@ const _handler = async (req) => {
   let p, wantRedirect = false;
   if (req.method === 'GET') {
     const u = new URL(req.url);
-    p = { kind: u.searchParams.get('kind'), id: u.searchParams.get('id'), part: u.searchParams.get('part') };
+    p = { kind: u.searchParams.get('kind'), id: u.searchParams.get('id'), part: u.searchParams.get('part'), method: u.searchParams.get('method') };   // NGH-BUILD 2026-09-11a: + method
     wantRedirect = true;
   } else if (req.method === 'POST') {
     try { p = await req.json(); } catch { return bad('Invalid JSON'); }
@@ -89,6 +115,8 @@ const _handler = async (req) => {
     return bad('Method not allowed', 405);
   }
   const base = siteBase(req);
+  const onAccount = p.method === 'onaccount';   // NGH-BUILD 2026-09-11a
+  if (onAccount && !onAccountEnabled()) return bad('pay-on-account is not enabled', 400);
 
   if (p.kind === 'booking') {
     const rows = await sql`SELECT data FROM bookings WHERE id = ${p.id}`;
@@ -96,34 +124,75 @@ const _handler = async (req) => {
     const b = rows[0].data;
     if (b.status === 'rejected' || b.status === 'canceled') return bad('this booking is no longer active', 400);
 
-    const part = p.part === 'deposit' ? 'deposit' : 'fee';
-    let amount, label, taxCents = 0;
-    if (part === 'fee') {
-      // booking fee (incl. paid add-ons) after any loyalty discount; tax added below
-      let fee = (b.costBooking != null ? b.costBooking : 0);
-      // Apply loyalty group discount (server-side authority) to the FEE only,
-      // never the refundable deposit.
-      const ld = await loyaltyDiscountForEmail(b.email);
-      let label2 = 'Booking fee — ' + (b.id || '');
-      if (ld.percent > 0) {
-        fee = Math.round(fee * (1 - ld.percent / 100) * 100) / 100;
-        label2 = 'Booking fee (' + ld.percent + '% ' + (ld.groupName || 'loyalty') + ' discount) — ' + (b.id || '');
+    // NGH-BUILD 2026-09-11a: amount math factored into bookingPart() so the
+    // on-account path can settle fee + deposit in one click (part=both).
+    async function bookingPart(part) {
+      let amount, label, taxCents = 0;
+      if (part === 'fee') {
+        // booking fee (incl. paid add-ons) after any loyalty discount; tax added below
+        let fee = (b.costBooking != null ? b.costBooking : 0);
+        // Apply loyalty group discount (server-side authority) to the FEE only,
+        // never the refundable deposit.
+        const ld = await loyaltyDiscountForEmail(b.email);
+        let label2 = 'Booking fee — ' + (b.id || '');
+        if (ld.percent > 0) {
+          fee = Math.round(fee * (1 - ld.percent / 100) * 100) / 100;
+          label2 = 'Booking fee (' + ld.percent + '% ' + (ld.groupName || 'loyalty') + ' discount) — ' + (b.id || '');
+        }
+        amount = Math.round(fee * 100);
+        label = label2;
+        if (b.feePaid) return { error: 'fee already paid' };
+        if (b.feeOnAccount && !onAccount) return { error: 'the booking fee is already on your account — a Guru will send a pay link' };
+        // Sales tax on the (discounted) fee + add-ons. Deposit is never taxed.
+        if (SALES_TAX_PERCENT > 0) taxCents = Math.round(amount * (SALES_TAX_PERCENT / 100));
+      } else {
+        // Prefer the stored deposit (which reflects any admin waiver/reduction);
+        // fall back to the computed schedule for older records.
+        const dep = (b.deposit != null) ? b.deposit : bookingDeposit(b);
+        amount = Math.round(dep * 100);
+        label = 'Refundable deposit — ' + (b.id || '');
+        if (b.depositPaid) return { error: 'deposit already paid' };
+        if (b.depositOnAccount && !onAccount) return { error: 'the deposit is already on your account — a Guru will send a pay link' };
+        if (dep === 0) return { error: 'deposit has been waived — nothing to pay' };
       }
-      amount = Math.round(fee * 100);
-      label = label2;
-      if (b.feePaid) return bad('fee already paid', 400);
-      // Sales tax on the (discounted) fee + add-ons. Deposit is never taxed.
-      if (SALES_TAX_PERCENT > 0) taxCents = Math.round(amount * (SALES_TAX_PERCENT / 100));
-    } else {
-      // Prefer the stored deposit (which reflects any admin waiver/reduction);
-      // fall back to the computed schedule for older records.
-      const dep = (b.deposit != null) ? b.deposit : bookingDeposit(b);
-      amount = Math.round(dep * 100);
-      label = 'Refundable deposit — ' + (b.id || '');
-      if (b.depositPaid) return bad('deposit already paid', 400);
-      if (dep === 0) return bad('deposit has been waived — nothing to pay', 400);
+      if (!amount || amount < 50) return { error: 'nothing to pay for this item' };
+      return { amount, label, taxCents };
     }
-    if (!amount || amount < 50) return bad('nothing to pay for this item', 400);
+
+    // NGH-BUILD 2026-09-11a: pay on account via Lightspeed (fee | deposit | both)
+    if (onAccount) {
+      const parts = p.part === 'both' ? ['fee', 'deposit'] : [p.part === 'deposit' ? 'deposit' : 'fee'];
+      const done = [];
+      let lastErr = null;
+      for (const part of parts) {
+        if (part === 'fee' ? b.feeOnAccount : b.depositOnAccount) { lastErr = 'already on account'; continue; }
+        const a = await bookingPart(part);
+        if (a.error) { lastErr = a.error; continue; }
+        const totalCents = a.amount + a.taxCents;
+        const res = await recordSale({
+          sourceId: b.id + ':' + part, kind: 'booking', customer: lscore.customerOf(b),
+          lines: lscore.bookingSaleLines(b, part, totalCents), payment: 'onaccount', state: 'closed',
+          note: 'NGH booking ' + b.id + ' (' + part + ', on account)' + (b.date ? ' · ' + b.date : '') + (b.name ? ' · ' + b.name : '')
+        });
+        if (!res.ok) return bad('could not put this on account: ' + (res.error || 'Lightspeed error') + ' — please pay by card instead', 502);
+        if (part === 'fee') { b.feeOnAccount = true; b.feePaidCents = totalCents; } else { b.depositOnAccount = true; b.depositPaidCents = totalCents; }
+        b.payment = 'onaccount';
+        b.onaccount = { ...(b.onaccount || {}), [part]: { saleId: res.saleId, at: new Date().toISOString(), cents: totalCents } };
+        await sql`UPDATE bookings SET data = ${JSON.stringify(b)}::jsonb WHERE id = ${b.id}`;
+        done.push({ part, saleId: res.saleId, amountCents: totalCents });
+      }
+      if (!done.length) return bad(lastErr || 'nothing to put on account', 400);
+      const totalCents = done.reduce((t, d) => t + d.amountCents, 0);
+      await onAccountEmail(b.email, b.name, done.length > 1 ? 'Booking fee + refundable deposit' : (done[0].part === 'fee' ? 'Booking fee' : 'Refundable deposit'), totalCents, b.id);
+      const tag = done.length > 1 ? 'both' : done[0].part;
+      const dest = base + '/booking.html?onaccount=' + tag + '&id=' + encodeURIComponent(b.id);
+      return wantRedirect ? payRedirect(dest) : json({ onaccount: true, parts: done, part: tag, saleId: done[0].saleId, amountCents: totalCents, url: dest });
+    }
+
+    const part = p.part === 'deposit' ? 'deposit' : 'fee';
+    const a = await bookingPart(part);
+    if (a.error) return bad(a.error, 400);
+    const { amount, label, taxCents } = a;
 
     const items = [{ name: label, amountCents: amount, qty: 1 }];
     if (taxCents > 0) items.push({ name: 'Sales tax (' + SALES_TAX_PERCENT + '%)', amountCents: taxCents, qty: 1 });
@@ -143,6 +212,7 @@ const _handler = async (req) => {
     const r = rows[0].data;
     if (r.status === 'canceled') return bad('registration is canceled', 400);
     if (r.feePaid) return bad('already paid', 400);
+    if (r.payment === 'onaccount' && !onAccount) return bad('this registration is already on your account — a Guru will send a pay link', 400);   // NGH-BUILD 2026-09-11a
     const qty = Math.max(1, parseInt(r.qty, 10) || 1);
     let perPerson = (Number(r.cost) || 0);
     let regLabel = 'Event registration — ' + (r.eventTitle || r.eventId);
@@ -153,6 +223,25 @@ const _handler = async (req) => {
     }
     const totals = computeRegTotals(Math.round(perPerson * 100), qty);
     if (!totals.totalCents || totals.totalCents < 50) return bad('this registration is free', 400);
+
+    // NGH-BUILD 2026-09-11a: pay on account via Lightspeed (no Stripe processing fee)
+    if (onAccount) {
+      if (r.payment === 'onaccount') return bad('already on account', 400);
+      const goods = { subtotalCents: totals.subtotalCents, taxCents: totals.taxCents, feeCents: 0, totalCents: totals.subtotalCents + totals.taxCents, qty };
+      const res = await recordSale({
+        sourceId: r.id, kind: 'registration', customer: lscore.customerOf(r),
+        lines: lscore.registrationSaleLines({ ...r, paidBreakdown: goods }), payment: 'onaccount', state: 'closed',
+        note: 'NGH event registration ' + r.id + ' (on account) — ' + (r.eventTitle || '') + (r.occDate ? ' ' + r.occDate : '') + (r.name ? ' · ' + r.name : '')
+      });
+      if (!res.ok) return bad('could not put this on account: ' + (res.error || 'Lightspeed error') + ' — please pay by card instead', 502);
+      r.payment = 'onaccount';
+      r.onaccount = { saleId: res.saleId, at: new Date().toISOString(), cents: goods.totalCents };
+      r.paidBreakdown = r.paidBreakdown || goods;
+      await sql`UPDATE registrations SET data = ${JSON.stringify(r)}::jsonb WHERE id = ${r.id}`;
+      await onAccountEmail(r.email, r.name, 'Event registration — ' + (r.eventTitle || 'NGH Event'), goods.totalCents, r.id);
+      const dest = base + '/ticket/' + ticketCode(r.id) + '?onaccount=1';
+      return wantRedirect ? payRedirect(dest) : json({ onaccount: true, saleId: res.saleId, amountCents: goods.totalCents, url: dest });
+    }
 
     const items = [{ name: regLabel, amountCents: totals.subtotalCents / qty, qty: qty }];
     if (totals.taxCents > 0) items.push({ name: 'Sales tax (' + taxPercent() + '%)', amountCents: totals.taxCents, qty: 1 });
@@ -175,5 +264,32 @@ const _handler = async (req) => {
     return wantRedirect ? payRedirect(session.url) : json({ url: session.url, id: session.id });
   }
 
+  // NGH-BUILD 2026-09-11a: shop order-ahead (prices already include tax — no tax/fee lines)
+  if (p.kind === 'order') {
+    if (onAccount) return bad('shop orders cannot be put on account — choose pay online or pay at pickup', 400);
+    const id = String(p.id || '').toUpperCase();
+    const rows = await sql`SELECT data, status FROM shop_orders WHERE id = ${id}`;
+    if (!rows.length) return bad('order not found', 404);
+    const o = rows[0].data;
+    if (rows[0].status === 'canceled') return bad('this order was canceled', 400);
+    if (o.paid) return bad('already paid', 400);
+    if (o.pay !== 'online') return bad('this order is set to pay at pickup', 400);
+    const items = (o.items || []).map(i => ({ name: i.name, amountCents: Math.round(Number(i.price) * 100), qty: Number(i.qty) || 1 })).filter(i => i.amountCents > 0);
+    if (!items.length) return bad('nothing to pay', 400);
+    const tok = lscore.orderSig(lscore.secret(), id);
+    const session = await createCheckoutSession({
+      items,
+      successUrl: base + '/app/shop.html?paid=1&order=' + encodeURIComponent(id) + '&t=' + tok,
+      cancelUrl: base + '/app/shop.html?canceled=1&order=' + encodeURIComponent(id) + '&t=' + tok,
+      customerEmail: o.email,
+      metadata: { kind: 'order', orderId: id }
+    });
+    o.checkoutSessionId = session.id;
+    await sql`UPDATE shop_orders SET data = ${JSON.stringify(o)}::jsonb WHERE id = ${id}`;
+    return wantRedirect ? payRedirect(session.url) : json({ url: session.url, id: session.id });
+  }
+
   return bad('unknown payment kind', 400);
 };
+
+// NGH-BUILD 2026-09-11a

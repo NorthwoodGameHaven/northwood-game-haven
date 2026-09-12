@@ -6,6 +6,12 @@
 // manage/cancel link).
 // The signature is verified so only genuine Stripe calls are trusted.
 //
+// NGH-BUILD 2026-09-11a: also handles shop orders (kind:'order') and,
+// after any booking part / registration / order is marked paid, records a
+// CLOSED sale in Lightspeed X-Series via recordSale() (fire-and-forget with
+// logging — a failed Lightspeed write never blocks marking the payment paid;
+// replay from the Guru Lightspeed page).
+//
 // IMPORTANT: this function must read the RAW request body for signature
 // verification — do not JSON.parse before verifying.
 import { sql, ensureSchema, json, bad } from './_shared/db.mjs';
@@ -13,11 +19,24 @@ import { verifyWebhook } from './_shared/stripe.mjs';
 import { issuePromoCoupons } from './_shared/boxoffice.mjs'; // NGH-BUILD 11a
 import { sendBrandedMail } from './_shared/email.mjs';
 import { ticketUrl, walletConfigured, money } from './_shared/ticket.mjs';
+import { recordSale, ensureLsSchema } from './_shared/lightspeed.mjs';               // NGH-BUILD 2026-09-11a
+import * as lscore from './_shared/lightspeed-core.mjs';                              // NGH-BUILD 2026-09-11a
+import { emailOrderConfirmation, emailStaffNewOrder } from './shop.mjs';              // NGH-BUILD 2026-09-11a
 
-export default async (req) => {
+// NGH-BUILD 2026-09-11a: background work. Netlify Functions 2.0 expose
+// context.waitUntil() so the response isn't held up; when it's unavailable we
+// simply await (recordSale never throws, so the webhook still returns 200).
+async function fireAndForget(context, label, fn) {
+  const p = Promise.resolve().then(fn).catch(e => console.error('[stripe-webhook] ' + label + ' failed', e && e.message));
+  if (context && typeof context.waitUntil === 'function') { context.waitUntil(p); return; }
+  await p;
+}
+
+export default async (req, context) => {   // NGH-BUILD 2026-09-11a: context for waitUntil
   try {
     if (req.method !== 'POST') return bad('Method not allowed', 405);
     await ensureSchema();
+    try { await ensureLsSchema(); } catch (e) { console.error('[stripe-webhook] lightspeed schema (non-fatal)', e && e.message); }   // NGH-BUILD 2026-09-11a: never let Lightspeed block payment recording
 
     const raw = await req.text();
     const sig = req.headers.get('stripe-signature');
@@ -39,11 +58,25 @@ export default async (req) => {
         const rows = await sql`SELECT data FROM bookings WHERE id = ${md.bookingId}`;
         if (rows.length) {
           const b = rows[0].data;
+          const part = md.part === 'deposit' ? 'deposit' : 'fee';                                   // NGH-BUILD 2026-09-11a
+          const alreadyPaid = part === 'deposit' ? !!b.depositPaid : !!b.feePaid;                  // NGH-BUILD 2026-09-11a: idempotency vs Stripe retries
           if (md.part === 'deposit') { b.depositPaid = true; b.depositPI = paymentIntent; }
           else { b.feePaid = true; b.feePI = paymentIntent; }
           if (b.feePaid && b.depositPaid) b.payment = 'paid';
+          // NGH-BUILD 2026-09-11a: remember what Stripe charged so replays record the same amount
+          if (s.amount_total != null) { if (part === 'deposit') b.depositPaidCents = Number(s.amount_total); else b.feePaidCents = Number(s.amount_total); }
           await sql`UPDATE bookings SET data = ${JSON.stringify(b)}::jsonb WHERE id = ${b.id}`;
           console.log('[stripe-webhook] booking', b.id, md.part, 'marked paid');
+
+          // NGH-BUILD 2026-09-11a: closed sale in Lightspeed (NGH-ROOM / NGH-DEPOSIT [+ NGH-KARAOKE])
+          if (!alreadyPaid) {
+            await fireAndForget(context, 'recordSale booking', () => recordSale({
+              sourceId: b.id + ':' + part, kind: 'booking', customer: lscore.customerOf(b),
+              lines: lscore.bookingSaleLines(b, part, s.amount_total != null ? Number(s.amount_total) : null),
+              payment: 'online', state: 'closed',
+              note: 'NGH booking ' + b.id + ' (' + part + ')' + (b.date ? ' · ' + b.date : '') + (b.name ? ' · ' + b.name : '')
+            }));
+          }
         }
       } else if (md.kind === 'registration' && md.registrationId) {
         const rows = await sql`SELECT data FROM registrations WHERE id = ${md.registrationId}`;
@@ -74,6 +107,41 @@ export default async (req) => {
             const evRows = await sql`SELECT data FROM events WHERE id = ${r.eventId}`;
             if (evRows.length) await issuePromoCoupons(r, evRows[0].data);
           } catch (e) { console.error('[stripe-webhook] promo coupon failed', e); }
+
+          // NGH-BUILD 2026-09-11a: closed sale in Lightspeed (NGH-EVENT "<title> × qty")
+          if (!alreadySent) {
+            await fireAndForget(context, 'recordSale registration', () => recordSale({
+              sourceId: r.id, kind: 'registration', customer: lscore.customerOf(r), lines: lscore.registrationSaleLines(r),
+              payment: 'online', state: 'closed',
+              note: 'NGH event registration ' + r.id + ' — ' + (r.eventTitle || '') + (r.occDate ? ' ' + r.occDate : '') + (r.name ? ' · ' + r.name : '')
+            }));
+          }
+        }
+      } else if (md.kind === 'order' && md.orderId) {
+        // NGH-BUILD 2026-09-11a: order-ahead paid online → closed sale + emails
+        const rows = await sql`SELECT data, status FROM shop_orders WHERE id = ${md.orderId}`;
+        if (rows.length) {
+          const o = rows[0].data;
+          const alreadyPaid = !!o.paid;
+          o.paid = true; o.paidAt = o.paidAt || new Date().toISOString(); o.paymentPI = paymentIntent; o.checkoutSessionId = s.id || o.checkoutSessionId;
+          if (s.amount_total != null) o.amountPaidCents = Number(s.amount_total);
+          if (rows[0].status === 'new' || !rows[0].status) o.status = 'paid';
+          else o.status = rows[0].status;
+          await sql`UPDATE shop_orders SET data = ${JSON.stringify(o)}::jsonb, status = ${o.status} WHERE id = ${o.id}`;
+          console.log('[stripe-webhook] order', o.id, 'marked paid,', s.amount_total, 'cents');
+          if (!alreadyPaid) {
+            await fireAndForget(context, 'order post-payment', async () => {
+              const res = await recordSale({
+                sourceId: o.id, kind: 'order', customer: lscore.customerOf(o), lines: lscore.orderSaleLines(o),
+                payment: 'online', state: 'closed',
+                note: 'ORDER AHEAD ' + o.id + ' (paid online)' + (o.pickupAt ? ' · pickup ' + (o.pickupLabel || o.pickupAt) : '') + (o.name ? ' · ' + o.name : '')
+              });
+              o.sale = { saleId: res.saleId, error: res.error, at: new Date().toISOString() };
+              await sql`UPDATE shop_orders SET data = ${JSON.stringify(o)}::jsonb WHERE id = ${o.id}`;
+              await emailOrderConfirmation(o, { paid: true });
+              await emailStaffNewOrder(o, { paid: true });
+            });
+          }
         }
       }
     }
@@ -104,7 +172,7 @@ async function sendTicketEmail(r) {
   buttons.push({ label: 'Modify or Cancel', url: tUrl + '#manage' });
 
   await sendBrandedMail(r.email, '✅ Payment received — your ticket for ' + (r.eventTitle || 'NGH Event'), {
-    heading: 'Payment confirmed — here\u2019s your ticket! 🎟️',
+    heading: 'Payment confirmed — here’s your ticket! 🎟️',
     bodyText:
       'Hi ' + r.name + ',\n\n' +
       'Your payment for ' + (r.eventTitle || 'NGH Event') + (r.occDate ? (' on ' + r.occDate) : '') + ' is complete.\n\n' +
@@ -118,3 +186,4 @@ async function sendTicketEmail(r) {
 }
 
 // NGH-BUILD 11a
+// NGH-BUILD 2026-09-11a

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karaoke Host — Guru</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#132a1d">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .app{max-width:960px}
+  .panel{display:none}.panel.on{display:block}
+  .cols{display:grid;grid-template-columns:1fr;gap:14px}@media(min-width:760px){.cols{grid-template-columns:1.1fr .9fr}}
+  .transport{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .transport .btn{min-height:54px;font-size:.92rem;padding:8px}
+  .q{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .q .t{flex:1;min-width:0}.q .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.q .t span{color:var(--muted);font-size:.82rem}
+  .q .ops{display:flex;gap:4px}.q .ops button{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--cream);cursor:pointer}
+  .np{background:rgba(232,184,75,.12);border:1px solid var(--gold);border-radius:14px;padding:12px}
+  .np b{font-size:1.1rem}
+  .prog{height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:8px}.prog>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--gold-lt))}
+  .kv b{color:var(--gold-lt)}
+  .room-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .room-row .sw{width:14px;height:14px;border-radius:3px;flex:none}
+  .room-row input{flex:1;min-height:38px}
+  .room-row .score{width:80px;text-align:right}
+  .mem{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.06);margin:3px;font-size:.85rem}
+  .mem button{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px}
+  .sessions .q{cursor:pointer}
+  .status-line{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.85rem;color:var(--muted)}
+  .song{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.07)}.song .t{flex:1;min-width:0}.song .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.song .t span{color:var(--muted);font-size:.82rem}
+  .scoring-box{background:rgba(20,136,166,.15);border:1px solid var(--teal);border-radius:14px;padding:12px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/guru.html" aria-label="Back">‹</a>
+    <div class="title">🎤 Karaoke Host</div>
+    <div class="actions"><button class="icon-btn" id="btnLogout" title="Sign out">⎋</button></div>
+  </header>
+
+  <!-- login -->
+  <section class="panel on" id="pLogin">
+    <div class="card gold" style="max-width:420px;margin:30px auto"><h2>Guru sign-in</h2><label class="f">Admin code</label><input class="f" id="code" type="password" autocomplete="current-password"><button class="btn block" id="btnLogin" style="margin-top:12px">Sign in</button></div>
+  </section>
+
+  <!-- sessions -->
+  <section class="panel" id="pSessions">
+    <div class="cols">
+      <div class="card gold"><h2>Start a session</h2>
+        <div class="chips" id="modeChips"><span class="chip sel" data-m="battle">⚔️ Karaoke Battle (rooms compete)</span><span class="chip" data-m="openmic">🎙️ Open mic (no scoring)</span></div>
+        <label class="f">Rooms in play</label><div class="chips" id="roomChips"></div>
+        <div id="teamNames"></div>
+        <label class="f">Guest WiFi (QR on the TVs)</label>
+        <div class="row"><input class="f" id="wifiSsid" placeholder="Network name"><input class="f" id="wifiPass" placeholder="Password"></div>
+        <div class="row" style="margin-top:8px"><div><label class="f">Vote window (s)</label><input class="f" id="voteSecs" type="number" value="45" min="10" max="300"></div><div><label class="f">Singers per song</label><input class="f" id="maxSingers" type="number" value="2" min="1" max="6"></div></div>
+        <div class="switch"><span>Rotate between rooms (round-robin)</span><input type="checkbox" id="rotate" checked></div>
+        <div class="switch"><span>Each room counts as one judge (room-weighted)</span><input type="checkbox" id="roomWeight"></div>
+        <div class="switch"><span>TVs play the backing track themselves (no rack player)</span><input type="checkbox" id="tvAudio"></div>
+        <button class="btn big" id="btnCreate" style="margin-top:14px">Create session</button>
+      </div>
+      <div class="card sessions"><h2>Recent sessions</h2><div id="sessionList" class="small muted">Loading…</div>
+        <div class="sep"></div><h3>Library</h3><div id="catStats" class="small muted">…</div>
+        <div class="small muted" style="margin-top:6px">Import songs from the rack PC: <code>node ngh-karaoke-player.mjs import</code> (see docs/NGH-APP-SETUP.md).</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- live console -->
+  <section class="panel" id="pLive">
+    <div class="status-line" style="margin-bottom:10px"><span class="pill" id="lvCode">····</span><span id="lvStatus"></span><span id="lvPlayer"></span><span id="lvMembers"></span><span style="margin-left:auto"><a href="#" id="lnkBack">all sessions</a></span></div>
+    <div class="cols">
+      <div>
+        <div class="card">
+          <div class="np" id="npBox"><b id="npTitle">Nothing playing</b><div class="small muted" id="npSub"></div><div class="prog"><i id="npProg"></i></div><div class="small muted" id="npTime" style="margin-top:4px"></div></div>
+          <div class="transport" style="margin-top:10px">
+            <button class="btn" id="tPlay">▶ Play next</button>
+            <button class="btn ghost" id="tPause">⏸ Pause</button>
+            <button class="btn ghost" id="tRestart">↺ Restart</button>
+            <button class="btn teal" id="tEnd">■ End song → score</button>
+            <button class="btn ghost" id="tSkip">⏭ Skip</button>
+            <button class="btn ghost" id="tStart">🚀 Start battle</button>
+          </div>
+          <div class="scoring-box" id="scBox" hidden><b>⭐ Scoring open</b> — <span id="scInfo"></span><div class="btn-row" style="margin-top:8px"><button class="btn sm teal" id="tClose">Close &amp; award now</button><button class="btn sm ghost" id="tExtend">+20 s</button></div></div>
+          <div id="lastRes" class="small" style="margin-top:8px"></div>
+        </div>
+        <div class="card"><h2>Queue <span class="small muted" id="qCount"></span></h2>
+          <div class="btn-row"><button class="btn sm ghost" id="btnAddHost">＋ Add song</button><button class="btn sm ghost" id="btnRotate">Rotation: on</button></div>
+          <div id="queue"></div>
+        </div>
+      </div>
+      <div>
+        <div class="card"><h2>Rooms &amp; scores</h2><div id="rooms"></div><div class="btn-row"><button class="btn sm ghost" id="btnResetScores">Reset scores</button></div></div>
+        <div class="card"><h2>TVs</h2>
+          <div class="small muted">Push the karaoke display to every TV on the NGH TV Network, then bring them back when you're done.</div>
+          <div class="btn-row"><button class="btn sm" id="btnTvOn">📺 Send to all TVs</button><button class="btn sm ghost" id="btnTvOff">Restore previous TV content</button></div>
+          <div class="small muted">Manual: open <code id="tvUrl"></code> on any screen.</div>
+        </div>
+        <div class="card"><h2>Rack player</h2><div id="playerBox" class="small muted">no heartbeat yet</div><div class="small muted" style="margin-top:6px">Plays through X32 OUT 5-6. Start <code>ngh-karaoke-player</code> on the rack PC (service) — it follows this session automatically.</div></div>
+        <div class="card"><h2>Singers <span class="small muted" id="memCount"></span></h2><div id="members"></div></div>
+        <div class="card"><h2>Session</h2>
+          <div class="btn-row"><button class="btn sm ghost" id="btnSettings">Settings</button><button class="btn sm ghost" id="btnMode">Switch to open mic</button><button class="btn sm danger" id="btnEndSession">End session</button></div>
+          <div class="small muted" style="margin-top:6px">Join link: <code id="joinUrl"></code></div>
+        </div>
+        <div class="card"><h2>Results</h2><div id="results" class="small"></div></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script src="/app/karaoke/karaoke-client.js"></script>
+<script>
+(function(){
+  var $ = NGH.$, esc = NGH.esc, A = NGH.admin;
+  var ROOMS = ['commons', 'holt', 'depths', 'den'];
+  var CODE = null, state = null, pollH = null, playerT = null, mode = 'battle';
+  function panel(id){ document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('on', p.id === id); }); }
+  function ctl(action, extra){ return A.fetch(KClient.sessionUrl(CODE) + '/control', { method: 'POST', body: Object.assign({ action: action }, extra || {}) }).then(function(j){ state = j.state; render(); return j; }).catch(function(e){ NGH.toast(e.message); throw e; }); }
+
+  // ---- login ----
+  function afterLogin(){ panel('pSessions'); loadSessions(); var qs = new URLSearchParams(location.search); if (qs.get('s')) openSession(qs.get('s').toUpperCase()); }
+  $('btnLogin').onclick = function(){ A.login($('code').value).then(afterLogin).catch(function(){ NGH.toast('Wrong code'); }); };
+  $('code').addEventListener('keydown', function(e){ if (e.key === 'Enter') $('btnLogin').click(); });
+  $('btnLogout').onclick = function(){ A.logout(); location.reload(); };
+  if (A.isLoggedIn()) afterLogin();
+
+  // ---- create ----
+  $('roomChips').innerHTML = ROOMS.map(function(r){ return '<span class="chip sel" data-r="' + r + '" style="border-color:' + NGH.roomsMeta[r].color + '">' + NGH.roomsMeta[r].name + '</span>'; }).join('');
+  function teamInputs(){ $('teamNames').innerHTML = Array.prototype.filter.call(document.querySelectorAll('#roomChips .chip'), function(c){ return c.classList.contains('sel'); }).map(function(c){ var r = c.getAttribute('data-r'); return '<label class="f">Team name — ' + NGH.roomsMeta[r].name + '</label><input class="f" data-team="' + r + '" placeholder="' + NGH.roomsMeta[r].name + '">'; }).join(''); }
+  teamInputs();
+  document.querySelectorAll('#roomChips .chip').forEach(function(c){ c.onclick = function(){ c.classList.toggle('sel'); teamInputs(); }; });
+  document.querySelectorAll('#modeChips .chip').forEach(function(c){ c.onclick = function(){ document.querySelectorAll('#modeChips .chip').forEach(function(x){ x.classList.remove('sel'); }); c.classList.add('sel'); mode = c.getAttribute('data-m'); }; });
+  var wifiStore = NGH.store('ngh_karaoke_wifi'); var w = wifiStore.get(null); if (w){ $('wifiSsid').value = w.ssid || ''; $('wifiPass').value = w.pass || ''; }
+  $('btnCreate').onclick = function(){
+    var rooms = Array.prototype.filter.call(document.querySelectorAll('#roomChips .chip'), function(c){ return c.classList.contains('sel'); }).map(function(c){ return c.getAttribute('data-r'); });
+    if (!rooms.length){ NGH.toast('Pick at least one room'); return; }
+    var teams = {}; document.querySelectorAll('[data-team]').forEach(function(i){ if (i.value.trim()) teams[i.getAttribute('data-team')] = i.value.trim(); });
+    var wifi = $('wifiSsid').value.trim() ? { ssid: $('wifiSsid').value.trim(), pass: $('wifiPass').value } : null; wifiStore.set(wifi || {});
+    var body = { mode: mode, rooms: rooms, teams: teams, settings: { voteSeconds: Number($('voteSecs').value) || 45, maxSingers: Number($('maxSingers').value) || 2, rotateRooms: $('rotate').checked, voteWeighting: $('roomWeight').checked ? 'room' : 'participant', tvAudio: $('tvAudio').checked, wifi: wifi } };
+    A.fetch(KClient.API + '/sessions', { method: 'POST', body: body }).then(function(j){ openSession(j.code); }).catch(function(e){ NGH.toast(e.message); });
+  };
+  function loadSessions(){
+    A.fetch(KClient.API + '/sessions').then(function(j){ $('sessionList').innerHTML = (j.sessions || []).map(function(s){ return '<div class="q" data-s="' + s.id + '"><div class="t"><b>' + s.id + ' <span class="pill">' + esc(s.status) + '</span></b><span>' + esc(s.mode) + ' · ' + s.members + ' singers · ' + new Date(s.updated_at).toLocaleString() + '</span></div><button class="btn sm ghost">Open</button></div>'; }).join('') || 'No sessions yet.'; document.querySelectorAll('#sessionList .q').forEach(function(r){ r.onclick = function(){ openSession(r.getAttribute('data-s')); }; }); }).catch(function(e){ $('sessionList').textContent = e.message; if (e.status === 401){ A.logout(); panel('pLogin'); } });
+    A.fetch(KClient.API + '/catalog/stats').then(function(j){ $('catStats').textContent = j.songs + ' songs · ' + j.withLyrics + ' with synced lyrics · ' + j.withCdg + ' CDG'; }).catch(function(){});
+  }
+
+  // ---- live ----
+  function openSession(code){
+    CODE = code; history.replaceState(null, '', '?s=' + code); panel('pLive');
+    $('lvCode').textContent = code; $('tvUrl').textContent = NGH.SITE + '/app/karaoke/tv.html?s=' + code; $('joinUrl').textContent = NGH.SITE + '/app/karaoke/join.html?s=' + code;
+    if (pollH) pollH.stop();
+    NGH.clock.sync(KClient.API + '/time', 2);
+    pollH = KClient.poll(code, { interval: 2000, onState: function(st){ state = st; render(); }, onError: function(e){ if (e.status === 404) NGH.toast('Session not found'); } });
+    clearInterval(playerT); playerT = setInterval(pollPlayer, 5000); pollPlayer();
+    setInterval(tick, 200);
+  }
+  $('lnkBack').onclick = function(e){ e.preventDefault(); if (pollH) pollH.stop(); clearInterval(playerT); history.replaceState(null, '', location.pathname); panel('pSessions'); loadSessions(); };
+  function pollPlayer(){ if (!CODE) return; A.fetch(KClient.sessionUrl(CODE) + '/player').then(function(j){ var p = (j.players || [])[0]; if (!p){ $('playerBox').innerHTML = '<span class="dot idle"></span>no rack player heartbeat yet'; $('lvPlayer').innerHTML = ''; return; } $('playerBox').innerHTML = '<span class="dot ' + (p.online ? '' : 'bad') + '"></span><b>' + esc(p.name) + '</b> ' + (p.online ? 'online' : 'offline') + ' · ' + esc(p.status || '') + (p.position ? ' · ' + KClient.fmtTime(p.position) : '') + (p.device ? '<div class="muted">' + esc(p.device) + '</div>' : '') + (p.error ? '<div style="color:var(--red)">' + esc(p.error) + '</div>' : ''); $('lvPlayer').innerHTML = '<span class="dot ' + (p.online ? '' : 'bad') + '"></span>player'; }).catch(function(){}); }
+
+  function render(){
+    var s = state; if (!s) return; var np = s.nowPlaying;
+    $('lvStatus').innerHTML = '<span class="pill">' + esc(s.status) + '</span> ' + esc(s.mode);
+    $('lvMembers').textContent = s.members.length + ' singers';
+    $('tStart').style.display = s.status === 'lobby' ? '' : 'none';
+    $('btnMode').textContent = s.mode === 'battle' ? 'Switch to open mic' : 'Switch to battle';
+    $('btnRotate').textContent = 'Rotation: ' + (s.settings.rotateRooms ? 'on' : 'off');
+    if (np){ $('npTitle').textContent = np.title + (np.artist ? ' — ' + np.artist : ''); $('npSub').innerHTML = '🎤 ' + esc((np.singers || []).join(' & ')) + ' · ' + KClient.roomBadge(np.room, s) + (np.custom ? ' · <i>requested (no media)</i>' : '') + (np.hasLyrics ? ' · 📱 lyrics' : ''); $('tPause').textContent = np.pausedAt ? '▶ Resume' : '⏸ Pause'; }
+    else { $('npTitle').textContent = 'Nothing playing'; $('npSub').textContent = s.onDeck.length ? 'Up next: ' + (s.queue.find(function(q){ return q.id === s.onDeck[0]; }) || {}).title : 'Queue empty'; $('npProg').style.width = '0'; $('npTime').textContent = ''; }
+    $('scBox').hidden = !s.scoring;
+    if (s.scoring) $('scInfo').innerHTML = esc(s.scoring.title) + ' (' + KClient.roomBadge(s.scoring.room, s) + ') · ' + s.scoring.tally.count + ' votes · ' + KClient.stars(s.scoring.tally.choiceAvg) + ' / ' + KClient.stars(s.scoring.tally.deliveryAvg);
+    if (s.lastResult){ var r = s.lastResult; $('lastRes').innerHTML = 'Last: <b>' + esc(r.title) + '</b> ' + KClient.roomBadge(r.room, s) + ' → <b style="color:var(--gold-lt)">+' + r.points.toFixed(1) + '</b> (choice ' + r.pointsChoice + ' + delivery ' + r.pointsDelivery + ', ' + r.votes + ' votes)' + (r.unscored ? ' <span style="color:var(--red)">no votes</span> <a href="#" id="lnkReopen">re-open scoring</a>' : ''); var lr = $('lnkReopen'); if (lr) lr.onclick = function(e){ e.preventDefault(); ctl('openScoring', { entryId: r.entryId }); }; }
+    // queue in on-deck order, then the rest
+    var deckIds = s.onDeck || [], queued = s.queue.filter(function(q){ return q.status === 'queued'; });
+    var ordered = deckIds.map(function(id){ return queued.find(function(q){ return q.id === id; }); }).filter(Boolean).concat(queued.filter(function(q){ return deckIds.indexOf(q.id) < 0; }));
+    $('qCount').textContent = queued.length + ' queued';
+    $('queue').innerHTML = ordered.map(function(e, i){ return '<div class="q" data-id="' + e.id + '"><span class="n" style="width:26px;height:26px;border-radius:50%;background:' + (i < deckIds.length ? 'var(--gold)' : 'rgba(255,255,255,.15)') + ';color:var(--ink);display:grid;place-items:center;font-weight:900;font-size:.8rem;flex:none">' + (i + 1) + '</span><div class="t"><b>' + esc(e.title) + '</b><span>' + esc(e.artist || '') + ' · 🎤 ' + esc(e.singers.join(' & ')) + ' · ' + KClient.roomBadge(e.room, s) + (e.songId ? '' : ' · requested') + '</span></div><div class="ops"><button title="Play now" data-op="play">▶</button><button title="Move to top" data-op="top">⤒</button><button title="Edit singers" data-op="edit">✎</button><button title="Remove" data-op="del">✕</button></div></div>'; }).join('') || '<div class="small muted">Queue is empty.</div>';
+    document.querySelectorAll('#queue [data-op]').forEach(function(b){ b.onclick = function(){ var id = b.closest('.q').getAttribute('data-id'), e = s.queue.find(function(q){ return q.id === id; }); var op = b.getAttribute('data-op');
+      if (op === 'play'){ if (s.nowPlaying && !confirm('A song is playing. End it and play this one?')) return; ctl('play', { entryId: id }); }
+      else if (op === 'top') ctl('moveToTop', { entryId: id });
+      else if (op === 'del'){ if (confirm('Remove "' + e.title + '"?')) ctl('removeEntry', { entryId: id }); }
+      else if (op === 'edit'){ var v = prompt('Singers (comma separated):', e.singers.join(', ')); if (v == null) return; var rm = prompt('Room (' + Object.keys(s.rooms).join('/') + '):', e.room); ctl('setSingers', { entryId: id, singers: v.split(',').map(function(x){ return x.trim(); }).filter(Boolean), room: rm }); } }; });
+    // rooms
+    $('rooms').innerHTML = Object.keys(s.rooms).map(function(id){ var r = KClient.roomMeta(id, s); return '<div class="room-row"><span class="sw" style="background:' + r.color + '"></span><input class="f" data-team="' + id + '" value="' + esc(r.team) + '"><input class="f score" data-score="' + id + '" type="number" step="0.1" value="' + r.score + '"><span class="small muted">' + r.songs + ' ♪</span></div>'; }).join('');
+    document.querySelectorAll('#rooms [data-team]').forEach(function(i){ i.onchange = function(){ ctl('setTeam', { room: i.getAttribute('data-team'), team: i.value }); }; });
+    document.querySelectorAll('#rooms [data-score]').forEach(function(i){ i.onchange = function(){ ctl('setTeam', { room: i.getAttribute('data-score'), score: Number(i.value) }); }; });
+    // members
+    $('memCount').textContent = s.members.length;
+    $('members').innerHTML = s.members.map(function(m){ var r = KClient.roomMeta(m.room, s); return '<span class="mem"><span class="sw" style="width:10px;height:10px;border-radius:2px;background:' + r.color + ';display:inline-block"></span>' + esc(m.name) + '<button title="Kick" data-kick="' + m.id + '">✕</button></span>'; }).join('') || '<span class="small muted">Nobody has joined yet — QR is on the TV.</span>';
+    document.querySelectorAll('[data-kick]').forEach(function(b){ b.onclick = function(){ if (confirm('Remove this singer?')) ctl('kick', { memberId: b.getAttribute('data-kick') }); }; });
+    // results
+    $('results').innerHTML = (s.results || []).slice().reverse().map(function(r){ return '<div class="q"><div class="t"><b>' + esc(r.title) + '</b><span>' + esc(r.singers.join(' & ')) + ' · ' + KClient.roomBadge(r.room, s) + ' · ' + r.votes + ' votes · choice ' + r.choiceAvg + ' · delivery ' + r.deliveryAvg + '</span></div><b style="color:var(--gold-lt)">+' + r.points.toFixed(1) + '</b></div>'; }).join('') || '<span class="muted">No results yet.</span>';
+  }
+  function tick(){ var s = state; if (!s || !s.nowPlaying) return; var np = s.nowPlaying, pos = KClient.position(np, NGH.clock.now()), dur = np.durationMs || 0; $('npProg').style.width = dur ? Math.min(100, Math.max(0, pos / dur * 100)) + '%' : '0'; $('npTime').textContent = (pos < 0 ? 'starts in ' + Math.ceil(-pos / 1000) : KClient.fmtTime(pos)) + (dur ? ' / ' + KClient.fmtTime(dur) : ' / ?') + (np.pausedAt ? ' · PAUSED' : '') + (s.scoring ? '' : ''); if (s.scoring){ var left = Math.max(0, Math.ceil((s.scoring.closesAt - NGH.clock.now()) / 1000)); $('scInfo').innerHTML = $('scInfo').innerHTML.replace(/ · closes in \d+ s$/, '') + ' · closes in ' + left + ' s'; } }
+
+  // ---- transport ----
+  $('tPlay').onclick = function(){
+    var s = state || {};
+    if (s.nowPlaying){ if (!confirm('"' + s.nowPlaying.title + '" is still playing. Skip it (no scoring) and start the next song?')) return; ctl('play', { endAs: 'skip' }); return; }
+    if (s.scoring){ if (!confirm('Voting is still open for "' + s.scoring.title + '". Close it now, award the points, and start the next song?')) return; }
+    ctl('play');
+  };
+  $('tPause').onclick = function(){ ctl(state && state.nowPlaying && state.nowPlaying.pausedAt ? 'resume' : 'pause'); };
+  $('tRestart').onclick = function(){ ctl('restart'); };
+  $('tEnd').onclick = function(){ ctl('end'); };
+  $('tSkip').onclick = function(){ if (confirm('Skip the current song (no scoring)?')) ctl('skip'); };
+  $('tStart').onclick = function(){ ctl('start'); };
+  $('tClose').onclick = function(){ ctl('closeScoring'); };
+  $('tExtend').onclick = function(){ ctl('extendScoring', { seconds: 20 }); };
+  $('btnRotate').onclick = function(){ ctl('setSettings', { settings: { rotateRooms: !state.settings.rotateRooms } }); };
+  $('btnResetScores').onclick = function(){ if (confirm('Reset all scores and results?')) ctl('resetScores'); };
+  $('btnMode').onclick = function(){ ctl('setMode', { mode: state.mode === 'battle' ? 'openmic' : 'battle' }); };
+  $('btnEndSession').onclick = function(){ if (confirm('End this session for everyone?')) ctl('endSession'); };
+  $('btnSettings').onclick = function(){
+    var st = state.settings, sheet = document.createElement('div'); sheet.className = 'sheet';
+    sheet.innerHTML = '<div><h2>Settings</h2><div class="row"><div><label class="f">Vote window (s)</label><input class="f" id="sVote" type="number" value="' + st.voteSeconds + '"></div><div><label class="f">Singers per song</label><input class="f" id="sMax" type="number" value="' + st.maxSingers + '"></div></div><div class="row"><div><label class="f">On-deck size</label><input class="f" id="sDeck" type="number" value="' + st.onDeck + '"></div><div><label class="f">Lead-in (ms)</label><input class="f" id="sLead" type="number" value="' + (st.leadInMs || 3000) + '"></div></div><label class="f">Guest WiFi</label><div class="row"><input class="f" id="sSsid" placeholder="SSID" value="' + esc((st.wifi && st.wifi.ssid) || '') + '"><input class="f" id="sPass" placeholder="password (leave blank to keep)"></div><div class="switch"><span>Room-weighted voting</span><input type="checkbox" id="sRoomW" ' + (st.voteWeighting === 'room' ? 'checked' : '') + '></div><div class="switch"><span>TVs play audio</span><input type="checkbox" id="sTvAudio" ' + (st.tvAudio ? 'checked' : '') + '></div><div class="btn-row"><button class="btn ghost" id="sCancel">Cancel</button><button class="btn" id="sSave">Save</button></div></div>';
+    document.body.appendChild(sheet); sheet.querySelector('#sCancel').onclick = function(){ sheet.remove(); };
+    sheet.querySelector('#sSave').onclick = function(){ var g = function(id){ return sheet.querySelector('#' + id); }; var settings = { voteSeconds: Number(g('sVote').value), maxSingers: Number(g('sMax').value), onDeck: Number(g('sDeck').value), leadInMs: Number(g('sLead').value), voteWeighting: g('sRoomW').checked ? 'room' : 'participant', tvAudio: g('sTvAudio').checked }; var ssid = g('sSsid').value.trim(); if (ssid && g('sPass').value) settings.wifi = { ssid: ssid, pass: g('sPass').value }; else if (!ssid) settings.wifi = null; ctl('setSettings', { settings: settings }).then(function(){ sheet.remove(); }); };
+  };
+  // ---- add song as host ----
+  $('btnAddHost').onclick = function(){
+    var sheet = document.createElement('div'); sheet.className = 'sheet';
+    sheet.innerHTML = '<div><h2>Add a song</h2><input class="f" id="hq" placeholder="Search library…"><div id="hres" style="margin-top:8px;max-height:40vh;overflow:auto"></div><div class="sep"></div><label class="f">Or custom request</label><div class="row"><input class="f" id="hct" placeholder="Title"><input class="f" id="hca" placeholder="Artist"></div><label class="f">Singers (comma separated)</label><input class="f" id="hs" placeholder="Jen, Sarah"><label class="f">Room</label><select class="f" id="hr">' + Object.keys(state.rooms).map(function(id){ return '<option value="' + id + '">' + esc(KClient.roomMeta(id, state).team) + '</option>'; }).join('') + '</select><div class="btn-row"><button class="btn ghost" id="hCancel">Cancel</button><button class="btn" id="hAdd">Add custom</button></div></div>';
+    document.body.appendChild(sheet); var g = function(id){ return sheet.querySelector('#' + id); };
+    g('hCancel').onclick = function(){ sheet.remove(); };
+    function add(body){ var singers = g('hs').value.split(',').map(function(x){ return x.trim(); }).filter(Boolean); if (!singers.length){ NGH.toast('Who is singing?'); return; } body.singers = singers; body.room = g('hr').value; A.fetch(KClient.sessionUrl(CODE) + '/queue', { method: 'POST', body: body }).then(function(j){ state = j.state; render(); sheet.remove(); NGH.toast('Added'); }).catch(function(e){ NGH.toast(e.message); }); }
+    g('hAdd').onclick = function(){ if (!g('hct').value.trim()){ NGH.toast('Title please'); return; } add({ custom: { title: g('hct').value.trim(), artist: g('hca').value.trim() } }); };
+    var t; g('hq').addEventListener('input', function(){ clearTimeout(t); t = setTimeout(function(){ NGH.fetchJSON(KClient.API + '/songs?q=' + encodeURIComponent(g('hq').value.trim())).then(function(j){ g('hres').innerHTML = (j.songs || []).map(function(sg){ return '<div class="song"><div class="t"><b>' + esc(sg.title) + '</b><span>' + esc(sg.artist) + '</span></div><button class="btn sm" data-id="' + esc(sg.id) + '">Add</button></div>'; }).join(''); g('hres').querySelectorAll('button').forEach(function(b){ b.onclick = function(){ add({ songId: b.getAttribute('data-id') }); }; }); }); }, 250); });
+    setTimeout(function(){ g('hq').focus(); }, 50);
+  };
+  // ---- TVs ----
+  // Remember what the TVs were showing so "restore" puts the slideshow/deck back.
+  var tvPrev = NGH.store('ngh_karaoke_tv_prev');
+  $('btnTvOn').onclick = function(){
+    A.fetch(NGH.API + '/tv/admin/overview').then(function(ov){
+      var all = (ov.channels || []).find(function(c){ return c.id === 'all'; });
+      var cur = all && all.data;
+      if (cur && !(cur.mode === 'url' && /\/app\/karaoke\/tv\.html/.test(cur.url || ''))) tvPrev.set(cur);
+    }).catch(function(){}).then(function(){
+      return A.fetch(NGH.API + '/tv/admin/channel/all', { method: 'PUT', body: { mode: 'url', url: '/app/karaoke/tv.html?s=' + CODE, note: 'Karaoke ' + CODE, qr: false } });
+    }).then(function(){ NGH.toast('All TVs switched to karaoke'); }).catch(function(e){ NGH.toast('TV network: ' + e.message); });
+  };
+  $('btnTvOff').onclick = function(){
+    var prev = tvPrev.get(null);
+    var body = prev && prev.mode ? prev : { mode: 'idle', note: 'after karaoke' };
+    A.fetch(NGH.API + '/tv/admin/channel/all', { method: 'PUT', body: body }).then(function(){ tvPrev.del(); NGH.toast(prev ? 'TVs restored to ' + prev.mode : 'TVs idle'); }).catch(function(e){ NGH.toast('TV network: ' + e.message); });
+  };
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

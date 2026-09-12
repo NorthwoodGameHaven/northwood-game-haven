@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pickup Orders — Guru</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#132a1d">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .err{color:#ffb3ad;font-weight:700;font-size:.9rem;margin-top:8px;min-height:1.2em}
+  .statusbar{display:flex;align-items:center;gap:10px;font-size:.8rem;color:var(--muted);margin:-4px 0 12px;flex-wrap:wrap}
+  .statusbar .grow{flex:1}
+  .group{margin-bottom:18px}
+  .group h2{display:flex;align-items:center;gap:8px;font-size:1.05rem;margin-bottom:8px}
+  .group h2 .cnt{margin-left:auto;background:rgba(255,255,255,.1);color:var(--cream);font:800 .78rem var(--font-body);padding:2px 10px;border-radius:999px}
+  .group.hot h2 .cnt{background:var(--gold);color:var(--ink)}
+  .group .none{color:var(--muted);font-size:.88rem;padding:4px 0 2px}
+  .order{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .order.fresh{border-color:var(--gold);box-shadow:0 0 0 1px rgba(201,151,58,.35),0 8px 24px rgba(0,0,0,.3);animation:pop .35s ease-out}
+  .order.late{border-color:var(--red)}
+  .ohead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .ohead .oid{font-family:var(--font-head);font-weight:600;letter-spacing:.06em;color:var(--gold-lt)}
+  .ohead .when{margin-left:auto;font-size:.82rem;font-weight:800;color:var(--cream);white-space:nowrap}
+  .ohead .when.late{color:#ffb3ad}
+  .ocust{font-size:.95rem;margin-bottom:6px}
+  .ocust a{color:var(--cream);text-decoration:none;font-weight:700}
+  .ocust .muted{font-size:.82rem}
+  .oitems{list-style:none;margin:0;padding:8px 0;border-top:1px solid rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07)}
+  .oitems li{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:.92rem}
+  .oitems li b{color:var(--gold-lt);min-width:2.2em}
+  .onote{font-size:.88rem;color:var(--gold-pale);margin-top:8px;background:rgba(232,184,75,.08);border-left:3px solid var(--gold);padding:6px 10px;border-radius:0 8px 8px 0}
+  .ofoot{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .ofoot .total{font-family:var(--font-head);font-size:1.15rem;color:var(--gold-lt);flex:1}
+  .ofoot .btn{min-height:40px}
+  .pill.ok{background:rgba(107,212,138,.18);color:#9ee6b4}
+  .pill.warn{background:rgba(232,184,75,.18);color:var(--gold-lt)}
+  .pill.bad{background:rgba(192,57,43,.25);color:#ffb3ad}
+  .pill.info{background:rgba(20,136,166,.25);color:#9fdcec}
+  .toolbar{display:flex;gap:6px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/guru.html" aria-label="Back to the Guru Hub">‹</a>
+    <div class="title">Pickup Orders</div>
+    <div class="actions toolbar" id="tools" hidden>
+      <button class="icon-btn" id="btnSound" title="New-order sound" aria-label="Toggle sound">🔔</button>
+      <button class="icon-btn" id="btnRefresh" title="Refresh" aria-label="Refresh">↻</button>
+      <button class="icon-btn" id="btnLogout" title="Sign out" aria-label="Sign out">⏏</button>
+    </div>
+  </header>
+
+  <!-- Admin gate -->
+  <section id="gate">
+    <div class="hero" style="padding-top:2px">
+      <img src="/brand/crest.png" alt="" style="width:96px;height:96px">
+      <div class="display" style="font-size:1.15rem">Guru sign-in</div>
+      <div class="tag">Order-ahead queue for the register.</div>
+    </div>
+    <div class="card gold">
+      <label class="f" for="adminCode">Guru code</label>
+      <input class="f code" id="adminCode" type="password" autocomplete="current-password" placeholder="••••••" aria-label="Guru code">
+      <div class="err" id="gateErr"></div>
+      <button class="btn big" id="btnLogin" style="margin-top:6px">Open the queue</button>
+    </div>
+  </section>
+
+  <!-- Queue -->
+  <section id="queue" hidden>
+    <div class="statusbar">
+      <span><span class="dot idle" id="dot"></span><span id="updated">Loading…</span></span>
+      <span class="grow"></span>
+      <span id="soundHint"></span>
+    </div>
+    <div class="group hot" id="gNew"><h2>🆕 New / Paid <span class="cnt">0</span></h2><div class="items"></div></div>
+    <div class="group" id="gParked"><h2>🅿️ Parked <span class="small muted" style="font-weight:600">(pay at pickup)</span> <span class="cnt">0</span></h2><div class="items"></div></div>
+    <div class="group" id="gReady"><h2>✅ Ready <span class="cnt">0</span></h2><div class="items"></div></div>
+    <div class="group" id="gDone"><h2>📦 Picked up today <span class="cnt">0</span></h2><div class="items"></div></div>
+    <div class="tiny muted center" id="canceledNote" style="margin-top:6px"></div>
+    <div class="footer-links"><a href="/guru.html">Guru Hub</a> · <a href="/app/guru-lightspeed.html">Lightspeed</a> · <a href="/app/shop.html">Customer shop</a></div>
+  </section>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = NGH.$, esc = NGH.esc;
+  var POLL_MS = 15000;
+  var SOUND = NGH.store('ngh_orders_sound');
+  var soundOn = SOUND.get(true), actx = null;
+  var timer = null, known = null, orders = [], busy = false, inflight = false;
+
+  // ---- helpers ----
+  function money(n) { return '$' + (Number(n) || 0).toFixed(2); }
+  function isToday(v) { if (!v) return false; var d = new Date(v), n = new Date(); return !isNaN(d) && d.toDateString() === n.toDateString(); }
+  function fmtPickup(v) {
+    if (!v) return '';
+    var d = new Date(v); if (isNaN(d)) return String(v);
+    var t = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    var diff = Math.round((d.getTime() - Date.now()) / 60000);
+    if (!isToday(d)) return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' ' + t;
+    if (diff > 90) return t + ' today';
+    if (diff >= 0) return t + ' · in ' + diff + ' min';
+    return t + ' · ' + (-diff) + ' min ago';
+  }
+  function isLate(o) { if (!o.pickupAt) return false; var d = new Date(o.pickupAt); return !isNaN(d) && Date.now() - d.getTime() > 10 * 60000; }
+  function isPaid(o) { return o.paid === true || o.status === 'paid'; }   // `paid` is set by the Stripe webhook
+  function payPill(o) {
+    if (o.status === 'canceled') return '<span class="pill bad">Canceled</span>';
+    if (isPaid(o)) return '<span class="pill ok">Paid online</span>';
+    if (o.pay === 'online') return '<span class="pill bad">Awaiting payment</span>';   // Stripe checkout not completed — don't pack it yet
+    return '<span class="pill warn">Pay at pickup</span>';
+  }
+  function pickedAt(o) {
+    if (o.pickedUpAt) return o.pickedUpAt;
+    var h = (o.history || []).filter(function (x) { return x && x.status === 'picked_up'; }).pop();
+    return (h && h.at) || o.updatedAt || o.createdAt;
+  }
+  function tel(p) { return String(p || '').replace(/[^\d+]/g, ''); }
+
+  // ---- sound (WebAudio; unlocked by the first tap) ----
+  function audioInit() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      if (!actx) actx = new AC();
+      if (actx.state === 'suspended') actx.resume();
+    } catch (e) {}
+  }
+  function ping() {
+    if (!soundOn || !actx) return;
+    try {
+      var t = actx.currentTime;
+      [[880, 0], [1174.7, 0.16], [1568, 0.32]].forEach(function (n) {
+        var o = actx.createOscillator(), g = actx.createGain();
+        o.type = 'sine'; o.frequency.value = n[0];
+        g.gain.setValueAtTime(0.0001, t + n[1]); g.gain.exponentialRampToValueAtTime(0.35, t + n[1] + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + n[1] + 0.45);
+        o.connect(g); g.connect(actx.destination); o.start(t + n[1]); o.stop(t + n[1] + 0.5);
+      });
+    } catch (e) {}
+  }
+  function renderSound() {
+    $('btnSound').textContent = soundOn ? '🔔' : '🔕';
+    $('soundHint').textContent = soundOn ? (actx && actx.state === 'running' ? 'Sound on' : 'Tap 🔔 to enable sound') : 'Sound off';
+  }
+  $('btnSound').onclick = function () { audioInit(); soundOn = !soundOn; SOUND.set(soundOn); renderSound(); if (soundOn) ping(); };
+
+  // ---- gate ----
+  function showGate(msg) { clearInterval(timer); timer = null; $('queue').hidden = true; $('tools').hidden = true; $('gate').hidden = false; $('gateErr').textContent = msg || ''; }
+  function login() {
+    var code = $('adminCode').value.trim();
+    if (!code) { $('gateErr').textContent = 'Enter the Guru code.'; return; }
+    if (busy) return; busy = true; $('btnLogin').disabled = true; $('gateErr').textContent = '';
+    audioInit();
+    NGH.admin.login(code).then(function () { $('adminCode').value = ''; start(); })
+      .catch(function (e) { $('gateErr').textContent = (e && e.status === 401) ? 'That code didn\'t match.' : (e && e.message) || 'Sign-in failed.'; NGH.haptic('warn'); })
+      .then(function () { busy = false; $('btnLogin').disabled = false; });
+  }
+  $('btnLogin').onclick = login;
+  $('adminCode').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+  $('btnLogout').onclick = function () { NGH.admin.logout(); known = null; showGate('Signed out.'); };
+  $('btnRefresh').onclick = function () { audioInit(); load(); };
+
+  // ---- queue ----
+  function start() {
+    $('gate').hidden = true; $('queue').hidden = false; $('tools').hidden = false;
+    renderSound(); load();
+    clearInterval(timer); timer = setInterval(load, POLL_MS);
+  }
+  function load() {
+    if (inflight) return; inflight = true;
+    return NGH.admin.fetch('/api/shop/orders?all=1').then(function (j) {
+      inflight = false;
+      orders = Array.isArray(j) ? j : (j && j.orders) || [];
+      var fresh = [];
+      if (known) orders.forEach(function (o) { if (!known[o.id] && /^(new|paid|parked)$/.test(String(o.status))) fresh.push(o); });
+      known = known || {}; orders.forEach(function (o) { known[o.id] = true; });
+      render(fresh);
+      $('dot').className = 'dot'; $('updated').textContent = 'Updated ' + new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+      if (fresh.length) {
+        ping();
+        if (!navigator.userActivation || navigator.userActivation.hasBeenActive) NGH.haptic('turn'); // vibrate is blocked (and logged) before the first tap
+        NGH.toast(fresh.length === 1 ? 'New order ' + fresh[0].id : fresh.length + ' new orders');
+      }
+    }).catch(function (e) {
+      inflight = false;
+      if (e && e.status === 401) { NGH.admin.logout(); showGate('Session expired — sign in again.'); return; }
+      $('dot').className = 'dot bad'; $('updated').textContent = 'Offline — retrying (' + ((e && e.message) || 'error') + ')';
+    });
+  }
+  function render(fresh) {
+    var groups = { gNew: [], gParked: [], gReady: [], gDone: [] }, canceled = 0;
+    orders.forEach(function (o) {
+      var s = String(o.status || '');
+      if (s === 'new' || s === 'paid') groups.gNew.push(o);
+      else if (s === 'parked') groups.gParked.push(o);
+      else if (s === 'ready') groups.gReady.push(o);
+      else if (s === 'picked_up') { if (isToday(pickedAt(o))) groups.gDone.push(o); }
+      else if (s === 'canceled') canceled++;
+    });
+    var byPickup = function (a, b) { return String(a.pickupAt || '').localeCompare(String(b.pickupAt || '')); };
+    Object.keys(groups).forEach(function (g) {
+      var list = groups[g].slice().sort(g === 'gDone' ? function (a, b) { return -byPickup(a, b); } : byPickup);
+      var el = $(g), box = el.querySelector('.items'); box.innerHTML = '';
+      el.querySelector('.cnt').textContent = list.length;
+      if (!list.length) { box.innerHTML = '<div class="none">' + { gNew: 'No new orders.', gParked: 'Nothing parked.', gReady: 'Nothing waiting at the counter.', gDone: 'None picked up yet today.' }[g] + '</div>'; return; }
+      list.forEach(function (o) { box.appendChild(card(o, fresh.indexOf(o) >= 0)); });
+    });
+    $('canceledNote').textContent = canceled ? canceled + ' canceled order' + (canceled === 1 ? '' : 's') + ' hidden' : '';
+  }
+  function card(o, fresh) {
+    var d = document.createElement('div');
+    var active = /^(new|paid|parked|ready)$/.test(String(o.status));
+    var late = active && isLate(o);
+    d.className = 'order' + (fresh ? ' fresh' : '') + (late ? ' late' : '');
+    d.setAttribute('data-id', o.id);
+    var items = (o.items || []).map(function (i) { return '<li><span><b>' + esc(i.qty || 1) + '×</b> ' + esc(i.name || i.id) + '</span><span class="muted">' + esc(money(i.lineTotal != null ? i.lineTotal : (Number(i.price) || 0) * (i.qty || 1))) + '</span></li>'; }).join('');
+    var btns = '';
+    if (o.status === 'ready') btns = '<button class="btn sm" data-s="picked_up">📦 Picked up</button>';
+    else if (active) btns = '<button class="btn sm" data-s="ready">✅ Mark ready</button>';
+    if (active) btns += '<button class="btn sm ghost" data-s="canceled">Cancel</button>';
+    d.innerHTML = '<div class="ohead"><span class="oid">' + esc(o.id) + '</span>' + payPill(o) +
+      (o.pickupAt ? '<span class="when' + (late ? ' late' : '') + '">' + esc((o.status === 'picked_up' ? 'Pickup ' : '') + fmtPickup(o.pickupAt)) + '</span>' : '') + '</div>' +
+      '<div class="ocust"><b>' + esc(o.name || o.email || 'Walk-in') + '</b>' + (o.phone ? ' · <a href="tel:' + esc(tel(o.phone)) + '">' + esc(o.phone) + '</a>' : '') +
+      (o.email ? '<div class="muted">' + esc(o.email) + (o.customer_code ? ' · code ' + esc(o.customer_code) : (o.customerId || o.customer_id ? ' · 🏅 rewards member' : '')) + '</div>' : '') + '</div>' +
+      '<ul class="oitems">' + items + '</ul>' + (o.note ? '<div class="onote">📝 ' + esc(o.note) + '</div>' : '') +
+      '<div class="ofoot"><span class="total">' + esc(money(o.total)) + '</span>' + btns + '</div>';
+    Array.prototype.forEach.call(d.querySelectorAll('button[data-s]'), function (b) { b.onclick = function () { setStatus(o, b.getAttribute('data-s'), b); }; });
+    return d;
+  }
+  function setStatus(o, status, btn) {
+    if (status === 'canceled' && !confirm('Cancel ' + o.id + ' for ' + (o.name || 'this customer') + '?' + (isPaid(o) ? '\n\nThis order was paid online — refund it in Stripe separately.' : ''))) return;
+    audioInit();
+    if (btn) btn.disabled = true;
+    NGH.admin.fetch('/api/shop/orders/' + encodeURIComponent(o.id) + '/status', { method: 'POST', body: { status: status } }).then(function () {
+      NGH.haptic('success'); NGH.toast(o.id + ' → ' + ({ ready: 'ready', picked_up: 'picked up', canceled: 'canceled' }[status] || status));
+      o.status = status; if (status === 'picked_up') o.pickedUpAt = new Date().toISOString();
+      render([]); load();
+    }).catch(function (e) {
+      if (btn) btn.disabled = false;
+      if (e && e.status === 401) { NGH.admin.logout(); showGate('Session expired — sign in again.'); return; }
+      NGH.toast((e && e.message) || 'Update failed'); NGH.haptic('warn');
+    });
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && timer) load(); });
+
+  // ---- boot ----
+  if (NGH.admin.isLoggedIn()) start(); else { showGate(''); setTimeout(function () { $('adminCode').focus(); }, 50); }
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

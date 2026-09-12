@@ -20,6 +20,12 @@
 /* ---- LIVE SERVER MODE: uncomment the next line after deploying ---- */
 window.NGH_API_BASE = "/.netlify/functions";
 
+/* ---- NGH-BUILD 2026-09-11a: Lightspeed "pay on account" buttons ----
+        Set to true after Lightspeed is connected (Guru Hub → Lightspeed) and
+        LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT is set in Netlify. Adds "Put on account"
+        actions to the Guru Console and an on-account button to approval emails. */
+window.NGH_LIGHTSPEED_ONACCOUNT = false;
+
 /* ---- Shown on emails / the success screen ---- */
 window.NGH_ADMIN_EMAIL = "stash@northwoodgamehaven.com";
 

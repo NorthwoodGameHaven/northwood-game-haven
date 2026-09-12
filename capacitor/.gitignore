@@ -1,0 +1,7 @@
+# NGH-BUILD 2026-09-11a
+node_modules/
+www/
+android/
+ios/
+*.keystore
+*.jks

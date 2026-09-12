@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<!-- NGH APP · Specials & coupon wallet — NGH-BUILD 2026-09-11a
+     ?cat=food|retail · reads /api/specials, /api/specials/settings; claims via
+     POST /api/specials/:id/claim; wallet in localStorage (NGH.store('ngh_coupons')). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Specials — Northwood Game Haven</title>
+<meta name="theme-color" content="#132a1d">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .seg{display:flex;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:999px;padding:4px;margin:0 0 14px}
+  .seg button{flex:1;min-height:42px;border:0;border-radius:999px;background:transparent;color:var(--muted);font:800 .95rem var(--font-body);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .seg button.on{background:linear-gradient(180deg,var(--gold-lt),var(--gold));color:var(--ink);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+  .order{margin:0 0 14px;font-size:1.05rem}
+  .special{padding:0;overflow:hidden}
+  .special .img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;background:rgba(0,0,0,.3)}
+  .special .bd{padding:14px 16px 16px}
+  .special .top{display:flex;align-items:flex-start;gap:10px}
+  .special .ttl{font-family:var(--font-head);font-weight:600;font-size:1.12rem;line-height:1.25;flex:1;margin:0}
+  .special .price{font-family:var(--font-head);font-weight:600;color:var(--gold-lt);font-size:1.15rem;white-space:nowrap}
+  .special .badge{display:inline-block;font-size:.66rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--gold);color:var(--ink);padding:3px 8px;border-radius:999px;margin-bottom:8px}
+  .special .blurb{margin:8px 0 4px;color:var(--cream)}
+  .special details{margin:6px 0 0}
+  .special summary{cursor:pointer;color:var(--muted);font-size:.84rem;font-weight:700;list-style:none;display:inline-flex;align-items:center;gap:6px}
+  .special summary::-webkit-details-marker{display:none}
+  .special summary::before{content:"▸";transition:transform .15s;display:inline-block}
+  .special details[open] summary::before{transform:rotate(90deg)}
+  .special details p{font-size:.84rem;color:var(--muted);margin:6px 0 0;white-space:pre-line}
+  .special .valid{font-size:.78rem;color:var(--muted);margin-top:8px}
+  .special .act{margin-top:12px}
+  .special .left{font-size:.78rem;color:var(--muted);text-align:center;margin-top:6px}
+  .empty{text-align:center;padding:14px 0 30px}
+  .empty img{width:190px;max-width:60%;filter:drop-shadow(0 10px 20px rgba(0,0,0,.5))}
+  .empty .display{font-size:1.2rem;margin-top:6px}
+  #loading{text-align:center;padding:30px 0}
+  /* wallet */
+  .wallet li{cursor:pointer}
+  .wallet .st{font-size:.68rem}
+  .wallet .st.active{background:#2e7d32;color:#fff}
+  .wallet .st.redeemed{background:rgba(255,255,255,.14)}
+  .wallet .st.expired{background:var(--maroon);color:#fff}
+  .wallet .x{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:16px;cursor:pointer;flex:none}
+  /* big "show at counter" view */
+  .showview{position:fixed;inset:0;z-index:70;background:var(--forest-dk);overflow:auto;padding:calc(12px + var(--safe-t)) 16px calc(24px + var(--safe-b))}
+  .showview .frame{max-width:520px;margin:0 auto;border:3px solid var(--gold);border-radius:22px;background:linear-gradient(180deg,var(--panel-2),var(--panel));padding:16px;text-align:center;box-shadow:0 0 0 6px rgba(201,151,58,.15),0 20px 50px rgba(0,0,0,.5)}
+  .showview .crest{width:56px;height:56px;border-radius:50%;border:2px solid var(--gold)}
+  .showview .img{width:100%;max-height:46vh;object-fit:cover;border-radius:14px;margin:12px 0}
+  .showview .ttl{font-family:var(--font-head);font-weight:600;font-size:1.45rem;color:var(--gold-lt);margin:6px 0 2px}
+  .showview .price{font-family:var(--font-display);font-size:1.6rem;color:var(--cream)}
+  .showview .date{font-family:var(--font-head);font-size:1.05rem;margin-top:12px;letter-spacing:.04em}
+  .showview .clock{font-variant-numeric:tabular-nums;color:var(--gold-lt)}
+  .showview .banner{margin-top:14px;background:#2e7d32;color:#fff;border-radius:12px;padding:12px;font-weight:800;font-size:1rem}
+  .showview .terms{font-size:.78rem;color:var(--muted);margin-top:12px;white-space:pre-line}
+  .showview .close{margin-top:16px}
+  /* coupon (QR) view */
+  .cpn{text-align:center}
+  .cpn .qr img{width:220px;height:220px}
+  .cpn .code{font-family:var(--font-head);font-size:1.5rem;letter-spacing:.12em;margin:12px 0 2px;user-select:all}
+  .cpn .ttl{font-family:var(--font-head);font-weight:600;font-size:1.15rem;color:var(--gold-lt)}
+  .cpn .st{margin-top:10px;border-radius:12px;padding:10px;font-weight:800}
+  .cpn .st.active{background:#2e7d32;color:#fff}
+  .cpn .st.redeemed{background:rgba(255,255,255,.12)}
+  .cpn .st.expired{background:var(--maroon);color:#fff}
+  .err{color:#ff9f95;font-weight:700;font-size:.9rem;margin-top:8px;min-height:1.2em}
+  .hp{position:absolute;left:-9999px;top:-9999px;height:0;width:0;overflow:hidden}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/app/" aria-label="Back">‹</a>
+    <div class="title" id="pageTitle">Specials</div>
+    <img class="logo" src="/brand/crest.png" alt="">
+  </header>
+
+  <div class="seg" id="seg" role="tablist">
+    <button type="button" data-cat="food" role="tab">🥤 Food &amp; Drink</button>
+    <button type="button" data-cat="retail" role="tab">🏷️ Retail</button>
+  </div>
+
+  <a class="btn big order" id="orderBtn" hidden target="_blank" rel="noopener">🍕 Order food</a>
+
+  <section class="card wallet" id="walletCard" hidden>
+    <h2>🎟️ My coupons</h2>
+    <ul class="list" id="walletList"></ul>
+    <div class="tiny muted" style="margin-top:8px">Tap a coupon to show its QR at the counter.</div>
+  </section>
+
+  <div id="loading"><span class="spinner"></span></div>
+  <div id="list"></div>
+
+  <div class="empty" id="empty" hidden>
+    <img src="/brand/stash-fullbody.png" alt="Stash the Otter">
+    <div class="display" id="emptyTitle">Nothing on special right now</div>
+    <p class="muted small" id="emptyText">Stash is cooking something up. Check back soon — or ask a Guru what's good tonight.</p>
+    <a class="btn ghost sm" href="/events.html">See what's on the calendar</a>
+  </div>
+
+  <div class="footer-links"><a href="/app/">Home</a> · <a href="/faq">FAQ</a></div>
+</div>
+
+<!-- Show-at-counter view -->
+<div class="showview" id="showView" hidden>
+  <div class="frame">
+    <img class="crest" src="/brand/crest.png" alt="">
+    <div id="showBadge"></div>
+    <img class="img" id="showImg" alt="" hidden>
+    <div class="ttl" id="showTitle"></div>
+    <div class="price" id="showPrice"></div>
+    <div class="muted" id="showBlurb"></div>
+    <div class="date"><span id="showDate"></span> · <span class="clock" id="showClock"></span></div>
+    <div class="banner">Show this screen at the counter</div>
+    <div class="terms" id="showTerms"></div>
+    <button type="button" class="btn ghost block close" id="showClose">Done</button>
+  </div>
+</div>
+
+<!-- Claim sheet -->
+<div class="sheet" id="claimSheet" hidden>
+  <div>
+    <h2 id="claimTitle">Claim coupon</h2>
+    <p class="small muted" id="claimSub">We'll issue a one-time QR coupon to this phone. One per person.</p>
+    <form id="claimForm" autocomplete="on">
+      <label class="f" for="claimName">Name (optional)</label>
+      <input class="f" id="claimName" name="name" type="text" maxlength="80" autocomplete="name" placeholder="Stash">
+      <label class="f" for="claimEmail">Email</label>
+      <input class="f" id="claimEmail" name="email" type="email" maxlength="120" autocomplete="email" required inputmode="email" placeholder="you@example.com">
+      <div class="hp" aria-hidden="true"><label>Website<input type="text" name="website" id="claimHp" tabindex="-1" autocomplete="off"></label></div>
+      <div class="err" id="claimErr"></div>
+      <div class="btn-row">
+        <button type="button" class="btn ghost" id="claimCancel">Cancel</button>
+        <button type="submit" class="btn" id="claimGo">Get my coupon</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Coupon (QR) sheet -->
+<div class="sheet" id="couponSheet" hidden>
+  <div class="cpn">
+    <div class="qr"><img id="cpnQr" alt="Coupon QR code" width="220" height="220"></div>
+    <div class="code" id="cpnCode"></div>
+    <div class="ttl" id="cpnTitle"></div>
+    <div class="small muted" id="cpnExp"></div>
+    <div class="st" id="cpnStatus"></div>
+    <div class="tiny muted" style="margin-top:8px">Saved to “My coupons” on this phone.</div>
+    <div class="btn-row" style="margin-top:12px">
+      <a class="btn ghost" id="cpnOpen" target="_blank" rel="noopener">Open page</a>
+      <button type="button" class="btn" id="cpnClose">Done</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = NGH.$, esc = NGH.esc;
+  var wallet = NGH.store('ngh_coupons');
+  var ident = NGH.store('ngh_claim_identity');
+  var VALID_CATS = ['food', 'retail'];
+  var params = new URLSearchParams(location.search);
+  var cat = VALID_CATS.indexOf(params.get('cat')) >= 0 ? params.get('cat') : 'food';
+  var settings = { foodOrderUrl: '' };
+  var specials = [];
+  var showClockT = null, claimTarget = null;
+
+  function abs(u) { return u && u.charAt(0) === '/' ? NGH.SITE + u : (u || ''); }
+  function fmtDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso); if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  function fmtDateLong(d) { return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }); }
+  function fmtTime(d) { return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+
+  // ---- segmented control ----
+  function setCat(c, push) {
+    cat = c;
+    Array.prototype.forEach.call(document.querySelectorAll('#seg button'), function (b) {
+      var on = b.getAttribute('data-cat') === c; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    $('pageTitle').textContent = c === 'food' ? 'Food & Drink Specials' : 'Retail Specials';
+    document.title = (c === 'food' ? 'Food & Drink Specials' : 'Retail Specials') + ' — Northwood Game Haven';
+    if (push !== false) { try { history.replaceState(null, '', location.pathname + '?cat=' + c); } catch (e) {} }
+    renderOrder();
+    load();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#seg button'), function (b) {
+    b.onclick = function () { NGH.haptic('light'); setCat(b.getAttribute('data-cat')); };
+  });
+
+  function renderOrder() {
+    var btn = $('orderBtn');
+    var show = cat === 'food' && !!settings.foodOrderUrl;
+    btn.hidden = !show;
+    if (show) btn.href = settings.foodOrderUrl;
+  }
+
+  // ---- specials list ----
+  function load() {
+    $('loading').hidden = false; $('list').innerHTML = ''; $('empty').hidden = true;
+    NGH.fetchJSON('/api/specials?cat=' + encodeURIComponent(cat)).then(function (list) {
+      specials = Array.isArray(list) ? list : [];
+      render();
+    }).catch(function (e) {
+      specials = [];
+      render();
+      $('emptyTitle').textContent = 'Could not load specials';
+      $('emptyText').textContent = (e && e.message) ? e.message : 'Check your connection and try again.';
+    });
+  }
+  function render() {
+    $('loading').hidden = true;
+    var box = $('list'); box.innerHTML = '';
+    if (!specials.length) {
+      $('emptyTitle').textContent = 'Nothing on special right now';
+      $('emptyText').textContent = cat === 'food'
+        ? 'Stash is cooking something up. Check back soon — or ask a Guru what’s good tonight.'
+        : 'Stash is restocking the shelves. Check back soon — new deals drop on game nights.';
+      $('empty').hidden = false; return;
+    }
+    $('empty').hidden = true;
+    specials.forEach(function (sp) {
+      var card = document.createElement('article');
+      card.className = 'card special'; card.setAttribute('data-id', sp.id);
+      var left = sp.claimLimit ? Math.max(0, sp.claimLimit - (sp.claimed || 0)) : null;
+      var soldOut = sp.redeem === 'claim' && left === 0;
+      var html = '';
+      if (sp.imageUrl) html += '<img class="img" src="' + esc(abs(sp.imageUrl)) + '" alt="" loading="lazy">';
+      html += '<div class="bd">';
+      if (sp.badge) html += '<span class="badge">' + esc(sp.badge) + '</span>';
+      html += '<div class="top"><h3 class="ttl">' + esc(sp.title) + '</h3>' + (sp.price ? '<div class="price">' + esc(sp.price) + '</div>' : '') + '</div>';
+      if (sp.blurb) html += '<p class="blurb">' + esc(sp.blurb) + '</p>';
+      if (sp.terms) html += '<details><summary>Terms</summary><p>' + esc(sp.terms) + '</p></details>';
+      var valid = sp.endsAt ? 'Through ' + fmtDate(sp.endsAt) : '';
+      if (valid) html += '<div class="valid">' + esc(valid) + '</div>';
+      html += '<div class="act">';
+      if (sp.redeem === 'claim') {
+        html += '<button type="button" class="btn block" data-act="claim"' + (soldOut ? ' disabled' : '') + '>' + (soldOut ? 'All claimed' : '🎟️ Claim coupon') + '</button>';
+        if (left != null) html += '<div class="left">' + (soldOut ? 'Everyone got one — sorry!' : left + ' left') + '</div>';
+      } else {
+        html += '<button type="button" class="btn block" data-act="show">📱 Show this at the counter</button>';
+      }
+      html += '</div></div>';
+      card.innerHTML = html;
+      var b = card.querySelector('[data-act]');
+      b.onclick = function () { NGH.haptic('light'); if (sp.redeem === 'claim') openClaim(sp); else openShow(sp); };
+      box.appendChild(card);
+    });
+  }
+
+  // ---- show-at-counter ----
+  function openShow(sp) {
+    $('showBadge').innerHTML = sp.badge ? '<span class="badge" style="display:inline-block;font-size:.7rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:var(--gold);color:var(--ink);padding:3px 9px;border-radius:999px;margin-top:8px">' + esc(sp.badge) + '</span>' : '';
+    var img = $('showImg');
+    if (sp.imageUrl) { img.src = abs(sp.imageUrl); img.hidden = false; } else { img.hidden = true; img.removeAttribute('src'); }
+    $('showTitle').textContent = sp.title;
+    $('showPrice').textContent = sp.price || '';
+    $('showBlurb').textContent = sp.blurb || '';
+    $('showTerms').textContent = sp.terms || '';
+    function tick() { var d = new Date(); $('showDate').textContent = fmtDateLong(d); $('showClock').textContent = fmtTime(d); }
+    tick(); clearInterval(showClockT); showClockT = setInterval(tick, 15000);
+    $('showView').hidden = false; document.body.style.overflow = 'hidden';
+    NGH.wakeLock();
+  }
+  function closeShow() { $('showView').hidden = true; document.body.style.overflow = ''; clearInterval(showClockT); }
+  $('showClose').onclick = closeShow;
+
+  // ---- claim flow ----
+  function openClaim(sp) {
+    claimTarget = sp;
+    $('claimTitle').textContent = 'Claim: ' + sp.title;
+    var id = ident.get({}) || {};
+    $('claimName').value = id.name || ''; $('claimEmail').value = id.email || ''; $('claimHp').value = '';
+    $('claimErr').textContent = ''; $('claimGo').disabled = false; $('claimGo').textContent = 'Get my coupon';
+    $('claimSheet').hidden = false;
+    setTimeout(function () { (id.email ? $('claimGo') : $('claimEmail')).focus(); }, 50);
+  }
+  function closeClaim() { $('claimSheet').hidden = true; claimTarget = null; }
+  $('claimCancel').onclick = closeClaim;
+  $('claimSheet').addEventListener('click', function (e) { if (e.target === $('claimSheet')) closeClaim(); });
+  $('claimForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!claimTarget) return;
+    var sp = claimTarget;
+    var name = $('claimName').value.trim(), email = $('claimEmail').value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('claimErr').textContent = 'Please enter a valid email.'; return; }
+    $('claimErr').textContent = ''; $('claimGo').disabled = true; $('claimGo').textContent = 'Claiming…';
+    NGH.fetchJSON('/api/specials/' + encodeURIComponent(sp.id) + '/claim', {
+      method: 'POST', body: { name: name, email: email, deviceId: NGH.DEVICE_ID, website: $('claimHp').value }
+    }).then(function (c) {
+      if (!c || !c.code) throw new Error('No coupon returned');
+      ident.set({ name: name, email: email });
+      var item = { code: c.code, specialId: c.specialId || sp.id, title: c.title || sp.title, cat: c.cat || sp.cat,
+        qrUrl: c.qrUrl, url: c.url || '', claimedAt: c.claimedAt || new Date().toISOString(), expiresAt: c.expiresAt || null, status: c.status || 'active' };
+      addToWallet(item);
+      closeClaim();
+      NGH.haptic('success');
+      NGH.toast(c.existing ? 'You already claimed this — here’s your coupon' : 'Coupon saved to My coupons');
+      // reflect the claim count locally
+      if (!c.existing) { sp.claimed = (sp.claimed || 0) + 1; render(); }
+      openCoupon(item);
+    }).catch(function (err) {
+      $('claimGo').disabled = false; $('claimGo').textContent = 'Get my coupon';
+      $('claimErr').textContent = (err && err.message) || 'Could not claim — try again.';
+      NGH.haptic('warn');
+      if (err && err.body && err.body.code === 'soldout') { sp.claimed = sp.claimLimit; render(); }
+    });
+  });
+
+  // ---- wallet ----
+  function getWallet() { var w = wallet.get([]); return Array.isArray(w) ? w : []; }
+  function addToWallet(item) {
+    var w = getWallet().filter(function (x) { return x.code !== item.code; });
+    w.unshift(item); wallet.set(w.slice(0, 50)); renderWallet();
+  }
+  function removeFromWallet(code) { wallet.set(getWallet().filter(function (x) { return x.code !== code; })); renderWallet(); }
+  function statusLabel(s) { return s === 'redeemed' ? 'Redeemed' : s === 'expired' ? 'Expired' : s === 'void' ? 'Voided' : 'Active'; }
+  function renderWallet() {
+    var w = getWallet(), ul = $('walletList'); ul.innerHTML = '';
+    $('walletCard').hidden = !w.length;
+    w.forEach(function (it) {
+      var li = document.createElement('li');
+      var st = it.status || 'active';
+      li.innerHTML = '<span class="n">🎟️</span><span class="body"><b>' + esc(it.title) + '</b><span class="small muted">' + esc(it.code) +
+        (it.expiresAt && st === 'active' ? ' · through ' + esc(fmtDate(it.expiresAt)) : '') + '</span></span>' +
+        '<span class="pill st ' + esc(st) + '">' + esc(statusLabel(st)) + '</span>' +
+        (st !== 'active' ? '<button type="button" class="x" aria-label="Remove" title="Remove">✕</button>' : '');
+      li.onclick = function () { openCoupon(it); };
+      var x = li.querySelector('.x');
+      if (x) x.onclick = function (e) { e.stopPropagation(); removeFromWallet(it.code); };
+      ul.appendChild(li);
+    });
+  }
+  function refreshWalletStatus() {
+    var w = getWallet(); if (!w.length) return;
+    var chain = Promise.resolve();
+    w.forEach(function (it) {
+      chain = chain.then(function () {
+        return NGH.fetchJSON('/api/specials/coupon/' + encodeURIComponent(it.code) + '/status').then(function (s) {
+          if (s && s.status) { it.status = s.status; if (s.expiresAt) it.expiresAt = s.expiresAt; if (s.title) it.title = s.title; }
+        }).catch(function (e) { if (e && e.status === 404) it.status = 'void'; });
+      });
+    });
+    chain.then(function () { wallet.set(w); renderWallet(); });
+  }
+  function openCoupon(it) {
+    var qr = $('cpnQr');
+    qr.src = abs(it.qrUrl || ('/api/specials/coupon/' + encodeURIComponent(it.code) + '/qr.png'));
+    $('cpnCode').textContent = it.code;
+    $('cpnTitle').textContent = it.title || '';
+    var st = it.status || 'active';
+    $('cpnExp').textContent = it.expiresAt ? (st === 'active' ? 'Valid through ' + fmtDate(it.expiresAt) : '') : '';
+    var stEl = $('cpnStatus'); stEl.className = 'st ' + st;
+    stEl.textContent = st === 'active' ? 'Show this QR at the counter — one-time use' : st === 'redeemed' ? '✅ Already redeemed' : st === 'expired' ? '⌛ This coupon has expired' : 'This coupon is no longer valid';
+    var open = $('cpnOpen'); open.href = it.url || (NGH.SITE + '/coupon-special/' + encodeURIComponent(it.code));
+    $('couponSheet').hidden = false;
+    NGH.wakeLock();
+  }
+  function closeCoupon() { $('couponSheet').hidden = true; }
+  $('cpnClose').onclick = closeCoupon;
+  $('couponSheet').addEventListener('click', function (e) { if (e.target === $('couponSheet')) closeCoupon(); });
+
+  // ---- boot ----
+  renderWallet();
+  refreshWalletStatus();
+  NGH.fetchJSON('/api/specials/settings').then(function (s) { settings = s || settings; renderOrder(); }).catch(function () {});
+  setCat(cat, false);
+})();
+</script>
+</body>
+</html>

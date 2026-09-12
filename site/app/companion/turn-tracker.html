@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Turn Tracker — Game Companion</title>
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .panel{display:none}.panel.on{display:block}
+  .swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .sw{aspect-ratio:1;border-radius:12px;border:3px solid transparent;cursor:pointer;position:relative;display:grid;place-items:center;font-size:.6rem;font-weight:900;text-transform:uppercase;letter-spacing:.02em;text-align:center;line-height:1;padding:2px}
+  .sw.sel{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+  .sw.taken{opacity:.25;cursor:not-allowed}
+  .sw.taken::after{content:"✕";position:absolute;font-size:22px;color:#fff;text-shadow:0 0 4px #000}
+  .players{list-style:none;padding:0;margin:0}
+  .players li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .players .dotc{width:26px;height:26px;border-radius:8px;flex:none;border:2px solid rgba(255,255,255,.3)}
+  .players .ops button{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--cream);cursor:pointer;margin-left:4px}
+  /* ---- live screen ---- */
+  #live{position:fixed;inset:0;display:none;z-index:50;padding:clamp(18px,7vw,40px);background:#000;user-select:none}
+  #live.on{display:block}
+  #liveInner{position:absolute;inset:clamp(18px,7vw,40px);border-radius:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden;transition:background .25s}
+  #liveInner .who{font:900 clamp(34px,11vw,72px)/1.05 'Nunito';letter-spacing:.02em;text-transform:uppercase;text-shadow:0 3px 0 rgba(0,0,0,.25);padding:0 10px}
+  #liveInner .sub{font:800 clamp(16px,4.5vw,24px) 'Nunito';opacity:.85;margin-top:8px}
+  #liveInner .timer{font:900 clamp(28px,9vw,54px) 'Nunito';margin-top:10px;font-variant-numeric:tabular-nums}
+  #endTurn{margin-top:26px;width:min(78vw,360px);height:min(78vw,360px);border-radius:50%;border:8px solid rgba(255,255,255,.7);background:rgba(0,0,0,.18);color:inherit;font:900 clamp(28px,8vw,44px) 'Nunito';text-transform:uppercase;letter-spacing:.06em;cursor:pointer;box-shadow:0 14px 40px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent}
+  #endTurn:active{transform:scale(.96)}
+  #liveTop{position:absolute;top:8px;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 14px;font:800 .8rem 'Nunito';color:#fff;text-shadow:0 1px 2px #000}
+  #liveTop button{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:999px;padding:6px 12px;font-weight:800;cursor:pointer}
+  #hostBar{position:absolute;bottom:8px;left:0;right:0;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;padding:0 10px}
+  #hostBar button{background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:999px;padding:8px 12px;font-weight:800;cursor:pointer;font-size:.8rem}
+  .order{position:absolute;bottom:60px;left:0;right:0;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;padding:0 14px}
+  .order i{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.6);display:block}
+  .order i.cur{transform:scale(1.5);border-color:#fff}
+  .qr{margin:8px auto;display:block}
+  .qr img{width:220px;height:220px}
+  .codebig{font:600 2rem 'Cinzel',serif;letter-spacing:.3em;text-align:center;color:var(--gold-lt)}
+  .banner{background:var(--gold);color:var(--ink);font-weight:900;text-align:center;padding:10px;border-radius:12px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header"><a class="back" href="/app/companion/" aria-label="Back">‹</a><div class="title">Turn Tracker</div><span class="dot idle" id="dot"></span></header>
+
+  <!-- landing -->
+  <section class="panel on" id="pHome">
+    <div class="hero" style="padding-top:0"><div class="display" style="font-size:1.2rem">Whose turn is it?</div><div class="tag">Everyone's phone lights up in the active player's color. Tap the big button when you're done.</div></div>
+    <div class="card gold"><h2>🏠 Host a table</h2><p class="small muted">You get a code and a QR for the others to scan. Works anywhere — at the Haven or at home.</p><button class="btn big" id="btnHost">Host a new table</button></div>
+    <div class="card"><h2>📱 Join a table</h2><div class="row"><input class="f code" id="codeIn" maxlength="6" placeholder="CODE" autocapitalize="characters" autocomplete="off"><button class="btn" id="btnJoinCode">Join</button></div></div>
+    <div class="card" id="resumeCard" hidden><b>Rejoin your last table</b><div class="small muted" id="resumeSub"></div><button class="btn sm" id="btnResume" style="margin-top:8px">Rejoin</button></div>
+  </section>
+
+  <!-- pick color + name -->
+  <section class="panel" id="pMe">
+    <h2 id="meTitle">Pick your color</h2>
+    <div class="swatches" id="swatches"></div>
+    <label class="f" for="nameIn">Name</label><input class="f" id="nameIn" maxlength="30" placeholder="Your name">
+    <div id="hostOpts" hidden><label class="f">Turn timer (optional)</label><select class="f" id="timerSel"><option value="0">No timer</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option><option value="300">5 minutes</option></select></div>
+    <button class="btn big" id="btnMeGo" style="margin-top:14px">Continue</button>
+  </section>
+
+  <!-- lobby -->
+  <section class="panel" id="pLobby">
+    <div id="lobbyBanner"></div>
+    <div class="card gold center"><div class="small muted">Table code</div><div class="codebig" id="lobbyCode">·····</div><div class="qr"><img id="lobbyQr" alt="Join QR"></div><div class="small muted">Scan to join · or open gamehaven.guru/app and enter the code</div><button class="btn ghost sm" id="btnShare" style="margin-top:8px">Share link</button></div>
+    <div class="card"><h2>Players <span class="small muted" id="pCount"></span></h2><ul class="players" id="playerList"></ul>
+      <div id="hostLobby" hidden><div class="btn-row"><button class="btn ghost sm" id="btnAddLocal">＋ Player without a phone</button></div><div class="small muted">Turn order = list order. Use ↑↓ to arrange seating.</div><button class="btn big" id="btnStart" style="margin-top:12px">Start game ▶</button></div>
+      <div id="guestLobby" class="small muted center">Waiting for the host to start…</div>
+    </div>
+    <div class="card"><div class="btn-row"><button class="btn ghost sm" id="btnChangeMe">Change my color / name</button><button class="btn ghost sm" id="btnLeave">Leave table</button></div></div>
+  </section>
+</div>
+
+<!-- live full-screen -->
+<div id="live"><div id="liveInner">
+  <div id="liveTop"><span id="liveRound"></span><button id="btnLiveMenu">☰</button></div>
+  <div class="who" id="liveWho">—</div><div class="sub" id="liveSub"></div><div class="timer" id="liveTimer"></div>
+  <button id="endTurn" hidden>End turn</button>
+  <div class="order" id="liveOrder"></div>
+  <div id="hostBar" hidden><button data-h="prev">◀ back</button><button data-h="pause">⏸ pause</button><button data-h="next">skip ▶</button><button data-h="reverse">⇄ reverse</button><button data-h="end">■ end</button></div>
+</div></div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function(){
+  var $ = NGH.$, esc = NGH.esc, API = NGH.API + '/companion';
+  var COLORS = [
+    ['Red','#d7263d','#fff'],['Blue','#1f6fd6','#fff'],['Green','#2e9e4f','#fff'],['Yellow','#f4d03f','#26211a'],['White','#f4f1ea','#26211a'],['Black','#1c1c1c','#fff'],
+    ['Purple','#7e3fb6','#fff'],['Orange','#f0842c','#26211a'],['Pink','#f06ba8','#26211a'],['Brown','#7b4a2d','#fff'],['Teal','#1aa19a','#fff'],['Grey','#8a8f94','#fff'],
+    ['Gold','#c9973a','#26211a'],['Silver','#c0c6cc','#26211a'],['Lime','#9ad62c','#26211a'],['Navy','#1f2e5e','#fff'],['Maroon','#7a2431','#fff'],['Tan','#d2b48c','#26211a'],
+    ['Cyan','#22c3e6','#26211a'],['Magenta','#d21fb0','#fff'],['Olive','#7f8c2a','#fff'],['Coral','#ff6f61','#26211a'],['Lavender','#b39ddb','#26211a'],['Mint','#98e8c1','#26211a'],
+    ['Sky','#7fc6f5','#26211a'],['Forest','#1e5b3a','#fff'],['Crimson','#9b111e','#fff'],['Amber','#ffb300','#26211a'],['Indigo','#3f51b5','#fff'],['Turquoise','#30d5c8','#26211a'],
+    ['Peach','#ffcba4','#26211a'],['Bronze','#a56b2a','#fff']
+  ];
+  function colorInfo(hex){ return COLORS.find(function(c){ return c[1] === hex; }) || ['Player', hex, '#fff']; }
+  var qs = new URLSearchParams(location.search);
+  var CODE = (qs.get('t') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  var sess = NGH.store('ngh_turns'); var me = null, state = null, pollH = null, role = 'guest', pendingRole = null, myColor = null, lastTurnSeq = -1, tickT = null;
+
+  function panel(id){ document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('on', p.id === id); }); window.scrollTo(0, 0); }
+  function api(path, body){ return NGH.fetchJSON(API + path, body ? { method: 'POST', body: body } : undefined); }
+  function act(action, extra, asHost){ var body = Object.assign({ token: asHost ? me.hostToken : me.token, action: action }, extra || {}); return api('/tables/' + me.code + '/action', body).then(function(j){ state = j.state; render(); return j; }).catch(function(e){ NGH.toast(e.message); throw e; }); }
+
+  // ---- landing ----
+  var last = sess.get(null);
+  if (last && last.code && (Date.now() - (last.at || 0)) < 12 * 3600e3 && !CODE){ $('resumeCard').hidden = false; $('resumeSub').textContent = 'Table ' + last.code + ' as ' + last.name; $('btnResume').onclick = function(){ me = last; connect(); }; }
+  $('btnHost').onclick = function(){ pendingRole = 'host'; showMe([]); };
+  $('btnJoinCode').onclick = function(){ var c = $('codeIn').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length < 4){ NGH.toast('Enter the 5-letter code'); return; } CODE = c; prejoin(); };
+  $('codeIn').addEventListener('keydown', function(e){ if (e.key === 'Enter') $('btnJoinCode').click(); });
+  if (CODE){ if (last && last.code === CODE && last.token){ me = last; connect(); } else prejoin(); }
+  function prejoin(){ api('/tables/' + CODE + '/state').then(function(st){ state = st; pendingRole = 'guest'; showMe(st.players.map(function(p){ return p.color; })); }).catch(function(e){ NGH.toast(e.status === 404 ? 'No table with that code' : e.message); panel('pHome'); }); }
+
+  // ---- color picker ----
+  function showMe(taken){
+    panel('pMe'); $('hostOpts').hidden = pendingRole !== 'host'; $('meTitle').textContent = pendingRole === 'host' ? 'Your color & name' : 'Join table ' + CODE;
+    $('nameIn').value = (me && me.name) || NGH.store('ngh_display_name').get('') || '';
+    myColor = (me && me.color) || null;
+    $('swatches').innerHTML = COLORS.map(function(c){ var t = taken.indexOf(c[1]) >= 0 && !(me && me.color === c[1]); return '<div class="sw' + (t ? ' taken' : '') + (myColor === c[1] ? ' sel' : '') + '" data-c="' + c[1] + '" style="background:' + c[1] + ';color:' + c[2] + '">' + c[0] + '</div>'; }).join('');
+    document.querySelectorAll('.sw').forEach(function(s){ s.onclick = function(){ if (s.classList.contains('taken')) return; document.querySelectorAll('.sw').forEach(function(x){ x.classList.remove('sel'); }); s.classList.add('sel'); myColor = s.getAttribute('data-c'); NGH.haptic('light'); }; });
+    $('btnMeGo').onclick = function(){
+      var name = $('nameIn').value.trim(); if (!name){ NGH.toast('Name please'); return; } if (!myColor){ NGH.toast('Pick a color'); return; }
+      NGH.store('ngh_display_name').set(name); $('btnMeGo').disabled = true;
+      var done = function(){ $('btnMeGo').disabled = false; };
+      if (pendingRole === 'host'){
+        api('/tables', { kind: 'turns', settings: { timerSec: Number($('timerSel').value) }, host: { name: name, color: myColor, deviceId: NGH.DEVICE_ID } }).then(function(j){ me = { code: j.code, playerId: j.playerId, token: j.token, hostToken: j.hostToken, name: name, color: myColor, at: Date.now() }; sess.set(me); state = j.state; role = 'host'; connect(); }).catch(function(e){ NGH.toast(e.message); }).then(done);
+      } else if (pendingRole === 'edit'){
+        act('setMe', { name: name, color: myColor }).then(function(){ me.name = name; me.color = myColor; sess.set(me); panel('pLobby'); }).catch(function(){}).then(done);
+      } else {
+        api('/tables/' + CODE + '/join', { name: name, color: myColor, deviceId: NGH.DEVICE_ID }).then(function(j){ me = { code: CODE, playerId: j.playerId, token: j.token, name: name, color: myColor, at: Date.now() }; sess.set(me); state = j.state; role = 'guest'; connect(); }).catch(function(e){ NGH.toast(e.message); }).then(done);
+      }
+    };
+  }
+
+  // ---- connect ----
+  function connect(){
+    CODE = me.code; role = me.hostToken ? 'host' : 'guest'; panel('pLobby');
+    var url = NGH.SITE + '/app/companion/turn-tracker.html?t=' + CODE;
+    $('lobbyCode').textContent = CODE; $('lobbyQr').src = NGH.qrUrl(url, 440);
+    $('btnShare').onclick = function(){ NGH.share({ title: 'Turn Tracker', text: 'Join our table — code ' + CODE, url: url }); };
+    $('hostLobby').hidden = role !== 'host'; $('guestLobby').hidden = role === 'host'; $('hostBar').hidden = role !== 'host';
+    NGH.clock.sync(API + '/time', 2);
+    if (pollH) pollH.stop();
+    pollH = NGH.poll(API + '/tables/' + CODE + '/state', { interval: function(){ return (state && state.status === 'live' && (isMyTurn() || isNextMe())) ? 1000 : (state && state.status === 'live' ? 2000 : 3000); }, hidden: 10000,
+      onState: function(st){ $('dot').className = 'dot'; state = st; render(); }, onError: function(e){ $('dot').className = 'dot bad'; if (e.status === 404){ NGH.toast('That table is gone'); sess.del(); location.href = location.pathname; } } });
+    clearInterval(tickT); tickT = setInterval(tick, 250);
+    NGH.wakeLock();
+  }
+  function orderedPlayers(){ return (state.players || []).slice().sort(function(a, b){ return a.order - b.order; }); }
+  function current(){ return state && state.turn ? state.players.find(function(p){ return p.id === state.turn.playerId; }) : null; }
+  function isMyTurn(){ var c = current(); return !!(c && me && c.id === me.playerId); }
+  function isNextMe(){ if (!state || !state.turn) return false; var ps = orderedPlayers(); var i = (state.turn.index + state.direction + ps.length) % ps.length; return ps[i] && ps[i].id === me.playerId; }
+
+  // ---- render ----
+  function render(){
+    var s = state; if (!s) return;
+    var ps = orderedPlayers();
+    $('pCount').textContent = ps.length;
+    $('playerList').innerHTML = ps.map(function(p, i){ var ci = colorInfo(p.color); return '<li><span class="dotc" style="background:' + p.color + '"></span><span style="flex:1"><b>' + esc(p.name) + '</b>' + (p.id === me.playerId ? ' <span class="pill">you</span>' : '') + (p.local ? ' <span class="pill">no phone</span>' : '') + '<div class="small muted">' + esc(ci[0]) + '</div></span>' + (role === 'host' ? '<span class="ops"><button data-mv="' + p.id + '" data-d="-1" title="Up">↑</button><button data-mv="' + p.id + '" data-d="1" title="Down">↓</button><button data-rm="' + p.id + '" title="Remove">✕</button></span>' : '') + '</li>'; }).join('') || '<li class="small muted">Nobody yet — share the code.</li>';
+    document.querySelectorAll('[data-mv]').forEach(function(b){ b.onclick = function(){ var id = b.getAttribute('data-mv'), d = Number(b.getAttribute('data-d')); var ids = ps.map(function(p){ return p.id; }); var i = ids.indexOf(id), j = i + d; if (j < 0 || j >= ids.length) return; ids.splice(i, 1); ids.splice(j, 0, id); act('setOrder', { order: ids }, true); }; });
+    document.querySelectorAll('[data-rm]').forEach(function(b){ b.onclick = function(){ if (confirm('Remove this player?')) act('remove', { playerId: b.getAttribute('data-rm') }, true); }; });
+    $('lobbyBanner').innerHTML = s.status === 'ended' ? '<div class="banner">Game over — thanks for playing!</div>' : s.status === 'paused' ? '<div class="banner">Paused by the host</div>' : '';
+    var live = (s.status === 'live' || s.status === 'paused') && s.turn;
+    $('live').classList.toggle('on', !!live);
+    if (live){
+      var c = current(), mine = isMyTurn(), inner = $('liveInner'), ci = c ? colorInfo(c.color) : ['?', '#333', '#fff'];
+      $('live').style.background = me.color || '#000';
+      inner.style.background = c ? c.color : '#333'; inner.style.color = ci[2];
+      $('liveWho').textContent = mine ? 'Your turn' : (s.settings.showNames && c ? c.name + "'s turn" : ci[0] + "'s turn");
+      $('liveSub').textContent = mine ? (s.settings.showNames ? ci[0] + ' — ' + me.name : ci[0]) : (s.settings.showNames && c ? ci[0] + ' player' : '') ;
+      if (s.status === 'paused'){ $('liveWho').textContent = '⏸ Paused'; $('liveSub').textContent = c ? (c.name + ' is up when play resumes') : ''; }
+      var canEnd = s.status === 'live' && (mine || role === 'host' || (c && c.local));
+      $('endTurn').hidden = !canEnd; $('endTurn').textContent = mine ? 'End turn' : (c && c.local ? 'End ' + c.name + "'s turn" : 'Skip turn'); $('endTurn').style.borderColor = ci[2]; $('endTurn').style.color = ci[2];
+      $('liveRound').textContent = 'Round ' + s.turn.round + ' · ' + ps.length + ' players' + (s.direction < 0 ? ' · ⇄ reversed' : '');
+      $('liveOrder').innerHTML = ps.map(function(p){ return '<i class="' + (c && p.id === c.id ? 'cur' : '') + '" style="background:' + p.color + '"></i>'; }).join('');
+      var pb = $('hostBar').querySelector('[data-h="pause"]'); if (pb) pb.textContent = s.status === 'paused' ? '▶ resume' : '⏸ pause';
+      if (s.turn.seq !== lastTurnSeq){ lastTurnSeq = s.turn.seq; if (mine) NGH.haptic('turn'); else NGH.haptic('light'); }
+    } else { lastTurnSeq = -1; }
+  }
+  function tick(){ if (!state || !state.turn || state.status !== 'live'){ $('liveTimer').textContent = ''; return; } var t = state.settings.timerSec; if (!t){ $('liveTimer').textContent = ''; return; } var el = (NGH.clock.now() - state.turn.startedAt) / 1000, left = Math.max(0, t - el); $('liveTimer').textContent = Math.floor(left / 60) + ':' + String(Math.floor(left % 60)).padStart(2, '0'); if (left <= 0 && isMyTurn() && !$('liveTimer').dataset.buzzed){ $('liveTimer').dataset.buzzed = '1'; NGH.haptic('warn'); } if (left > 0) delete $('liveTimer').dataset.buzzed; }
+
+  // ---- actions ----
+  $('endTurn').onclick = function(){ NGH.haptic('heavy'); act('endTurn', {}, role === 'host' && !isMyTurn()).catch(function(){}); };
+  $('btnStart').onclick = function(){ act('start', {}, true); };
+  $('btnAddLocal').onclick = function(){ var name = prompt('Player name:'); if (!name) return; var taken = state.players.map(function(p){ return p.color; }); var free = COLORS.find(function(c){ return taken.indexOf(c[1]) < 0; }); act('addLocal', { name: name, color: free ? free[1] : '#888888' }, true); };
+  $('btnChangeMe').onclick = function(){ pendingRole = 'edit'; showMe(state.players.map(function(p){ return p.color; })); };
+  $('btnLeave').onclick = function(){ if (!confirm('Leave this table?')) return; act('leave').catch(function(){}).then(function(){ sess.del(); location.href = location.pathname; }); };
+  document.querySelectorAll('#hostBar button').forEach(function(b){ b.onclick = function(){ var h = b.getAttribute('data-h'); if (h === 'pause') h = state.status === 'paused' ? 'resume' : 'pause'; if (h === 'end' && !confirm('End the game for everyone?')) return; act(h, {}, true); }; });
+  $('btnLiveMenu').onclick = function(){ if (role === 'host'){ $('hostBar').hidden = !$('hostBar').hidden; } else { if (confirm('Leave this table?')){ act('leave').catch(function(){}).then(function(){ sess.del(); location.href = location.pathname; }); } } };
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden && pollH) pollH.kick(); });
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

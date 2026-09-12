@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Haven Rewards — Northwood Game Haven</title>
+<meta name="description" content="Your Northwood Game Haven rewards: loyalty balance, customer code for the register, recent purchases and upcoming bookings.">
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .view{animation:fade .18s ease-out}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .err{color:#ffb3ad;font-weight:700;font-size:.9rem;margin-top:8px;min-height:1.2em}
+  .hint{font-size:.86rem;color:var(--muted);margin-top:8px}
+  .link{background:none;border:0;color:var(--gold-lt);font:700 .9rem var(--font-body);cursor:pointer;padding:0;text-decoration:underline}
+  .balance{text-align:center;padding:22px 16px 18px}
+  .balance .lbl{font-size:.76rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:800}
+  .balance .amt{font-family:var(--font-display);font-weight:700;font-size:2.7rem;color:var(--gold-lt);text-shadow:0 2px 0 rgba(0,0,0,.35);line-height:1.1;margin:6px 0 2px}
+  .balance .unit{font-family:var(--font-head);font-size:1rem;color:var(--cream);letter-spacing:.06em}
+  .balance .rule{color:var(--muted);font-size:.9rem;margin-top:8px}
+  .balance .pill{margin-top:12px;background:rgba(232,184,75,.18);color:var(--gold-lt);border:1px solid rgba(232,184,75,.4)}
+  .code-card{text-align:center}
+  .code-big{font-family:var(--font-head);font-weight:600;font-size:2rem;letter-spacing:.16em;color:var(--cream);margin:4px 0 12px;word-break:break-all}
+  .who{font-family:var(--font-head);font-size:1.05rem;margin-bottom:2px}
+  .up li{align-items:flex-start}
+  .up .when{font-family:var(--font-head);font-weight:600;color:var(--gold-lt);font-size:.8rem;width:78px;flex:none;line-height:1.3;padding-top:2px}
+  .up .body b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25}
+  .up .body .small{display:block;white-space:normal}
+  .pill.ok{background:rgba(107,212,138,.18);color:#9ee6b4}
+  .pill.warn{background:rgba(232,184,75,.18);color:var(--gold-lt)}
+  .pill.bad{background:rgba(192,57,43,.25);color:#ffb3ad}
+  .pill.info{background:rgba(20,136,166,.25);color:#9fdcec}
+  .amount{font-weight:800;color:var(--gold-lt);white-space:nowrap}
+  .empty{color:var(--muted);font-size:.9rem;padding:6px 0}
+  .signout{text-align:center;padding:10px 0 4px}
+  .staffcode{border-color:var(--teal)}
+  .staffcode .code-big{font-size:1.6rem;margin:2px 0 4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/app/" aria-label="Back">‹</a>
+    <div class="title">Haven Rewards</div>
+    <img class="logo" src="/brand/crest.png" alt="">
+  </header>
+
+  <!-- Staff view when a customer's QR is scanned (?c=CODE) -->
+  <section class="card staffcode" id="staffCode" hidden>
+    <div class="small muted">Customer code</div>
+    <div class="code-big" id="staffCodeVal"></div>
+    <div class="small muted">Look this customer up in Lightspeed Sell to apply rewards.</div>
+  </section>
+
+  <!-- Loading -->
+  <section class="view center" id="vLoading"><div style="padding:40px 0"><span class="spinner"></span></div></section>
+
+  <!-- Signed-out: email step -->
+  <section class="view" id="vEmail" hidden>
+    <div class="hero" style="padding-top:2px">
+      <div class="display" style="font-size:1.2rem">Points, perks &amp; your code</div>
+      <div class="tag">Sign in with the email on your Haven account. New here? Same door — we'll set you up.</div>
+    </div>
+    <div class="card gold">
+      <label class="f" for="email">Email</label>
+      <input class="f" type="email" id="email" inputmode="email" autocomplete="email" placeholder="you@example.com" autocapitalize="off" spellcheck="false">
+      <div class="err" id="emailErr"></div>
+      <button class="btn big" id="btnSend" style="margin-top:6px">Send code</button>
+      <div class="hint">We'll email you a 6-digit code. No password to remember.</div>
+    </div>
+    <div class="card">
+      <h2>🏅 How rewards work</h2>
+      <p class="small muted" style="margin:0">Every purchase in store or in the app earns Haven Rewards you can spend at the register. Bookings and event tickets earn too. Show your customer code (or its QR) to the Guru at checkout.</p>
+    </div>
+  </section>
+
+  <!-- Signed-out: code step -->
+  <section class="view" id="vCode" hidden>
+    <div class="card gold">
+      <h2>✉️ Check your email</h2>
+      <p class="small muted">We sent a 6-digit code to <b id="codeEmail" class="gold"></b>.</p>
+      <label class="f" for="code">Code</label>
+      <input class="f code" type="text" id="code" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="••••••" aria-label="6-digit code">
+      <div class="err" id="codeErr"></div>
+      <button class="btn big" id="btnVerify" style="margin-top:6px">Sign in</button>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn ghost sm" id="btnResend">Resend code</button>
+        <button class="btn ghost sm" id="btnChangeEmail">Change email</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sign-up (no X-Series customer for this email yet) -->
+  <section class="view" id="vSignup" hidden>
+    <div class="hero" style="padding-top:2px">
+      <div class="display" style="font-size:1.2rem">Welcome to the Haven</div>
+      <div class="tag">No account for <b id="signupEmail"></b> yet — tell us who you are and you're in.</div>
+    </div>
+    <div class="card gold">
+      <div class="row">
+        <div><label class="f" for="suFirst">First name</label><input class="f" id="suFirst" autocomplete="given-name"></div>
+        <div><label class="f" for="suLast">Last name</label><input class="f" id="suLast" autocomplete="family-name"></div>
+      </div>
+      <label class="f" for="suPhone">Mobile phone</label>
+      <input class="f" id="suPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(715) 555-0100">
+      <div class="switch" style="margin-top:10px">
+        <div><b>Email me specials &amp; events</b><div class="small muted">Occasional Haven news. Unsubscribe any time.</div></div>
+        <input type="checkbox" id="suMarketing" checked>
+      </div>
+      <div class="err" id="suErr"></div>
+      <button class="btn big" id="btnSignup" style="margin-top:6px">Create my rewards account</button>
+    </div>
+  </section>
+
+  <!-- Dashboard -->
+  <section class="view" id="vDash" hidden>
+    <div class="card gold balance pop">
+      <div class="lbl">Your balance</div>
+      <div class="amt" id="dBalance">$0.00</div>
+      <div class="unit">Haven Rewards</div>
+      <div class="rule" id="dRule"></div>
+      <span class="pill" id="dGroup" hidden></span>
+      <div class="small muted" id="dOnAccount" hidden style="margin-top:10px"></div>
+    </div>
+
+    <div class="card code-card">
+      <div class="who" id="dName"></div>
+      <div class="small muted">Customer code</div>
+      <div class="code-big" id="dCode"></div>
+      <div class="qr"><img id="dQr" alt="Your customer QR code" width="200" height="200"></div>
+      <div class="small muted" style="margin-top:10px">Show this at the register to earn and spend rewards.</div>
+    </div>
+
+    <section class="card up" id="dUpCard">
+      <h2>📅 Your upcoming</h2>
+      <ul class="list" id="dUp"></ul>
+      <div class="btn-row" style="margin-top:8px">
+        <a class="btn ghost sm" href="/booking.html">Book a room</a>
+        <a class="btn ghost sm" href="/events.html">Events</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>🛍️ Order-ahead orders</h2>
+      <ul class="list" id="dOrders"></ul>
+      <a class="btn ghost sm" href="/app/shop.html" style="margin-top:8px">Order ahead →</a>
+    </section>
+
+    <section class="card">
+      <h2>🧾 Recent purchases</h2>
+      <ul class="list" id="dPurchases"></ul>
+    </section>
+
+    <section class="card">
+      <h2>👤 Your profile</h2>
+      <div class="row">
+        <div><label class="f" for="pFirst">First name</label><input class="f" id="pFirst" autocomplete="given-name"></div>
+        <div><label class="f" for="pLast">Last name</label><input class="f" id="pLast" autocomplete="family-name"></div>
+      </div>
+      <label class="f" for="pPhone">Mobile phone</label>
+      <input class="f" id="pPhone" type="tel" inputmode="tel" autocomplete="tel">
+      <label class="f" for="pEmail">Email</label>
+      <input class="f" id="pEmail" type="email" inputmode="email" autocomplete="email">
+      <div class="switch" style="margin-top:10px">
+        <div><b>Email me specials &amp; events</b></div>
+        <input type="checkbox" id="pMarketing">
+      </div>
+      <div class="err" id="pErr"></div>
+      <button class="btn block" id="btnSave" style="margin-top:6px">Save changes</button>
+    </section>
+
+    <div class="signout"><button class="btn ghost sm" id="btnSignOut">Sign out</button></div>
+  </section>
+
+  <div class="footer-links">
+    <a href="/app/">App home</a> · <a href="/faq">FAQ</a> · <a href="/terms.html">Terms</a>
+  </div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = NGH.$, esc = NGH.esc;
+  var S = NGH.store('ngh_account');   // { session, email }
+  var qs = new URLSearchParams(location.search);
+  var NEXT = qs.get('next') || '';
+  var VIEWS = ['vLoading', 'vEmail', 'vCode', 'vSignup', 'vDash'];
+  var pendingEmail = '', busy = false, cooldownT = null, me = null;
+
+  // ---- helpers ----
+  function show(id) { VIEWS.forEach(function (v) { $(v).hidden = v !== id; }); window.scrollTo(0, 0); }
+  function sess() { var s = S.get(null); return s && s.session ? s : null; }
+  function money(n) { n = Number(n) || 0; return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2); }
+  function setErr(id, msg) { $(id).textContent = msg || ''; }
+  function cap(msg) { msg = String(msg || ''); return msg.charAt(0).toUpperCase() + msg.slice(1); }
+  function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function fmtDate(v, withTime) {
+    if (!v) return '';
+    var d = (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? new Date(v + 'T12:00:00') : new Date(v);
+    if (isNaN(d)) return String(v);
+    var s = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    if (withTime) s += ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return s;
+  }
+  function t12(t) { if (!t) return ''; var p = String(t).split(':'), h = +p[0], m = p[1] || '00'; return (h % 12 || 12) + (m !== '00' ? ':' + m : '') + (h >= 12 ? ' PM' : ' AM'); }
+  function pillFor(status) {
+    var s = String(status || '').toLowerCase();
+    var cls = /paid|confirmed|ready|picked|complete|closed/.test(s) ? 'ok' : /cancel|refund|void/.test(s) ? 'bad' : /pending|hold|unpaid|parked|new|awaiting/.test(s) ? 'warn' : 'info';
+    var label = { picked_up: 'Picked up', parked: 'Pay at pickup', new: 'Received', paid: 'Paid' }[s] || s.replace(/_/g, ' ');
+    return '<span class="pill ' + cls + '">' + esc(label || '—') + '</span>';
+  }
+  // Every account call carries X-NGH-Session; a 401 clears the session and drops back to sign-in.
+  function acct(url, opts) {
+    opts = opts || {};
+    var s = sess();
+    opts.headers = Object.assign({}, opts.headers || {}, s ? { 'X-NGH-Session': s.session } : {});
+    return NGH.fetchJSON(url, opts).catch(function (e) {
+      if (e && e.status === 401) { S.del(); me = null; show('vEmail'); NGH.toast('Session expired — please sign in again'); }
+      throw e;
+    });
+  }
+
+  // ---- signed-out: email → code ----
+  function sendCode(isResend) {
+    var email = ($('email').value || pendingEmail || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setErr('emailErr', 'Enter a valid email address.'); $('email').focus(); return; }
+    if (busy) return; busy = true; setErr('emailErr', ''); setErr('codeErr', '');
+    $('btnSend').disabled = true; $('btnResend').disabled = true;
+    NGH.fetchJSON('/api/account/start', { method: 'POST', body: { email: email } }).then(function () {
+      pendingEmail = email;
+      $('codeEmail').textContent = email;
+      $('code').value = '';
+      show('vCode');
+      setTimeout(function () { $('code').focus(); }, 50);
+      NGH.toast(isResend ? 'New code sent' : 'Code sent — check your email');
+      startCooldown(30);
+    }).catch(function (e) {
+      var msg = (e && e.status === 429) ? 'Too many codes requested — try again in a few minutes.' : cap((e && e.message) || 'Could not send the code.');
+      setErr(isResend ? 'codeErr' : 'emailErr', msg);
+      if (isResend) startCooldown(5);
+    }).then(function () { busy = false; $('btnSend').disabled = false; });
+  }
+  function startCooldown(secs) {
+    clearInterval(cooldownT);
+    var left = secs, b = $('btnResend');
+    function tick() { if (left <= 0) { clearInterval(cooldownT); b.disabled = false; b.textContent = 'Resend code'; return; } b.disabled = true; b.textContent = 'Resend in ' + left + 's'; left--; }
+    tick(); cooldownT = setInterval(tick, 1000);
+  }
+  function verify() {
+    var code = ($('code').value || '').replace(/\D/g, '').slice(0, 6);
+    if (code.length !== 6) { setErr('codeErr', 'Enter the 6-digit code from your email.'); return; }
+    if (busy) return; busy = true; setErr('codeErr', ''); $('btnVerify').disabled = true;
+    NGH.fetchJSON('/api/account/verify', { method: 'POST', body: { email: pendingEmail, code: code } }).then(function (j) {
+      if (!j || !j.session) throw new Error('Sign-in failed');
+      S.set({ session: j.session, email: pendingEmail, at: Date.now() });
+      NGH.haptic('success');
+      if (!j.customer) { $('signupEmail').textContent = pendingEmail; show('vSignup'); setTimeout(function () { $('suFirst').focus(); }, 50); }
+      else afterSignIn();
+    }).catch(function (e) {
+      var m = String((e && e.message) || '');
+      var msg = (e && e.status === 401) || /incorrect/i.test(m) ? 'That code didn\'t match. Check the email and try again.' : (e && e.status === 410) || /expired/i.test(m) ? 'That code expired — send a new one.' : cap(m || 'Sign-in failed.');
+      setErr('codeErr', msg); NGH.haptic('warn'); $('code').select();
+    }).then(function () { busy = false; $('btnVerify').disabled = false; });
+  }
+  function afterSignIn() {
+    if (NEXT && NEXT.charAt(0) === '/' && NEXT.indexOf('//') !== 0) { location.replace(NEXT); return; }
+    loadDash();
+  }
+
+  // ---- sign-up ----
+  function signup() {
+    var first = $('suFirst').value.trim(), last = $('suLast').value.trim(), phone = $('suPhone').value.trim();
+    if (!first || !last) { setErr('suErr', 'First and last name, please.'); return; }
+    if (busy) return; busy = true; setErr('suErr', ''); $('btnSignup').disabled = true;
+    var s = sess();
+    acct('/api/account/signup', { method: 'POST', body: { session: s && s.session, first_name: first, last_name: last, phone: phone, marketing: $('suMarketing').checked } })
+      .then(function (j) {
+        if (j && j.session) S.set({ session: j.session, email: (s && s.email) || pendingEmail, at: Date.now() });
+        NGH.haptic('success'); NGH.toast('Welcome to Haven Rewards!'); afterSignIn();
+      })
+      .catch(function (e) { setErr('suErr', cap((e && e.message) || 'Could not create your account.')); })
+      .then(function () { busy = false; $('btnSignup').disabled = false; });
+  }
+
+  // ---- dashboard ----
+  function loadDash() {
+    show('vLoading');
+    return acct('/api/account/me').then(function (j) {
+      if (!j || !j.customer) { // session valid but no customer (e.g. signed in before finishing sign-up)
+        var s = sess(); $('signupEmail').textContent = (s && s.email) || ''; show('vSignup'); return;
+      }
+      me = j; renderDash(j); show('vDash');
+    }).catch(function (e) {
+      if (e && e.status === 401) return; // acct() already handled
+      show('vEmail'); NGH.toast((e && e.message) || 'Could not load your account');
+    });
+  }
+  function earnRule(loyalty) {
+    var r = loyalty && Number(loyalty.ratio);
+    if (!r || r <= 0) return '';
+    var cents = r * 100;
+    var txt = cents >= 100 ? money(r) : (Math.round(cents * 10) / 10) + '¢';
+    return 'Earn ' + txt + ' for every $1 you spend';
+  }
+  function renderDash(j) {
+    var c = j.customer, s = sess();
+    $('dBalance').textContent = money(c.loyalty_balance);
+    $('dRule').textContent = earnRule(j.loyalty) || (c.enable_loyalty === false ? 'Loyalty isn\'t enabled on this account yet — ask a Guru.' : '');
+    var grp = c.customer_group && (typeof c.customer_group === 'object' ? c.customer_group.name : c.customer_group);
+    $('dGroup').hidden = !grp; $('dGroup').textContent = grp || '';
+    var owed = Number(c.balance) || 0;
+    $('dOnAccount').hidden = !owed;
+    $('dOnAccount').textContent = owed > 0 ? 'On account: ' + money(owed) + ' — pay at the counter or from your emailed pay link.' : 'Account credit: ' + money(-owed);
+    $('dName').textContent = [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || '';
+    var code = c.customer_code || c.id || '';
+    $('dCode').textContent = code;
+    $('dQr').src = NGH.qrUrl('https://gamehaven.guru/app/account.html?c=' + encodeURIComponent(code), 420);
+
+    // profile
+    $('pFirst').value = c.first_name || ''; $('pLast').value = c.last_name || '';
+    $('pPhone').value = c.phone || c.mobile || ''; $('pEmail').value = c.email || (s && s.email) || '';
+    $('pMarketing').checked = !c.do_not_email;
+
+    // upcoming: bookings + registrations, soonest first
+    var up = [], today = ymd(new Date());
+    (j.bookings || []).forEach(function (b) {
+      var rooms = Array.isArray(b.rooms) ? b.rooms.join(' + ') : (b.room || b.roomName || '');
+      var timeStr = b.start && !/T/.test(String(b.start)) ? b.start : '';
+      up.push({ when: b.date || b.start || b.startsAt, time: timeStr, title: b.title || rooms || 'Room booking',
+        sub: [b.birthdayParty ? 'Birthday party' : (b.title && rooms ? rooms : 'Party room'), b.hours ? b.hours + (Number(b.hours) === 1 ? ' hour' : ' hours') : '', b.endLabel ? 'until ' + b.endLabel : ''].filter(Boolean).join(' · '),
+        status: b.status || (b.feePaid || b.depositPaid ? 'paid' : ''), url: b.url || b.manageUrl || '/booking.html' });
+    });
+    (j.registrations || []).forEach(function (r) {
+      up.push({ when: r.date || r.occDate || r.start || r.startsAt, time: r.start && !/T/.test(String(r.start)) ? r.start : '', title: r.title || r.eventTitle || r.event || 'Event registration',
+        sub: (Number(r.qty) > 1 ? r.qty + ' tickets' : 'Ticket'), status: r.status || (r.feePaid ? 'paid' : ''), url: r.ticketUrl || r.url || '' });
+    });
+    var past = up.filter(function (u) { return String(u.when || '').slice(0, 10) < today; }).length;
+    up = up.filter(function (u) { return String(u.when || '').slice(0, 10) >= today; });
+    up.sort(function (a, b) { return String(a.when).localeCompare(String(b.when)); });
+    var ul = $('dUp'); ul.innerHTML = '';
+    if (!up.length) ul.innerHTML = '<li class="empty">' + (past ? 'Nothing coming up — book your next visit!' : 'Nothing booked yet — grab a party room or a seat at an event.') + '</li>';
+    up.forEach(function (u) {
+      var li = document.createElement('li');
+      li.innerHTML = '<span class="when">' + esc(fmtDate(u.when, !u.time && /T/.test(String(u.when)))) + (u.time ? '<br>' + esc(t12(u.time)) : '') + '</span>' +
+        '<span class="body"><b>' + esc(u.title) + '</b><span class="small muted">' + esc(u.sub) + '</span></span>' + pillFor(u.status);
+      if (u.url) { li.style.cursor = 'pointer'; li.onclick = function () { NGH.go(u.url); }; }
+      ul.appendChild(li);
+    });
+
+    // order-ahead orders
+    var ol = $('dOrders'); ol.innerHTML = '';
+    var orders = (j.orders || []).slice().sort(function (a, b) { return String(b.createdAt || b.created_at || '').localeCompare(String(a.createdAt || a.created_at || '')); });
+    if (!orders.length) ol.innerHTML = '<li class="empty">No pickup orders yet.</li>';
+    orders.slice(0, 8).forEach(function (o) {
+      var items = o.items || [], n = items.reduce(function (t, i) { return t + (Number(i.qty) || 1); }, 0);
+      var li = document.createElement('li');
+      li.innerHTML = '<span class="body"><b>' + esc(o.id) + ' · ' + esc(money(o.total)) + '</b><span class="small muted">' + esc(n + (n === 1 ? ' item' : ' items')) + (o.pickupAt ? ' · pickup ' + esc(fmtDate(o.pickupAt, true)) : '') + '</span></span>' + pillFor(o.status);
+      var url = o.url || (o.token ? '/app/shop.html?order=' + encodeURIComponent(o.id) + '&t=' + encodeURIComponent(o.token) : '');
+      if (url) { li.style.cursor = 'pointer'; li.onclick = function () { NGH.go(url); }; }
+      ol.appendChild(li);
+    });
+
+    // recent purchases
+    var pl = $('dPurchases'); pl.innerHTML = '';
+    var purchases = j.purchases || [];
+    if (!purchases.length) pl.innerHTML = '<li class="empty">Your in-store and online purchases will show up here.</li>';
+    purchases.slice(0, 10).forEach(function (p) {
+      var n = p.items != null ? (Array.isArray(p.items) ? p.items.reduce(function (t, i) { return t + (Number(i.qty || i.quantity) || 1); }, 0) : Number(p.items)) : Number(p.itemCount || p.item_count || 0);
+      var li = document.createElement('li');
+      li.innerHTML = '<span class="body"><b>' + esc(fmtDate(p.date || p.sale_date || p.createdAt, true)) + '</b><span class="small muted">' + esc((n ? n + (n === 1 ? ' item' : ' items') : 'Purchase') + (p.note ? ' · ' + p.note : '') + (p.loyalty ? ' · +' + money(p.loyalty) + ' rewards' : '')) + '</span></span>' +
+        '<span class="amount">' + esc(money(p.total)) + '</span>';
+      pl.appendChild(li);
+    });
+  }
+  function saveProfile() {
+    var body = { first_name: $('pFirst').value.trim(), last_name: $('pLast').value.trim(), phone: $('pPhone').value.trim(), email: $('pEmail').value.trim().toLowerCase(), do_not_email: !$('pMarketing').checked };
+    if (!body.first_name || !body.last_name) { setErr('pErr', 'First and last name, please.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { setErr('pErr', 'Enter a valid email address.'); return; }
+    if (busy) return; busy = true; setErr('pErr', ''); $('btnSave').disabled = true;
+    acct('/api/account/me', { method: 'PUT', body: body }).then(function (j) {
+      NGH.haptic('success'); NGH.toast('Profile saved');
+      var s = sess(); if (s) { s.email = body.email; S.set(s); }
+      if (j && j.customer) { me.customer = j.customer; renderDash(me); }
+      else { Object.assign(me.customer, body); renderDash(me); }
+    }).catch(function (e) { setErr('pErr', cap((e && e.message) || 'Could not save.')); })
+      .then(function () { busy = false; $('btnSave').disabled = false; });
+  }
+  function signOut() {
+    acct('/api/account/logout', { method: 'POST', body: {} }).catch(function () {});
+    S.del(); me = null; $('email').value = ''; show('vEmail'); NGH.toast('Signed out');
+  }
+
+  // ---- wire up ----
+  $('btnSend').onclick = function () { sendCode(false); };
+  $('email').addEventListener('keydown', function (e) { if (e.key === 'Enter') sendCode(false); });
+  $('btnResend').onclick = function () { sendCode(true); };
+  $('btnChangeEmail').onclick = function () { clearInterval(cooldownT); $('email').value = pendingEmail; show('vEmail'); $('email').focus(); };
+  $('code').addEventListener('input', function () {
+    var v = this.value.replace(/\D/g, '').slice(0, 6);
+    if (v !== this.value) this.value = v;
+    if (v.length === 6) verify();       // auto-submit on the 6th digit
+  });
+  $('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') verify(); });
+  $('btnVerify').onclick = verify;
+  $('btnSignup').onclick = signup;
+  $('btnSave').onclick = saveProfile;
+  $('btnSignOut').onclick = signOut;
+
+  // ---- boot ----
+  var staff = qs.get('c');
+  if (staff) { $('staffCodeVal').textContent = staff; $('staffCode').hidden = false; }
+  var s0 = sess();
+  if (s0) { pendingEmail = s0.email || ''; loadDash(); }
+  else { show('vEmail'); var pre = qs.get('email'); if (pre) $('email').value = pre; }
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

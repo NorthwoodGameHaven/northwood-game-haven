@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<!-- NGH APP · Trivia entry — NGH-BUILD 2026-09-11a
+     Finds the live game via GET /api/trivia/active and hands off to the existing
+     player (/trivia-play.html?game=ID). Idle: next trivia-tagged events from
+     /api/events. Optional phone-sized TV feed = /trivia-display.html in a scaled iframe. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trivia — Northwood Game Haven</title>
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  #checking{text-align:center;padding:40px 0}
+  .livecard{text-align:center;padding:22px 16px 18px;border-color:var(--gold);
+    background:linear-gradient(160deg,rgba(232,184,75,.22),rgba(232,184,75,.03)),linear-gradient(180deg,var(--panel-2),var(--panel));
+    box-shadow:0 0 0 1px rgba(201,151,58,.35),0 12px 34px rgba(0,0,0,.4)}
+  .livepill{display:inline-flex;align-items:center;gap:8px;background:var(--red);color:#fff;font-weight:900;letter-spacing:.14em;
+    font-size:.78rem;padding:6px 14px;border-radius:999px;text-transform:uppercase}
+  .livepill .dot{width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 0 0 rgba(255,255,255,.7);animation:pulse 1.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.7)}70%{box-shadow:0 0 0 10px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+  .livecard .display{font-size:1.5rem;margin-top:14px;line-height:1.2}
+  .livecard .kind{font-family:var(--font-head);font-weight:600;color:var(--cream);margin-top:6px;font-size:1.02rem}
+  .livecard .phase{color:var(--muted);font-size:.9rem;margin-top:2px}
+  .livecard .btn.big{margin-top:18px;font-size:1.25rem;min-height:66px}
+  .livecard .btn.ghost{margin-top:10px}
+  .tvcard{padding:12px}
+  .tvwrap{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border-radius:12px;background:#000;border:1px solid var(--line)}
+  .tvwrap iframe{position:absolute;top:0;left:0;width:1920px;height:1080px;border:0;transform-origin:0 0;background:#000}
+  .tvhint{font-size:.8rem;color:var(--muted);text-align:center;margin-top:8px}
+  .idle .hero img{border:0;border-radius:0;box-shadow:none;width:170px;height:auto;filter:drop-shadow(0 12px 22px rgba(0,0,0,.5))}
+  .next .when{font-family:var(--font-head);font-weight:600;color:var(--gold-lt);font-size:.82rem;width:78px;flex:none}
+  .next li{cursor:pointer}
+  .how ol{margin:0;padding-left:20px;color:var(--cream)}
+  .how li{margin:4px 0}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/app/" aria-label="Back">‹</a>
+    <div class="title">Trivia &amp; Event Stream</div>
+    <img class="logo" src="/brand/crest.png" alt="">
+  </header>
+
+  <div id="checking"><span class="spinner"></span><div class="small muted" style="margin-top:10px">Looking for tonight's game…</div></div>
+
+  <!-- LIVE -->
+  <section id="live" hidden>
+    <div class="card livecard">
+      <span class="livepill"><span class="dot"></span>Live now</span>
+      <div class="display" id="liveTitle">Trivia is LIVE — join now</div>
+      <div class="kind" id="liveKind"></div>
+      <div class="phase" id="livePhase"></div>
+      <a class="btn big" id="joinBtn" href="#">🧠 Join from your phone</a>
+      <button type="button" class="btn ghost block" id="tvBtn">📺 Watch the TV feed on your phone</button>
+      <div class="tiny muted" style="margin-top:10px">Playing at a table? Scan the QR on the TV to land on the same game.</div>
+    </div>
+    <section class="card tvcard" id="tvCard" hidden>
+      <div class="tvwrap" id="tvWrap"><iframe id="tvFrame" title="Trivia TV feed" allow="autoplay" loading="lazy"></iframe></div>
+      <div class="tvhint" id="tvHint">↻ Turn your phone sideways for a bigger view.</div>
+      <div class="btn-row"><button type="button" class="btn ghost sm" id="tvFull" hidden>⛶ Full screen</button><button type="button" class="btn ghost sm" id="tvClose">Hide TV feed</button></div>
+    </section>
+  </section>
+
+  <!-- IDLE -->
+  <section id="idle" class="idle" hidden>
+    <div class="hero">
+      <img src="/brand/stash-fullbody.png" alt="Stash the Otter">
+      <div class="display">No trivia running right now</div>
+      <div class="tag">This page finds the live game automatically — leave it open and it'll light up when a Guru starts one.</div>
+    </div>
+    <section class="card next" id="nextCard" hidden>
+      <h2>🗓️ Next trivia nights</h2>
+      <ul class="list" id="nextList"></ul>
+      <a class="btn ghost sm" href="/events.html" style="margin-top:8px">See all events →</a>
+    </section>
+    <section class="card" id="noNext" hidden>
+      <h2>🗓️ Nothing scheduled yet</h2>
+      <p class="small muted">Trivia and Event Stream nights are posted to the calendar as soon as they're booked.</p>
+      <a class="btn ghost sm" href="/events.html">See all events →</a>
+    </section>
+    <section class="card how">
+      <h2>🧠 How it works</h2>
+      <ol>
+        <li>Grab a table — questions and clues play on the TVs.</li>
+        <li>Open this page (or scan the TV's QR) and enter your team name.</li>
+        <li>Answer on your phone before the clock runs out. Standings update live.</li>
+      </ol>
+    </section>
+  </section>
+
+  <div class="footer-links"><a href="/app/">Home</a> · <a href="/events.html">Calendar</a></div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = NGH.$, esc = NGH.esc;
+  var POLL_MS = 20000;
+  var game = null, eventsLoaded = false, tvOpen = false;
+
+  var KIND = { trivia: 'Team Trivia', timer: 'Tournament round timer', reflex: 'Reflex Rally', stream: 'Event Stream' };
+  var PHASE = {
+    lobby: 'Lobby is open — pick a team name and get in', preload: 'Next question is loading', live: 'Question in play — jump in',
+    locked: 'Answers locked — reveal coming up', reveal: 'Answer on the board', scoreboard: 'Standings are up', intermission: 'Short break — join before the next round',
+    minigame: 'Minigame in progress', wager: 'Wagers are open', finale: 'Final question!'
+  };
+  function kindLabel(k) { k = String(k || 'trivia'); return KIND[k] || (k.charAt(0).toUpperCase() + k.slice(1)); }
+  function phaseLabel(p) { p = String(p || 'lobby'); return PHASE[p] || ('Now: ' + p.replace(/[_-]+/g, ' ')); }
+
+  function joinUrl(id) { return NGH.SITE + '/trivia-play.html?game=' + encodeURIComponent(id); }
+  function tvUrl(id) { return NGH.SITE + '/trivia-display.html?game=' + encodeURIComponent(id) + '&display=' + encodeURIComponent('PHONE-' + NGH.DEVICE_ID); }
+
+  // ---- live / idle switching ----
+  function showLive(g) {
+    var changed = !game || game.id !== g.id;
+    game = g;
+    $('checking').hidden = true; $('idle').hidden = true; $('live').hidden = false;
+    $('liveTitle').textContent = (g.kind === 'timer' ? 'A round timer is running' : 'Trivia is LIVE — join now');
+    $('liveKind').textContent = kindLabel(g.kind);
+    $('livePhase').textContent = phaseLabel(g.phase);
+    $('joinBtn').href = joinUrl(g.id);
+    if (changed && tvOpen) openTv();
+  }
+  function showIdle() {
+    if (game) { game = null; closeTv(); }
+    $('checking').hidden = true; $('live').hidden = true; $('idle').hidden = false;
+    if (!eventsLoaded) loadNext();
+  }
+  function check() {
+    return NGH.fetchJSON('/api/trivia/active').then(function (j) {
+      if (j && j.id && j.phase !== 'ended') showLive(j); else showIdle();
+    }).catch(function (e) {
+      if (e && e.status === 404) { showIdle(); return; }
+      // network hiccup: keep whatever we were showing; first load falls back to idle
+      if (!$('checking').hidden) showIdle();
+    });
+  }
+  $('joinBtn').addEventListener('click', function () { NGH.haptic('success'); });
+
+  // ---- TV feed in a scaled frame ----
+  function fitTv() {
+    var w = $('tvWrap').clientWidth || 0; if (!w) return;
+    $('tvFrame').style.transform = 'scale(' + (w / 1920) + ')';
+  }
+  function openTv() {
+    if (!game) return;
+    tvOpen = true;
+    $('tvCard').hidden = false;
+    var f = $('tvFrame'), u = tvUrl(game.id);
+    if (f.getAttribute('src') !== u) f.setAttribute('src', u);
+    fitTv(); setTimeout(fitTv, 60);
+    $('tvBtn').textContent = '📺 TV feed is below';
+    NGH.wakeLock();
+    $('tvCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function closeTv() {
+    tvOpen = false; $('tvCard').hidden = true;
+    var f = $('tvFrame'); if (f.getAttribute('src')) f.removeAttribute('src');
+    $('tvBtn').textContent = '📺 Watch the TV feed on your phone';
+  }
+  $('tvBtn').onclick = function () { NGH.haptic('light'); if (tvOpen) $('tvCard').scrollIntoView({ behavior: 'smooth' }); else openTv(); };
+  $('tvClose').onclick = closeTv;
+  window.addEventListener('resize', function () { if (tvOpen) fitTv(); });
+  if (screen && screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', function () { if (tvOpen) setTimeout(fitTv, 100); });
+  if ($('tvWrap').requestFullscreen) {
+    $('tvFull').hidden = false;
+    $('tvFull').onclick = function () { $('tvWrap').requestFullscreen().catch(function () {}); };
+    document.addEventListener('fullscreenchange', function () {
+      var full = document.fullscreenElement === $('tvWrap');
+      var f = $('tvFrame');
+      if (full) { var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080); f.style.transform = 'scale(' + s + ')'; f.style.left = ((window.innerWidth - 1920 * s) / 2) + 'px'; f.style.top = ((window.innerHeight - 1080 * s) / 2) + 'px'; }
+      else { f.style.left = '0'; f.style.top = '0'; fitTv(); }
+    });
+  }
+
+  // ---- idle: next trivia-tagged events (same recurrence expansion as the app home) ----
+  var TRIVIA_RE = /trivia|reflex|event stream/i;
+  function ymd(dt) { return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0'); }
+  function addDays(s, n) { var d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return ymd(d); }
+  function expand(e) {
+    if (!e.recurrence) return [e];
+    var out = [], cur = e.date, f = e.recurrence.freq, c = Math.min(60, e.recurrence.count || 1), exc = e.exceptions || [];
+    for (var i = 0; i < c; i++) {
+      if (exc.indexOf(cur) < 0) { var x = Object.assign({}, e); x.date = cur; out.push(x); }
+      if (f === 'weekly') cur = addDays(cur, 7); else if (f === 'biweekly') cur = addDays(cur, 14); else { var d = new Date(e.date + 'T12:00:00'); d.setMonth(d.getMonth() + i + 1); cur = ymd(d); }
+    }
+    return out;
+  }
+  function t12(t) { if (!t) return ''; var p = t.split(':'), h = +p[0], m = p[1] || '00'; return (h % 12 || 12) + (m !== '00' ? ':' + m : '') + (h >= 12 ? 'pm' : 'am'); }
+  function isTrivia(e) {
+    if (TRIVIA_RE.test(e.title || '')) return true;
+    var tags = Array.isArray(e.tags) ? e.tags : (typeof e.tags === 'string' ? e.tags.split(/[,\s]+/) : []);
+    return tags.some(function (t) { return TRIVIA_RE.test(String(t)); });
+  }
+  function loadNext() {
+    eventsLoaded = true;
+    NGH.fetchJSON('/api/events').then(function (list) {
+      var today = ymd(new Date()), occ = [];
+      (list || []).forEach(function (e) {
+        if (!e || e.status === 'draft' || e.private || !e.date || !isTrivia(e)) return;
+        expand(e).forEach(function (x) { if (x.date >= today) occ.push(x); });
+      });
+      occ.sort(function (a, b) { return (a.date + (a.start || '')).localeCompare(b.date + (b.start || '')); });
+      occ = occ.slice(0, 3);
+      $('nextCard').hidden = !occ.length; $('noNext').hidden = !!occ.length;
+      var ul = $('nextList'); ul.innerHTML = '';
+      occ.forEach(function (e) {
+        var d = new Date(e.date + 'T12:00:00');
+        var lab = e.date === today ? 'Tonight' : e.date === addDays(today, 1) ? 'Tomorrow' : d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        var li = document.createElement('li');
+        li.innerHTML = '<span class="when">' + esc(lab) + '</span><span class="body"><b>' + esc(e.title) + '</b><span class="small muted">' +
+          (e.allDay ? 'All day' : esc(t12(e.start)) + (e.end ? ' – ' + esc(t12(e.end)) : '')) + '</span></span>';
+        li.onclick = function () { NGH.go('/events.html?event=' + encodeURIComponent(e.id) + '&date=' + e.date); };
+        ul.appendChild(li);
+      });
+    }).catch(function () { $('nextCard').hidden = true; $('noNext').hidden = false; });
+  }
+
+  // ---- boot + 20 s poll (also re-checks when the app comes back to the foreground) ----
+  check();
+  setInterval(function () { if (!document.hidden) check(); }, POLL_MS);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+})();
+</script>
+</body>
+</html>

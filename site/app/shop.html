@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Order Ahead — Northwood Game Haven</title>
+<meta name="description" content="Browse the Northwood Game Haven shop, order ahead and pick up in store. Pay online or at the register.">
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .searchwrap{position:relative;margin-bottom:10px}
+  .searchwrap input{padding-left:40px}
+  .searchwrap .mag{position:absolute;left:14px;top:50%;transform:translateY(-50%);opacity:.6;pointer-events:none}
+  .filters .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding:2px 24px 2px 0;margin:0 -16px;padding-left:16px;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 40px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 40px),transparent)}
+  .filters .chips::-webkit-scrollbar{display:none}
+  .filters .chip{white-space:nowrap;flex:none}
+  .subbar{display:flex;align-items:center;gap:10px;margin:8px 0 12px}
+  .subbar .count{flex:1;font-size:.8rem;color:var(--muted)}
+  .stockflag{display:flex;align-items:center;gap:8px;flex:none;font-size:.78rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+  .stockflag input{width:40px;height:22px;appearance:none;background:rgba(255,255,255,.14);border-radius:999px;position:relative;cursor:pointer;flex:none;margin:0}
+  .stockflag input:checked{background:var(--gold)}
+  .stockflag input::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+  .stockflag input:checked::after{left:21px}
+  .pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media (min-width:600px){.pgrid{grid-template-columns:repeat(3,1fr)}}
+  .prod{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;box-shadow:0 6px 18px rgba(0,0,0,.25);transition:transform .12s,border-color .12s;-webkit-tap-highlight-color:transparent}
+  .prod:active{transform:scale(.97)}
+  .prod .img{aspect-ratio:1;background:rgba(0,0,0,.28);display:grid;place-items:center;overflow:hidden}
+  .prod .img img{width:100%;height:100%;object-fit:cover;display:block}
+  .prod .img img.ph{width:56%;height:56%;object-fit:contain;opacity:.32;filter:grayscale(.3)}
+  .prod .info{padding:10px 12px 12px;display:flex;flex-direction:column;gap:3px;flex:1}
+  .prod .name{font-weight:800;font-size:.92rem;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .prod .type{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:800}
+  .prod .pr{display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-top:auto;padding-top:4px}
+  .prod .price{color:var(--gold-lt);font-weight:800;font-size:1.02rem}
+  .prod .stock{font-size:.72rem;font-weight:800;color:#ffb3ad;white-space:nowrap}
+  .prod.out .img img{opacity:.35}
+  .prod .incart{position:absolute;top:8px;left:8px;background:var(--gold);color:var(--ink);font-size:.7rem;font-weight:900;padding:3px 8px;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+  .empty{text-align:center;color:var(--muted);padding:36px 12px}
+  .cartbar{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:10px 16px calc(10px + var(--safe-b));background:rgba(19,42,29,.97);border-top:1px solid var(--line);backdrop-filter:blur(8px);animation:up .2s ease-out}
+  @keyframes up{from{transform:translateY(100%)}to{transform:none}}
+  .cartbar>div{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:12px}
+  .cartbar .sum{flex:1;min-width:0}
+  .cartbar .sum b{display:block;font-family:var(--font-head);font-size:1.05rem;color:var(--gold-lt)}
+  .cartbar .sum span{font-size:.8rem;color:var(--muted)}
+  body.has-cart .app{padding-bottom:calc(96px + var(--safe-b))}
+  .sheet h2{margin-bottom:10px}
+  .sheet .close{position:absolute;right:14px;top:12px}
+  .sheet>div{position:relative}
+  .dimg{width:100%;aspect-ratio:1.4;object-fit:cover;border-radius:14px;background:rgba(0,0,0,.28);display:block;margin-bottom:12px}
+  .dimg.ph{object-fit:contain;padding:14%;opacity:.35}
+  .dprice{font-family:var(--font-head);font-size:1.5rem;color:var(--gold-lt);font-weight:600}
+  .ddesc{color:var(--muted);font-size:.92rem;white-space:pre-line;max-height:32vh;overflow:auto}
+  .stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;background:rgba(0,0,0,.25);flex:none}
+  .stepper button{width:42px;height:42px;background:none;border:0;color:var(--cream);font-size:22px;cursor:pointer;line-height:1;-webkit-tap-highlight-color:transparent}
+  .stepper button:disabled{opacity:.3}
+  .stepper span{min-width:30px;text-align:center;font-weight:800;font-size:1.05rem}
+  .stepper.sm button{width:34px;height:34px;font-size:18px} .stepper.sm span{min-width:24px;font-size:.95rem}
+  .addrow{display:flex;align-items:center;gap:12px;margin-top:14px}
+  .addrow .btn{flex:1}
+  .cl{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .cl img{width:52px;height:52px;border-radius:10px;object-fit:cover;background:rgba(0,0,0,.28);flex:none}
+  .cl img.ph{object-fit:contain;padding:10px;opacity:.35}
+  .cl .body{flex:1;min-width:0}
+  .cl .body b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:.92rem;line-height:1.25;overflow:hidden}
+  .cl .body span{font-size:.8rem;color:var(--muted)}
+  .cl .rm{background:none;border:0;color:var(--muted);font-size:20px;cursor:pointer;padding:6px}
+  .totals .kv b{color:var(--gold-lt)}
+  .contactsum{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-sm);background:rgba(0,0,0,.2)}
+  .contactsum .body{flex:1;min-width:0;font-size:.9rem}
+  .contactsum .body b{display:block}
+  .link{background:none;border:0;color:var(--gold-lt);font:700 .88rem var(--font-body);cursor:pointer;padding:0;text-decoration:underline}
+  .err{color:#ffb3ad;font-weight:700;font-size:.9rem;margin-top:8px;min-height:1.2em}
+  .paybtns{display:grid;gap:10px;margin-top:12px}
+  .done{text-align:center;padding:26px 0 8px}
+  #vDone p,#vReceipt .rline,#vReceipt .kv span{color:var(--cream)}   /* .card.gold also tints text gold; keep body copy cream */
+  .done .big-ic{font-size:64px;line-height:1;animation:pop .4s ease-out}
+  .done .oid{font-family:var(--font-head);font-size:1.6rem;letter-spacing:.08em;color:var(--gold-lt);margin:8px 0 2px}
+  .pill.ok{background:rgba(107,212,138,.18);color:#9ee6b4}
+  .pill.warn{background:rgba(232,184,75,.18);color:var(--gold-lt)}
+  .pill.bad{background:rgba(192,57,43,.25);color:#ffb3ad}
+  .pill.info{background:rgba(20,136,166,.25);color:#9fdcec}
+  .rline{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,.08);font-size:.94rem}
+  .rline:last-child{border-bottom:0}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/app/" aria-label="Back">‹</a>
+    <div class="title">Order Ahead</div>
+    <img class="logo" src="/brand/crest.png" alt="">
+  </header>
+
+  <!-- Catalog -->
+  <div id="vShop">
+    <div class="searchwrap"><span class="mag">🔍</span><input class="f" id="q" type="search" placeholder="Search games, cards, snacks…" autocomplete="off" aria-label="Search the shop"></div>
+    <div class="filters">
+      <div class="chips" id="typeChips"></div>
+      <div class="subbar">
+        <span class="count" id="count"></span>
+        <label class="stockflag"><span>In stock only</span><input type="checkbox" id="inStock" checked></label>
+      </div>
+    </div>
+    <div class="center" id="loading" style="padding:40px 0"><span class="spinner"></span></div>
+    <div class="pgrid" id="grid"></div>
+    <div class="empty" id="empty" hidden>Nothing matches — try another search or turn off "In stock".</div>
+    <div class="tiny muted center" id="synced" style="margin-top:14px"></div>
+    <div class="small muted center" style="margin-top:10px">Prices include tax. Pick up at 115 W Spring St during open hours.</div>
+  </div>
+
+  <!-- Pay-at-pickup success -->
+  <div id="vDone" hidden>
+    <div class="card gold done">
+      <div class="big-ic">🎉</div>
+      <h2 style="justify-content:center">Order received!</h2>
+      <div class="oid" id="doneId"></div>
+      <div class="small muted" id="donePickup"></div>
+      <div class="sep"></div>
+      <p id="doneCopy">We'll have it ready at the counter — just give the Guru your name or order number and pay when you pick up.</p>
+      <div class="btn-row"><a class="btn" href="/app/shop.html">Order more</a><a class="btn ghost" href="/app/account.html">Haven Rewards</a></div>
+    </div>
+  </div>
+
+  <!-- Receipt (return from Stripe or an order link) -->
+  <div id="vReceipt" hidden>
+    <div class="card gold">
+      <div class="done" style="padding-top:8px">
+        <div class="big-ic" id="rIcon">🧾</div>
+        <h2 style="justify-content:center" id="rTitle">Your order</h2>
+        <div class="oid" id="rId"></div>
+        <div id="rStatus"></div>
+        <div class="small muted" id="rPickup" style="margin-top:8px"></div>
+      </div>
+      <div class="sep"></div>
+      <div id="rLines"></div>
+      <div class="sep"></div>
+      <div class="kv"><span>Total</span><b class="gold" id="rTotal"></b></div>
+      <p class="small muted" id="rCopy" style="margin-top:12px"></p>
+      <div class="btn-row"><a class="btn" href="/app/shop.html">Order more</a><a class="btn ghost" href="/app/account.html">Haven Rewards</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- Sticky cart bar -->
+<div class="cartbar" id="cartbar" hidden>
+  <div>
+    <div class="sum"><b id="cbTotal">$0.00</b><span id="cbCount">0 items</span></div>
+    <button class="btn" id="btnCart">🛍️ View cart</button>
+  </div>
+</div>
+
+<!-- Product detail sheet -->
+<div class="sheet" id="detail" hidden>
+  <div>
+    <button class="icon-btn close" id="dClose" aria-label="Close">✕</button>
+    <img class="dimg" id="dImg" alt="">
+    <div class="tiny muted" id="dType" style="text-transform:uppercase;letter-spacing:.05em;font-weight:800"></div>
+    <h2 id="dName" style="margin-top:2px"></h2>
+    <div class="row" style="justify-content:space-between;margin-bottom:8px"><div class="dprice" id="dPrice"></div><div class="small" id="dStock" style="text-align:right"></div></div>
+    <div class="ddesc" id="dDesc"></div>
+    <div class="addrow">
+      <div class="stepper"><button id="dMinus" aria-label="Fewer">−</button><span id="dQty">1</span><button id="dPlus" aria-label="More">+</button></div>
+      <button class="btn" id="dAdd">Add to cart</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cart / checkout sheet -->
+<div class="sheet" id="cart" hidden>
+  <div>
+    <button class="icon-btn close" id="cClose" aria-label="Close">✕</button>
+    <h2>🛍️ Your order</h2>
+    <div id="cLines"></div>
+    <div class="totals" style="margin-top:8px">
+      <div class="kv"><span>Total <span class="tiny muted">(tax included)</span></span><b id="cTotal">$0.00</b></div>
+    </div>
+
+    <div class="sep"></div>
+    <h3>Pickup time</h3>
+    <div class="chips" id="dayChips"></div>
+    <select class="f" id="slot" style="margin-top:10px" aria-label="Pickup time"></select>
+    <div class="tiny muted" id="slotHint" style="margin-top:6px"></div>
+
+    <div class="sep"></div>
+    <h3>Your details</h3>
+    <div class="contactsum" id="contactSum" hidden>
+      <span style="font-size:22px">🏅</span>
+      <div class="body"><b id="csName"></b><span class="small muted" id="csEmail"></span></div>
+      <button class="link" id="csChange">Change</button>
+    </div>
+    <div id="contactForm">
+      <label class="f" for="cName">Name</label><input class="f" id="cName" autocomplete="name" placeholder="Who's picking up?">
+      <label class="f" for="cEmail">Email</label><input class="f" id="cEmail" type="email" inputmode="email" autocomplete="email" placeholder="For your receipt">
+      <label class="f" for="cPhone">Mobile</label><input class="f" id="cPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="We'll text when it's ready">
+      <div class="tiny muted" id="signinNudge" style="margin-top:8px">Have Haven Rewards? <a href="/app/account.html?next=%2Fapp%2Fshop.html">Sign in</a> to earn on this order.</div>
+    </div>
+    <label class="f" for="cNote">Note for the Gurus (optional)</label>
+    <textarea class="f" id="cNote" rows="2" placeholder="Gift wrap? Holding a table? Let us know."></textarea>
+    <div class="err" id="cErr"></div>
+    <div class="paybtns">
+      <button class="btn big" id="btnPayNow">💳 Pay now</button>
+      <button class="btn big ghost" id="btnPayPickup">🏪 Pay at pickup</button>
+    </div>
+    <div class="tiny muted center" style="margin-top:10px">Pay now takes you to secure checkout (Stripe). Pay at pickup holds the order at the register — cash, card or rewards.</div>
+  </div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = NGH.$, esc = NGH.esc;
+  var CART = NGH.store('ngh_cart');          // { items:[{id,qty}], note }
+  var ACC = NGH.store('ngh_account');        // { session, email } — written by account.html
+  var GUEST = NGH.store('ngh_shop_contact'); // remembered guest contact
+  var PLACEHOLDER = '/brand/crest.png';
+  var HOURS = { 0: [12, 20], 1: [17, 21], 2: [17, 21], 3: [17, 21], 4: [17, 21], 5: [16, 22], 6: [10, 22] };
+  var LEAD_MIN = 20;                          // minimum minutes from now to a pickup slot
+  var products = [], byId = {}, filt = { q: '', type: '', inStock: true };
+  var cart = normalizeCart(CART.get(null));
+  var detail = null, detailQty = 1;
+  var account = null;                         // { session, name, email, phone } when signed in
+  var pickDay = 0, busy = false;
+
+  // ---- helpers ----
+  function money(n) { return '$' + (Number(n) || 0).toFixed(2); }
+  function cap(msg) { msg = String(msg || ''); return msg.charAt(0).toUpperCase() + msg.slice(1); }
+  function normalizeCart(c) {
+    var out = { items: [], note: '' };
+    if (c && Array.isArray(c.items)) c.items.forEach(function (i) { if (i && i.id && Number(i.qty) > 0) out.items.push({ id: String(i.id), qty: Math.min(99, Math.floor(Number(i.qty))) }); });
+    if (c && typeof c.note === 'string') out.note = c.note;
+    return out;
+  }
+  function saveCart() { CART.set(cart); renderCartBar(); renderGrid(); }
+  function cartQty(id) { var l = cart.items.filter(function (i) { return i.id === id; })[0]; return l ? l.qty : 0; }
+  function cartCount() { return cart.items.reduce(function (t, i) { return t + i.qty; }, 0); }
+  function cartTotal() { return cart.items.reduce(function (t, i) { var p = byId[i.id]; return t + (p ? Number(p.price) * i.qty : 0); }, 0); }
+  function setQty(id, qty) {
+    var p = byId[id];
+    if (p && p.stock != null && qty > Number(p.stock)) { qty = Number(p.stock); NGH.toast('Only ' + qty + ' in stock'); }
+    var line = cart.items.filter(function (i) { return i.id === id; })[0];
+    if (qty <= 0) cart.items = cart.items.filter(function (i) { return i.id !== id; });
+    else if (line) line.qty = qty;                       // update in place so the line doesn't jump
+    else cart.items.push({ id: id, qty: qty });
+    saveCart();
+  }
+  function stockHint(p) {
+    if (p.stock == null) return '';
+    var s = Number(p.stock);
+    if (s <= 0) return 'Sold out';
+    if (s <= 5) return s + ' left';
+    return '';
+  }
+  function inStock(p) { return p.stock == null || Number(p.stock) > 0; }
+  function fmtWhen(v) { var d = new Date(v); if (isNaN(d)) return String(v || ''); return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+  function pillFor(status) {
+    var s = String(status || '').toLowerCase();
+    var cls = /paid|ready|picked|complete/.test(s) ? 'ok' : /cancel|refund/.test(s) ? 'bad' : /parked|new|pending/.test(s) ? 'warn' : 'info';
+    var label = { picked_up: 'Picked up', parked: 'Pay at pickup', new: 'Received', paid: 'Paid', ready: 'Ready for pickup', canceled: 'Canceled' }[s] || s.replace(/_/g, ' ');
+    return '<span class="pill ' + cls + '">' + esc(label || '—') + '</span>';
+  }
+  function imgTag(p, cls) {
+    var src = p.thumb || p.image;
+    return '<img src="' + esc(src || PLACEHOLDER) + '" alt="" loading="lazy" class="' + (src ? '' : 'ph ') + (cls || '') + '" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER + '\';this.classList.add(\'ph\')">';
+  }
+
+  // ---- catalog ----
+  function loadCatalog() {
+    return NGH.fetchJSON('/api/shop/catalog').then(function (j) {
+      products = (j && j.products) || [];
+      byId = {}; products.forEach(function (p) { p.id = String(p.id); byId[p.id] = p; });
+      var types = (j && j.types && j.types.length) ? j.types.slice() : [];
+      if (!types.length) products.forEach(function (p) { if (p.type && types.indexOf(p.type) < 0) types.push(p.type); });
+      types = types.map(function (t) { return typeof t === 'object' ? (t.name || t.id) : t; }).filter(Boolean);
+      renderChips(types);
+      // drop cart lines for products that no longer exist
+      cart.items = cart.items.filter(function (i) { return byId[i.id]; });
+      CART.set(cart);
+      $('loading').hidden = true;
+      if (j && j.syncedAt) { var d = new Date(j.syncedAt); if (!isNaN(d)) $('synced').textContent = 'Stock updated ' + d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+      renderGrid(); renderCartBar();
+    }).catch(function (e) {
+      $('loading').innerHTML = '<div class="empty">Couldn\'t load the shop right now.<br><button class="btn sm ghost" style="margin-top:12px" onclick="location.reload()">Try again</button></div>';
+      NGH.toast((e && e.message) || 'Could not load the catalog');
+    });
+  }
+  function renderChips(types) {
+    var el = $('typeChips'); el.innerHTML = '';
+    [''].concat(types).forEach(function (t) {
+      var c = document.createElement('button'); c.type = 'button'; c.className = 'chip' + (filt.type === t ? ' sel' : '');
+      c.textContent = t || 'All'; c.setAttribute('data-type', t);
+      c.onclick = function () { filt.type = t; renderChips(types); renderGrid(); NGH.haptic('light'); };
+      el.appendChild(c);
+    });
+  }
+  function visible() {
+    var q = filt.q.trim().toLowerCase();
+    return products.filter(function (p) {
+      if (filt.inStock && !inStock(p)) return false;
+      if (filt.type && p.type !== filt.type) return false;
+      if (q) { var hay = [p.name, p.sku, p.brand, p.type].concat(p.tags || []).join(' ').toLowerCase(); if (hay.indexOf(q) < 0) return false; }
+      return true;
+    });
+  }
+  function renderGrid() {
+    if (!products.length) return;
+    var list = visible(), g = $('grid'); g.innerHTML = '';
+    $('empty').hidden = !!list.length;
+    $('count').textContent = list.length + (list.length === 1 ? ' item' : ' items') + (filt.type ? ' · ' + filt.type : '');
+    list.forEach(function (p) {
+      var card = document.createElement('div'); card.className = 'prod' + (inStock(p) ? '' : ' out'); card.setAttribute('data-id', p.id); card.setAttribute('role', 'button');
+      var inCart = cartQty(p.id), hint = stockHint(p);
+      card.innerHTML = '<div class="img">' + imgTag(p) + '</div>' + (inCart ? '<span class="incart">×' + inCart + ' in cart</span>' : '') +
+        '<div class="info">' + (p.type ? '<span class="type">' + esc(p.type) + '</span>' : '') + '<span class="name">' + esc(p.name) + '</span>' +
+        '<span class="pr"><span class="price">' + esc(money(p.price)) + '</span>' + (hint ? '<span class="stock">' + esc(hint) + '</span>' : '') + '</span></div>';
+      card.onclick = function () { openDetail(p); };
+      g.appendChild(card);
+    });
+  }
+
+  // ---- detail sheet ----
+  function openDetail(p) {
+    detail = p; detailQty = Math.max(1, cartQty(p.id) || 1);
+    var img = $('dImg'), src = p.image || p.thumb;
+    img.className = 'dimg' + (src ? '' : ' ph'); img.src = src || PLACEHOLDER;
+    img.onerror = function () { img.onerror = null; img.src = PLACEHOLDER; img.className = 'dimg ph'; };
+    $('dType').textContent = [p.type, p.brand].filter(Boolean).join(' · ');
+    $('dName').textContent = p.name;
+    $('dPrice').textContent = money(p.price);
+    var hint = stockHint(p);
+    $('dStock').innerHTML = hint ? '<span class="pill ' + (inStock(p) ? 'warn' : 'bad') + '">' + esc(hint) + '</span>' : (p.stock != null ? '<span class="pill ok">In stock</span>' : '');
+    $('dDesc').textContent = p.description || 'Ask a Guru for details on this one.';
+    $('dAdd').disabled = !inStock(p);
+    $('dAdd').textContent = inStock(p) ? 'Add to cart' : 'Sold out';
+    renderDetailQty();
+    $('detail').hidden = false;
+  }
+  function renderDetailQty() {
+    $('dQty').textContent = detailQty;
+    var max = detail && detail.stock != null ? Number(detail.stock) : 99;
+    $('dMinus').disabled = detailQty <= 1; $('dPlus').disabled = detailQty >= max;
+    if (inStock(detail)) $('dAdd').textContent = (cartQty(detail.id) ? 'Update cart' : 'Add to cart') + ' — ' + money(Number(detail.price) * detailQty);
+  }
+  $('dMinus').onclick = function () { if (detailQty > 1) { detailQty--; renderDetailQty(); NGH.haptic('light'); } };
+  $('dPlus').onclick = function () { detailQty++; renderDetailQty(); NGH.haptic('light'); };
+  $('dAdd').onclick = function () { if (!detail) return; setQty(detail.id, detailQty); NGH.haptic('success'); NGH.toast('Added ' + detail.name); closeDetail(); };
+  function closeDetail() { $('detail').hidden = true; detail = null; }
+  $('dClose').onclick = closeDetail;
+  $('detail').addEventListener('click', function (e) { if (e.target === this) closeDetail(); });
+
+  // ---- cart bar ----
+  function renderCartBar() {
+    var n = cartCount();
+    $('cartbar').hidden = !n; document.body.classList.toggle('has-cart', !!n);
+    $('cbTotal').textContent = money(cartTotal()); $('cbCount').textContent = n + (n === 1 ? ' item' : ' items');
+  }
+  $('btnCart').onclick = openCart;
+
+  // ---- pickup slots ----
+  function dayDate(offset) { var d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + offset); return d; }
+  function slotsFor(offset) {
+    var d = dayDate(offset), w = HOURS[d.getDay()], out = [], min = Date.now() + LEAD_MIN * 60000;
+    for (var h = w[0]; h < w[1]; h++) for (var m = 0; m < 60; m += 15) {
+      if (h === w[0] && m < 15) continue;                       // give the Gurus 15 min after opening
+      var t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m);
+      if (t.getTime() >= min) out.push(t);
+    }
+    return out;
+  }
+  function hoursLabel(offset) { var w = HOURS[dayDate(offset).getDay()]; function f(h) { return (h % 12 || 12) + (h >= 12 ? ' PM' : ' AM'); } return f(w[0]) + ' – ' + f(w[1]); }
+  function renderPickup() {
+    var el = $('dayChips'); el.innerHTML = '';
+    var todayOk = slotsFor(0).length > 0;
+    if (!todayOk && pickDay === 0) pickDay = 1;
+    [[0, 'Today'], [1, 'Tomorrow']].forEach(function (d) {
+      var c = document.createElement('button'); c.type = 'button'; c.className = 'chip' + (pickDay === d[0] ? ' sel' : ''); c.textContent = d[1];
+      c.disabled = d[0] === 0 && !todayOk; if (c.disabled) c.style.opacity = '.4';
+      c.onclick = function () { pickDay = d[0]; renderPickup(); NGH.haptic('light'); };
+      el.appendChild(c);
+    });
+    var sel = $('slot'), prev = sel.value; sel.innerHTML = '';
+    slotsFor(pickDay).forEach(function (t) {
+      var o = document.createElement('option'); o.value = t.toISOString(); o.textContent = t.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); sel.appendChild(o);
+    });
+    if (prev) sel.value = prev; if (!sel.value && sel.options.length) sel.selectedIndex = 0;
+    $('slotHint').textContent = (todayOk ? '' : 'We\'re closed for the rest of today. ') + 'Open ' + hoursLabel(pickDay) + ' ' + (pickDay ? 'tomorrow' : 'today') + '.';
+  }
+
+  // ---- cart sheet ----
+  function openCart() {
+    if (!cartCount()) return;
+    renderCartLines(); renderPickup(); renderContact();
+    $('cNote').value = cart.note || ''; $('cErr').textContent = '';
+    $('cart').hidden = false;
+  }
+  function closeCart() { cart.note = $('cNote').value; CART.set(cart); $('cart').hidden = true; }
+  $('cClose').onclick = closeCart;
+  $('cart').addEventListener('click', function (e) { if (e.target === this) closeCart(); });
+  function renderCartLines() {
+    var el = $('cLines'); el.innerHTML = '';
+    cart.items.forEach(function (i) {
+      var p = byId[i.id]; if (!p) return;
+      var row = document.createElement('div'); row.className = 'cl';
+      row.innerHTML = imgTag(p) + '<div class="body"><b>' + esc(p.name) + '</b><span>' + esc(money(p.price)) + ' each · ' + esc(money(Number(p.price) * i.qty)) + '</span></div>' +
+        '<div class="stepper sm"><button data-a="-" aria-label="Fewer">−</button><span>' + i.qty + '</span><button data-a="+" aria-label="More">+</button></div>' +
+        '<button class="rm" aria-label="Remove">🗑</button>';
+      row.querySelector('[data-a="-"]').onclick = function () { setQty(i.id, i.qty - 1); afterLineChange(); };
+      row.querySelector('[data-a="+"]').onclick = function () { setQty(i.id, i.qty + 1); afterLineChange(); };
+      row.querySelector('.rm').onclick = function () { setQty(i.id, 0); afterLineChange(); };
+      el.appendChild(row);
+    });
+    $('cTotal').textContent = money(cartTotal());
+  }
+  function afterLineChange() { NGH.haptic('light'); if (!cartCount()) { closeCart(); return; } renderCartLines(); }
+  function renderContact() {
+    var signed = !!(account && account.session);
+    $('contactSum').hidden = !signed; $('contactForm').hidden = signed;
+    if (signed) { $('csName').textContent = account.name || account.email; $('csEmail').textContent = [account.email, account.phone].filter(Boolean).join(' · '); }
+    var g = GUEST.get(null);
+    if (!$('cName').value && g) { $('cName').value = g.name || ''; $('cEmail').value = g.email || ''; $('cPhone').value = g.phone || ''; }
+    if (signed && !$('cName').value) { $('cName').value = account.name || ''; $('cEmail').value = account.email || ''; $('cPhone').value = account.phone || ''; }
+  }
+  $('csChange').onclick = function () { $('contactSum').hidden = true; $('contactForm').hidden = false; $('signinNudge').hidden = true; $('cName').focus(); };
+
+  function placeOrder(pay) {
+    if (busy) return;
+    var name = $('cName').value.trim(), email = $('cEmail').value.trim().toLowerCase(), phone = $('cPhone').value.trim();
+    var usingAccount = !!(account && account.session) && $('contactForm').hidden;
+    if (usingAccount) { name = account.name || name; email = account.email || email; phone = account.phone || phone; }
+    if (!name) { $('cErr').textContent = 'Tell us who\'s picking up.'; return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('cErr').textContent = 'Enter a valid email for your receipt.'; return; }
+    if (!$('slot').value) { $('cErr').textContent = 'Pick a pickup time.'; return; }
+    if (!cart.items.length) { $('cErr').textContent = 'Your cart is empty.'; return; }
+    $('cErr').textContent = ''; busy = true;
+    $('btnPayNow').disabled = $('btnPayPickup').disabled = true;
+    if (!usingAccount) GUEST.set({ name: name, email: email, phone: phone });
+    var body = { name: name, email: email, phone: phone, items: cart.items.map(function (i) { return { id: i.id, qty: i.qty }; }), pickupAt: $('slot').value, note: $('cNote').value.trim(), pay: pay };
+    var headers = {};
+    if (account && account.session) { body.session = account.session; headers['X-NGH-Session'] = account.session; }
+    NGH.fetchJSON('/api/shop/orders', { method: 'POST', body: body, headers: headers }).then(function (j) {
+      var order = (j && j.order) || j || {};
+      if (pay === 'online') {
+        if (!j || !j.checkoutUrl) throw new Error('Checkout is unavailable right now — try "Pay at pickup".');
+        if (!NGH.ON_SITE && order.id && order.token) {             // NGH-BUILD 2026-09-11a: store app → in-app browser sheet
+          var P = window.Capacitor && window.Capacitor.Plugins;
+          if (P && P.Browser) P.Browser.addListener('browserFinished', function () { location.href = '/app/shop.html?paid=1&order=' + encodeURIComponent(order.id) + '&t=' + encodeURIComponent(order.token); });
+          NGH.open(j.checkoutUrl);
+          return;
+        }
+        location.href = j.checkoutUrl;                           // cart is cleared on the ?paid=1 return
+        return;
+      }
+      cart = { items: [], note: '' }; CART.set(cart); renderCartBar(); renderGrid();
+      $('cart').hidden = true;
+      NGH.haptic('success');
+      $('doneId').textContent = order.id || '';
+      $('donePickup').textContent = order.pickupAt || body.pickupAt ? 'Pickup ' + fmtWhen(order.pickupAt || body.pickupAt) + ' · ' + name : name;
+      $('vShop').hidden = true; $('vDone').hidden = false; window.scrollTo(0, 0);
+    }).catch(function (e) {
+      $('cErr').textContent = cap((e && e.body && e.body.error) || (e && e.message) || 'Could not place the order.');
+      NGH.haptic('warn');
+    }).then(function () { busy = false; $('btnPayNow').disabled = $('btnPayPickup').disabled = false; });
+  }
+  $('btnPayNow').onclick = function () { placeOrder('online'); };
+  $('btnPayPickup').onclick = function () { placeOrder('pickup'); };
+
+  // ---- receipt (?paid=1&id=ORD-…&t=token, or ?id=&t= from the account page) ----
+  function showReceipt(id, token, paid) {
+    $('vShop').hidden = true; $('vReceipt').hidden = false; document.body.classList.remove('has-cart'); $('cartbar').hidden = true;
+    $('rId').textContent = id; $('rTitle').textContent = paid ? 'Payment received' : 'Your order';
+    $('rLines').innerHTML = '<div class="center" style="padding:14px"><span class="spinner"></span></div>';
+    NGH.fetchJSON('/api/shop/orders/' + encodeURIComponent(id) + '?t=' + encodeURIComponent(token || '')).then(function (j) {
+      var o = (j && j.order) || j || {};
+      if (paid || /paid|ready|picked/.test(String(o.status))) { cart = { items: [], note: '' }; CART.set(cart); }
+      $('rIcon').textContent = /cancel/.test(String(o.status)) ? '🚫' : (paid || o.status === 'paid') ? '✅' : '🧾';
+      $('rStatus').innerHTML = pillFor(o.status || (paid ? 'paid' : ''));
+      $('rPickup').textContent = (o.pickupAt ? 'Pickup ' + fmtWhen(o.pickupAt) : '') + (o.name ? ' · ' + o.name : '');
+      var lines = (o.items || []).map(function (i) { return '<div class="rline"><span>' + esc((i.qty || 1) + ' × ' + (i.name || i.id)) + '</span><span>' + esc(money(i.lineTotal != null ? i.lineTotal : (i.price != null ? Number(i.price) : 0) * (i.qty || 1))) + '</span></div>'; }).join('');
+      $('rLines').innerHTML = lines || '<div class="small muted">No line detail available.</div>';
+      $('rTotal').textContent = money(o.total);
+      var s = String(o.status || '');
+      $('rCopy').textContent = s === 'ready' ? 'It\'s ready! Come grab it from the counter.' : s === 'picked_up' ? 'Picked up — thanks for shopping the Haven.' : /cancel/.test(s) ? 'This order was canceled. If that\'s a surprise, call us at (715) 861-3214.' :
+        s === 'parked' ? 'We\'ll have it ready at the counter — pay when you pick up.' : 'We\'ll have it ready at the counter — just give the Guru your name or order number. A receipt is on its way to ' + (o.email || 'your email') + '.';
+    }).catch(function (e) {
+      $('rLines').innerHTML = '<div class="small muted">' + esc((e && e.status === 404) ? 'We couldn\'t find that order.' : (e && e.status === 401) ? 'This order link is invalid or expired.' : cap((e && e.message) || 'Could not load the order.')) + '</div>';
+    });
+  }
+
+  // ---- account prefill (signed in on account.html) ----
+  function loadAccount() {
+    var s = ACC.get(null);
+    if (!s || !s.session) return Promise.resolve();
+    return NGH.fetchJSON('/api/account/me', { headers: { 'X-NGH-Session': s.session } }).then(function (j) {
+      var c = j && j.customer; if (!c) return;
+      account = { session: s.session, name: [c.first_name, c.last_name].filter(Boolean).join(' '), email: c.email || s.email, phone: c.phone || c.mobile || '' };
+    }).catch(function (e) { if (e && e.status === 401) ACC.del(); });
+  }
+
+  // ---- filters ----
+  $('q').addEventListener('input', function () { filt.q = this.value; renderGrid(); });
+  $('inStock').addEventListener('change', function () { filt.inStock = this.checked; renderGrid(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeDetail(); if (!$('cart').hidden) closeCart(); } });
+
+  // ---- boot ----
+  var qs = new URLSearchParams(location.search), oid = qs.get('order') || qs.get('id');
+  if (qs.get('canceled')) { NGH.toast('Checkout canceled — your cart is saved'); history.replaceState(null, '', location.pathname); oid = null; }
+  if (oid) { showReceipt(oid, qs.get('t') || '', qs.get('paid') === '1'); }
+  else { renderCartBar(); loadAccount(); loadCatalog(); }
+})();
+</script>
+</body>
+</html>

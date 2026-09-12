@@ -153,6 +153,102 @@
   to   = "/arcade-play.html"
   status = 200
 
+# ------------------------------------------------------------
+# NGH-BUILD 2026-09-11a — NGH App (PWA + iOS/Android), Karaoke Battle,
+# Game Companion tables, Specials, Lightspeed X-Series (rewards / order-ahead)
+# ------------------------------------------------------------
+[[redirects]]
+  from = "/api/karaoke/*"
+  to   = "/.netlify/functions/karaoke/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/karaoke"
+  to   = "/.netlify/functions/karaoke"
+  status = 200
+[[redirects]]
+  from = "/api/companion/*"
+  to   = "/.netlify/functions/companion/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/specials/*"
+  to   = "/.netlify/functions/specials/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/specials"
+  to   = "/.netlify/functions/specials"
+  status = 200
+[[redirects]]
+  from = "/coupon-special/*"
+  to   = "/.netlify/functions/specials/coupon/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/lightspeed/*"
+  to   = "/.netlify/functions/lightspeed/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/lightspeed"
+  to   = "/.netlify/functions/lightspeed"
+  status = 200
+[[redirects]]
+  from = "/api/account/*"
+  to   = "/.netlify/functions/account/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/account"
+  to   = "/.netlify/functions/account"
+  status = 200
+[[redirects]]
+  from = "/api/shop/*"
+  to   = "/.netlify/functions/shop/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/shop"
+  to   = "/.netlify/functions/shop"
+  status = 200
+# Short links for signs / TV QR codes
+[[redirects]]
+  from = "/karaoke"
+  to   = "/app/karaoke/"
+  status = 301
+[[redirects]]
+  from = "/sing"
+  to   = "/app/karaoke/"
+  status = 301
+[[redirects]]
+  from = "/companion"
+  to   = "/app/companion/"
+  status = 301
+[[redirects]]
+  from = "/turns"
+  to   = "/app/companion/turn-tracker.html"
+  status = 301
+[[redirects]]
+  from = "/rewards"
+  to   = "/app/account.html"
+  status = 301
+[[redirects]]
+  from = "/order"
+  to   = "/app/shop.html"
+  status = 301
+[[redirects]]
+  from = "/specials"
+  to   = "/app/specials.html"
+  status = 301
+
+# App deep-link verification files (Android App Links / iOS Universal Links)
+[[headers]]
+  for = "/.well-known/apple-app-site-association"
+  [headers.values]
+    Content-Type = "application/json"
+[[headers]]
+  for = "/.well-known/assetlinks.json"
+  [headers.values]
+    Content-Type = "application/json"
+[[headers]]
+  for = "/app/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
 # Tickets: printable page, QR PNG, Google Wallet save link
 [[redirects]]
   from = "/ticket/*"
@@ -188,21 +284,9 @@
   to   = "/.netlify/functions/stripe-webhook"
   status = 200
 
-# The booking app calls the functions with sub-paths like
-# /.netlify/functions/bookings/NGH-XXXX — Netlify routes these to the
-# bookings function automatically, but this rule makes it explicit.
-[[redirects]]
-  from = "/.netlify/functions/bookings/*"
-  to   = "/.netlify/functions/bookings/:splat"
-  status = 200
-[[redirects]]
-  from = "/.netlify/functions/events/*"
-  to   = "/.netlify/functions/events/:splat"
-  status = 200
-[[redirects]]
-  from = "/.netlify/functions/registrations/*"
-  to   = "/.netlify/functions/registrations/:splat"
-  status = 200
+# NGH-BUILD 2026-09-11a: removed the three "/.netlify/functions/*" self-redirects
+# (bookings/events/registrations). The CLI flags them invalid and Netlify ignores
+# them — function sub-paths already route to their function automatically.
 
 # NGH-BUILD 2026-09-08a — FAQ page pretty URL
 [[redirects]]
@@ -221,6 +305,10 @@
 # Daily event-promotion task digest -> promo inbox (12:00 UTC = 6-7 AM Central).
 [functions."promo-digest"]
   schedule = "0 12 * * *"
+
+# Lightspeed catalog sync for Order Ahead, every 30 min (NGH-BUILD 2026-09-11a)
+[functions."shop-sync"]
+  schedule = "*/30 * * * *"
 
 # T-1 registrant reminder emails, 14:00 UTC = 9 AM Central (NGH-BUILD 2026-08-26c)
 [functions."reminders"]

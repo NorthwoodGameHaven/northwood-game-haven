@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RPG Companion — Game Companion</title>
+<meta name="description" content="Dice roller, initiative and combat tracker, d20 fantasy character sheet, quick rules and session notes. Works offline.">
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  /* ---- shell tweaks ---- */
+  .app-header .title small{display:block;font:600 .68rem var(--font-body);color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+  .tabbar a{min-height:48px;justify-content:center;padding:2px 4px;border-radius:12px;flex:1;-webkit-tap-highlight-color:transparent}
+  .tabbar a.on{background:rgba(232,184,75,.08)}
+  .panel{animation:fadein .18s ease-out}
+  @keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .card{padding:14px}
+  .card h2{font-size:1.05rem}
+  .card.col>h2{cursor:pointer;margin:0;user-select:none;-webkit-tap-highlight-color:transparent;min-height:32px}
+  .card.col>h2 .chev{margin-left:auto;font-size:.8rem;color:var(--muted);transition:transform .15s}
+  .card.col.closed>h2 .chev{transform:rotate(-90deg)}
+  .card.col>.body{margin-top:12px}
+  .card.col.closed>.body{display:none}
+  .btn{-webkit-tap-highlight-color:transparent}
+  .btn.green{background:linear-gradient(180deg,#5bbf7a,#3d7a54);border-color:#3d7a54;color:#fff}
+  .icon-btn{min-width:44px;min-height:44px;-webkit-tap-highlight-color:transparent}
+  .icon-btn.danger{color:#ff8a80;border-color:rgba(192,57,43,.5)}
+  input.f.num{text-align:center;padding:10px 6px;font-weight:800}
+  input[type=number]{-moz-appearance:textfield}
+  input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+  .stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:rgba(0,0,0,.25)}
+  .stepper button{width:44px;height:44px;border:0;background:transparent;color:var(--gold-lt);font-size:1.4rem;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .stepper button:active{background:rgba(255,255,255,.08)}
+  .stepper .v{min-width:56px;text-align:center;font-family:var(--font-head);font-weight:600;font-size:1.1rem}
+  .seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:rgba(0,0,0,.25)}
+  .seg button{flex:1;min-height:44px;border:0;background:transparent;color:var(--cream);font:800 .88rem var(--font-body);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .seg button.on{background:var(--gold);color:var(--ink)}
+  .seg button.on.bad{background:var(--red);color:#fff}
+  .chip{min-height:40px;display:inline-flex;align-items:center;-webkit-tap-highlight-color:transparent}
+  .chip.sm{min-height:30px;padding:4px 10px;font-size:.78rem}
+  .chip.bad.sel{background:var(--red);border-color:var(--red);color:#fff}
+  .chip.teal.sel{background:var(--teal);border-color:var(--teal);color:#fff}
+  .empty{text-align:center;color:var(--muted);padding:18px 8px;font-size:.92rem}
+  .subh{font-family:var(--font-head);font-weight:600;font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-lt);margin:14px 0 6px}
+  .subh:first-child{margin-top:0}
+  .sheet>div h2{margin-bottom:8px}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap}
+  .swatches button{width:44px;height:44px;border-radius:50%;border:3px solid transparent;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .swatches button.on{border-color:#fff;box-shadow:0 0 0 2px var(--gold)}
+
+  /* ---- dice ---- */
+  .dice-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .die-btn{min-height:58px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.02)),var(--panel);
+    color:var(--cream);font-family:var(--font-head);font-weight:600;font-size:1.1rem;cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;transition:transform .1s}
+  .die-btn:active{transform:scale(.94);border-color:var(--gold)}
+  .die-btn .cnt{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;border-radius:999px;background:var(--gold);color:var(--ink);font:800 .74rem var(--font-body);display:grid;place-items:center;padding:0 5px}
+  .die-btn.clear{color:var(--muted);font-family:var(--font-body);font-weight:800;font-size:.9rem}
+  .formula{display:flex;gap:8px;margin:12px 0 10px}
+  .formula input{font-family:var(--font-head);font-size:1.25rem;text-align:center;letter-spacing:.04em}
+  .dice-ctl{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;margin-bottom:12px}
+  .dice-ctl .lab{font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .result{text-align:center;padding:6px 0 4px;min-height:60px}
+  .result .label{font-size:.82rem;color:var(--muted);font-weight:700}
+  .total{font-family:var(--font-display);font-size:3.2rem;color:var(--gold-lt);line-height:1.1;text-shadow:0 2px 0 rgba(0,0,0,.4)}
+  .total.crit{color:#ffe08a;text-shadow:0 0 18px rgba(232,184,75,.7)}
+  .total.fumble{color:#ff8a80}
+  .dice-out{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0 4px}
+  .dgroup{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:6px 8px;border-radius:12px;background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.06)}
+  .dgroup .g{font-size:.72rem;font-weight:800;color:var(--muted);margin-right:2px}
+  .d{min-width:38px;height:38px;padding:0 6px;border-radius:10px;display:grid;place-items:center;font-weight:900;font-size:1.05rem;background:rgba(255,255,255,.07);border:1px solid var(--line)}
+  .d.max{background:var(--gold);color:var(--ink);border-color:var(--gold-lt);box-shadow:0 0 10px rgba(232,184,75,.55)}
+  .d.min{background:var(--red);color:#fff;border-color:#e57373}
+  .d.drop{opacity:.32;text-decoration:line-through}
+  .d.mod{background:transparent;border-style:dashed;color:var(--muted);font-weight:800}
+  .hist li{cursor:pointer;-webkit-tap-highlight-color:transparent;padding:9px 0}
+  .hist li:active{background:rgba(255,255,255,.04)}
+  .hist .tot{font-family:var(--font-head);font-weight:600;font-size:1.25rem;color:var(--gold-lt);min-width:44px;text-align:right;flex:none}
+  .hist .f{font-weight:800}
+  .hist .dets{font-size:.76rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hist .rr{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.04);display:grid;place-items:center;flex:none;font-size:16px;color:var(--gold-lt)}
+
+  /* ---- combat ---- */
+  .cbar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .cbar .round{flex:none;text-align:center;border:1px solid var(--line);border-radius:14px;padding:4px 14px;background:rgba(0,0,0,.25);min-width:84px}
+  .cbar .round .lab{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .cbar .round .n{font-family:var(--font-head);font-weight:600;font-size:1.5rem;color:var(--gold-lt);line-height:1.1}
+  .cbar .btn.big{min-height:64px;width:auto;flex:1}
+  .cmb{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 8px;border-radius:14px;border:1px solid var(--line);
+    border-left:6px solid var(--c,#888);background:rgba(0,0,0,.2);margin-bottom:8px;position:relative}
+  .cmb.active{border-color:var(--gold);border-left-color:var(--c,#888);box-shadow:0 0 0 2px rgba(232,184,75,.45),0 6px 18px rgba(0,0,0,.3);background:rgba(232,184,75,.09)}
+  .cmb.active::before{content:"▶";position:absolute;left:-2px;top:50%;transform:translate(-100%,-50%);color:var(--gold-lt);font-size:12px}
+  .cmb.down{opacity:.75}
+  .cmb .init{width:46px;height:46px;border-radius:12px;background:rgba(0,0,0,.35);display:grid;place-items:center;font-family:var(--font-head);font-weight:600;font-size:1.2rem;flex:none;cursor:pointer;border:1px solid transparent}
+  .cmb .init:active{border-color:var(--gold)}
+  .cmb .body{flex:1;min-width:0;cursor:pointer}
+  .cmb .body .nm{font-weight:800;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cmb .body .nm .pill{font-size:.62rem;padding:1px 7px}
+  .cmb .meta{font-size:.76rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+  .cmb .conds{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+  .cmb .conds span{font-size:.66rem;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(192,57,43,.28);border:1px solid rgba(192,57,43,.5);color:#ffd2ce;text-transform:uppercase;letter-spacing:.03em}
+  .cmb .conds span.conc{background:rgba(20,136,166,.3);border-color:rgba(20,136,166,.6);color:#c8eef8}
+  .cmb .conds span.exh{background:rgba(201,151,58,.25);border-color:rgba(201,151,58,.6);color:#ffe4a8}
+  .hpb{min-width:66px;min-height:48px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--cream);cursor:pointer;flex:none;padding:4px 8px;text-align:center;-webkit-tap-highlight-color:transparent}
+  .hpb b{display:block;font-family:var(--font-head);font-size:1.05rem;line-height:1.1}
+  .hpb small{font-size:.66rem;color:var(--muted);font-weight:800}
+  .hpb small.t{color:#8fd8ea}
+  .hpbar{height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:6px}
+  .hpbar i{display:block;height:100%;background:#6bd48a;transition:width .2s}
+  .hpbar i.warn{background:var(--gold-lt)} .hpbar i.bad{background:var(--red)}
+  .dsaves{display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap}
+  .dsaves .grp{display:flex;align-items:center;gap:2px}
+  .dsaves .grp span{font-size:.66rem;font-weight:800;text-transform:uppercase;color:var(--muted);margin-right:4px}
+  .dsaves button{width:34px;height:34px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent}
+  .dsaves button i{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);display:block}
+  .dsaves .ok button.on i{background:#6bd48a;border-color:#6bd48a}
+  .dsaves .no button.on i{background:var(--red);border-color:var(--red)}
+  .keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+  .keypad button{min-height:54px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--cream);font:800 1.35rem var(--font-body);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .keypad button:active{background:rgba(255,255,255,.12)}
+  .hpdisp{text-align:center;padding:6px 0}
+  .hpdisp .cur{font-family:var(--font-display);font-size:2.4rem;color:var(--gold-lt);line-height:1.1}
+  .hpdisp .amt{font-family:var(--font-head);font-size:2rem;min-height:48px;color:#fff;border-bottom:2px solid var(--line);margin:6px auto 0;width:160px}
+
+  /* ---- character ---- */
+  .charbar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+  .charbar select{flex:1;min-width:0}
+  .basics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .basics .full{grid-column:1/-1}
+  .basics label.f{margin:4px 0 3px;font-size:.7rem}
+  .pbrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .stat{text-align:center;border:1px solid var(--line);border-radius:14px;padding:8px 4px;background:rgba(0,0,0,.2)}
+  .stat .l{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .stat .v{font-family:var(--font-head);font-weight:600;font-size:1.35rem;color:var(--gold-lt);min-height:36px;display:grid;place-items:center}
+  .stat .v.roll{cursor:pointer;border-radius:10px;min-height:44px}
+  .stat .v.roll:active{background:rgba(232,184,75,.15)}
+  .stat input.f{min-height:40px;padding:6px;font-size:1.05rem;margin-top:4px}
+  .abil-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .abil{text-align:center;border:1px solid var(--line);border-radius:14px;padding:8px 6px 6px;background:rgba(0,0,0,.22)}
+  .abil .l{font-family:var(--font-head);font-weight:600;font-size:.78rem;letter-spacing:.08em;color:var(--muted)}
+  .abil .mod{font-family:var(--font-head);font-size:1.75rem;font-weight:600;color:var(--gold-lt);min-height:46px;display:grid;place-items:center;cursor:pointer;border-radius:10px;-webkit-tap-highlight-color:transparent}
+  .abil .mod:active{background:rgba(232,184,75,.15)}
+  .abil input.f{min-height:40px;padding:4px;font-size:1.05rem;text-align:center}
+  .srow{display:flex;align-items:center;gap:10px;min-height:48px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .srow:last-child{border-bottom:0}
+  .prof{width:38px;height:38px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;flex:none;cursor:pointer;background:transparent;color:var(--cream);font-size:.7rem;font-weight:900;-webkit-tap-highlight-color:transparent}
+  .prof.p1{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+  .prof.p2{background:var(--gold-lt);border-color:#fff;color:var(--ink);box-shadow:0 0 0 2px var(--gold)}
+  .srow .nm{flex:1;min-width:0;font-weight:700}
+  .srow .nm small{color:var(--muted);font-weight:600;margin-left:6px;text-transform:uppercase;font-size:.68rem}
+  .srow .tot{min-width:58px;min-height:44px;display:grid;place-items:center;font-family:var(--font-head);font-weight:600;font-size:1.15rem;color:var(--gold-lt);border-radius:10px;background:rgba(0,0,0,.25);border:1px solid var(--line);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .srow .tot:active{background:rgba(232,184,75,.18)}
+  .hpwrap{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+  .hpbig{text-align:center;border:1px solid var(--line);border-radius:14px;padding:8px;background:rgba(0,0,0,.22);cursor:pointer;-webkit-tap-highlight-color:transparent}
+  .hpbig .l{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .hpbig .v{font-family:var(--font-display);font-size:2.2rem;color:var(--gold-lt);line-height:1.15}
+  .hpbig .v small{font-size:1rem;color:var(--muted);font-family:var(--font-head)}
+  .hpbig .t{font-size:.76rem;color:#8fd8ea;font-weight:800}
+  .hpctl{display:flex;flex-direction:column;gap:8px}
+  .hpctl .btn{min-width:64px;min-height:44px;padding:6px 14px}
+  .slot-row{display:flex;align-items:center;gap:8px;min-height:46px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .slot-row:last-child{border-bottom:0}
+  .slot-row .lv{width:34px;font-family:var(--font-head);font-weight:600;color:var(--gold-lt);flex:none}
+  .bubbles{display:flex;flex-wrap:wrap;gap:6px;flex:1}
+  .bub{width:34px;height:34px;border-radius:50%;border:2px solid var(--gold);background:transparent;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent}
+  .bub.used{background:var(--gold);box-shadow:inset 0 0 0 3px rgba(0,0,0,.25)}
+  .slot-row .stepper button{width:36px;height:36px;font-size:1.1rem}
+  .slot-row .stepper .v{min-width:28px;font-size:.95rem}
+  .lrow{display:flex;align-items:center;gap:8px;min-height:48px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .lrow:last-child{border-bottom:0}
+  .lrow .nm{flex:1;min-width:0;font-weight:700}
+  .lrow .nm small{display:block;color:var(--muted);font-weight:600;font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lrow .qty{font-family:var(--font-head);min-width:30px;text-align:center}
+  .addrow{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px}
+  .addrow.three{grid-template-columns:2fr 1fr 1fr auto}
+  .addrow input.f{min-height:44px;padding:8px 10px;font-size:.95rem}
+  .addrow select.f{min-height:44px;padding:8px 6px;font-size:.9rem}
+  .coins{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .rest-row{display:flex;gap:8px;margin-top:10px}
+  .rest-row .btn{flex:1}
+
+  /* ---- rules ---- */
+  .rule{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .rule:last-child{border-bottom:0}
+  .rule b{display:block;color:var(--gold-lt);font-family:var(--font-head);font-weight:600;font-size:.95rem}
+  .rule p{margin:2px 0 0;font-size:.9rem;color:var(--cream)}
+  .rule .lv{display:inline-block;width:26px;height:26px;border-radius:50%;background:var(--gold);color:var(--ink);font-weight:900;font-size:.8rem;text-align:center;line-height:26px;margin-right:6px;font-family:var(--font-body)}
+  .rules-src{font-size:.72rem;color:var(--muted);text-align:center;padding:6px 0 0}
+
+  /* ---- notes ---- */
+  .note-li{cursor:pointer}
+  .note-li .body small{display:block;color:var(--muted);font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .note-edit textarea.f{min-height:46vh;font-weight:500;line-height:1.5}
+  .note-edit .title{font-family:var(--font-head);font-size:1.1rem}
+  .savestate{font-size:.72rem;color:var(--muted);text-align:right;min-height:1em}
+</style>
+</head>
+<body class="has-tabbar">
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/app/companion/" aria-label="Back">‹</a>
+    <div class="title">RPG Companion<small id="hdrSub">Dice</small></div>
+    <img class="logo" src="/brand/crest.png" alt="">
+  </header>
+
+  <!-- ================= DICE ================= -->
+  <section class="panel" id="p-dice" data-panel="dice">
+    <div class="card gold">
+      <div class="dice-grid" id="diceGrid">
+        <button class="die-btn" data-die="4">d4</button>
+        <button class="die-btn" data-die="6">d6</button>
+        <button class="die-btn" data-die="8">d8</button>
+        <button class="die-btn" data-die="10">d10</button>
+        <button class="die-btn" data-die="12">d12</button>
+        <button class="die-btn" data-die="20">d20</button>
+        <button class="die-btn" data-die="100">d100</button>
+        <button class="die-btn clear" id="diceClear">Clear</button>
+      </div>
+      <div class="formula">
+        <input class="f" id="diceFormula" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. 2d6+1d4+3 · 4d6kh3 · d20" aria-label="Dice formula">
+      </div>
+      <div class="dice-ctl">
+        <span class="lab">Modifier</span>
+        <div class="stepper" style="justify-self:start"><button id="modMinus" aria-label="Lower modifier">−</button><span class="v" id="modVal">+0</span><button id="modPlus" aria-label="Raise modifier">+</button></div>
+        <span class="lab">d20 mode</span>
+        <div class="seg" id="advSeg"><button data-adv="norm" class="on">Normal</button><button data-adv="adv">Advantage</button><button data-adv="dis" class="bad">Disadvantage</button></div>
+      </div>
+      <button class="btn big" id="btnRoll">🎲 ROLL</button>
+      <div class="result" id="diceResult"><div class="empty">Tap dice to build a formula, then ROLL.</div></div>
+    </div>
+    <div class="card">
+      <div class="switch"><div><b>Shake to roll</b><div class="small muted" id="shakeHint">Shake your phone to roll the current formula.</div></div><input type="checkbox" id="shakeToggle" aria-label="Shake to roll"></div>
+    </div>
+    <div class="card col" id="histCard">
+      <h2>🕰️ History <span class="chev">▼</span></h2>
+      <div class="body">
+        <ul class="list hist" id="diceHist"></ul>
+        <div class="btn-row"><button class="btn ghost sm" id="histClear">Clear history</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= COMBAT ================= -->
+  <section class="panel" id="p-combat" data-panel="combat" hidden>
+    <div class="cbar">
+      <div class="round"><div class="lab">Round</div><div class="n" id="roundNum">1</div></div>
+      <button class="btn big" id="btnNext">▶ Next turn</button>
+      <button class="icon-btn" id="btnPrev" title="Previous turn" aria-label="Previous turn">↶</button>
+    </div>
+    <div id="cmbList"></div>
+    <div class="btn-row">
+      <button class="btn" id="btnAddCmb">＋ Add combatant</button>
+      <button class="btn ghost" id="btnRollNpc">🎲 Roll NPC init</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn ghost sm" id="btnResetRound">Reset round</button>
+      <button class="btn danger sm" id="btnEndEnc">End encounter</button>
+    </div>
+    <p class="tiny muted center">Tap HP to damage or heal · tap a name for conditions &amp; more · tap initiative to edit.</p>
+  </section>
+  <!-- ================= CHARACTER ================= -->
+  <section class="panel" id="p-char" data-panel="char" hidden>
+    <div class="charbar">
+      <select class="f" id="charSel" aria-label="Character"></select>
+      <button class="icon-btn" id="btnCharNew" title="New character" aria-label="New character">＋</button>
+      <button class="icon-btn" id="btnCharMenu" title="More" aria-label="Character options">⋯</button>
+    </div>
+    <div id="charBody"></div>
+    <input type="file" id="charFile" accept=".json,application/json" hidden>
+  </section>
+
+  <!-- ================= RULES ================= -->
+  <section class="panel" id="p-rules" data-panel="rules" hidden>
+    <input class="f" id="rulesSearch" type="search" placeholder="Search rules… (e.g. prone, dodge, cover)" aria-label="Search rules" autocomplete="off">
+    <div id="rulesBody" style="margin-top:12px"></div>
+    <p class="rules-src">Quick reference paraphrased from the SRD 5.1 (CC-BY-4.0, Wizards of the Coast). Always defer to your table's DM.</p>
+  </section>
+
+  <!-- ================= NOTES ================= -->
+  <section class="panel" id="p-notes" data-panel="notes" hidden>
+    <div id="notesList">
+      <button class="btn block" id="btnNoteNew">＋ New note</button>
+      <div class="card" style="margin-top:12px"><ul class="list" id="noteUl"></ul></div>
+    </div>
+    <div id="noteEditor" class="note-edit" hidden>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn ghost sm" id="btnNoteBack" style="flex:0 0 auto">‹ Notes</button>
+        <div class="savestate" id="noteSaved" style="flex:1"></div>
+        <button class="icon-btn" id="btnNoteShare" title="Share" aria-label="Share note" style="flex:0 0 auto">⤴</button>
+        <button class="icon-btn danger" id="btnNoteDel" title="Delete" aria-label="Delete note" style="flex:0 0 auto">🗑</button>
+      </div>
+      <input class="f title" id="noteTitle" type="text" placeholder="Title" aria-label="Note title" autocomplete="off">
+      <textarea class="f" id="noteBody" placeholder="Session notes, NPC names, loot, quest hooks…" aria-label="Note body" style="margin-top:8px"></textarea>
+    </div>
+  </section>
+</div>
+
+<!-- ---- HP keypad sheet ---- -->
+<div class="sheet" id="sheetHP" hidden>
+  <div>
+    <h2 id="hpTitle">Hit points</h2>
+    <div class="hpdisp"><div class="cur" id="hpCur">10 / 10</div><div class="tiny muted" id="hpTemp"></div><div class="amt" id="hpAmt">&nbsp;</div></div>
+    <div class="keypad" id="hpPad">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="C" style="font-size:1rem">Clear</button><button data-k="0">0</button><button data-k="B">⌫</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn danger" id="hpDmg">🗡 Damage</button>
+      <button class="btn green" id="hpHeal">💚 Heal</button>
+      <button class="btn teal" id="hpTmp">🛡 Temp HP</button>
+    </div>
+    <button class="btn ghost block" id="hpCancel">Cancel</button>
+  </div>
+</div>
+
+<!-- ---- combatant add/edit sheet ---- -->
+<div class="sheet" id="sheetCmb" hidden>
+  <div>
+    <h2 id="cmbSheetTitle">Add combatant</h2>
+    <label class="f" for="cName">Name</label>
+    <input class="f" id="cName" type="text" placeholder="Goblin, Aria, Owlbear…" autocomplete="off">
+    <div class="row">
+      <div><label class="f" for="cInit">Initiative</label><input class="f num" id="cInit" type="number" inputmode="numeric" placeholder="—"></div>
+      <div><label class="f" for="cMod">Init mod (DEX)</label><input class="f num" id="cMod" type="number" inputmode="numeric" value="0"></div>
+      <div style="flex:0 0 auto;align-self:flex-end"><button class="btn ghost" id="cRollInit">🎲 Roll</button></div>
+    </div>
+    <div class="row">
+      <div><label class="f" for="cHp">Max HP</label><input class="f num" id="cHp" type="number" inputmode="numeric" placeholder="10"></div>
+      <div><label class="f" for="cAc">AC</label><input class="f num" id="cAc" type="number" inputmode="numeric" placeholder="10"></div>
+    </div>
+    <label class="f">Type</label>
+    <div class="seg" id="cType"><button data-t="pc">Player (PC)</button><button data-t="npc" class="on">Monster / NPC</button></div>
+    <label class="f">Colour</label>
+    <div class="swatches" id="cColors"></div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn ghost" id="cCancel">Cancel</button>
+      <button class="btn" id="cSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- combatant actions sheet ---- -->
+<div class="sheet" id="sheetAct" hidden>
+  <div>
+    <h2 id="actTitle">Combatant</h2>
+    <div class="subh">Conditions</div>
+    <div class="chips" id="actConds"></div>
+    <div class="row" style="margin-top:12px">
+      <div class="small"><b>Exhaustion</b></div>
+      <div class="stepper" style="flex:0 0 auto"><button id="exhMinus" aria-label="Less exhaustion">−</button><span class="v" id="exhVal">0</span><button id="exhPlus" aria-label="More exhaustion">+</button></div>
+    </div>
+    <div class="switch"><b>Concentrating</b><input type="checkbox" id="actConc"></div>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn ghost" id="actEdit">✏️ Edit</button>
+      <button class="btn ghost" id="actDup">⧉ Duplicate</button>
+      <button class="btn danger" id="actRemove">✕ Remove</button>
+    </div>
+    <button class="btn block" id="actDone">Done</button>
+  </div>
+</div>
+
+<!-- ---- character menu sheet ---- -->
+<div class="sheet" id="sheetCharMenu" hidden>
+  <div>
+    <h2>Character</h2>
+    <div class="btn-row"><button class="btn ghost" id="cmExport">⬇ Export JSON</button><button class="btn ghost" id="cmImport">⬆ Import JSON</button></div>
+    <div class="btn-row"><button class="btn ghost" id="cmDup">⧉ Duplicate</button><button class="btn danger" id="cmDelete">🗑 Delete</button></div>
+    <button class="btn block" id="cmDone">Done</button>
+  </div>
+</div>
+
+<!-- ---- short rest sheet ---- -->
+<div class="sheet" id="sheetRest" hidden>
+  <div>
+    <h2>Short rest</h2>
+    <p class="small muted" id="restInfo"></p>
+    <div class="row"><div class="small"><b>Hit dice to spend</b></div>
+      <div class="stepper" style="flex:0 0 auto"><button id="restMinus" aria-label="Fewer">−</button><span class="v" id="restVal">1</span><button id="restPlus" aria-label="More">+</button></div></div>
+    <div class="btn-row" style="margin-top:12px"><button class="btn ghost" id="restCancel">Cancel</button><button class="btn" id="restGo">🎲 Roll &amp; heal</button></div>
+  </div>
+</div>
+<nav class="tabbar" id="tabbar">
+  <a href="#dice" data-tab="dice" class="on"><span class="ic">🎲</span>Dice</a>
+  <a href="#combat" data-tab="combat"><span class="ic">⚔️</span>Combat</a>
+  <a href="#char" data-tab="char"><span class="ic">📜</span>Character</a>
+  <a href="#rules" data-tab="rules"><span class="ic">📖</span>Rules</a>
+  <a href="#notes" data-tab="notes"><span class="ic">📝</span>Notes</a>
+</nav>
+<script src="/app/ngh-app.js"></script>
+<script>
+/* ===== core: tabs, sheets, dice engine, Dice tab ===== */
+window.RPG = window.RPG || {};
+(function () {
+  'use strict';
+  var N = window.NGH, $ = N.$, esc = N.esc;
+  var R = window.RPG;
+
+  // ---------- small helpers ----------
+  R.signed = function (n) { n = Number(n) || 0; return (n >= 0 ? '+' : '−') + Math.abs(n); };
+  R.signedAscii = function (n) { n = Number(n) || 0; return (n >= 0 ? '+' : '-') + Math.abs(n); };
+  R.clamp = function (n, a, b) { n = Number(n); if (isNaN(n)) n = a; return Math.max(a, Math.min(b, n)); };
+  R.int = function (v, d) { var n = parseInt(v, 10); return isNaN(n) ? (d || 0) : n; };
+  R.uid = function () { return N.uid(8); };
+  R.fmtTime = function (ts) {
+    var d = new Date(ts), now = new Date();
+    var hm = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (d.toDateString() === now.toDateString()) return hm;
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + hm;
+  };
+  R.rnd = function (sides) {
+    sides = Math.max(1, sides | 0);
+    try {
+      if (window.crypto && window.crypto.getRandomValues) {
+        var a = new Uint32Array(1), lim = Math.floor(4294967296 / sides) * sides, v;
+        do { window.crypto.getRandomValues(a); v = a[0]; } while (v >= lim);
+        return (v % sides) + 1;
+      }
+    } catch (e) {}
+    return 1 + Math.floor(Math.random() * sides);
+  };
+  R.confirm = function (msg) { try { return window.confirm(msg); } catch (e) { return true; } };
+
+  // ---------- sheets ----------
+  R.openSheet = function (id) { var s = $(id); if (s) { s.hidden = false; document.body.style.overflow = 'hidden'; } };
+  R.closeSheet = function (id) { var s = $(id); if (s) s.hidden = true; if (!document.querySelector('.sheet:not([hidden])')) document.body.style.overflow = ''; };
+  document.addEventListener('click', function (e) {
+    if (e.target.classList && e.target.classList.contains('sheet')) R.closeSheet(e.target.id);
+  });
+  // collapsible cards
+  document.addEventListener('click', function (e) {
+    var h = e.target.closest('.card.col > h2');
+    if (h && !e.target.closest('button,input,select,a')) { h.parentNode.classList.toggle('closed'); }
+  });
+
+  // ---------- tabs ----------
+  var TAB_NAMES = { dice: 'Dice', combat: 'Combat', char: 'Character', rules: 'Rules', notes: 'Notes' };
+  var curTab = null;
+  R.showTab = function (name) {
+    if (!TAB_NAMES[name]) name = 'dice';
+    curTab = name;
+    Array.prototype.forEach.call(document.querySelectorAll('.panel'), function (p) { p.hidden = p.getAttribute('data-panel') !== name; });
+    Array.prototype.forEach.call(document.querySelectorAll('.tabbar a'), function (a) { a.classList.toggle('on', a.getAttribute('data-tab') === name); });
+    $('hdrSub').textContent = TAB_NAMES[name];
+    try { localStorage.setItem('ngh_rpg_tab', name); } catch (e) {}
+    if (name === 'combat') N.wakeLock();
+    window.scrollTo(0, 0);
+    document.dispatchEvent(new CustomEvent('rpg:tab', { detail: name }));
+  };
+  R.tab = function () { return curTab; };
+  $('tabbar').addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-tab]'); if (!a) return;
+    e.preventDefault(); R.showTab(a.getAttribute('data-tab')); N.haptic('light');
+  });
+
+  // ---------- dice engine ----------
+  // Grammar: terms joined by + / -. Term = NdM[kh|kl|dh|dl N] | dM | integer. 'd%' = d100.
+  R.parseFormula = function (str) {
+    var s = String(str || '').toLowerCase().replace(/\s+/g, '').replace(/−/g, '-');
+    if (!s) return null;
+    if (!/^[-+]?[0-9d%khl+\-]+$/.test(s)) return null;
+    var parts = s.match(/[+-]?[^+-]+/g); if (!parts) return null;
+    if (parts.join('') !== s.replace(/^\+/, '')) return null; // dangling / doubled operator ("2d6+", "1d8+-2")
+    var terms = [];
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i], sign = p.charAt(0) === '-' ? -1 : 1, body = p.replace(/^[+-]/, '');
+      var m = body.match(/^(\d*)d(\d+|%)(?:(kh|kl|dh|dl)(\d*))?$/);
+      if (m) {
+        var n = m[1] ? parseInt(m[1], 10) : 1, sides = m[2] === '%' ? 100 : parseInt(m[2], 10);
+        if (n < 1 || n > 100 || sides < 2 || sides > 1000) return null;
+        var kn = m[4] ? parseInt(m[4], 10) : 1;
+        if (m[3] && (kn < 1 || kn > n)) return null;
+        terms.push({ type: 'dice', sign: sign, n: n, sides: sides, keep: m[3] || null, kn: m[3] ? kn : 0 });
+      } else if (/^\d+$/.test(body)) {
+        terms.push({ type: 'num', sign: sign, v: parseInt(body, 10) });
+      } else return null;
+    }
+    return terms.length ? terms : null;
+  };
+  R.formulaString = function (terms) {
+    var out = '', mod = 0;
+    terms.forEach(function (t) {
+      if (t.type === 'num') { mod += t.sign * t.v; return; }
+      var s = t.n + 'd' + t.sides + (t.keep ? t.keep + t.kn : '');
+      out += (out ? (t.sign < 0 ? '-' : '+') : (t.sign < 0 ? '-' : '')) + s;
+    });
+    if (mod) out += (mod > 0 ? '+' : '-') + Math.abs(mod);
+    if (!out) out = String(mod);
+    return out;
+  };
+  R.rollTerms = function (terms) {
+    var total = 0, out = [];
+    terms.forEach(function (t) {
+      if (t.type === 'num') { total += t.sign * t.v; out.push({ type: 'num', v: t.sign * t.v }); return; }
+      var rolls = [];
+      for (var i = 0; i < t.n; i++) rolls.push({ v: R.rnd(t.sides), kept: true });
+      if (t.keep) {
+        var idx = rolls.map(function (r, i) { return i; }).sort(function (a, b) { return rolls[b].v - rolls[a].v || a - b; }); // desc
+        var keepSet = {};
+        if (t.keep === 'kh') idx.slice(0, t.kn).forEach(function (i) { keepSet[i] = 1; });
+        else if (t.keep === 'kl') idx.slice(idx.length - t.kn).forEach(function (i) { keepSet[i] = 1; });
+        else if (t.keep === 'dh') idx.slice(t.kn).forEach(function (i) { keepSet[i] = 1; });
+        else if (t.keep === 'dl') idx.slice(0, idx.length - t.kn).forEach(function (i) { keepSet[i] = 1; });
+        rolls.forEach(function (r, i) { r.kept = !!keepSet[i]; });
+      }
+      var sum = 0; rolls.forEach(function (r) { if (r.kept) sum += r.v; });
+      total += t.sign * sum;
+      out.push({ type: 'dice', sign: t.sign, n: t.n, sides: t.sides, keep: t.keep, kn: t.kn, rolls: rolls, sum: t.sign * sum });
+    });
+    return { terms: out, total: total };
+  };
+
+  // ---------- dice UI ----------
+  var HS = N.store('ngh_rpg_dice');
+  var hist = HS.get([]); if (!Array.isArray(hist)) hist = [];
+  var adv = 'norm';
+  var fIn = $('diceFormula');
+
+  function currentTerms() { return R.parseFormula(fIn.value) || []; }
+  function setFormula(terms) { fIn.value = terms.length ? R.formulaString(terms) : ''; syncCtl(); }
+  function syncCtl() {
+    var terms = currentTerms(), mod = 0, counts = {};
+    terms.forEach(function (t) { if (t.type === 'num') mod += t.sign * t.v; else if (!t.keep && t.sign > 0) counts[t.sides] = (counts[t.sides] || 0) + t.n; });
+    $('modVal').textContent = R.signed(mod);
+    Array.prototype.forEach.call(document.querySelectorAll('.die-btn[data-die]'), function (b) {
+      var c = counts[b.getAttribute('data-die')] || 0, badge = b.querySelector('.cnt');
+      if (c) { if (!badge) { badge = document.createElement('span'); badge.className = 'cnt'; b.appendChild(badge); } badge.textContent = c; }
+      else if (badge) badge.remove();
+    });
+    fIn.style.borderColor = (fIn.value && !R.parseFormula(fIn.value)) ? 'var(--red)' : '';
+  }
+  function addDie(sides) {
+    var terms = R.parseFormula(fIn.value);
+    if (!terms) terms = [];
+    var found = null;
+    terms.forEach(function (t) { if (!found && t.type === 'dice' && t.sides === sides && !t.keep && t.sign > 0) found = t; });
+    if (found) found.n = Math.min(100, found.n + 1); else terms.push({ type: 'dice', sign: 1, n: 1, sides: sides, keep: null, kn: 0 });
+    setFormula(terms); N.haptic('light');
+  }
+  function setMod(delta) {
+    var terms = R.parseFormula(fIn.value) || [], mod = 0;
+    terms = terms.filter(function (t) { if (t.type === 'num') { mod += t.sign * t.v; return false; } return true; });
+    mod = R.clamp(mod + delta, -10, 10);
+    if (mod) terms.push({ type: 'num', sign: mod < 0 ? -1 : 1, v: Math.abs(mod) });
+    setFormula(terms); N.haptic('light');
+  }
+  $('diceGrid').addEventListener('click', function (e) {
+    var b = e.target.closest('.die-btn'); if (!b) return;
+    if (b.id === 'diceClear') { setFormula([]); return; }
+    addDie(parseInt(b.getAttribute('data-die'), 10));
+  });
+  $('modMinus').addEventListener('click', function () { setMod(-1); });
+  $('modPlus').addEventListener('click', function () { setMod(1); });
+  fIn.addEventListener('input', syncCtl);
+  fIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); fIn.blur(); doRoll(); } });
+  $('advSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-adv]'); if (!b) return;
+    adv = b.getAttribute('data-adv');
+    Array.prototype.forEach.call($('advSeg').children, function (c) { c.classList.toggle('on', c === b); });
+    N.haptic('light');
+  });
+
+  function applyAdv(terms, mode) {
+    var dice = terms.filter(function (t) { return t.type === 'dice'; });
+    if (mode === 'norm' || dice.length !== 1 || dice[0].n !== 1 || dice[0].sides !== 20 || dice[0].keep) return null;
+    var copy = terms.map(function (t) { return Object.assign({}, t); });
+    copy.forEach(function (t) { if (t.type === 'dice') { t.n = 2; t.keep = mode === 'adv' ? 'kh' : 'kl'; t.kn = 1; } });
+    return copy;
+  }
+
+  // Roll a formula; returns the result record (or null if invalid). Used by Character tab too.
+  R.roll = function (formula, label, opts) {
+    opts = opts || {};
+    var terms = R.parseFormula(formula);
+    if (!terms) { N.toast('Formula not understood'); N.haptic('warn'); return null; }
+    var mode = opts.adv || 'norm', advd = applyAdv(terms, mode);
+    if (advd) terms = advd;
+    var res = R.rollTerms(terms);
+    var rec = { id: R.uid(), f: R.formulaString(terms), label: label || '', total: res.total, ts: Date.now(), terms: res.terms, adv: advd ? mode : 'norm' };
+    var d20s = res.terms.filter(function (t) { return t.type === 'dice' && t.sides === 20; });
+    rec.nat20 = d20s.some(function (t) { return t.rolls.some(function (r) { return r.kept && r.v === 20; }); });
+    rec.nat1 = d20s.some(function (t) { return t.rolls.some(function (r) { return r.kept && r.v === 1; }); }) && !rec.nat20;
+    hist.unshift(rec); if (hist.length > 30) hist.length = 30; HS.set(hist);
+    renderHist();
+    if (!opts.quiet) renderResult(rec);
+    N.haptic(rec.nat20 ? 'success' : 'heavy');
+    return rec;
+  };
+  R.describe = function (rec) {
+    return rec.terms.map(function (t) {
+      if (t.type === 'num') return R.signedAscii(t.v);
+      return (t.sign < 0 ? '-' : '') + '[' + t.rolls.map(function (r) { return r.kept ? r.v : '(' + r.v + ')'; }).join(',') + ']';
+    }).join(' ').replace(/^\+/, '');
+  };
+  function doRoll() {
+    var f = fIn.value.trim();
+    if (!f) { N.toast('Tap some dice first'); N.haptic('warn'); return; }
+    var rec = R.roll(f, '', { adv: adv });
+    if (rec) { var r = $('diceResult'); r.classList.remove('pop'); void r.offsetWidth; r.classList.add('pop'); }
+  }
+  $('btnRoll').addEventListener('click', doRoll);
+
+  function diceHtml(rec) {
+    return rec.terms.map(function (t) {
+      if (t.type === 'num') return '<div class="dgroup"><span class="d mod">' + R.signed(t.v) + '</span></div>';
+      var lab = t.n + 'd' + t.sides + (t.keep ? ' ' + t.keep + t.kn : '');
+      return '<div class="dgroup"><span class="g">' + esc((t.sign < 0 ? '−' : '') + lab) + '</span>' +
+        t.rolls.map(function (r) {
+          var cls = 'd' + (r.v === t.sides ? ' max' : '') + (r.v === 1 ? ' min' : '') + (r.kept ? '' : ' drop');
+          return '<span class="' + cls + '">' + r.v + '</span>';
+        }).join('') + '</div>';
+    }).join('');
+  }
+  function renderResult(rec) {
+    var cls = 'total' + (rec.nat20 ? ' crit' : '') + (rec.nat1 ? ' fumble' : '');
+    var advLab = rec.adv === 'adv' ? ' · advantage' : rec.adv === 'dis' ? ' · disadvantage' : '';
+    $('diceResult').innerHTML =
+      '<div class="label">' + esc((rec.label ? rec.label + ' · ' : '') + rec.f) + esc(advLab) + '</div>' +
+      '<div class="' + cls + '">' + rec.total + '</div>' +
+      (rec.nat20 ? '<div class="gold small" style="font-weight:800">★ Natural 20!</div>' : '') +
+      (rec.nat1 ? '<div class="small" style="color:#ff8a80;font-weight:800">Natural 1…</div>' : '') +
+      '<div class="dice-out">' + diceHtml(rec) + '</div>';
+  }
+  function renderHist() {
+    var ul = $('diceHist');
+    if (!hist.length) { ul.innerHTML = '<li><div class="empty" style="width:100%">No rolls yet.</div></li>'; return; }
+    ul.innerHTML = hist.map(function (h) {
+      return '<li data-id="' + h.id + '"><span class="tot' + (h.nat20 ? ' gold' : '') + '"' + (h.nat1 ? ' style="color:#ff8a80"' : '') + '>' + h.total + '</span>' +
+        '<div class="body"><span class="f">' + esc((h.label ? h.label + ' · ' : '') + h.f) + '</span>' +
+        '<div class="dets">' + esc(R.describe(h)) + ' · ' + esc(R.fmtTime(h.ts)) + '</div></div>' +
+        '<span class="rr" title="Reroll">↻</span></li>';
+    }).join('');
+  }
+  $('diceHist').addEventListener('click', function (e) {
+    var li = e.target.closest('li[data-id]'); if (!li) return;
+    var h = null; hist.forEach(function (x) { if (x.id === li.getAttribute('data-id')) h = x; });
+    if (!h) return;
+    fIn.value = h.f; syncCtl();
+    var rec = R.roll(h.f, h.label);
+    if (rec) { N.toast('Reroll: ' + rec.total); if (R.tab() !== 'dice') R.showTab('dice'); }
+  });
+  $('histClear').addEventListener('click', function () { if (!hist.length || R.confirm('Clear roll history?')) { hist = []; HS.set(hist); renderHist(); } });
+
+  // ---------- shake to roll (guarded) ----------
+  var PS = N.store('ngh_rpg_shake'), shakeOn = false, lastShake = 0, motionBound = false;
+  function onMotion(e) {
+    if (!shakeOn || R.tab() !== 'dice') return;
+    var a = e.accelerationIncludingGravity || e.acceleration; if (!a || a.x == null) return;
+    var mag = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+    if (mag > 26 && Date.now() - lastShake > 1200) { lastShake = Date.now(); if (fIn.value.trim()) doRoll(); }
+  }
+  function bindMotion() { if (!motionBound) { window.addEventListener('devicemotion', onMotion); motionBound = true; } }
+  var shakeT = $('shakeToggle');
+  if (!window.DeviceMotionEvent) { shakeT.disabled = true; $('shakeHint').textContent = 'Motion sensors are not available on this device.'; }
+  else {
+    shakeOn = !!PS.get(false); shakeT.checked = shakeOn;
+    if (shakeOn && !(typeof DeviceMotionEvent.requestPermission === 'function')) bindMotion();
+    shakeT.addEventListener('change', function () {
+      if (!shakeT.checked) { shakeOn = false; PS.set(false); return; }
+      if (typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission().then(function (st) {
+          if (st === 'granted') { shakeOn = true; PS.set(true); bindMotion(); N.toast('Shake to roll enabled'); }
+          else { shakeT.checked = false; N.toast('Motion permission denied'); }
+        }).catch(function () { shakeT.checked = false; N.toast('Motion permission denied'); });
+      } else { shakeOn = true; PS.set(true); bindMotion(); N.toast('Shake to roll enabled'); }
+    });
+  }
+
+  syncCtl(); renderHist();
+  if (hist.length) renderResult(hist[0]);
+})();
+</script>
+<script>
+/* ===== HP keypad sheet (shared) + Combat / initiative tracker ===== */
+(function () {
+  'use strict';
+  var N = window.NGH, $ = N.$, esc = N.esc, R = window.RPG;
+
+  // ---------- shared HP keypad ----------
+  // R.openHP({ title, get: () -> {cur,max,temp}, apply: (kind, n) })   kind: 'dmg' | 'heal' | 'temp'
+  var hpCtx = null, hpAmt = '';
+  function hpRefresh() {
+    if (!hpCtx) return;
+    var s = hpCtx.get();
+    $('hpTitle').textContent = hpCtx.title || 'Hit points';
+    $('hpCur').textContent = s.cur + ' / ' + s.max;
+    $('hpTemp').textContent = s.temp ? ('+' + s.temp + ' temp HP') : '';
+    $('hpAmt').textContent = hpAmt || ' ';
+  }
+  R.openHP = function (ctx) { hpCtx = ctx; hpAmt = ''; hpRefresh(); R.openSheet('sheetHP'); };
+  $('hpPad').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-k]'); if (!b) return;
+    var k = b.getAttribute('data-k');
+    if (k === 'C') hpAmt = ''; else if (k === 'B') hpAmt = hpAmt.slice(0, -1); else if (hpAmt.length < 4) hpAmt += k;
+    N.haptic('light'); hpRefresh();
+  });
+  function hpApply(kind) {
+    var n = parseInt(hpAmt, 10);
+    if (!n) { N.toast('Enter an amount'); N.haptic('warn'); return; }
+    hpCtx.apply(kind, n); N.haptic(kind === 'dmg' ? 'heavy' : 'success');
+    R.closeSheet('sheetHP'); hpCtx = null;
+  }
+  $('hpDmg').addEventListener('click', function () { hpApply('dmg'); });
+  $('hpHeal').addEventListener('click', function () { hpApply('heal'); });
+  $('hpTmp').addEventListener('click', function () { hpApply('temp'); });
+  $('hpCancel').addEventListener('click', function () { R.closeSheet('sheetHP'); hpCtx = null; });
+  // generic HP mutation used by combat + character
+  R.hpChange = function (h, kind, n) {
+    h.cur = R.int(h.cur); h.max = R.int(h.max); h.temp = R.int(h.temp);
+    if (kind === 'dmg') { var t = Math.min(h.temp, n); h.temp -= t; n -= t; h.cur = Math.max(0, h.cur - n); }
+    else if (kind === 'heal') h.cur = Math.min(h.max, h.cur + n);
+    else if (kind === 'temp') h.temp = Math.max(h.temp, n);
+  };
+
+  // ---------- combat state ----------
+  R.CONDITIONS = ['Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Invisible', 'Paralyzed', 'Petrified', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious'];
+  var COLORS = ['#c9973a', '#1488a6', '#7a2431', '#3d7a54', '#e07a9e', '#1f3a5f', '#8e6bd4', '#d9534f', '#9aa3ad', '#f0e68c'];
+  var CS = N.store('ngh_rpg_combat');
+  var cb = CS.get(null);
+  if (!cb || !Array.isArray(cb.list)) cb = { round: 1, active: null, list: [] };
+  function save() { CS.set(cb); render(); }
+  function byId(id) { for (var i = 0; i < cb.list.length; i++) if (cb.list[i].id === id) return cb.list[i]; return null; }
+  function sorted() {
+    return cb.list.slice().sort(function (a, b) {
+      return (b.init - a.init) || (b.mod - a.mod) || (a.pc === b.pc ? 0 : (a.pc ? -1 : 1)) || a.name.localeCompare(b.name);
+    });
+  }
+  function mk(o) {
+    return { id: R.uid(), name: o.name || 'Combatant', init: R.int(o.init), mod: R.int(o.mod), maxHp: Math.max(0, R.int(o.maxHp)), hp: Math.max(0, R.int(o.hp != null ? o.hp : o.maxHp)),
+      temp: R.int(o.temp), ac: R.int(o.ac, 10), pc: !!o.pc, color: o.color || COLORS[cb.list.length % COLORS.length], conds: o.conds ? o.conds.slice() : [], exh: R.int(o.exh), conc: !!o.conc, ds: { s: 0, f: 0 }, stable: false };
+  }
+
+  // ---------- render ----------
+  function render() {
+    $('roundNum').textContent = cb.round;
+    var wrap = $('cmbList'), order = sorted();
+    if (!order.length) { wrap.innerHTML = '<div class="card"><div class="empty">No combatants yet. Add your party and the monsters, then hit <b>Next turn</b>.</div></div>'; return; }
+    if (cb.active && !byId(cb.active)) cb.active = null;
+    wrap.innerHTML = order.map(function (c) {
+      var pct = c.maxHp ? Math.round(100 * c.hp / c.maxHp) : 100;
+      var down = c.maxHp > 0 && c.hp <= 0;
+      var chips = c.conds.map(function (x) { return '<span>' + esc(x) + '</span>'; });
+      if (c.exh) chips.push('<span class="exh">Exhaustion ' + c.exh + '</span>');
+      if (c.conc) chips.push('<span class="conc">Concentrating</span>');
+      var ds = '';
+      if (c.pc && down) {
+        var dot = function (grp, key) { var s = ''; for (var i = 1; i <= 3; i++) s += '<button data-ds="' + key + '" data-n="' + i + '" class="' + (c.ds[key] >= i ? 'on' : '') + '" aria-label="' + grp + ' ' + i + '"><i></i></button>'; return s; };
+        ds = '<div class="dsaves">' + (c.stable ? '<span class="pill" style="background:#3d7a54;color:#fff">Stable</span>' : c.ds.f >= 3 ? '<span class="pill" style="background:var(--red);color:#fff">Dead</span>' : '') +
+          '<div class="grp ok"><span>Saves</span>' + dot('Success', 's') + '</div><div class="grp no"><span>Fails</span>' + dot('Failure', 'f') + '</div></div>';
+      }
+      return '<div class="cmb' + (c.id === cb.active ? ' active' : '') + (down ? ' down' : '') + '" style="--c:' + esc(c.color) + '" data-id="' + c.id + '">' +
+        '<div class="init" data-act="edit" title="Edit">' + c.init + '</div>' +
+        '<div class="body" data-act="menu"><div class="nm">' + esc(c.name) + '<span class="pill">' + (c.pc ? 'PC' : 'NPC') + '</span>' + (down && !c.pc ? '<span class="pill" style="background:var(--red);color:#fff">Down</span>' : '') + '</div>' +
+        '<div class="meta"><span>AC ' + c.ac + '</span><span>Init ' + R.signed(c.mod) + '</span></div>' +
+        (chips.length ? '<div class="conds">' + chips.join('') + '</div>' : '') +
+        (c.maxHp ? '<div class="hpbar"><i class="' + (pct <= 25 ? 'bad' : pct <= 50 ? 'warn' : '') + '" style="width:' + Math.max(0, Math.min(100, pct)) + '%"></i></div>' : '') + ds + '</div>' +
+        '<button class="hpb" data-act="hp" aria-label="Hit points"><b>' + (c.maxHp ? c.hp + '<small>/' + c.maxHp + '</small>' : '—') + '</b>' + (c.temp ? '<small class="t">+' + c.temp + ' tmp</small>' : '<small>HP</small>') + '</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  $('cmbList').addEventListener('click', function (e) {
+    var row = e.target.closest('.cmb'); if (!row) return;
+    var c = byId(row.getAttribute('data-id')); if (!c) return;
+    var dsb = e.target.closest('button[data-ds]');
+    if (dsb) {
+      var key = dsb.getAttribute('data-ds'), n = parseInt(dsb.getAttribute('data-n'), 10);
+      c.ds[key] = (c.ds[key] >= n) ? n - 1 : n;
+      if (key === 's' && c.ds.s >= 3) { c.stable = true; N.toast(c.name + ' is stable'); N.haptic('success'); }
+      else if (key === 'f' && c.ds.f >= 3) { N.toast(c.name + ' has died'); N.haptic('warn'); }
+      else if (key === 's') c.stable = false;
+      save(); return;
+    }
+    var act = e.target.closest('[data-act]'); if (!act) return;
+    act = act.getAttribute('data-act');
+    if (act === 'hp') openHpFor(c);
+    else if (act === 'edit') openEdit(c);
+    else if (act === 'menu') openMenu(c);
+  });
+
+  function openHpFor(c) {
+    R.openHP({
+      title: c.name,
+      get: function () { return { cur: c.hp, max: c.maxHp, temp: c.temp }; },
+      apply: function (kind, n) {
+        var was = c.hp, h = { cur: c.hp, max: c.maxHp || 9999, temp: c.temp };
+        R.hpChange(h, kind, n); c.hp = h.cur; c.temp = h.temp;
+        if (kind === 'dmg' && c.hp === 0 && was > 0) { c.ds = { s: 0, f: 0 }; c.stable = false; N.toast(c.name + (c.pc ? ' is down — death saves!' : ' is down')); }
+        else if (kind === 'dmg' && c.pc && was === 0 && c.hp === 0) { c.ds.f = Math.min(3, c.ds.f + 1); c.stable = false; N.toast('Damage at 0 HP: +1 failed save'); }
+        if (kind === 'heal' && c.hp > 0) { c.ds = { s: 0, f: 0 }; c.stable = false; }
+        save();
+      }
+    });
+  }
+
+  // ---------- turn flow ----------
+  function next(dir) {
+    var order = sorted(); if (!order.length) { N.toast('Add combatants first'); return; }
+    var idx = -1; order.forEach(function (c, i) { if (c.id === cb.active) idx = i; });
+    if (dir > 0) {
+      if (idx < 0) idx = 0;
+      else { idx++; if (idx >= order.length) { idx = 0; cb.round++; N.toast('Round ' + cb.round); } }
+    } else {
+      if (idx < 0) idx = order.length - 1;
+      else { idx--; if (idx < 0) { idx = order.length - 1; if (cb.round > 1) cb.round--; } }
+    }
+    cb.active = order[idx].id; N.haptic('turn'); save();
+    var el = document.querySelector('.cmb.active'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  $('btnNext').addEventListener('click', function () { next(1); });
+  $('btnPrev').addEventListener('click', function () { next(-1); });
+  $('btnResetRound').addEventListener('click', function () { cb.round = 1; cb.active = null; save(); N.toast('Round reset'); });
+  $('btnEndEnc').addEventListener('click', function () {
+    if (!cb.list.length) { cb.round = 1; cb.active = null; save(); return; }
+    if (R.confirm('End the encounter and remove all combatants?')) { cb = { round: 1, active: null, list: [] }; save(); N.toast('Encounter ended'); }
+  });
+  $('btnRollNpc').addEventListener('click', function () {
+    var n = 0; cb.list.forEach(function (c) { if (!c.pc) { c.init = R.rnd(20) + R.int(c.mod); n++; } });
+    if (!n) { N.toast('No NPCs to roll for'); return; }
+    N.haptic('heavy'); N.toast('Rolled initiative for ' + n + ' NPC' + (n > 1 ? 's' : '')); save();
+  });
+
+  // ---------- add / edit sheet ----------
+  var editing = null, fType = 'npc', fColor = COLORS[0];
+  function paintSwatches() {
+    $('cColors').innerHTML = COLORS.map(function (c) { return '<button type="button" data-c="' + c + '" class="' + (c === fColor ? 'on' : '') + '" style="background:' + c + '" aria-label="Colour"></button>'; }).join('');
+  }
+  function setType(t) { fType = t; Array.prototype.forEach.call($('cType').children, function (b) { b.classList.toggle('on', b.getAttribute('data-t') === t); }); }
+  function openEdit(c) {
+    editing = c || null;
+    $('cmbSheetTitle').textContent = c ? 'Edit combatant' : 'Add combatant';
+    $('cName').value = c ? c.name : ''; $('cInit').value = c ? c.init : ''; $('cMod').value = c ? c.mod : 0;
+    $('cHp').value = c ? (c.maxHp || '') : ''; $('cAc').value = c ? c.ac : '';
+    setType(c ? (c.pc ? 'pc' : 'npc') : 'npc'); fColor = c ? c.color : COLORS[cb.list.length % COLORS.length]; paintSwatches();
+    R.openSheet('sheetCmb');
+    if (!c) setTimeout(function () { $('cName').focus(); }, 50);
+  }
+  $('btnAddCmb').addEventListener('click', function () { openEdit(null); });
+  $('cType').addEventListener('click', function (e) { var b = e.target.closest('button[data-t]'); if (b) setType(b.getAttribute('data-t')); });
+  $('cColors').addEventListener('click', function (e) { var b = e.target.closest('button[data-c]'); if (b) { fColor = b.getAttribute('data-c'); paintSwatches(); } });
+  $('cRollInit').addEventListener('click', function () { var r = R.rnd(20), m = R.int($('cMod').value); $('cInit').value = r + m; N.haptic('heavy'); N.toast('d20: ' + r + ' ' + R.signed(m) + ' = ' + (r + m)); });
+  $('cCancel').addEventListener('click', function () { R.closeSheet('sheetCmb'); });
+  $('cSave').addEventListener('click', function () {
+    var name = $('cName').value.trim() || (fType === 'pc' ? 'Hero' : 'Monster');
+    var init = $('cInit').value === '' ? null : R.int($('cInit').value), mod = R.int($('cMod').value);
+    if (init == null) init = R.rnd(20) + mod;
+    var maxHp = Math.max(0, R.int($('cHp').value)), ac = R.int($('cAc').value, 10);
+    if (editing) {
+      var dHp = maxHp - editing.maxHp;
+      editing.name = name; editing.init = init; editing.mod = mod; editing.ac = ac; editing.pc = fType === 'pc'; editing.color = fColor;
+      editing.maxHp = maxHp; editing.hp = Math.max(0, Math.min(maxHp, editing.hp + Math.max(0, dHp)));
+    } else {
+      cb.list.push(mk({ name: name, init: init, mod: mod, maxHp: maxHp, ac: ac, pc: fType === 'pc', color: fColor }));
+    }
+    R.closeSheet('sheetCmb'); N.haptic('success'); save();
+  });
+  $('cName').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('cSave').click(); } });
+
+  // ---------- actions / conditions sheet ----------
+  var menuFor = null;
+  function paintMenu() {
+    var c = menuFor; if (!c) return;
+    $('actTitle').textContent = c.name;
+    $('actConds').innerHTML = R.CONDITIONS.map(function (x) { return '<button type="button" class="chip sm bad' + (c.conds.indexOf(x) >= 0 ? ' sel' : '') + '" data-cond="' + esc(x) + '">' + esc(x) + '</button>'; }).join('');
+    $('exhVal').textContent = c.exh; $('actConc').checked = !!c.conc;
+  }
+  function openMenu(c) { menuFor = c; paintMenu(); R.openSheet('sheetAct'); }
+  $('actConds').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-cond]'); if (!b || !menuFor) return;
+    var x = b.getAttribute('data-cond'), i = menuFor.conds.indexOf(x);
+    if (i >= 0) menuFor.conds.splice(i, 1); else menuFor.conds.push(x);
+    N.haptic('light'); paintMenu(); save();
+  });
+  $('exhMinus').addEventListener('click', function () { if (!menuFor) return; menuFor.exh = R.clamp(menuFor.exh - 1, 0, 6); paintMenu(); save(); });
+  $('exhPlus').addEventListener('click', function () { if (!menuFor) return; menuFor.exh = R.clamp(menuFor.exh + 1, 0, 6); paintMenu(); save(); if (menuFor.exh === 6) N.toast('Exhaustion 6: death'); });
+  $('actConc').addEventListener('change', function () { if (menuFor) { menuFor.conc = $('actConc').checked; save(); } });
+  $('actEdit').addEventListener('click', function () { var c = menuFor; R.closeSheet('sheetAct'); if (c) openEdit(c); });
+  $('actDup').addEventListener('click', function () {
+    if (!menuFor) return; var c = menuFor, m = (c.name.match(/^(.*?)(\d+)$/));
+    var name = m ? (m[1] + (parseInt(m[2], 10) + 1)) : (c.name + ' 2');
+    cb.list.push(mk({ name: name, init: c.init, mod: c.mod, maxHp: c.maxHp, ac: c.ac, pc: c.pc, color: c.color, conds: c.conds, exh: c.exh }));
+    R.closeSheet('sheetAct'); N.toast('Duplicated as ' + name); save();
+  });
+  $('actRemove').addEventListener('click', function () {
+    if (!menuFor) return;
+    if (!R.confirm('Remove ' + menuFor.name + ' from the encounter?')) return;
+    var order = sorted(), idx = -1; order.forEach(function (c, i) { if (c.id === menuFor.id) idx = i; });
+    cb.list = cb.list.filter(function (c) { return c.id !== menuFor.id; });
+    if (cb.active === menuFor.id) { var o2 = sorted(); cb.active = o2.length ? o2[Math.min(idx, o2.length - 1)].id : null; }
+    menuFor = null; R.closeSheet('sheetAct'); save();
+  });
+  $('actDone').addEventListener('click', function () { R.closeSheet('sheetAct'); });
+
+  // expose for tests / character tab
+  R.combat = { state: function () { return cb; }, add: function (o) { cb.list.push(mk(o)); save(); }, order: sorted };
+  render();
+})();
+</script>
+<script>
+/* ===== Character sheet (5e, local only, multiple characters) ===== */
+(function () {
+  'use strict';
+  var N = window.NGH, $ = N.$, esc = N.esc, R = window.RPG;
+  var ABIL = [['str', 'Strength'], ['dex', 'Dexterity'], ['con', 'Constitution'], ['int', 'Intelligence'], ['wis', 'Wisdom'], ['cha', 'Charisma']];
+  var SKILLS = [['Acrobatics', 'dex'], ['Animal Handling', 'wis'], ['Arcana', 'int'], ['Athletics', 'str'], ['Deception', 'cha'], ['History', 'int'], ['Insight', 'wis'], ['Intimidation', 'cha'], ['Investigation', 'int'], ['Medicine', 'wis'], ['Nature', 'int'], ['Perception', 'wis'], ['Performance', 'cha'], ['Persuasion', 'cha'], ['Religion', 'int'], ['Sleight of Hand', 'dex'], ['Stealth', 'dex'], ['Survival', 'wis']];
+  var CH = N.store('ngh_rpg_chars');
+  var st = CH.get(null); if (!st || !Array.isArray(st.list)) st = { cur: null, list: [] };
+  var body = $('charBody'), sel = $('charSel'), saveT = null, editSlots = false;
+
+  function blank(name) {
+    return { id: R.uid(), name: name || 'New Hero', cls: '', level: 1, race: '', bg: '', align: '', xp: 0,
+      abil: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, saves: {}, skills: {},
+      ac: 10, initMisc: 0, speed: 30, hp: { max: 10, cur: 10, temp: 0 }, hd: { die: 8, used: 0 },
+      slots: {}, spells: [], attacks: [], items: [], gold: { gp: 0, sp: 0, cp: 0 }, feats: '' };
+  }
+  function normalize(c) { // fill gaps for imported / older records
+    var b = blank(c.name); Object.keys(b).forEach(function (k) { if (c[k] == null || (typeof b[k] === 'object' && typeof c[k] !== 'object')) c[k] = b[k]; });
+    ABIL.forEach(function (a) { if (c.abil[a[0]] == null) c.abil[a[0]] = 10; });
+    ['spells', 'attacks', 'items'].forEach(function (k) { if (!Array.isArray(c[k])) c[k] = []; });
+    if (!c.id) c.id = R.uid();
+    return c;
+  }
+  st.list.forEach(normalize);
+  function cur() { for (var i = 0; i < st.list.length; i++) if (st.list[i].id === st.cur) return st.list[i]; return null; }
+  function save() { CH.set(st); }
+  function saveSoon() { clearTimeout(saveT); saveT = setTimeout(save, 250); }
+  function mod(s) { return Math.floor((R.int(s, 10) - 10) / 2); }
+  function lvl(c) { return R.clamp(c.level, 1, 20); }
+  function pb(c) { return Math.ceil(lvl(c) / 4) + 1; }
+  function saveTotal(c, a) { return mod(c.abil[a]) + (c.saves[a] ? pb(c) : 0); }
+  function skillTotal(c, i) { var s = SKILLS[i]; return mod(c.abil[s[1]]) + (R.int(c.skills[s[0]]) * pb(c)); }
+  function initTotal(c) { return mod(c.abil.dex) + R.int(c.initMisc); }
+  function setPath(o, path, v) { var ks = path.split('.'); for (var i = 0; i < ks.length - 1; i++) { if (o[ks[i]] == null || typeof o[ks[i]] !== 'object') o[ks[i]] = {}; o = o[ks[i]]; } o[ks[ks.length - 1]] = v; }
+  function getPath(o, path) { var ks = path.split('.'); for (var i = 0; i < ks.length; i++) { if (o == null) return undefined; o = o[ks[i]]; } return o; }
+
+  // ---------- render ----------
+  function renderSelect() {
+    sel.innerHTML = st.list.map(function (c) { return '<option value="' + c.id + '"' + (c.id === st.cur ? ' selected' : '') + '>' + esc(c.name || 'Unnamed') + (c.cls ? ' · ' + esc(c.cls) + ' ' + lvl(c) : '') + '</option>'; }).join('');
+  }
+  function inp(c, k, opts) {
+    opts = opts || {}; var v = getPath(c, k); if (v == null) v = '';
+    return '<input class="f' + (opts.num ? ' num' : '') + '" type="' + (opts.num ? 'number' : 'text') + '"' + (opts.num ? ' inputmode="numeric" data-num="1"' : '') +
+      ' data-k="' + k + '" value="' + esc(v) + '"' + (opts.ph ? ' placeholder="' + esc(opts.ph) + '"' : '') + (opts.min != null ? ' min="' + opts.min + '"' : '') + (opts.max != null ? ' max="' + opts.max + '"' : '') + ' autocomplete="off">';
+  }
+  function render() {
+    renderSelect();
+    var c = cur();
+    if (!c) { body.innerHTML = '<div class="card"><div class="empty">No characters yet.</div><button class="btn block" id="btnCharFirst">＋ Create a character</button></div>'; return; }
+    var h = '';
+    h += '<div class="card col"><h2>🧝 Basics <span class="chev">▼</span></h2><div class="body"><div class="basics">' +
+      '<div class="full"><label class="f">Name</label>' + inp(c, 'name', { ph: 'Character name' }) + '</div>' +
+      '<div><label class="f">Class</label>' + inp(c, 'cls', { ph: 'Fighter' }) + '</div>' +
+      '<div><label class="f">Level</label>' + inp(c, 'level', { num: 1, min: 1, max: 20 }) + '</div>' +
+      '<div><label class="f">Race</label>' + inp(c, 'race', { ph: 'Elf' }) + '</div>' +
+      '<div><label class="f">Background</label>' + inp(c, 'bg', { ph: 'Soldier' }) + '</div>' +
+      '<div><label class="f">Alignment</label>' + inp(c, 'align', { ph: 'NG' }) + '</div>' +
+      '<div><label class="f">XP</label>' + inp(c, 'xp', { num: 1, min: 0 }) + '</div></div>' +
+      '<div class="pbrow"><div class="stat"><div class="l">Proficiency</div><div class="v" data-d="pb"></div></div>' +
+      '<div class="stat"><div class="l">Initiative</div><div class="v roll" data-roll="init" title="Roll initiative"></div></div>' +
+      '<div class="stat"><div class="l">Passive Perc.</div><div class="v" data-d="pp"></div></div></div></div></div>';
+    h += '<div class="card col"><h2>💪 Abilities &amp; Saves <span class="chev">▼</span></h2><div class="body"><div class="abil-grid">' +
+      ABIL.map(function (a) { return '<div class="abil"><div class="l">' + a[0].toUpperCase() + '</div><div class="mod" data-roll="abil:' + a[0] + '" title="Roll ' + a[1] + ' check"></div>' + inp(c, 'abil.' + a[0], { num: 1, min: 1, max: 30 }) + '</div>'; }).join('') +
+      '</div><div class="subh">Saving throws</div>' +
+      ABIL.map(function (a) { return '<div class="srow"><button type="button" class="prof" data-save="' + a[0] + '" aria-label="Toggle proficiency">P</button><div class="nm">' + a[1] + '</div><div class="tot" data-roll="save:' + a[0] + '"></div></div>'; }).join('') + '</div></div>';
+    h += '<div class="card col"><h2>🎯 Skills <span class="chev">▼</span></h2><div class="body"><p class="tiny muted" style="margin:0 0 6px">Tap the circle: proficient → expertise → none. Tap the total to roll.</p>' +
+      SKILLS.map(function (s, i) { return '<div class="srow"><button type="button" class="prof" data-skill="' + i + '" aria-label="Toggle proficiency">P</button><div class="nm">' + s[0] + '<small>' + s[1] + '</small></div><div class="tot" data-roll="skill:' + i + '"></div></div>'; }).join('') + '</div></div>';
+    h += '<div class="card col"><h2>⚔️ Combat <span class="chev">▼</span></h2><div class="body">' +
+      '<div class="pbrow"><div class="stat"><div class="l">Armor class</div>' + inp(c, 'ac', { num: 1, min: 0 }) + '</div><div class="stat"><div class="l">Speed</div>' + inp(c, 'speed', { num: 1, min: 0 }) + '</div><div class="stat"><div class="l">Init bonus</div>' + inp(c, 'initMisc', { num: 1 }) + '</div></div>' +
+      '<div class="hpwrap" style="margin-top:10px"><div class="hpbig" data-act="hp" role="button" tabindex="0"><div class="l">Hit points · tap for damage / heal</div><div class="v"><span data-d="hpcur"></span><small>/<span data-d="hpmax"></span></small></div><div class="t" data-d="hptemp"></div></div>' +
+      '<div class="hpctl"><button type="button" class="btn danger" data-hp="-1">−1</button><button type="button" class="btn green" data-hp="1">+1</button></div></div>' +
+      '<div class="row" style="margin-top:8px"><div><label class="f">Max HP</label>' + inp(c, 'hp.max', { num: 1, min: 0 }) + '</div><div><label class="f">Temp HP</label>' + inp(c, 'hp.temp', { num: 1, min: 0 }) + '</div>' +
+      '<div><label class="f">Hit die</label><select class="f" data-k="hd.die" data-num="1">' + [6, 8, 10, 12].map(function (d) { return '<option value="' + d + '"' + (R.int(c.hd.die, 8) === d ? ' selected' : '') + '>d' + d + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="kv" style="margin-top:8px"><span>Hit dice remaining</span><b><span data-d="hdleft"></span> / <span data-d="hdtotal"></span> <span data-d="hddie"></span></b></div>' +
+      '<div class="rest-row"><button type="button" class="btn ghost" data-act="short">🌙 Short rest</button><button type="button" class="btn ghost" data-act="long">🛏 Long rest</button></div></div></div>';
+    h += '<div class="card col"><h2>🗡 Attacks <span class="chev">▼</span></h2><div class="body"><div id="atkList"></div>' +
+      '<div class="addrow three"><input class="f" id="atkName" placeholder="Longsword" autocomplete="off"><input class="f num" id="atkBonus" type="number" inputmode="numeric" placeholder="+5"><input class="f" id="atkDmg" placeholder="1d8+3" autocomplete="off"><button type="button" class="btn sm" data-act="atkAdd" aria-label="Add attack">＋</button></div></div></div>';
+    h += '<div class="card col"><h2>✨ Spells <span class="chev">▼</span></h2><div class="body"><div class="row" style="margin-bottom:6px"><div class="subh" style="margin:0">Spell slots</div><button type="button" class="chip sm" data-act="editSlots" style="flex:0 0 auto">' + (editSlots ? 'Done' : 'Edit slots') + '</button></div><div id="slotList"></div>' +
+      '<div class="subh">Spell list</div><div id="spellList"></div>' +
+      '<div class="addrow three" style="grid-template-columns:2fr 1fr auto"><input class="f" id="spName" placeholder="Spell name" autocomplete="off"><select class="f" id="spLevel"><option value="0">Cantrip</option>' + [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (l) { return '<option value="' + l + '">Lv ' + l + '</option>'; }).join('') + '</select><button type="button" class="btn sm" data-act="spAdd" aria-label="Add spell">＋</button></div></div></div>';
+    h += '<div class="card col"><h2>🎒 Inventory <span class="chev">▼</span></h2><div class="body"><div id="itemList"></div>' +
+      '<div class="addrow three" style="grid-template-columns:2fr 1fr auto"><input class="f" id="itName" placeholder="Item" autocomplete="off"><input class="f num" id="itQty" type="number" inputmode="numeric" placeholder="Qty" value="1"><button type="button" class="btn sm" data-act="itAdd" aria-label="Add item">＋</button></div>' +
+      '<div class="coins"><div><label class="f">GP</label>' + inp(c, 'gold.gp', { num: 1, min: 0 }) + '</div><div><label class="f">SP</label>' + inp(c, 'gold.sp', { num: 1, min: 0 }) + '</div><div><label class="f">CP</label>' + inp(c, 'gold.cp', { num: 1, min: 0 }) + '</div></div></div></div>';
+    h += '<div class="card col"><h2>📜 Features &amp; Traits <span class="chev">▼</span></h2><div class="body"><textarea class="f" data-k="feats" placeholder="Class features, racial traits, feats, notes…" style="min-height:140px">' + esc(c.feats) + '</textarea></div></div>';
+    body.innerHTML = h;
+    renderLists(); refresh();
+  }
+  function renderLists() {
+    var c = cur(); if (!c) return;
+    $('atkList').innerHTML = c.attacks.length ? c.attacks.map(function (a, i) {
+      return '<div class="lrow"><div class="nm">' + esc(a.name) + '<small>' + esc(a.dmg || '') + '</small></div><div class="tot srow-tot" style="min-width:58px;min-height:44px;display:grid;place-items:center;font-family:var(--font-head);color:var(--gold-lt);border:1px solid var(--line);border-radius:10px;cursor:pointer" data-roll="atk:' + i + '" title="Roll attack">' + R.signed(a.bonus) + '</div>' +
+        (a.dmg && R.parseFormula(a.dmg) ? '<button type="button" class="icon-btn" data-dmg="' + i + '" title="Roll damage" aria-label="Roll damage">🎲</button>' : '') + '<button type="button" class="icon-btn danger" data-del="atk:' + i + '" aria-label="Delete">✕</button></div>';
+    }).join('') : '<div class="empty">No attacks yet.</div>';
+    var slots = '';
+    for (var l = 1; l <= 9; l++) {
+      var s = c.slots[l] || { max: 0, used: 0 }, mx = R.int(s.max), used = R.clamp(s.used, 0, mx);
+      if (!mx && !editSlots) continue;
+      var bubs = ''; for (var i = 0; i < mx; i++) bubs += '<button type="button" class="bub' + (i < used ? ' used' : '') + '" data-bub="' + l + ':' + i + '" aria-label="Slot"></button>';
+      slots += '<div class="slot-row"><span class="lv">' + l + (l === 1 ? 'st' : l === 2 ? 'nd' : l === 3 ? 'rd' : 'th') + '</span><div class="bubbles">' + (bubs || '<span class="tiny muted">—</span>') + '</div>' +
+        (editSlots ? '<div class="stepper"><button type="button" data-slot="' + l + ':-1" aria-label="Fewer">−</button><span class="v">' + mx + '</span><button type="button" data-slot="' + l + ':1" aria-label="More">+</button></div>' : '') + '</div>';
+    }
+    $('slotList').innerHTML = slots || '<div class="empty">No spell slots. Tap <b>Edit slots</b> to set them.</div>';
+    $('spellList').innerHTML = c.spells.length ? c.spells.slice().sort(function (a, b) { return a.level - b.level || a.name.localeCompare(b.name); }).map(function (s) {
+      var i = c.spells.indexOf(s);
+      return '<div class="lrow"><button type="button" class="prof' + (s.prep ? ' p1' : '') + '" data-prep="' + i + '" title="Prepared" aria-label="Toggle prepared">✓</button><div class="nm">' + esc(s.name) + '<small>' + (s.level ? 'Level ' + s.level : 'Cantrip') + (s.prep ? ' · prepared' : '') + '</small></div><button type="button" class="icon-btn danger" data-del="sp:' + i + '" aria-label="Delete">✕</button></div>';
+    }).join('') : '<div class="empty">No spells yet.</div>';
+    $('itemList').innerHTML = c.items.length ? c.items.map(function (it, i) {
+      return '<div class="lrow"><div class="nm">' + esc(it.name) + '</div><div class="stepper"><button type="button" data-qty="' + i + ':-1" aria-label="Fewer" style="width:40px;height:40px">−</button><span class="v qty" style="min-width:34px">' + R.int(it.qty) + '</span><button type="button" data-qty="' + i + ':1" aria-label="More" style="width:40px;height:40px">+</button></div><button type="button" class="icon-btn danger" data-del="it:' + i + '" aria-label="Delete">✕</button></div>';
+    }).join('') : '<div class="empty">Inventory is empty.</div>';
+  }
+  function setD(k, v) { Array.prototype.forEach.call(body.querySelectorAll('[data-d="' + k + '"]'), function (el) { el.textContent = v; }); }
+  function refresh() {
+    var c = cur(); if (!c) return;
+    setD('pb', R.signed(pb(c)));
+    var pIdx = 11; setD('pp', 10 + skillTotal(c, pIdx));
+    var initEl = body.querySelector('[data-roll="init"]'); if (initEl) initEl.textContent = R.signed(initTotal(c));
+    ABIL.forEach(function (a) {
+      var m = body.querySelector('[data-roll="abil:' + a[0] + '"]'); if (m) m.textContent = R.signed(mod(c.abil[a[0]]));
+      var t = body.querySelector('[data-roll="save:' + a[0] + '"]'); if (t) t.textContent = R.signed(saveTotal(c, a[0]));
+      var p = body.querySelector('[data-save="' + a[0] + '"]'); if (p) p.className = 'prof' + (c.saves[a[0]] ? ' p1' : '');
+    });
+    SKILLS.forEach(function (s, i) {
+      var t = body.querySelector('[data-roll="skill:' + i + '"]'); if (t) t.textContent = R.signed(skillTotal(c, i));
+      var p = body.querySelector('[data-skill="' + i + '"]'); var lv = R.int(c.skills[s[0]]); if (p) { p.className = 'prof' + (lv ? ' p' + lv : ''); p.textContent = lv === 2 ? 'E' : 'P'; }
+    });
+    setD('hpcur', R.int(c.hp.cur)); setD('hpmax', R.int(c.hp.max)); setD('hptemp', R.int(c.hp.temp) ? '+' + R.int(c.hp.temp) + ' temp' : '');
+    setD('hdtotal', lvl(c)); setD('hdleft', Math.max(0, lvl(c) - R.int(c.hd.used))); setD('hddie', 'd' + R.int(c.hd.die, 8));
+    var opt = sel.querySelector('option[value="' + c.id + '"]'); if (opt) opt.textContent = (c.name || 'Unnamed') + (c.cls ? ' · ' + c.cls + ' ' + lvl(c) : '');
+  }
+
+  // ---------- rolls ----------
+  function rollFor(kind) {
+    var c = cur(); if (!c) return;
+    var parts = kind.split(':'), bonus = 0, label = '';
+    if (parts[0] === 'init') { bonus = initTotal(c); label = 'Initiative'; }
+    else if (parts[0] === 'abil') { bonus = mod(c.abil[parts[1]]); label = ABIL.filter(function (a) { return a[0] === parts[1]; })[0][1] + ' check'; }
+    else if (parts[0] === 'save') { bonus = saveTotal(c, parts[1]); label = ABIL.filter(function (a) { return a[0] === parts[1]; })[0][1] + ' save'; }
+    else if (parts[0] === 'skill') { var i = parseInt(parts[1], 10); bonus = skillTotal(c, i); label = SKILLS[i][0]; }
+    else if (parts[0] === 'atk') { var a = c.attacks[parseInt(parts[1], 10)]; if (!a) return; bonus = R.int(a.bonus); label = a.name + ' attack'; }
+    var rec = R.roll('d20' + R.signedAscii(bonus), (c.name ? c.name + ' · ' : '') + label);
+    if (!rec) return;
+    var nat = rec.terms[0].rolls[0].v;
+    N.toast(label + ': ' + rec.total + '  (d20 ' + nat + ' ' + R.signed(bonus) + ')' + (rec.nat20 ? ' ★ NAT 20' : rec.nat1 ? ' — nat 1' : ''), 3000);
+  }
+
+  // ---------- events ----------
+  body.addEventListener('input', function (e) {
+    var el = e.target, k = el.getAttribute && el.getAttribute('data-k'); var c = cur(); if (!k || !c) return;
+    var v = el.hasAttribute('data-num') ? R.int(el.value, 0) : el.value;
+    if (k === 'level') v = R.clamp(v || 1, 1, 20);
+    if (k === 'hp.max') { setPath(c, k, Math.max(0, v)); if (R.int(c.hp.cur) > v) c.hp.cur = v; }
+    else setPath(c, k, v);
+    if (k === 'name') renderSelect();
+    refresh(); saveSoon();
+  });
+  body.addEventListener('change', function (e) {
+    var el = e.target, k = el.getAttribute && el.getAttribute('data-k'); var c = cur(); if (!k || !c) return;
+    if (el.tagName === 'SELECT') { setPath(c, k, R.int(el.value, 8)); refresh(); save(); }
+    else if (el.hasAttribute('data-num')) { el.value = getPath(c, k); }
+  });
+  body.addEventListener('click', function (e) {
+    var c = cur();
+    if (e.target.id === 'btnCharFirst') { create(); return; }
+    if (!c) return;
+    var t;
+    if ((t = e.target.closest('[data-roll]'))) { rollFor(t.getAttribute('data-roll')); return; }
+    if ((t = e.target.closest('[data-save]'))) { var a = t.getAttribute('data-save'); c.saves[a] = !c.saves[a]; N.haptic('light'); refresh(); save(); return; }
+    if ((t = e.target.closest('[data-skill]'))) { var s = SKILLS[parseInt(t.getAttribute('data-skill'), 10)][0]; c.skills[s] = (R.int(c.skills[s]) + 1) % 3; N.haptic('light'); refresh(); save(); return; }
+    if ((t = e.target.closest('[data-hp]'))) { var d = parseInt(t.getAttribute('data-hp'), 10); if (d < 0) R.hpChange(c.hp, 'dmg', 1); else R.hpChange(c.hp, 'heal', 1); N.haptic('light'); refresh(); save(); syncInputs(); return; }
+    if ((t = e.target.closest('[data-bub]'))) { var p = t.getAttribute('data-bub').split(':'), l = p[0], i = parseInt(p[1], 10), sl = c.slots[l]; sl.used = (i < R.int(sl.used)) ? i : i + 1; N.haptic('light'); renderLists(); save(); return; }
+    if ((t = e.target.closest('[data-slot]'))) { var q = t.getAttribute('data-slot').split(':'), lv = q[0], dd = parseInt(q[1], 10); var so = c.slots[lv] || (c.slots[lv] = { max: 0, used: 0 }); so.max = R.clamp(R.int(so.max) + dd, 0, 12); so.used = Math.min(so.used, so.max); renderLists(); save(); return; }
+    if ((t = e.target.closest('[data-prep]'))) { var sp = c.spells[parseInt(t.getAttribute('data-prep'), 10)]; if (sp) { sp.prep = !sp.prep; N.haptic('light'); renderLists(); save(); } return; }
+    if ((t = e.target.closest('[data-qty]'))) { var qq = t.getAttribute('data-qty').split(':'), it = c.items[parseInt(qq[0], 10)]; if (it) { it.qty = Math.max(0, R.int(it.qty) + parseInt(qq[1], 10)); renderLists(); save(); } return; }
+    if ((t = e.target.closest('[data-dmg]'))) { var at = c.attacks[parseInt(t.getAttribute('data-dmg'), 10)]; if (at) { var rec = R.roll(at.dmg, (c.name ? c.name + ' · ' : '') + at.name + ' damage'); if (rec) N.toast(at.name + ' damage: ' + rec.total + '  (' + R.describe(rec) + ')', 3000); } return; }
+    if ((t = e.target.closest('[data-del]'))) {
+      var dp = t.getAttribute('data-del').split(':'), idx = parseInt(dp[1], 10);
+      var arr = dp[0] === 'atk' ? c.attacks : dp[0] === 'sp' ? c.spells : c.items;
+      if (arr[idx] && R.confirm('Delete ' + arr[idx].name + '?')) { arr.splice(idx, 1); renderLists(); save(); }
+      return;
+    }
+    if ((t = e.target.closest('[data-act]'))) {
+      var act = t.getAttribute('data-act');
+      if (act === 'hp') R.openHP({ title: c.name || 'Hit points', get: function () { return { cur: R.int(c.hp.cur), max: R.int(c.hp.max), temp: R.int(c.hp.temp) }; }, apply: function (kind, n) { R.hpChange(c.hp, kind, n); refresh(); save(); syncInputs(); } });
+      else if (act === 'short') openShortRest(c);
+      else if (act === 'long') longRest(c);
+      else if (act === 'editSlots') { editSlots = !editSlots; t.textContent = editSlots ? 'Done' : 'Edit slots'; renderLists(); }
+      else if (act === 'atkAdd') { var nm = $('atkName').value.trim(); if (!nm) { $('atkName').focus(); return; } c.attacks.push({ name: nm, bonus: R.int($('atkBonus').value), dmg: $('atkDmg').value.trim() }); $('atkName').value = ''; $('atkBonus').value = ''; $('atkDmg').value = ''; renderLists(); save(); }
+      else if (act === 'spAdd') { var sn = $('spName').value.trim(); if (!sn) { $('spName').focus(); return; } c.spells.push({ name: sn, level: R.int($('spLevel').value), prep: false }); $('spName').value = ''; renderLists(); save(); }
+      else if (act === 'itAdd') { var iname = $('itName').value.trim(); if (!iname) { $('itName').focus(); return; } c.items.push({ name: iname, qty: Math.max(1, R.int($('itQty').value, 1)) }); $('itName').value = ''; $('itQty').value = '1'; renderLists(); save(); }
+    }
+  });
+  body.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+    var map = { atkName: 'atkAdd', atkBonus: 'atkAdd', atkDmg: 'atkAdd', spName: 'spAdd', itName: 'itAdd', itQty: 'itAdd' };
+    if (map[e.target.id]) { e.preventDefault(); var b = body.querySelector('[data-act="' + map[e.target.id] + '"]'); if (b) b.click(); }
+  });
+  function syncInputs() { var c = cur(); if (!c) return; Array.prototype.forEach.call(body.querySelectorAll('input[data-k^="hp."]'), function (el) { el.value = getPath(c, el.getAttribute('data-k')); }); }
+
+  // ---------- rests ----------
+  var restN = 1, restChar = null;
+  function restAvail(c) { return Math.max(0, lvl(c) - R.int(c.hd.used)); }
+  function paintRest() {
+    var c = restChar, av = restAvail(c); restN = R.clamp(restN, av ? 1 : 0, av);
+    $('restVal').textContent = restN;
+    $('restInfo').textContent = av ? ('You have ' + av + ' of ' + lvl(c) + ' hit dice (d' + R.int(c.hd.die, 8) + '). Each die heals 1d' + R.int(c.hd.die, 8) + ' ' + R.signed(mod(c.abil.con)) + ' (CON).') : 'No hit dice left — take a long rest to recover them.';
+    $('restGo').disabled = !av;
+  }
+  function openShortRest(c) { restChar = c; restN = 1; paintRest(); R.openSheet('sheetRest'); }
+  $('restMinus').addEventListener('click', function () { restN--; paintRest(); });
+  $('restPlus').addEventListener('click', function () { restN++; paintRest(); });
+  $('restCancel').addEventListener('click', function () { R.closeSheet('sheetRest'); });
+  $('restGo').addEventListener('click', function () {
+    var c = restChar; if (!c || !restN) return;
+    var die = R.int(c.hd.die, 8), cm = mod(c.abil.con), healed = 0, rolls = [];
+    for (var i = 0; i < restN; i++) { var r = R.rnd(die); rolls.push(r); healed += Math.max(0, r + cm); }
+    c.hd.used = R.int(c.hd.used) + restN; R.hpChange(c.hp, 'heal', healed);
+    R.closeSheet('sheetRest'); refresh(); save(); syncInputs(); N.haptic('success');
+    N.toast('Short rest: healed ' + healed + ' HP  [' + rolls.join(', ') + '] ' + R.signed(cm) + ' each', 3500);
+  });
+  function longRest(c) {
+    if (!R.confirm('Long rest: restore HP, spell slots and half your hit dice?')) return;
+    c.hp.cur = R.int(c.hp.max); c.hp.temp = 0;
+    Object.keys(c.slots).forEach(function (l) { c.slots[l].used = 0; });
+    c.hd.used = Math.max(0, R.int(c.hd.used) - Math.max(1, Math.floor(lvl(c) / 2)));
+    refresh(); renderLists(); save(); syncInputs(); N.haptic('success'); N.toast('Long rest complete — welcome back, ' + (c.name || 'hero'));
+  }
+
+  // ---------- character management ----------
+  function create(name) { var c = blank(name); st.list.push(c); st.cur = c.id; save(); render(); N.toast('New character created'); return c; }
+  sel.addEventListener('change', function () { st.cur = sel.value; save(); render(); });
+  $('btnCharNew').addEventListener('click', function () { create(); });
+  $('btnCharMenu').addEventListener('click', function () { if (!cur()) { create(); return; } R.openSheet('sheetCharMenu'); });
+  $('cmDone').addEventListener('click', function () { R.closeSheet('sheetCharMenu'); });
+  $('cmDup').addEventListener('click', function () {
+    var c = cur(); if (!c) return; var d = JSON.parse(JSON.stringify(c)); d.id = R.uid(); d.name = (c.name || 'Hero') + ' (copy)';
+    st.list.push(d); st.cur = d.id; save(); render(); R.closeSheet('sheetCharMenu'); N.toast('Duplicated');
+  });
+  $('cmDelete').addEventListener('click', function () {
+    var c = cur(); if (!c) return;
+    if (!R.confirm('Delete ' + (c.name || 'this character') + '? This cannot be undone.')) return;
+    st.list = st.list.filter(function (x) { return x.id !== c.id; }); st.cur = st.list.length ? st.list[0].id : null;
+    save(); render(); R.closeSheet('sheetCharMenu'); N.toast('Character deleted');
+  });
+  $('cmExport').addEventListener('click', function () {
+    var c = cur(); if (!c) return;
+    var json = JSON.stringify(c, null, 2), fname = (c.name || 'character').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') + '.json';
+    try {
+      var blob = new Blob([json], { type: 'application/json' }), url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      N.toast('Exported ' + fname);
+    } catch (e) { N.share({ title: fname, text: json }); }
+    R.closeSheet('sheetCharMenu');
+  });
+  $('cmImport').addEventListener('click', function () { R.closeSheet('sheetCharMenu'); $('charFile').value = ''; $('charFile').click(); });
+  $('charFile').addEventListener('change', function () {
+    var f = $('charFile').files && $('charFile').files[0]; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      try {
+        var obj = JSON.parse(rd.result);
+        if (!obj || typeof obj !== 'object' || !obj.abil) throw new Error('bad');
+        obj.id = R.uid(); normalize(obj); st.list.push(obj); st.cur = obj.id; save(); render(); N.toast('Imported ' + (obj.name || 'character'));
+      } catch (e) { N.toast('That file is not a character export'); N.haptic('warn'); }
+    };
+    rd.readAsText(f);
+  });
+  document.addEventListener('rpg:tab', function (e) { if (e.detail === 'char' && !st.list.length) create('New Hero'); });
+
+  R.chars = { state: function () { return st; }, current: cur, render: render };
+  if (!st.cur && st.list.length) st.cur = st.list[0].id;
+  render();
+})();
+</script>
+<script>
+/* ===== Rules quick reference (SRD 5.1 paraphrase) + Notes + init ===== */
+(function () {
+  'use strict';
+  var N = window.NGH, $ = N.$, esc = N.esc, R = window.RPG;
+
+  var RULES = [
+    { id: 'cond', t: '🩸 Conditions', items: [
+      ['Blinded', 'Can’t see and automatically fails any check that requires sight. Attack rolls against it have advantage; its own attack rolls have disadvantage.'],
+      ['Charmed', 'Can’t attack the charmer or target them with harmful abilities or magic. The charmer has advantage on ability checks to interact socially with it.'],
+      ['Deafened', 'Can’t hear and automatically fails any check that requires hearing.'],
+      ['Frightened', 'Disadvantage on ability checks and attack rolls while the source of its fear is in line of sight. Can’t willingly move closer to the source.'],
+      ['Grappled', 'Speed becomes 0 and it can’t benefit from bonuses to speed. Ends if the grappler is incapacitated, or if an effect moves the grappled creature out of the grappler’s reach.'],
+      ['Incapacitated', 'Can’t take actions or reactions.'],
+      ['Invisible', 'Impossible to see without magic or a special sense; counts as heavily obscured for hiding. Its location can be given away by noise or tracks. Attack rolls against it have disadvantage; its attack rolls have advantage.'],
+      ['Paralyzed', 'Incapacitated and can’t move or speak. Automatically fails STR and DEX saves. Attack rolls against it have advantage, and any hit from within 5 feet is a critical hit.'],
+      ['Petrified', 'Turned to solid inanimate substance (with nonmagical gear); weight ×10; stops aging. Incapacitated, can’t move or speak, unaware of surroundings. Attacks against it have advantage; auto-fails STR and DEX saves; resistance to all damage; immune to poison and disease (existing ones are suspended).'],
+      ['Poisoned', 'Disadvantage on attack rolls and ability checks.'],
+      ['Prone', 'Can only crawl unless it stands up (costs half of movement). Disadvantage on attack rolls. Attacks against it have advantage from within 5 feet, otherwise disadvantage.'],
+      ['Restrained', 'Speed becomes 0 and it can’t benefit from bonuses to speed. Attack rolls against it have advantage; its attack rolls have disadvantage. Disadvantage on DEX saves.'],
+      ['Stunned', 'Incapacitated, can’t move, and can speak only falteringly. Automatically fails STR and DEX saves. Attack rolls against it have advantage.'],
+      ['Unconscious', 'Incapacitated, can’t move or speak, unaware of surroundings. Drops whatever it holds and falls prone. Auto-fails STR and DEX saves. Attacks against it have advantage; any hit from within 5 feet is a critical hit.']
+    ]},
+    { id: 'exh', t: '😩 Exhaustion', items: [
+      ['1', 'Disadvantage on ability checks.', 1], ['2', 'Speed halved.', 2], ['3', 'Disadvantage on attack rolls and saving throws.', 3],
+      ['4', 'Hit point maximum halved.', 4], ['5', 'Speed reduced to 0.', 5], ['6', 'Death.', 6],
+      ['Notes', 'Effects are cumulative: a creature suffers its level and all lower levels. Finishing a long rest with food and drink reduces exhaustion by 1. Effects that remove the condition end it entirely.']
+    ]},
+    { id: 'act', t: '⚔️ Actions in combat', items: [
+      ['Attack', 'Make one melee or ranged attack. Some features let you attack more than once with this action.'],
+      ['Cast a Spell', 'Cast a spell with a casting time of 1 action. A bonus-action spell means the only other spell you can cast that turn is a cantrip with a casting time of 1 action.'],
+      ['Dash', 'Gain extra movement this turn equal to your speed (after modifiers).'],
+      ['Disengage', 'Your movement doesn’t provoke opportunity attacks for the rest of the turn.'],
+      ['Dodge', 'Until the start of your next turn, attack rolls against you have disadvantage if you can see the attacker, and you make DEX saves with advantage. Lost if you become incapacitated or your speed drops to 0.'],
+      ['Help', 'Give a creature advantage on its next ability check for a task you help with, or on its next attack roll against a creature within 5 feet of you — if made before your next turn.'],
+      ['Hide', 'Make a DEX (Stealth) check to hide, per the DM’s judgment. While hidden you are unseen and unheard.'],
+      ['Ready', 'Choose a trigger and the action (or movement) you’ll take in response; it uses your reaction. A readied spell is cast now and held with concentration.'],
+      ['Search', 'Devote your attention to finding something: a WIS (Perception) or INT (Investigation) check.'],
+      ['Use an Object', 'Interact with a second object on your turn, or use an object that requires an action.'],
+      ['Grapple / Shove', 'Special melee attacks: contest your STR (Athletics) vs. the target’s STR (Athletics) or DEX (Acrobatics). Grapple gives the grappled condition; shove knocks prone or pushes 5 feet. Target must be no more than one size larger.'],
+      ['Opportunity attack', 'Reaction: one melee attack when a hostile creature you can see moves out of your reach. Avoided by Disengage or teleportation.'],
+      ['Two-weapon fighting', 'When you attack with a light melee weapon in one hand, you can use a bonus action to attack with a different light melee weapon in the other. Don’t add your ability modifier to the bonus attack’s damage unless it’s negative.']
+    ]},
+    { id: 'cover', t: '🛡 Cover', items: [
+      ['Half cover', '+2 bonus to AC and DEX saving throws. Obstacle blocks at least half of the body (low wall, furniture, a creature).'],
+      ['Three-quarters cover', '+5 bonus to AC and DEX saving throws. Obstacle covers about three-quarters (portcullis, arrow slit, thick tree trunk).'],
+      ['Total cover', 'Can’t be targeted directly by an attack or spell, though some spells reach by including it in an area of effect.']
+    ]},
+    { id: 'dmg', t: '🔥 Damage types', items: [
+      ['Acid', 'Corrosive spray, digestive enzymes.'], ['Bludgeoning', 'Blunt force: hammers, falling, constriction.'], ['Cold', 'Infernal chill, icy breath.'],
+      ['Fire', 'Flames, dragon breath, fire spells.'], ['Force', 'Pure magical energy (magic missile, spiritual weapon).'], ['Lightning', 'Lightning bolt, blue dragon breath.'],
+      ['Necrotic', 'Withers matter and the soul; many undead.'], ['Piercing', 'Puncturing: spears, arrows, bites.'], ['Poison', 'Venomous stings, toxic gas.'],
+      ['Psychic', 'Mental abilities like a mind flayer’s blast.'], ['Radiant', 'Searing light; celestials, holy spells.'], ['Slashing', 'Swords, axes, claws.'], ['Thunder', 'Concussive sound bursts.'],
+      ['Resistance & vulnerability', 'Resistance halves damage of that type; vulnerability doubles it. Multiple resistances to the same type count once. Apply after all other modifiers.']
+    ]},
+    { id: 'rest', t: '🌙 Resting', items: [
+      ['Short rest', 'At least 1 hour of light activity. Spend one or more Hit Dice: roll each, add your CON modifier, and regain that many HP (you can decide after each roll).'],
+      ['Long rest', 'At least 8 hours (sleep, plus up to 2 hours of light activity). Interrupted by 1+ hours of strenuous activity. Regain all HP and up to half your total Hit Dice (minimum 1). Only one long rest per 24 hours, and you must have at least 1 HP to benefit.']
+    ]},
+    { id: 'death', t: '💀 Death saves & dropping to 0 HP', items: [
+      ['Death saving throw', 'At 0 HP, at the start of each of your turns roll a d20 with no modifiers. 10 or higher: success. 9 or lower: failure. Three successes: you become stable. Three failures: you die. The tally resets when you regain HP or become stable.'],
+      ['Natural 1 / 20', 'A 1 counts as two failures. A 20: you regain 1 hit point.'],
+      ['Damage at 0 HP', 'Taking damage while at 0 HP is one failure (two if it’s a critical hit). If the damage equals or exceeds your HP maximum, you die instantly.'],
+      ['Instant death', 'Damage that reduces you to 0 with remaining damage equal to or greater than your HP maximum kills you outright.'],
+      ['Stabilizing', 'A DC 10 WIS (Medicine) check or healing magic stabilizes a creature. A stable creature is unconscious at 0 HP, stops rolling death saves, and regains 1 HP after 1d4 hours.'],
+      ['Knocking out', 'When a melee attack reduces a creature to 0 HP, the attacker can choose to knock it out instead: it falls unconscious and is stable.']
+    ]},
+    { id: 'conc', t: '🧠 Concentration', items: [
+      ['Keeping concentration', 'Some spells require concentration to keep their effect going. Normal activity like moving and attacking doesn’t interfere.'],
+      ['Losing it', 'Ends if you cast another concentration spell, become incapacitated or die, or the DM rules an environmental effect breaks it (e.g. a crashing wave).'],
+      ['Taking damage', 'Make a CON saving throw: DC 10 or half the damage taken, whichever is higher. Make a separate save for each source of damage.']
+    ]},
+    { id: 'misc', t: '📐 Checks & contests', items: [
+      ['Advantage / disadvantage', 'Roll 2d20 and use the higher (advantage) or lower (disadvantage). They don’t stack, and having both cancels out to a normal roll.'],
+      ['Contest', 'Both creatures make ability checks; the higher total wins. On a tie, the situation stays as it was.'],
+      ['Passive check', '10 + all modifiers that normally apply (+5 for advantage, −5 for disadvantage).'],
+      ['Critical hit', 'A natural 20 on an attack roll always hits and rolls all the attack’s damage dice twice. A natural 1 always misses.']
+    ]}
+  ];
+  function renderRules(q) {
+    q = (q || '').trim().toLowerCase();
+    var html = RULES.map(function (sec) {
+      var items = sec.items.filter(function (it) { return !q || (it[0] + ' ' + it[1]).toLowerCase().indexOf(q) >= 0 || sec.t.toLowerCase().indexOf(q) >= 0; });
+      if (!items.length) return '';
+      return '<div class="card col' + (q ? '' : (sec.id === 'cond' ? '' : ' closed')) + '"><h2>' + esc(sec.t) + ' <span class="chev">▼</span></h2><div class="body">' +
+        items.map(function (it) { return '<div class="rule"><b>' + (it[2] ? '<span class="lv">' + it[2] + '</span>' : '') + esc(it[2] ? 'Level ' + it[0] : it[0]) + '</b><p>' + esc(it[1]) + '</p></div>'; }).join('') + '</div></div>';
+    }).join('');
+    $('rulesBody').innerHTML = html || '<div class="card"><div class="empty">Nothing matches “' + esc(q) + '”.</div></div>';
+  }
+  var rsT = null;
+  $('rulesSearch').addEventListener('input', function () { clearTimeout(rsT); rsT = setTimeout(function () { renderRules($('rulesSearch').value); }, 120); });
+  renderRules('');
+
+  // ---------- notes ----------
+  var NS = N.store('ngh_rpg_notes');
+  var notes = NS.get([]); if (!Array.isArray(notes)) notes = [];
+  var openId = null, noteT = null;
+  function noteById(id) { for (var i = 0; i < notes.length; i++) if (notes[i].id === id) return notes[i]; return null; }
+  function renderNotes() {
+    var ul = $('noteUl');
+    if (!notes.length) { ul.innerHTML = '<li><div class="empty" style="width:100%">No notes yet. Keep session recaps, NPC names, loot and quest hooks here.</div></li>'; return; }
+    ul.innerHTML = notes.slice().sort(function (a, b) { return b.ts - a.ts; }).map(function (n) {
+      return '<li class="note-li" data-id="' + n.id + '"><span class="n">📝</span><div class="body"><b>' + esc(n.title || 'Untitled') + '</b><small>' + esc(R.fmtTime(n.ts)) + (n.body ? ' · ' + esc(n.body.slice(0, 80).replace(/\s+/g, ' ')) : '') + '</small></div><span class="muted">›</span></li>';
+    }).join('');
+  }
+  function openNote(id) {
+    var n = noteById(id); if (!n) return;
+    openId = id; $('noteTitle').value = n.title || ''; $('noteBody').value = n.body || ''; $('noteSaved').textContent = 'Saved ' + R.fmtTime(n.ts);
+    $('notesList').hidden = true; $('noteEditor').hidden = false; window.scrollTo(0, 0);
+  }
+  function closeNote() { openId = null; $('noteEditor').hidden = true; $('notesList').hidden = false; renderNotes(); }
+  function saveNote() {
+    var n = noteById(openId); if (!n) return;
+    n.title = $('noteTitle').value; n.body = $('noteBody').value; n.ts = Date.now(); NS.set(notes);
+    $('noteSaved').textContent = 'Saved ' + R.fmtTime(n.ts);
+  }
+  function noteChanged() { $('noteSaved').textContent = 'Saving…'; clearTimeout(noteT); noteT = setTimeout(saveNote, 400); }
+  $('btnNoteNew').addEventListener('click', function () {
+    var n = { id: R.uid(), title: '', body: '', ts: Date.now() }; notes.unshift(n); NS.set(notes); openNote(n.id);
+    setTimeout(function () { $('noteTitle').focus(); }, 50);
+  });
+  $('noteUl').addEventListener('click', function (e) { var li = e.target.closest('li[data-id]'); if (li) openNote(li.getAttribute('data-id')); });
+  $('noteTitle').addEventListener('input', noteChanged);
+  $('noteBody').addEventListener('input', noteChanged);
+  $('btnNoteBack').addEventListener('click', function () { clearTimeout(noteT); saveNote(); closeNote(); });
+  $('btnNoteDel').addEventListener('click', function () {
+    var n = noteById(openId); if (!n) return;
+    if (!R.confirm('Delete this note?')) return;
+    clearTimeout(noteT); notes = notes.filter(function (x) { return x.id !== openId; }); NS.set(notes); closeNote(); N.toast('Note deleted');
+  });
+  $('btnNoteShare').addEventListener('click', function () {
+    var n = noteById(openId); if (!n) return; clearTimeout(noteT); saveNote();
+    N.share({ title: n.title || 'Session notes', text: (n.title ? n.title + '\n\n' : '') + (n.body || '') });
+  });
+  document.addEventListener('visibilitychange', function () { if (document.hidden && openId) { clearTimeout(noteT); saveNote(); } });
+  renderNotes();
+
+  // ---------- init: restore last tab ----------
+  var last = null; try { last = localStorage.getItem('ngh_rpg_tab'); } catch (e) {}
+  var hash = (location.hash || '').replace('#', '');
+  R.showTab(hash && /^(dice|combat|char|rules|notes)$/.test(hash) ? hash : (last || 'dice'));
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>

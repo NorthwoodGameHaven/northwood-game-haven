@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["REPLACE_TEAMID.guru.gamehaven.app"],
+        "components": [
+          { "/": "/app/*", "comment": "NGH-BUILD 2026-09-11a — app pages (Karaoke join QR, turn tracker, rewards)" },
+          { "/": "/karaoke*" },
+          { "/": "/turns*" }
+        ]
+      }
+    ]
+  }
+}

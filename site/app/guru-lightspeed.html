@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lightspeed — Guru</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#132a1d">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .err{color:#ffb3ad;font-weight:700;font-size:.9rem;margin-top:8px;min-height:1.2em}
+  .conn{display:flex;align-items:center;gap:12px}
+  .conn .big{font-family:var(--font-head);font-size:1.15rem;font-weight:600}
+  .conn .sub{font-size:.86rem;color:var(--muted)}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.82rem;overflow-wrap:anywhere}
+  .kv b{min-width:0;text-align:right;overflow-wrap:anywhere}
+  .envname{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.74rem;background:rgba(0,0,0,.3);border:1px solid var(--line);padding:2px 8px;border-radius:6px;color:var(--gold-pale);cursor:pointer;white-space:nowrap}
+  .envrow{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:2px 0 10px;font-size:.84rem;color:var(--muted)}
+  .ref{width:100%;border-collapse:collapse}
+  .ref td{padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.07);vertical-align:middle;font-size:.9rem}
+  .ref tr:last-child td{border-bottom:0}
+  .ref td.name b{display:block}
+  .ref td.name span{font-size:.76rem;color:var(--muted)}
+  .ref td.id{color:var(--muted);width:44%;font-size:.7rem;line-height:1.3}
+  .ref td.id div{overflow-wrap:anywhere}
+  .ref td.act{width:44px;text-align:right}
+  .ref .cp{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--cream);font-size:16px;cursor:pointer}
+  .ref .cur{margin-left:6px}
+  .pill.ok{background:rgba(107,212,138,.18);color:#9ee6b4}
+  .pill.warn{background:rgba(232,184,75,.18);color:var(--gold-lt)}
+  .pill.bad{background:rgba(192,57,43,.25);color:#ffb3ad}
+  .cfg .kv{font-size:.86rem;align-items:center}
+  .cfg .kv span:first-child{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.76rem;color:var(--gold-pale)}
+  .cfg .kv b{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.76rem;font-weight:600;color:var(--cream);white-space:nowrap}
+  .unsynced li{align-items:flex-start}
+  .unsynced .body span{display:block;white-space:normal}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/guru.html" aria-label="Back to the Guru Hub">‹</a>
+    <div class="title">Lightspeed connection</div>
+    <div class="actions" id="tools" hidden>
+      <button class="icon-btn" id="btnRefresh" title="Refresh" aria-label="Refresh">↻</button>
+      <button class="icon-btn" id="btnLogout" title="Sign out" aria-label="Sign out">⏏</button>
+    </div>
+  </header>
+
+  <!-- Admin gate -->
+  <section id="gate">
+    <div class="hero" style="padding-top:2px">
+      <img src="/brand/crest.png" alt="" style="width:96px;height:96px">
+      <div class="display" style="font-size:1.15rem">Guru sign-in</div>
+      <div class="tag">Lightspeed Retail (X-Series) connection &amp; setup.</div>
+    </div>
+    <div class="card gold">
+      <label class="f" for="adminCode">Guru code</label>
+      <input class="f code" id="adminCode" type="password" autocomplete="current-password" placeholder="••••••" aria-label="Guru code">
+      <div class="err" id="gateErr"></div>
+      <button class="btn big" id="btnLogin" style="margin-top:6px">Continue</button>
+    </div>
+  </section>
+
+  <section id="main" hidden>
+    <div class="center" id="loading" style="padding:30px 0"><span class="spinner"></span></div>
+
+    <div id="content" hidden>
+      <!-- Connection -->
+      <div class="card gold">
+        <div class="conn">
+          <span class="dot idle" id="cDot" style="width:12px;height:12px"></span>
+          <div style="flex:1;min-width:0"><div class="big" id="cTitle">Checking…</div><div class="sub" id="cSub"></div></div>
+        </div>
+        <div class="sep"></div>
+        <div class="kv"><span>Store</span><b class="mono" id="cDomain">—</b></div>
+        <div class="kv"><span>Access token</span><b id="cExpires">—</b></div>
+        <div class="kv"><span>API version</span><b class="mono" id="cVersion">—</b></div>
+        <div class="kv"><span>Catalog cache</span><b id="cCatalog">—</b></div>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn" id="btnConnect">🔗 Connect Lightspeed</button>
+          <button class="btn teal" id="btnSync">⟳ Sync catalog now</button>
+        </div>
+        <button class="btn ghost block sm" id="btnDisconnect">Disconnect</button>
+        <div class="tiny muted" style="margin-top:10px">Connecting opens Lightspeed's consent screen for the store owner. Redirect URL in the developer portal must be <span class="mono">https://gamehaven.guru/api/lightspeed/callback</span>.</div>
+      </div>
+
+      <!-- Configured env vars -->
+      <div class="card cfg" id="cfgCard" hidden>
+        <h2>⚙️ Configured on Netlify</h2>
+        <div id="cfgList"></div>
+        <div class="tiny muted" style="margin-top:8px">Set these in Netlify → Site configuration → Environment variables, then redeploy. Copy ids from the tables below.</div>
+      </div>
+
+      <!-- Reference tables -->
+      <div id="refs"></div>
+
+      <!-- Replay -->
+      <div class="card">
+        <h2>🔁 Replay unsynced sale</h2>
+        <p class="small muted">If a booking, registration or pickup order was paid but never landed in Lightspeed (see the log for <span class="mono">recordSale</span> errors), replay it here. Idempotent — an already-synced sale is skipped.</p>
+        <div class="row">
+          <div style="flex:0 0 40%"><label class="f" for="rpKind">Kind</label>
+            <select class="f" id="rpKind">
+              <option value="booking">Booking</option>
+              <option value="registration">Registration</option>
+              <option value="order">Pickup order</option>
+            </select></div>
+          <div><label class="f" for="rpId">Id</label><input class="f mono" id="rpId" placeholder="bk_… / reg_… / ORD-…" autocapitalize="off" spellcheck="false"></div>
+        </div>
+        <div class="tiny muted" style="margin-top:6px">Booking with a specific part: <span class="mono">bookingId:part</span> (e.g. <span class="mono">bk_123:deposit</span>).</div>
+        <div class="err" id="rpErr"></div>
+        <button class="btn block" id="btnReplay" style="margin-top:4px">Replay</button>
+        <ul class="list unsynced" id="unsynced" style="margin-top:10px"></ul>
+      </div>
+
+      <div class="footer-links"><a href="/guru.html">Guru Hub</a> · <a href="/app/shop-orders.html">Pickup orders</a> · <a href="/app/shop.html">Customer shop</a></div>
+    </div>
+  </section>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = NGH.$, esc = NGH.esc;
+  var busy = false, status = null;
+  var TABLES = [
+    { key: ['outlets'], title: '🏬 Outlets', env: ['LIGHTSPEED_OUTLET_ID'], name: function (r) { return r.name; }, sub: function (r) { return [r.physical_address_1 || r.address, r.currency].filter(Boolean).join(' · '); } },
+    { key: ['registers'], title: '🖥️ Registers', env: ['LIGHTSPEED_REGISTER_ID'], name: function (r) { return r.name; }, sub: function (r) { return r.outlet_id ? 'Outlet ' + shortId(r.outlet_id) : ''; } },
+    { key: ['users'], title: '👤 Users', env: ['LIGHTSPEED_USER_ID'], name: function (r) { return r.display_name || r.username || r.name; }, sub: function (r) { return [r.username, r.account_type].filter(Boolean).join(' · '); }, hint: 'Sales from the app are attributed to this user — make a "Website" user in Lightspeed.' },
+    { key: ['payment_types', 'paymentTypes'], title: '💳 Payment types', env: ['LIGHTSPEED_PAYMENT_TYPE_ONLINE', 'LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT'], name: function (r) { return r.name; }, sub: function (r) { return r.payment_type_id != null ? 'type ' + r.payment_type_id + (String(r.payment_type_id) === '106' ? ' (loyalty)' : '') : ''; }, hint: 'ONLINE = the "Online — Stripe" type used for paid web orders; ONACCOUNT = "On Account".' },
+    { key: ['taxes'], title: '🧾 Taxes', env: ['LIGHTSPEED_TAX_ID'], name: function (r) { return r.name; }, sub: function (r) { return r.rate != null ? (Number(r.rate) * 100).toFixed(3).replace(/\.?0+$/, '') + '%' : ''; } }
+  ];
+
+  // ---- helpers ----
+  function shortId(id) { id = String(id || ''); return id.length > 14 ? id.slice(0, 8) + '…' + id.slice(-4) : id; }
+  function copy(text, label) {
+    text = String(text);
+    function done() { NGH.toast('Copied ' + (label || text)); NGH.haptic('light'); }
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;opacity:0;left:-9999px';
+      document.body.appendChild(ta); ta.select();
+      var okc = false; try { okc = document.execCommand('copy'); } catch (e) {}
+      if (okc) done(); else NGH.toast('Copy failed — long-press the id to select it');
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  }
+  function expiresMs(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'string' && isNaN(Number(v))) { var d = new Date(v); return isNaN(d) ? null : d.getTime(); }
+    var n = Number(v); return n < 1e11 ? n * 1000 : n;
+  }
+  function fmtExpiry(ms) {
+    if (!ms) return 'unknown';
+    var diff = ms - Date.now(), abs = Math.abs(diff), txt = abs < 60000 ? 'under a minute' : abs < 3600000 ? Math.round(abs / 60000) + ' min' : abs < 86400000 ? (abs / 3600000).toFixed(1).replace(/\.0$/, '') + ' h' : Math.round(abs / 86400000) + ' d';
+    return diff > 0 ? 'expires in ' + txt + ' · auto-refreshes' : 'expired ' + txt + ' ago · refreshes on next call';
+  }
+  var ENV_KEYS = { LIGHTSPEED_OUTLET_ID: 'outletId', LIGHTSPEED_REGISTER_ID: 'registerId', LIGHTSPEED_USER_ID: 'userId', LIGHTSPEED_PAYMENT_TYPE_ONLINE: 'paymentTypeOnline', LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT: 'paymentTypeOnAccount', LIGHTSPEED_TAX_ID: 'taxId' };
+  function envObj() { return (status && (status.env || status.config || status.configured)) || null; }
+  function envVal(name) { var env = envObj() || {}; var v = env[name] != null ? env[name] : env[ENV_KEYS[name]]; return v == null ? '' : String(v); }
+  function listFor(t) { var R = (status && status.reference) || status || {}; for (var i = 0; i < t.key.length; i++) if (Array.isArray(R[t.key[i]])) return R[t.key[i]]; return []; }
+
+  // ---- gate ----
+  function showGate(msg) { $('main').hidden = true; $('tools').hidden = true; $('gate').hidden = false; $('gateErr').textContent = msg || ''; }
+  function login() {
+    var code = $('adminCode').value.trim();
+    if (!code) { $('gateErr').textContent = 'Enter the Guru code.'; return; }
+    if (busy) return; busy = true; $('btnLogin').disabled = true; $('gateErr').textContent = '';
+    NGH.admin.login(code).then(function () { $('adminCode').value = ''; start(); })
+      .catch(function (e) { $('gateErr').textContent = (e && e.status === 401) ? 'That code didn\'t match.' : (e && e.message) || 'Sign-in failed.'; NGH.haptic('warn'); })
+      .then(function () { busy = false; $('btnLogin').disabled = false; });
+  }
+  $('btnLogin').onclick = login;
+  $('adminCode').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+  $('btnLogout').onclick = function () { NGH.admin.logout(); showGate('Signed out.'); };
+  $('btnRefresh').onclick = function () { load(); };
+  function onAuthErr(e) { if (e && e.status === 401) { NGH.admin.logout(); showGate('Session expired — sign in again.'); return true; } return false; }
+
+  // ---- status ----
+  function start() { $('gate').hidden = true; $('main').hidden = false; $('tools').hidden = false; load(); }
+  function load() {
+    $('loading').hidden = false;
+    return NGH.admin.fetch('/api/lightspeed/status').then(function (j) {
+      status = j || {}; render(); $('loading').hidden = true; $('content').hidden = false;
+    }).catch(function (e) {
+      $('loading').hidden = true;
+      if (onAuthErr(e)) return;
+      $('content').hidden = false;
+      $('cDot').className = 'dot bad'; $('cTitle').textContent = 'Status unavailable'; $('cSub').textContent = (e && e.message) || 'Could not reach /api/lightspeed/status';
+    });
+  }
+  function render() {
+    var st = status, ok = !!st.connected;
+    $('cDot').className = 'dot' + (ok ? '' : ' bad');
+    $('cTitle').textContent = ok ? 'Connected' : 'Not connected';
+    $('cSub').textContent = ok ? ('Sales, customers and catalog sync are live' + (st.retailer && st.retailer.name ? ' for ' + st.retailer.name : '') + '.') : (st.error ? String(st.error) : 'Connect the store to enable rewards, order-ahead and sale sync.');
+    var domain = st.domain || st.domain_prefix || '';
+    $('cDomain').textContent = domain ? domain + '.retail.lightspeed.app' : '—';
+    var exp = expiresMs(st.expires), env0 = envObj() || {};
+    $('cExpires').textContent = ok ? (st.mode === 'personal' || st.personalToken ? 'personal token (no expiry)' : fmtExpiry(exp)) : '—';
+    $('cVersion').textContent = (st.apiVersion || st.api_version || env0.apiVersion || '—') + (st.mode ? ' · ' + (st.mode === 'oauth' ? 'OAuth' : st.mode) : '');
+    var cat = st.catalog || {}, syncedAt = cat.syncedAt || cat.synced_at || st.syncedAt;
+    var counts = st.orders && typeof st.orders === 'object' ? Object.keys(st.orders).map(function (k) { return st.orders[k] + ' ' + k.replace(/_/g, ' '); }).join(', ') : '';
+    $('cCatalog').textContent = (cat.products != null ? cat.products + ' products' : '—') + (syncedAt ? ' · synced ' + new Date(syncedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '') + (counts ? ' · orders: ' + counts : '');
+    if (st.referenceError) NGH.toast('Reference lists: ' + st.referenceError, 5000);
+    $('btnConnect').textContent = ok ? '🔗 Reconnect Lightspeed' : '🔗 Connect Lightspeed';
+    $('btnDisconnect').hidden = !ok; $('btnSync').disabled = !ok;
+
+    // configured env vars
+    var env = envObj();
+    var ENV_ALL = ['LIGHTSPEED_OUTLET_ID', 'LIGHTSPEED_REGISTER_ID', 'LIGHTSPEED_USER_ID', 'LIGHTSPEED_PAYMENT_TYPE_ONLINE', 'LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT', 'LIGHTSPEED_TAX_ID'];
+    $('cfgCard').hidden = !env;
+    if (env) {
+      var rows = [];
+      if (env.clientId != null) rows.push({ k: 'LIGHTSPEED_CLIENT_ID', v: env.clientId ? 'set' : '' });
+      if (env.clientSecret != null) rows.push({ k: 'LIGHTSPEED_CLIENT_SECRET', v: env.clientSecret ? 'set' : '' });
+      ENV_ALL.forEach(function (k) { rows.push({ k: k, v: envVal(k), id: true }); });
+      $('cfgList').innerHTML = rows.map(function (r) {
+        var optional = r.k === 'LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT';
+        return '<div class="kv"><span>' + r.k + '</span>' + (r.v ? '<b title="' + esc(r.v) + '">' + esc(r.id ? shortId(r.v) : r.v) + '</b>' : '<span class="pill ' + (optional ? 'warn' : 'bad') + '">' + (optional ? 'optional' : 'not set') + '</span>') + '</div>';
+      }).join('');
+    }
+
+    // reference tables
+    var refs = $('refs'); refs.innerHTML = '';
+    TABLES.forEach(function (t) {
+      var rows = listFor(t), card = document.createElement('div'); card.className = 'card';
+      var envHtml = t.env.map(function (n) { return '<span class="envname" data-copy="' + esc(n) + '" title="Copy name">' + esc(n) + '</span>'; }).join('');
+      var html = '<h2>' + t.title + '<span class="pill" style="margin-left:auto">' + rows.length + '</span></h2><div class="envrow">Env var' + (t.env.length > 1 ? 's' : '') + ': ' + envHtml + '</div>' + (t.hint ? '<div class="tiny muted" style="margin:-4px 0 8px">' + esc(t.hint) + '</div>' : '');
+      if (!rows.length) html += '<div class="small muted">' + (ok ? 'None returned.' : 'Connect Lightspeed to load.') + '</div>';
+      else {
+        html += '<table class="ref">' + rows.map(function (r) {
+          var id = String(r.id || r.outlet_id || ''), cur = t.env.filter(function (n) { return envVal(n) && envVal(n) === id; });
+          return '<tr><td class="name"><b>' + esc(t.name(r) || '(unnamed)') + (cur.length ? '<span class="pill ok cur" title="' + esc(cur.join(', ')) + '">in use</span>' : '') + '</b><span>' + esc(t.sub(r) || '') + '</span></td>' +
+            '<td class="id mono" title="' + esc(id) + '"><div>' + esc(id) + '</div></td>' +
+            '<td class="act"><button class="cp" data-copy="' + esc(id) + '" data-label="' + esc(t.name(r) || 'id') + '" title="Copy id" aria-label="Copy id">⧉</button></td></tr>';
+        }).join('') + '</table>';
+      }
+      card.innerHTML = html; refs.appendChild(card);
+    });
+    Array.prototype.forEach.call(refs.querySelectorAll('[data-copy]'), function (b) { b.onclick = function () { copy(b.getAttribute('data-copy'), b.getAttribute('data-label') ? 'id for ' + b.getAttribute('data-label') : b.getAttribute('data-copy')); }; });
+
+    // unsynced list
+    var un = st.unsynced || st.failed || [], ul = $('unsynced'); ul.innerHTML = '';
+    if (un.length) { var hdr = document.createElement('li'); hdr.className = 'small muted'; hdr.style.display = 'block'; hdr.textContent = un.length + ' sale' + (un.length === 1 ? '' : 's') + ' waiting to sync'; ul.appendChild(hdr); }
+    un.slice(0, 20).forEach(function (u) {
+      var li = document.createElement('li');
+      var at = u.at || u.created_at;
+      li.innerHTML = '<span class="body"><b>' + esc(u.kind || '') + ' ' + esc(u.id || u.source_id || '') + '</b><span class="small muted">' + esc(u.error || u.reason || 'not synced') + (at ? ' · ' + new Date(at).toLocaleString() : '') + '</span></span><button class="btn sm ghost">Replay</button>';
+      li.querySelector('button').onclick = function () { $('rpKind').value = u.kind || 'booking'; $('rpId').value = u.id || u.source_id || ''; replay(); };
+      ul.appendChild(li);
+    });
+  }
+
+  // ---- actions ----
+  $('btnConnect').onclick = function () {
+    var tok = NGH.admin.token();
+    if (!tok) { showGate('Sign in again to connect.'); return; }
+    location.href = NGH.API + '/lightspeed/connect?token=' + encodeURIComponent(tok);
+  };
+  $('btnDisconnect').onclick = function () {
+    if (!confirm('Disconnect Lightspeed? Rewards sign-in, order-ahead and sale sync stop until it is reconnected.')) return;
+    NGH.admin.fetch('/api/lightspeed/disconnect', { method: 'POST', body: {} }).then(function () { NGH.toast('Disconnected'); load(); })
+      .catch(function (e) { if (!onAuthErr(e)) NGH.toast((e && e.message) || 'Disconnect failed'); });
+  };
+  $('btnSync').onclick = function () {
+    var b = $('btnSync'); b.disabled = true; b.textContent = '⟳ Syncing…';
+    NGH.admin.fetch('/api/shop/sync', { method: 'POST', body: {} }).then(function (j) {
+      var n = j && (j.products != null ? j.products : j.count);
+      NGH.toast('Catalog synced' + (n != null ? ' · ' + n + ' products' : '')); NGH.haptic('success'); load();
+    }).catch(function (e) { if (!onAuthErr(e)) NGH.toast((e && e.message) || 'Sync failed'); })
+      .then(function () { b.disabled = false; b.textContent = '⟳ Sync catalog now'; });
+  };
+  function replay() {
+    var kind = $('rpKind').value, id = $('rpId').value.trim(), body = { kind: kind, id: id };
+    if (!id) { $('rpErr').textContent = 'Enter the id to replay.'; return; }
+    if (kind === 'booking' && id.indexOf(':') > 0) { body.id = id.split(':')[0]; body.part = id.split(':')[1]; }
+    if (busy) return; busy = true; $('rpErr').textContent = ''; $('btnReplay').disabled = true;
+    NGH.admin.fetch('/api/lightspeed/replay', { method: 'POST', body: body }).then(function (j) {
+      var results = (j && j.results) || [j || {}];
+      var synced = results.filter(function (r) { return r && (r.ok || r.saleId || r.sale_id) && !r.skipped; });
+      var skipped = results.filter(function (r) { return r && r.skipped; });
+      var failed = results.filter(function (r) { return r && r.error && !r.skipped; });
+      var msg = [];
+      if (synced.length) msg.push('Replayed → sale ' + synced.map(function (r) { return (r.part ? r.part + ' ' : '') + (r.saleId || r.sale_id); }).join(', '));
+      if (skipped.length) msg.push('Skipped: ' + skipped.map(function (r) { return (r.part ? r.part + ' — ' : '') + (r.reason || 'already synced'); }).join('; '));
+      if (failed.length) msg.push('Failed: ' + failed.map(function (r) { return (r.part ? r.part + ' — ' : '') + r.error; }).join('; '));
+      if (failed.length) { NGH.haptic('warn'); $('rpErr').textContent = msg.join(' · '); } else { NGH.haptic('success'); NGH.toast(msg.join(' · ') || 'Replayed', 4500); $('rpId').value = ''; }
+      load();
+    }).catch(function (e) { if (!onAuthErr(e)) $('rpErr').textContent = (e && e.body && e.body.error) || (e && e.message) || 'Replay failed.'; })
+      .then(function () { busy = false; $('btnReplay').disabled = false; });
+  }
+  $('btnReplay').onclick = replay;
+
+  // ---- boot: OAuth redirect feedback, then gate ----
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('connected')) NGH.toast('Lightspeed connected' + (qs.get('domain') ? ' — ' + qs.get('domain') : '') + ' 🎉', 3500);
+  else if (qs.get('error')) NGH.toast('Lightspeed: ' + qs.get('error'), 5000);
+  if (qs.get('connected') || qs.get('error')) history.replaceState(null, '', location.pathname);
+  if (NGH.admin.isLoggedIn()) start(); else { showGate(''); setTimeout(function () { $('adminCode').focus(); }, 50); }
+})();
+</script>
+</body>
+<!-- NGH-BUILD 2026-09-11a · NGH App -->
+</html>
