@@ -142,8 +142,21 @@
   .gpick { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
   .gpick .chip.on { background:var(--forest); color:#fff; border-color:var(--forest); }
 
-  .hrow { display:grid; grid-template-columns:66px 1fr 84px 12px 84px 1fr; gap:8px; align-items:center; margin-bottom:6px; }
-  @media (max-width:820px) { .hrow { grid-template-columns:60px 1fr; } .hrow .wide { grid-column:1 / -1; } }
+  /* Store-hours rows. The times sit next to the day they belong to — the old
+     layout put a 1fr column between them and stranded the inputs 600px to the
+     right, and native <input type="time"> was too narrow for its own value. */
+  .hrow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:7px; padding:6px 8px; border-radius:9px; }
+  .hrow:nth-child(odd) { background:#faf8ef; }
+  .hrow.shut { opacity:0.62; }
+  .hrow .day { font-family:'Cinzel',serif; font-size:0.82rem; width:52px; flex:none; }
+  .hrow select.t { min-width:118px; font-size:0.9rem; padding:7px 8px; }
+  .hrow select.t:disabled { background:#f0eee2; color:#a7a492; }
+  .hrow .dash { color:#9a9a86; flex:none; }
+  .hrow .shutbox { font-size:0.78rem; white-space:nowrap; flex:none; }
+  .hrow .note { flex:1 1 150px; min-width:110px; max-width:320px; }
+  .hrow .span { font-size:0.76rem; color:#7a7a5a; flex:none; min-width:74px; }
+  .hrow .rowbtns { flex:none; display:flex; gap:4px; }
+  @media (max-width:700px) { .hrow .note { flex-basis:100%; } .hrow select.t { flex:1 1 120px; } }
 </style>
 </head>
 <body>
@@ -708,36 +721,87 @@ async function saveAssign(none){
 function closeModal(){ $("modal").className = "modal"; modalItem = null; }
 
 /* ---------------- store hours ---------------- */
+/* A shop opens on the quarter hour. <input type="time"> made you type four
+   digits and an AM/PM into a box narrow enough to clip its own value, and it
+   happily accepted the half-finished result. A dropdown of real opening times
+   cannot be half-typed, cannot be ambiguous about AM/PM, and is one click. */
+var TIME_STEP = 15;
+function timeOpts(sel, blankLabel, isClose){
+  var out = '<option value="">' + esc(blankLabel || "—") + '</option>';
+  for(var m = 0; m < 1440; m += TIME_STEP){
+    var v = pad(Math.floor(m/60)) + ":" + pad(m%60);
+    out += '<option value="'+v+'"'+(v===sel?' selected':'')+'>'+esc(fmtMin(m))+'</option>';
+  }
+  // Closing at midnight is a real answer, but "00:00" would read as the START
+  // of the same day and the server rightly rejects a close that is not after
+  // the open. Offer the end of the day explicitly instead of making somebody
+  // work out that 11:59 PM is the closest they can get.
+  if(isClose) out += '<option value="23:59"'+("23:59"===sel?' selected':'')+'>Midnight</option>';
+  return out;
+}
+function spanLabel(d){
+  if(d.closed || !d.open || !d.close) return "";
+  var a = t2m(d.open), b = t2m(d.close);
+  if(b <= a) return '<span style="color:var(--maroon);">check times</span>';
+  var h = (b - a) / 60;
+  return (Math.round(h*10)/10) + "h";
+}
+function t2m(t){ if(!t) return 0; var p = String(t).split(":"); return (+p[0])*60 + (+p[1]||0); }
+
 function renderHours(){
   var H = state.hoursDraft || { weekly: [], overrides: [] };
   if(!H.weekly || H.weekly.length !== 7){
     H.weekly = []; for(var i=0;i<7;i++) H.weekly.push({ closed:true, open:"", close:"" });
   }
   $("hours-week").innerHTML = H.weekly.map(function(d, ix){
-    return '<div class="hrow">' +
-      '<div style="font-family:\'Cinzel\',serif;font-size:0.8rem;">'+DOW[ix]+'</div>' +
-      '<label style="font-size:0.78rem;"><input type="checkbox" '+(d.closed?"checked":"")+' onchange="hClosed('+ix+',this.checked)"> Closed</label>' +
-      '<input type="time" value="'+esc(d.open||"")+'" '+(d.closed?"disabled":"")+' onchange="hSet('+ix+',\'open\',this.value)">' +
-      '<div style="text-align:center;color:#9a9a86;">–</div>' +
-      '<input type="time" value="'+esc(d.close||"")+'" '+(d.closed?"disabled":"")+' onchange="hSet('+ix+',\'close\',this.value)">' +
-      '<input class="wide" type="text" placeholder="note (optional)" value="'+esc(d.label||"")+'" onchange="hSet('+ix+',\'label\',this.value)">' +
+    var off = !!d.closed;
+    return '<div class="hrow'+(off?" shut":"")+'">' +
+      '<span class="day">'+DOWFULL[ix].slice(0,3)+'</span>' +
+      '<select class="t" '+(off?"disabled":"")+' onchange="hSet('+ix+',\'open\',this.value)">'+timeOpts(d.open||"", "Open…")+'</select>' +
+      '<span class="dash">–</span>' +
+      '<select class="t" '+(off?"disabled":"")+' onchange="hSet('+ix+',\'close\',this.value)">'+timeOpts(d.close||"", "Close…", true)+'</select>' +
+      '<span class="span">'+(off ? '<i style="color:#9a9a86;">closed</i>' : spanLabel(d))+'</span>' +
+      '<label class="shutbox"><input type="checkbox" '+(off?"checked":"")+' onchange="hClosed('+ix+',this.checked)"> Closed</label>' +
+      '<input class="note" type="text" placeholder="note (optional)" value="'+esc(d.label||"")+'" onchange="hSet('+ix+',\'label\',this.value)">' +
+      '<span class="rowbtns">' +
+        (off ? '' : '<button class="btn btn-xs btn-ghost" title="Copy these hours to every other open day" onclick="hCopyAll('+ix+')">⧉ all days</button>') +
+      '</span>' +
       '</div>';
   }).join("");
+
   var ov = H.overrides || [];
   $("hours-over").innerHTML = ov.length ? ov.map(function(o, ix){
-    return '<div class="hrow">' +
-      '<input type="date" value="'+esc(o.date||"")+'" onchange="oSet('+ix+',\'date\',this.value)" style="grid-column:span 2;">' +
-      '<label style="font-size:0.78rem;"><input type="checkbox" '+(o.closed?"checked":"")+' onchange="oClosed('+ix+',this.checked)"> Closed</label>' +
-      '<input type="time" value="'+esc(o.open||"")+'" '+(o.closed?"disabled":"")+' onchange="oSet('+ix+',\'open\',this.value)">' +
-      '<input type="time" value="'+esc(o.close||"")+'" '+(o.closed?"disabled":"")+' onchange="oSet('+ix+',\'close\',this.value)">' +
-      '<span><input type="text" placeholder="reason" value="'+esc(o.label||"")+'" onchange="oSet('+ix+',\'label\',this.value)" style="width:70%;"> ' +
-      '<button class="btn btn-xs btn-danger" onclick="oDel('+ix+')">✕</button></span>' +
+    var off = !!o.closed;
+    return '<div class="hrow'+(off?" shut":"")+'">' +
+      '<input type="date" value="'+esc(o.date||"")+'" onchange="oSet('+ix+',\'date\',this.value)" style="flex:none;">' +
+      '<select class="t" '+(off?"disabled":"")+' onchange="oSet('+ix+',\'open\',this.value)">'+timeOpts(o.open||"", "Open…")+'</select>' +
+      '<span class="dash">–</span>' +
+      '<select class="t" '+(off?"disabled":"")+' onchange="oSet('+ix+',\'close\',this.value)">'+timeOpts(o.close||"", "Close…", true)+'</select>' +
+      '<label class="shutbox"><input type="checkbox" '+(off?"checked":"")+' onchange="oClosed('+ix+',this.checked)"> Closed</label>' +
+      '<input class="note" type="text" placeholder="reason (e.g. Thanksgiving)" value="'+esc(o.label||"")+'" onchange="oSet('+ix+',\'label\',this.value)">' +
+      '<span class="rowbtns"><button class="btn btn-xs btn-danger" onclick="oDel('+ix+')">✕</button></span>' +
       '</div>';
   }).join("") : '<p class="hint">No exceptions yet.</p>';
 }
-function hSet(ix,k,v){ state.hoursDraft.weekly[ix][k]=v; }
+function hSet(ix,k,v){
+  state.hoursDraft.weekly[ix][k]=v;
+  if(k!=="label") renderHours();   // a note must not re-render and steal focus mid-tab
+}
 function hClosed(ix,v){ state.hoursDraft.weekly[ix].closed=v; renderHours(); }
-function oSet(ix,k,v){ state.hoursDraft.overrides[ix][k]=v; }
+/* Seven days of identical hours, entered one dropdown at a time, is fourteen
+   clicks nobody should have to make. */
+function hCopyAll(ix){
+  var src = state.hoursDraft.weekly[ix];
+  state.hoursDraft.weekly.forEach(function(d, i){
+    if(i===ix || d.closed) return;
+    d.open = src.open; d.close = src.close;
+  });
+  renderHours();
+}
+function oSet(ix,k,v){
+  state.hoursDraft.overrides[ix][k]=v;
+  if(k!=="label") renderHours();
+}
 function oClosed(ix,v){ state.hoursDraft.overrides[ix].closed=v; renderHours(); }
 function oDel(ix){ state.hoursDraft.overrides.splice(ix,1); renderHours(); }
 function addOverride(){

@@ -240,6 +240,40 @@ const hoursText = await page.textContent('#view-hours');
 ok('the store-hours editor lists all seven days',
   ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].every(d => hoursText.includes(d)));
 ok('and the existing exception is shown', (await page.inputValue('#hours-over input[type=date]')) === '2026-09-19');
+
+// The time controls. Native <input type="time"> clipped its own value and
+// accepted half-typed garbage; these are dropdowns of real opening times.
+ok('[hours] no native time inputs remain', (await page.$$('#view-hours input[type=time]')).length === 0);
+const sels = await page.$$('#hours-week select.t');
+ok('[hours] every day has an open and a close dropdown', sels.length === 14, sels.length + ' found');
+const optCount = await page.$$eval('#hours-week select.t', els => els[0].options.length);
+ok('[hours] the dropdown offers quarter-hour times', optCount === 97, optCount + ' options');
+const closeOpts = await page.$$eval('#hours-week select.t', els => Array.from(els[1].options).map(o => o.text));
+ok('[hours] closing at midnight is offered', closeOpts.indexOf('Midnight') >= 0);
+ok('[hours] and midnight is NOT offered as an opening time',
+  (await page.$$eval('#hours-week select.t', els => Array.from(els[0].options).map(o => o.text))).indexOf('Midnight') < 0);
+// Nothing may be clipped: the control must be at least as wide as its content.
+const clipped = await page.$$eval('#hours-week select.t', els =>
+  els.filter(e => e.scrollWidth > e.clientWidth + 1).length);
+ok('[hours] no dropdown clips its own value', clipped === 0, clipped + ' clipped');
+
+// Fill Tuesday in and copy it across.
+await page.selectOption('#hours-week .hrow:nth-child(3) select.t >> nth=0', '12:00');
+await page.selectOption('#hours-week .hrow:nth-child(3) select.t >> nth=1', '20:00');
+await sleep(200);
+ok('[hours] the row shows how long the day is', /8h/.test(await page.textContent('#hours-week .hrow:nth-child(3)')));
+await page.click('#hours-week .hrow:nth-child(3) button');
+await sleep(250);
+const afterCopy = await page.$$eval('#hours-week select.t', els => els.map(e => e.value));
+ok('[hours] copy-to-all-days fills every open day', afterCopy.filter(v => v === '12:00').length >= 2 && afterCopy.filter(v => v === '20:00').length >= 2,
+  afterCopy.join(','));
+// Closed days must be left alone by the copy.
+await page.click('#hours-week .hrow:nth-child(1) input[type=checkbox]');
+await sleep(200);
+ok('[hours] a closed day disables its dropdowns',
+  await page.isDisabled('#hours-week .hrow:nth-child(1) select.t >> nth=0'));
+ok('[hours] and says so', /closed/i.test(await page.textContent('#hours-week .hrow:nth-child(1)')));
+
 await page.screenshot({ path: path.join(SHOTS, 'guru-master-hours.png'), fullPage: true });
 
 // ---------------------------------------------------------------- narrow
