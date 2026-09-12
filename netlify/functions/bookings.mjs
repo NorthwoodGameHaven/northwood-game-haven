@@ -13,6 +13,10 @@ import { checkWindow, loadBlockers, describe, toMins as cToMins, MIN_GAP_MINS } 
 // bookings anywhere in the codebase (only event registrations had one).
 import { refundPaymentIntent } from './_shared/stripe.mjs';
 import { refundSale } from './_shared/lightspeed.mjs';
+// NGH-BUILD 2026-09-12h: the server now owns booking money. Prices used to be
+// computed in booking.html and stored verbatim, so a schedule edit changed the
+// hours but not the price, and a crafted PATCH could set any amount it liked.
+import { computeBookingMoney, hoursError, CLIENT_MONEY_FIELDS, PRICE_SHAPE_FIELDS } from './_shared/pricing.mjs';
 
 const ROOM_IDS = ['holt', 'den', 'depths'];
 
@@ -75,10 +79,20 @@ const _handler = async (req) => {
     // Server-side double-booking guard for non-recurring single submissions.
     // (Recurring requests are reviewed per-instance by staff, so we allow them
     //  through and let the admin resolve conflicts during approval.)
+    const isStaffCreate = requireAdmin(req);
     for (const b of list) {
       if (!b.id || !b.date || !b.start || !b.hours || !Array.isArray(b.rooms)) {
         return bad('Malformed booking record');
       }
+      // NGH-BUILD 2026-09-12h: the 4-hour minimum was only a <select> on the
+      // public form — a crafted POST could book 1 hour at customer prices.
+      // Staff (authenticated) keep 1-8 for in-person bookings.
+      const he = hoursError(b.hours, { isStaff: isStaffCreate });
+      if (he) return bad(he, 400);
+      if (!b.rooms.length) return bad('at least one room is required', 400);
+      // Whatever money the client sent is discarded and recomputed here.
+      for (const f of CLIENT_MONEY_FIELDS) delete b[f];
+      Object.assign(b, computeBookingMoney(b));
     }
     if (list.length === 1) {
       const b = list[0];
@@ -235,7 +249,36 @@ const _handler = async (req) => {
       const id = decodeURIComponent(parts[0]);
       const rows = await sql`SELECT data FROM bookings WHERE id = ${id}`;
       if (!rows.length) return bad('Not found', 404);
-      const merged = { ...rows[0].data, ...patch };
+      const prev = rows[0].data;
+
+      // NGH-BUILD 2026-09-12h: money is server-owned. Client-supplied amounts
+      // are dropped, and any patch that changes the SHAPE of the booking
+      // (hours, rooms, add-ons, military claim) triggers a full reprice — this
+      // is what makes "✎ Edit → Save date/time" actually change the price.
+      const repriced = PRICE_SHAPE_FIELDS.some(f => Object.prototype.hasOwnProperty.call(patch, f));
+      for (const f of CLIENT_MONEY_FIELDS) delete patch[f];
+      if (patch.hours != null) {
+        const he = hoursError(patch.hours, { isStaff: true });   // this route is admin-only
+        if (he) return bad(he, 400);
+      }
+      const merged = { ...prev, ...patch };
+      if (repriced) {
+        const before = Number(prev.costBooking) || 0;
+        Object.assign(merged, computeBookingMoney(merged));
+        // A paid booking that gets repriced no longer matches what was charged.
+        // Surface it rather than silently over/under-billing.
+        if ((prev.feePaid || prev.depositPaid) && Number(merged.costBooking) !== before) {
+          merged.repricedAfterPayment = {
+            at: new Date().toISOString(),
+            wasCostBooking: before, nowCostBooking: Number(merged.costBooking),
+            paidCents: Number(prev.feePaidCents) || null
+          };
+          console.warn('[bookings] repriced a PAID booking', id, before, '→', merged.costBooking);
+        }
+      } else if (Object.prototype.hasOwnProperty.call(patch, 'deposit')) {
+        // Sanctioned staff override (adjustDeposit) — keep it, refresh the total.
+        Object.assign(merged, computeBookingMoney(merged));
+      }
       await sql`UPDATE bookings
                 SET data = ${JSON.stringify(merged)}::jsonb,
                     status = ${merged.status || null}
