@@ -227,6 +227,22 @@
   to   = "/tv-idle.html"
   status = 200
 
+# NGH-BUILD 2026-09-12q — Master Guru Calendar: one merged read of every
+# scheduling source (events, bookings incl. pending, birthdays, blackouts,
+# store shifts, unavailability, off-site commitments) plus coverage + conflicts.
+[[redirects]]
+  from = "/api/schedule/*"
+  to   = "/.netlify/functions/schedule/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/schedule"
+  to   = "/.netlify/functions/schedule"
+  status = 200
+[[redirects]]
+  from = "/master"
+  to   = "/guru-master.html"
+  status = 200
+
 # NGH-BUILD 2026-09-12n — privacy policy. Google Play will not accept a
 # listing without this URL, and the Data Safety form is checked against what
 # the page says.

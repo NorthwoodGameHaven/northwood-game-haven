@@ -34,6 +34,12 @@
   .chip.ci{ background:#fdecea; color:var(--red); font-weight:bold; }
   .ev{ border-left:5px solid var(--forest); }
   .ev.offsite{ border-left-color:var(--teal); }
+  /* NGH-BUILD 2026-09-12q: room bookings, deliberately unlike the event cards. */
+  .bk{ border-left:5px double #6e1f2b; }
+  .bk.pending{ background-image:repeating-linear-gradient(45deg, rgba(110,31,43,0.07) 0, rgba(110,31,43,0.07) 6px, transparent 6px, transparent 13px); }
+  .bk-title{ font-weight:bold; color:#6e1f2b; font-size:17px; }
+  .bk-tag{ display:inline-block; background:#6e1f2b; color:#fff; border-radius:20px; padding:1px 9px; font-size:12px; margin-left:6px; }
+  .bk-tag.warn{ background:#b8862d; color:#241c07; }
   .ev-title{ font-weight:bold; color:var(--forest); font-size:17px; }
   .ev-time{ font-size:14px; color:var(--amber); font-weight:bold; }
   .weather{ background:linear-gradient(135deg,#eef4ee,#f7f3e6); border:1px solid #dfe6d8; border-radius:12px; padding:10px 14px; text-align:center; font-size:14px; color:#41523f; margin-bottom:12px; }
@@ -68,6 +74,10 @@
 
     <h2 class="sec">📋 Today <span class="cnt" id="today-label"></span></h2>
     <div id="today-list"><p class="empty">Loading…</p></div>
+
+    <!-- NGH-BUILD 2026-09-12q -->
+    <h2 class="sec">🔑 Room bookings <span class="cnt" id="bk-label">(today &amp; the next 7 days)</span></h2>
+    <div id="bookings-list"><p class="empty">Loading…</p></div>
 
     <h2 class="sec">🗓️ The week ahead <span class="cnt">(next 7 days)</span></h2>
     <div class="card" id="week-list"><p class="empty">Loading…</p></div>
@@ -182,8 +192,55 @@
     return h;
   }
 
+  /* NGH-BUILD 2026-09-12q */
+  var BK_ROOMS = { holt:"The Holt", den:"Stash's Den", depths:"The Depths", lodge:"Lakeview Lodge (VRBO)", rest:"Otter's Rest (VRBO)" };
+  function bkRooms(b){ return (b.rooms||[]).map(function(r){ return BK_ROOMS[r]||r; }).join(", ") || "room TBD"; }
+  function bkGurus(b){
+    var ov=null, base=null;
+    (S.guru.assignments||[]).forEach(function(a){
+      if(!a || a.bookingId!==b.id) return;
+      if(a.date===b.date) ov=a; else if(a.date==null) base=a;
+    });
+    var a=ov||base;
+    if(!a) return null;
+    return a.none ? [] : (a.gurus||[]);
+  }
+  function bkCard(b){
+    var need=(b.addons||[]).filter(function(a){ return a && a.id==="guru"; })[0];
+    var qty=need ? Math.max(1, parseInt(need.qty,10)||1) : 0;
+    var g=bkGurus(b);
+    var mins=t2m(b.start)||0, endM=mins+Math.round((Number(b.hours)||1)*60);
+    var when=(b.date===TODAY ? "Today" : human(b.date)) + " · " + m2t(mins) + "–" + m2t(Math.min(1440,endM));
+    var tags="";
+    if(b.status!=="approved") tags+='<span class="bk-tag warn">'+esc(b.status)+'</span>';
+    if(qty) tags+='<span class="bk-tag'+((g&&g.length>=qty)?"":" warn")+'">'+((g&&g.length)||0)+'/'+qty+' Guru'+(qty>1?"s":"")+'</span>';
+    if(b.birthdayParty) tags+='<span class="bk-tag">\ud83c\udf82 birthday</span>';
+    return '<div class="card ev bk'+(b.status!=="approved"?" pending":"")+'">'+
+      '<div class="bk-title">\ud83d\udd11 '+esc(b.name||"Private booking")+tags+'</div>'+
+      '<div class="ev-time">'+esc(when)+'</div>'+
+      '<div>'+esc(bkRooms(b))+(b.guests?(" · "+esc(b.guests)+" guests"):"")+'</div>'+
+      (g && g.length ? '<div>\ud83d\udc64 '+esc(g.join(", "))+'</div>'
+                     : (qty ? '<div style="color:#8a5a12;">\u26a0\ufe0f No Guru assigned yet</div>' : ''))+
+      (b.phone?('<div class="empty" style="margin:4px 0 0;">'+esc(b.phone)+'</div>'):'')+
+      '<div style="margin-top:8px;">'+
+        '<a class="btn ghost small" href="guru-master.html?date='+encodeURIComponent(b.date)+'&view=day">Master Calendar</a> '+
+        '<a class="btn ghost small" href="booking.html?admin=1&view=list#'+encodeURIComponent(b.id)+'">Open request</a>'+
+      '</div></div>';
+  }
+  function m2t(m){ var h=Math.floor(m/60), mm=m%60, ap=h>=12?"PM":"AM"; h=h%12; if(h===0)h=12; return h+(mm?(":"+(mm<10?"0":"")+mm):"")+ap; }
+  function renderBookings(){
+    var horizon=addDays(TODAY,7);
+    var list=(S.bookings||[]).filter(function(b){ return b.date>=TODAY && b.date<=horizon; })
+      .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:((t2m(a.start)||0)-(t2m(b.start)||0)); });
+    var todayN=list.filter(function(b){ return b.date===TODAY; }).length;
+    $("bk-label").textContent = "(" + (todayN ? (todayN + " today, ") : "") + list.length + " in the next 7 days)";
+    $("bookings-list").innerHTML = list.length ? list.map(bkCard).join("")
+      : '<div class="card"><p class="empty">\ud83d\udd11 No room bookings in the next week.</p></div>';
+  }
+
   function render(){
     $("today-label").textContent = "("+human(TODAY)+")";
+    renderBookings();
     var horizon=addDays(TODAY,7), occ=[];
     S.events.forEach(function(e){
       if(e.status==="draft") return;
@@ -260,10 +317,16 @@
     $("today-list").innerHTML='<p class="empty">Loading…</p>';
     Promise.all([
       fetch(API+"/events",{headers:hdrs()}).then(function(r){ if(r.status===401) throw new Error("auth"); return r.json(); }),
-      fetch(API+"/gurus",{headers:hdrs()}).then(function(r){ return r.ok?r.json():{}; }).catch(function(){ return {}; })
+      fetch(API+"/gurus",{headers:hdrs()}).then(function(r){ return r.ok?r.json():{}; }).catch(function(){ return {}; }),
+      /* NGH-BUILD 2026-09-12q: bookings. A booking failing to load must not take
+         the whole page down with it — the events are still worth showing. */
+      fetch(API+"/bookings",{headers:hdrs()}).then(function(r){ return r.ok?r.json():[]; }).catch(function(){ return []; })
     ]).then(function(res){
       var ev=res[0]; S.events=(ev&&ev.events)||ev||[];
       S.guru={ assignments:(res[1]&&res[1].assignments)||[], shifts:(res[1]&&res[1].shifts)||[], unavail:(res[1]&&res[1].unavail)||[] };
+      var bk=res[2]; S.bookings=((bk&&bk.bookings)||bk||[]).filter(function(b){
+        return b && b.date && (b.status==="approved" || b.status==="pending" || b.status==="hold");
+      });
       render();
     }).catch(function(e){
       if(String(e.message)==="auth"){ gate(); return; }

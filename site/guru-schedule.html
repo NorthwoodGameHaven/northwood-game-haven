@@ -79,6 +79,11 @@
   .blk.ev.unassigned { background:#a8a288 !important; color:#2b2b1f; font-style:italic; }
   .blk.ev.draft { background-image:repeating-linear-gradient(45deg, rgba(0,0,0,0.18) 0, rgba(0,0,0,0.18) 2px, transparent 2px, transparent 6px); font-style:italic; }
   .blk.ev b { display:block; font-size:0.66rem; }
+  /* NGH-BUILD 2026-09-12q: room bookings are not events and must never read as
+     one. Maroon, a doubled left edge, and a hatch while still a request. */
+  .blk.ev.booking { background:#6e1f2b !important; border-left:5px double rgba(255,255,255,0.85); }
+  .blk.ev.booking.pending { background-image:repeating-linear-gradient(45deg, rgba(255,255,255,0.30) 0, rgba(255,255,255,0.30) 4px, transparent 4px, transparent 9px); }
+  .blk.ev.booking.unassigned { background:#8b4a52 !important; color:#fff; font-style:normal; }
   .blk.shift { z-index:1; border:1.5px dashed rgba(90,43,122,0.55); background:repeating-linear-gradient(135deg, rgba(122,80,160,0.14) 0, rgba(122,80,160,0.14) 6px, rgba(122,80,160,0.05) 6px, rgba(122,80,160,0.05) 12px); color:#5a2b7a; cursor:default; }
   .blk.unav { z-index:2; background:repeating-linear-gradient(45deg, rgba(60,60,60,0.16) 0, rgba(60,60,60,0.16) 4px, rgba(60,60,60,0.06) 4px, rgba(60,60,60,0.06) 8px); border:1.5px dotted #888; color:#444; cursor:default; }
   .blk.conf-red { outline:3px solid #c0392b; outline-offset:-1px; }
@@ -291,12 +296,22 @@ async function boot(){
   await reload();
 }
 async function reload(){
-  var ev=await api("/events");
-  var gd=await api("/gurus");
+  /* NGH-BUILD 2026-09-12q: /bookings joins the fetch. This page has planned the
+     week from events alone since it was written, which meant a room could be
+     booked solid and still look free here. Approved AND pending — a request
+     nobody has answered yet is exactly the thing you need to see before you
+     promise the room to somebody else. */
+  var ev, gd, bk;
+  try { ev = await api("/events"); } catch(e){ ev = []; }
+  try { gd = await api("/gurus"); } catch(e){ gd = null; }
+  try { bk = await api("/bookings"); } catch(e){ bk = []; }
   cache.events=ev||[];
   cache.assignments=(gd&&gd.assignments)||[];
   cache.shifts=(gd&&gd.shifts)||[];
   cache.unavail=(gd&&gd.unavail)||[];
+  cache.bookings=((bk&&bk.bookings)||bk||[]).filter(function(b){
+    return b && b.date && (b.status==="approved" || b.status==="pending" || b.status==="hold");
+  });
   setView(curView);
 }
 
@@ -312,6 +327,25 @@ function asgFor(eventId, date){
 }
 function gurusFor(eventId, date){
   var a=asgFor(eventId, date);
+  if(!a) return { state:"unassigned", gurus:[] };
+  if(a.none) return { state:"none", gurus:[], rec:a };
+  return { state:"assigned", gurus:a.gurus||[], rec:a };
+}
+
+/* NGH-BUILD 2026-09-12q: assignments can now point at a booking, not just an
+   event, so resolution takes the field name. Same override rule as always:
+   a dated record beats the undated one. */
+function asgForRef(field, id, date){
+  var ov=null, base=null;
+  cache.assignments.forEach(function(a){
+    if(!a || a[field]!==id) return;
+    if(a.date===date) ov=a;
+    else if(a.date==null) base=a;
+  });
+  return ov||base;
+}
+function bookingGurus(id, date){
+  var a=asgForRef("bookingId", id, date);
   if(!a) return { state:"unassigned", gurus:[] };
   if(a.none) return { state:"none", gurus:[], rec:a };
   return { state:"assigned", gurus:a.gurus||[], rec:a };
@@ -334,6 +368,26 @@ function eventItemsInRange(from,to){
         title:(e.private?"🔒 ":"")+(e.title||"NGH Event")+(isDraftEvent(e)?" (draft)":""),
         eventId:e.id, ev:e, gurus:g.gurus, gstate:g.state });
     });
+  });
+  return out;
+}
+/* NGH-BUILD 2026-09-12q */
+function bookingItemsInRange(from,to){
+  var out=[];
+  (cache.bookings||[]).forEach(function(b){
+    if(!b.date || b.date<from || b.date>to) return;
+    var sMin=timeToMins(b.start);
+    var rawEnd=sMin+Math.round((Number(b.hours)||1)*60);
+    var overnight=rawEnd>1440;
+    var addon=(b.addons||[]).filter(function(a){ return a && a.id==="guru"; })[0];
+    var g=bookingGurus(b.id,b.date);
+    out.push({ type:"booking", date:b.date, allDay:false, overnight:overnight,
+      start:sMin, end:overnight?1440:rawEnd,
+      startLbl:fmtTime(sMin), endLbl:fmtTime(overnight?1440:rawEnd)+(overnight?" (+1 day)":""),
+      title:"\ud83d\udd11 "+(b.name||"Private booking")+(b.status!=="approved"?(" ("+b.status+")"):""),
+      eventId:null, bookingId:b.id, bk:b, status:b.status,
+      guruNeed: addon ? Math.max(1, parseInt(addon.qty,10)||1) : 0,
+      gurus:g.gurus, gstate:g.state });
   });
   return out;
 }
@@ -449,7 +503,7 @@ function guruVisible(g){ return !sched.filter || sched.filter[g]; }
 
 function renderSched(){
   var r=schedRange(), from=r[0], to=r[1];
-  var evs=eventItemsInRange(from,to);
+  var evs=eventItemsInRange(from,to).concat(bookingItemsInRange(from,to)); /* NGH-BUILD 2026-09-12q */
   var shifts=shiftItemsInRange(from,to);
   var unav=unavailItemsInRange(from,to);
   // conflicts across all gurus in this window (for outlines)
@@ -537,6 +591,10 @@ function renderSched(){
     var dayEvs=evs.filter(function(e){
       if(e.date!==d) return false;
       if(e.gstate==="assigned") return e.gurus.some(guruVisible);
+      /* NGH-BUILD 2026-09-12q: a room booking with no Guru assigned still occupies
+         the room, so a Guru filter must not make it disappear — that is how a
+         double-booking gets promised. */
+      if(e.type==="booking") return true;
       return sched.showUnassigned && !sched.filter;
     }).sort(function(a,b){ return a.start-b.start || b.end-a.end; });
     var lanes=[];
@@ -549,12 +607,20 @@ function renderSched(){
     var laneCount=Math.max(1,lanes.length);
     dayEvs.forEach(function(e){
       var w=(70/laneCount), l=28+e._lane*w; // leave left gutter so store band labels stay readable
-      var col = e.gstate==="assigned" ? guruColor(e.gurus[0]) : "#a8a288";
-      var conf=confKeys[e.eventId+"|"+d];
-      var cls="blk ev"+(e.gstate!=="assigned"?" unassigned":"")+(isDraftEvent(e.ev)?" draft":"")+(e.overnight?" overnight":"")+(conf==="red"?" conf-red":conf==="yel"?" conf-yel":"");
-      var label = e.gstate==="assigned" ? e.gurus.join(" + ") : (e.gstate==="none"?"No Guru needed":"UNASSIGNED");
-      h+='<div class="'+cls+'" style="top:'+top(e.start)+'px;height:'+Math.max(22,top(e.end)-top(e.start))+'px;left:'+l+'%;width:'+(w-1)+'%;background:'+col+';" onclick="openDetails(\''+esc(e.eventId)+'\',\''+d+'\')">'+
+      var isBk = e.type==="booking";                                   /* NGH-BUILD 2026-09-12q */
+      var col = isBk ? "" : (e.gstate==="assigned" ? guruColor(e.gurus[0]) : "#a8a288");
+      var conf=confKeys[(e.eventId||e.bookingId)+"|"+d];
+      var cls="blk ev"+(isBk?" booking":"")+(isBk&&e.status!=="approved"?" pending":"")+
+              (e.gstate!=="assigned"?" unassigned":"")+((!isBk&&isDraftEvent(e.ev))?" draft":"")+
+              (e.overnight?" overnight":"")+(conf==="red"?" conf-red":conf==="yel"?" conf-yel":"");
+      var label = e.gstate==="assigned" ? e.gurus.join(" + ")
+                : (e.gstate==="none" ? "No Guru needed"
+                : (isBk ? (e.guruNeed ? ("NEEDS "+e.guruNeed+" GURU"+(e.guruNeed>1?"S":"")) : "Room booking") : "UNASSIGNED"));
+      var go = isBk ? ('openBookingDetails(\''+esc(e.bookingId)+'\')')
+                    : ('openDetails(\''+esc(e.eventId)+'\',\''+d+'\')');
+      h+='<div class="'+cls+'" style="top:'+top(e.start)+'px;height:'+Math.max(22,top(e.end)-top(e.start))+'px;left:'+l+'%;width:'+(w-1)+'%;'+(col?('background:'+col+';'):'')+'" onclick="'+go+'">'+
          '<b>'+esc(label)+'</b>'+esc(e.title)+'<br>'+e.startLbl+(e.endLbl?("–"+e.endLbl):"")+
+         (isBk&&e.bk&&e.bk.rooms&&e.bk.rooms.length?('<br>'+esc(e.bk.rooms.map(roomName).join(", "))):'')+
          (e.overnight?'<span class="contnote">⤵ continues past midnight</span>':'')+'</div>';
     });
     h+='</div></div>';
@@ -563,6 +629,40 @@ function renderSched(){
   h+='<p class="hint" style="margin-bottom:0;">Blocks show <b>Guru name first</b>, then the event title — tap any block for full event details. Purple striped bands = retail store shifts (open/close). Red outline = same-Guru overlap; yellow outline = under '+TIGHT_MIN+' min between that Guru\'s events.</p>';
   h+='</div>';
   $("view-sched").innerHTML=h;
+}
+
+/* NGH-BUILD 2026-09-12q: bookings get their own detail, and a way through to the
+   Master Guru Calendar where a Guru can actually be assigned to one. */
+function openBookingDetails(id){
+  var b=(cache.bookings||[]).filter(function(x){ return x.id===id; })[0];
+  if(!b) return;
+  var g=bookingGurus(b.id,b.date);
+  var addon=(b.addons||[]).filter(function(a){ return a && a.id==="guru"; })[0];
+  var paidFee = (b.feePaid===true || b.payment==="paid");
+  var paidDep = (b.depositPaid===true || b.payment==="paid");
+  var rows=[
+    ["Status", b.status],
+    ["When", b.date+" · "+fmtTime(timeToMins(b.start))+" for "+(b.hours||1)+"h"],
+    ["Rooms", (b.rooms||[]).map(roomName).join(", ")||"—"],
+    ["Guests", b.guests||"—"],
+    ["Contact", (b.name||"—")+(b.phone?(" · "+b.phone):"")+(b.email?(" · "+b.email):"")],
+    ["Payment", b.payment==="onaccount" ? "On account"
+       : ((paidFee?"Fee paid":"Fee due")+" · "+(paidDep?"Deposit paid":"Deposit due (payable on the day)"))],
+    ["Gurus", g.gurus.length ? g.gurus.join(", ") : (g.state==="none" ? "None needed" : "Not assigned")],
+    ["Guru add-on", addon ? (addon.qty||1)+" purchased" : "none"]
+  ];
+  if(b.comments) rows.push(["Comments", b.comments]);
+  var html='<h2 style="margin:0 0 2px;">\ud83d\udd11 '+esc(b.name||"Private booking")+'</h2>'+
+    '<p class="hint" style="margin:0 0 12px;">Private room booking</p>'+
+    rows.map(function(r){ return '<div class="kv"><b>'+esc(r[0])+'</b> '+esc(String(r[1]))+'</div>'; }).join("")+
+    '<p class="hint" style="margin-top:12px;">Guru assignment for bookings lives on the Master Guru Calendar.</p>'+
+    '<div style="margin-top:14px;text-align:right;">'+
+      '<a class="btn btn-sm btn-ghost" href="guru-master.html?date='+encodeURIComponent(b.date)+'&view=day">Open Master Calendar</a> '+
+      '<a class="btn btn-sm btn-ghost" href="booking.html?admin=1&view=list#'+encodeURIComponent(b.id)+'">Open in Requests</a> '+
+      '<button class="btn btn-sm btn-ghost" onclick="closeModal()">Close</button>'+
+    '</div>';
+  $("modal-box").innerHTML=html;
+  $("modal-bg").style.display="block";
 }
 
 /* ---------------- DETAILS MODAL ---------------- */

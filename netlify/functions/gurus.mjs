@@ -1,30 +1,54 @@
 // netlify/functions/gurus.mjs
 // Game Guru scheduling backend (admin-only except the signed ICS feed).
 //
-//   GET  /gurus                          -> { assignments, shifts, unavail }   (admin Bearer)
+//   GET  /gurus                          -> { assignments, shifts, unavail, hours }  (admin Bearer)
 //   GET  /gurus?feedkey=1                -> { key }  signed ICS feed key       (admin Bearer)
 //   GET  /gurus?ics=1&key=...&gurus=A,B  -> text/calendar feed (public w/ key; Google Calendar subscribe)
 //   POST /gurus  { action, item }        -> mutate (admin Bearer)
 //        actions: save-assignment | delete-assignment
 //                 save-shift      | delete-shift
 //                 save-unavail    | delete-unavail
+//                 save-hours
 //
 // HARD RULE enforced server-side: save-assignment is REJECTED (409) if any
 // selected guru has an "unavailable" entry overlapping any occurrence of the
-// event. Every other conflict (double-booked guru, store-shift overlap,
-// tight spacing) is advisory only and handled client-side with
+// thing being assigned. Every other conflict (double-booked guru, store-shift
+// overlap, tight spacing) is advisory only and handled client-side with
 // proceed-anyway confirms.
 //
 // Data lives in one table:
 //   guru_data (id TEXT PK, kind TEXT, data JSONB, created_at)
-//     kind='assignment' data: { id, eventId, date|null, gurus:[..], none:bool, updatedAt }
+//     kind='assignment' data: { id, eventId|bookingId|birthdayId|externalId,
+//                               date|null, gurus:[..], none:bool, updatedAt }
 //                             date null = applies to every occurrence;
 //                             date set  = override for that one occurrence.
 //     kind='shift'      data: { id, guru, date, open:"HH:MM", close:"HH:MM",
 //                               recurrence:{freq,count}|null, notes }
 //     kind='unavail'    data: { id, guru, date, endDate|null, allDay:bool,
 //                               start, end, notes }
+//     kind='hours'      data: { weekly:[7 x {closed,open,close,label}],
+//                               overrides:[{date,closed,open,close,label}],
+//                               configured:bool, updatedAt }   -- one row, id STORE-HOURS
+//
+// NGH-BUILD 2026-09-12q — WHAT CHANGED AND WHY
+//
+// 1. AN ASSIGNMENT CAN NOW POINT AT SOMETHING OTHER THAN AN EVENT.
+//    A private booking could buy Gurus — addons:[{id:"guru", qty:2}] — and
+//    nothing anywhere recorded WHICH Gurus. The quantity was the only trace.
+//    Birthday parties had no guru field at all, and an off-site card show the
+//    shop had committed to could tie up two people invisibly. Assignments now
+//    accept bookingId, birthdayId and externalId alongside eventId, so the
+//    question "who is working Saturday" finally has one answer.
+//
+// 2. STORE HOURS EXIST. There was no definition of when the shop is open
+//    anywhere in the codebase — only a per-guru shift with an open and close
+//    time and nothing to check it against. Without a template, an uncovered
+//    Thursday afternoon and a Thursday the shop is shut look identical.
+//
+// 3. THE ICS FEED STOPPED SENDING GURUS TO THE WRONG ADDRESS. Every entry
+//    hardcoded 115 W Spring St, including offsite gigs at the Plus.
 import { sql, ensureSchema, json, bad, noContent, preflight, requireAdmin } from './_shared/db.mjs';
+import { DEFAULT_STORE_HOURS } from './_shared/schedule-core.mjs';
 import crypto from 'node:crypto';
 
 function newId(p) { return p + '-' + Date.now().toString(36).toUpperCase().slice(-6) + '-' + Math.floor(Math.random() * 900 + 100); }
@@ -55,6 +79,7 @@ async function ensureGuruSchema() {
 // ---- date/time helpers (mirror booking.html conventions) ----
 const pad = (n) => (n < 10 ? '0' : '') + n;
 function timeToMins(t) { if (!t) return 0; const p = String(t).split(':'); return (+p[0]) * 60 + (+p[1] || 0); }
+function minsToTime(m) { const x = Math.max(0, Math.min(1440, m | 0)); return pad(Math.floor(x / 60) % 24) + ':' + pad(x % 60); }
 function addDays(dateStr, n) { const d = new Date(dateStr + 'T12:00:00'); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 function addMonths(dateStr, n) { const d = new Date(dateStr + 'T12:00:00'); d.setMonth(d.getMonth() + n); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 function ymdOf(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -134,7 +159,11 @@ function buildIcs(items) {
     }
     lines.push('SUMMARY:' + icsEscape(it.summary));
     if (it.desc) lines.push('DESCRIPTION:' + icsEscape(it.desc));
-    lines.push('LOCATION:Northwood Game Haven\\, 115 W Spring St\\, Chippewa Falls\\, WI');
+    // NGH-BUILD 2026-09-12q: an offsite gig is not at the shop. This used to
+    // send every subscriber to 115 W Spring St for a card show two towns over.
+    lines.push('LOCATION:' + (it.location
+      ? icsEscape(it.location)
+      : 'Northwood Game Haven\\, 115 W Spring St\\, Chippewa Falls\\, WI'));
     lines.push('END:VEVENT');
   }
   lines.push('END:VCALENDAR');
@@ -143,13 +172,59 @@ function buildIcs(items) {
 
 async function loadAll() {
   const rows = await sql`SELECT id, kind, data FROM guru_data ORDER BY created_at ASC`;
-  const out = { assignments: [], shifts: [], unavail: [] };
+  const out = { assignments: [], shifts: [], unavail: [], hours: null };
   for (const r of rows) {
     if (r.kind === 'assignment') out.assignments.push(r.data);
     else if (r.kind === 'shift') out.shifts.push(r.data);
     else if (r.kind === 'unavail') out.unavail.push(r.data);
+    else if (r.kind === 'hours') out.hours = r.data;
   }
+  if (!out.hours) out.hours = { ...DEFAULT_STORE_HOURS };
   return out;
+}
+
+// What an assignment can point at. Exactly one must be supplied.
+export const ASSIGN_REFS = ['eventId', 'bookingId', 'birthdayId', 'externalId'];
+export function refOf(item) {
+  const set = ASSIGN_REFS.filter(k => item && item[k]);
+  if (set.length !== 1) return null;
+  return { field: set[0], id: String(item[set[0]]) };
+}
+
+// The dates and times an assignment target actually occupies. Events recur;
+// bookings, parties and off-site commitments do not, so each has its own tiny
+// resolver rather than one over-clever function.
+async function occurrencesOfTarget(ref, itemDate) {
+  if (ref.field === 'eventId') {
+    const events = await loadEvents();
+    const e = events.find(x => x.id === ref.id);
+    if (!e) return { error: 'Event not found' };
+    const dates = itemDate ? [itemDate] : eventDates(e);
+    return { occs: dates.map(d => ({ date: d, allDay: !!e.allDay, start: e.start, end: e.end || e.start })) };
+  }
+  if (ref.field === 'bookingId') {
+    const rows = await sql`SELECT data FROM bookings WHERE id = ${ref.id}`;
+    const b = rows[0] && rows[0].data;
+    if (!b) return { error: 'Booking not found' };
+    const s = timeToMins(b.start);
+    const e = s + Math.round((Number(b.hours) || 1) * 60);
+    return { occs: [{ date: b.date, allDay: false, start: b.start, end: minsToTime(Math.min(1440, e)) }] };
+  }
+  if (ref.field === 'birthdayId') {
+    const rows = await sql`SELECT data FROM birthday_requests WHERE id = ${ref.id}`;
+    const r = rows[0] && rows[0].data;
+    if (!r) return { error: 'Birthday request not found' };
+    if (!r.time) return { occs: [{ date: r.date, allDay: true, start: null, end: null }] };
+    const s = timeToMins(r.time);
+    return { occs: [{ date: r.date, allDay: false, start: r.time, end: minsToTime(Math.min(1440, s + 180)) }] };
+  }
+  // externalId — a third-party event. Its own recurrence model is a date span
+  // plus an optional weekly repeat, so an assignment there is per-date only.
+  const rows = await sql`SELECT data FROM interest_events WHERE id = ${ref.id}`;
+  const r = rows[0] && rows[0].data;
+  if (!r) return { error: 'Event of interest not found' };
+  const d = itemDate || r.date;
+  return { occs: [{ date: d, allDay: r.allDay !== false, start: r.start || null, end: r.end || r.start || null }] };
 }
 
 async function loadEvents() {
@@ -196,6 +271,7 @@ const _handler = async (req) => {
     // Event assignments
     for (const a of store.assignments) {
       if (a.none || !a.gurus || !a.gurus.length) continue;
+      if (!a.eventId) continue;                      // handled below by kind
       const e = evById[a.eventId]; if (!e) continue;
       const gurus = a.gurus.filter(wants); if (!gurus.length) continue;
       const occs = occInWindow(e, from, to);
@@ -208,10 +284,69 @@ const _handler = async (req) => {
           uid: 'ga-' + a.eventId + '-' + o.date + '-' + gurus.join('_').replace(/\W+/g, ''),
           date: o.date, allDay: o.allDay, start: o.start, end: o.end,
           summary: gurus.join(' + ') + ' — ' + (e.title || 'NGH Event'),
-          desc: 'Guru(s): ' + gurus.join(', ') + (e.notes ? ('\n' + e.notes) : '')
+          desc: 'Guru(s): ' + gurus.join(', ') + (e.notes ? ('\n' + e.notes) : ''),
+          location: e.offsite ? (e.offsiteLocation || 'Offsite') : ''
         });
       }
     }
+    // NGH-BUILD 2026-09-12q: bookings, birthday parties and off-site
+    // commitments. A guru who subscribes to this feed and is working a
+    // private booking on Saturday used to see an empty Saturday.
+    const [bkRows, bdRows, ieRows] = await Promise.all([
+      sql`SELECT data FROM bookings WHERE status IN ('approved','pending','hold')`.catch(() => []),
+      sql`SELECT data FROM birthday_requests`.catch(() => []),
+      sql`SELECT data FROM interest_events`.catch(() => [])
+    ]);
+    const bkById = {}; bkRows.forEach(r => { if (r.data) bkById[r.data.id] = r.data; });
+    const bdById = {}; bdRows.forEach(r => { if (r.data) bdById[r.data.id] = r.data; });
+    const ieById = {}; ieRows.forEach(r => { if (r.data) ieById[r.data.id] = r.data; });
+
+    for (const a of store.assignments) {
+      if (a.none || !a.gurus || !a.gurus.length) continue;
+      const gurus = a.gurus.filter(wants); if (!gurus.length) continue;
+
+      if (a.bookingId) {
+        const b = bkById[a.bookingId];
+        if (!b || !b.date || b.date < from || b.date > to) continue;
+        const s = timeToMins(b.start);
+        items.push({
+          uid: 'gab-' + a.bookingId + '-' + b.date, date: b.date, allDay: false,
+          start: b.start, end: minsToTime(Math.min(1440, s + Math.round((Number(b.hours) || 1) * 60))),
+          summary: gurus.join(' + ') + ' — 🔑 ' + (b.name || 'Private booking') +
+            (b.status !== 'approved' ? ' (' + b.status + ')' : ''),
+          desc: 'Private room booking' + (b.rooms && b.rooms.length ? ('\nRooms: ' + b.rooms.join(', ')) : '') +
+            (b.guests ? ('\nGuests: ' + b.guests) : '') + (b.phone ? ('\nPhone: ' + b.phone) : '')
+        });
+        continue;
+      }
+      if (a.birthdayId) {
+        const r = bdById[a.birthdayId];
+        if (!r || !r.date || r.date < from || r.date > to) continue;
+        const s = r.time ? timeToMins(r.time) : 0;
+        items.push({
+          uid: 'gad-' + a.birthdayId + '-' + r.date, date: r.date, allDay: !r.time,
+          start: r.time || null, end: r.time ? minsToTime(Math.min(1440, s + 180)) : null,
+          summary: gurus.join(' + ') + ' — 🎂 ' + (r.heroName ? r.heroName + "'s party" : 'Birthday party'),
+          desc: (r.package || 'Birthday party') + (r.guests ? ('\nGuests: ' + r.guests) : '') +
+            (r.name ? ('\nContact: ' + r.name) : '') + (r.phone ? ('\nPhone: ' + r.phone) : '')
+        });
+        continue;
+      }
+      if (a.externalId) {
+        const r = ieById[a.externalId];
+        if (!r) continue;
+        const d = a.date || r.date;
+        if (!d || d < from || d > to) continue;
+        items.push({
+          uid: 'gax-' + a.externalId + '-' + d, date: d, allDay: r.allDay !== false,
+          start: r.start || null, end: r.end || r.start || null,
+          summary: gurus.join(' + ') + ' — 🚗 ' + (r.title || 'Off-site event'),
+          desc: 'Off-site' + (r.location ? (' at ' + r.location) : '') + (r.notes ? ('\n' + r.notes) : ''),
+          location: r.location || 'Off-site'
+        });
+      }
+    }
+
     // Store shifts
     for (const s of store.shifts) {
       if (!wants(s.guru)) continue;
@@ -250,24 +385,31 @@ const _handler = async (req) => {
     const item = (body && body.item) || {};
 
     if (action === 'save-assignment') {
-      if (!item.eventId) return bad('eventId required');
+      // NGH-BUILD 2026-09-12q: eventId is no longer the only thing a guru can
+      // be assigned to. Exactly one reference must be given so an assignment
+      // can never be ambiguous about what it staffs.
+      const ref = refOf(item);
+      if (!ref) {
+        return bad('exactly one of ' + ASSIGN_REFS.join(', ') + ' is required');
+      }
       const gurus = Array.isArray(item.gurus) ? item.gurus.map((g) => String(g).trim()).filter(Boolean) : [];
       const none = !!item.none;
       if (!none && !gurus.length) return bad('Select at least one Guru, or choose None.');
 
-      // HARD BLOCK: unavailability. Server-authoritative.
+      // HARD BLOCK: unavailability. Server-authoritative, and now covering
+      // bookings and parties too — not just events. A guru who has the day
+      // off cannot be quietly put on a birthday party.
       if (!none && gurus.length) {
-        const [events, store] = await Promise.all([loadEvents(), loadAll()]);
-        const e = events.find((x) => x.id === item.eventId);
-        if (!e) return bad('Event not found', 404);
-        const occs = item.date
-          ? [{ date: item.date, allDay: !!e.allDay, start: e.start, end: e.end }]
-          : eventDates(e).map((d) => ({ date: d, allDay: !!e.allDay, start: e.start, end: e.end }));
-        const s = timeToMins(e.start), en = timeToMins(e.end || e.start);
+        const target = await occurrencesOfTarget(ref, item.date || null);
+        if (target.error) return bad(target.error, 404);
+        const store = await loadAll();
         const viol = [];
-        for (const g of gurus) for (const o of occs) for (const u of store.unavail) {
-          if (unavailBlocks(u, g, o.date, o.allDay, s, en)) {
-            viol.push({ guru: g, date: o.date, unavailId: u.id, allDay: !!u.allDay, start: u.start || null, end: u.end || null, notes: u.notes || '' });
+        for (const o of target.occs) {
+          const s = timeToMins(o.start), en = timeToMins(o.end || o.start);
+          for (const g of gurus) for (const u of store.unavail) {
+            if (unavailBlocks(u, g, o.date, o.allDay, s, en)) {
+              viol.push({ guru: g, date: o.date, unavailId: u.id, allDay: !!u.allDay, start: u.start || null, end: u.end || null, notes: u.notes || '' });
+            }
           }
         }
         if (viol.length) return json({ error: 'guru-unavailable', conflicts: viol }, 409);
@@ -275,7 +417,7 @@ const _handler = async (req) => {
 
       const rec = {
         id: item.id || newId('GA'),
-        eventId: item.eventId,
+        [ref.field]: ref.id,
         date: item.date || null,
         gurus: none ? [] : gurus,
         none,
@@ -283,6 +425,48 @@ const _handler = async (req) => {
       };
       await sql`INSERT INTO guru_data (id, kind, data) VALUES (${rec.id}, 'assignment', ${JSON.stringify(rec)}::jsonb)
                 ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`;
+      return json(rec, 201);
+    }
+
+    // NGH-BUILD 2026-09-12q: the store-hours template. One row, replaced whole.
+    // Nothing else in the codebase knew when the shop was open — coverage
+    // warnings on the master calendar are measured against this and nothing
+    // else, so an unconfigured template deliberately produces no warnings at
+    // all rather than pretending every day is a nine-to-five.
+    if (action === 'save-hours') {
+      const src = (item && item.weekly) || [];
+      const weekly = [];
+      for (let i = 0; i < 7; i++) {
+        const d = src[i] || {};
+        const closed = !!d.closed || !d.open || !d.close;
+        weekly.push({
+          closed,
+          open: closed ? '' : String(d.open),
+          close: closed ? '' : String(d.close),
+          label: String(d.label || '')
+        });
+        if (!closed && timeToMins(d.close) <= timeToMins(d.open)) {
+          return bad('Closing time must be after opening time (' + ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i] + ')');
+        }
+      }
+      const overrides = [];
+      for (const o of (item.overrides || [])) {
+        if (!o || !/^\d{4}-\d{2}-\d{2}$/.test(String(o.date || ''))) continue;
+        const closed = !!o.closed || !o.open || !o.close;
+        if (!closed && timeToMins(o.close) <= timeToMins(o.open)) {
+          return bad('Closing time must be after opening time (' + o.date + ')');
+        }
+        overrides.push({
+          date: o.date, closed,
+          open: closed ? '' : String(o.open),
+          close: closed ? '' : String(o.close),
+          label: String(o.label || '')
+        });
+      }
+      overrides.sort((a, b) => (a.date < b.date ? -1 : 1));
+      const rec = { weekly, overrides, configured: true, updatedAt: new Date().toISOString() };
+      await sql`INSERT INTO guru_data (id, kind, data) VALUES ('STORE-HOURS', 'hours', ${JSON.stringify(rec)}::jsonb)
+                ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, kind = 'hours'`;
       return json(rec, 201);
     }
 

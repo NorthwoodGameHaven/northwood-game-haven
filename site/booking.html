@@ -3666,7 +3666,7 @@ function eventsForDate(dateStr){
   var evs=[];
   cache.bookings.forEach(function(r){
     if(r.status==="rejected") return;
-    if(r.date===dateStr) evs.push({cat:"booking", status:r.status, payment:r.payment, rec:!!r.groupId, start:r.start, hours:r.hours, label:r.name+" · "+roomList(r), id:r.id, groupId:r.groupId, _src:r, _ds:dateStr});
+    if(r.date===dateStr) evs.push({cat:"booking", status:r.status, payment:r.payment, rec:!!r.groupId, start:r.start, hours:r.hours, label:"\uD83D\uDD11 "+r.name+" · "+roomList(r), id:r.id, groupId:r.groupId, _src:r, _ds:dateStr}); /* NGH-BUILD 2026-09-12q: key icon so a room booking is identifiable by kind, not only by colour */
   });
   expandedEvents().forEach(function(e){
     if(e.date===dateStr) evs.push({cat:"event", priv:!!e.private, rec:!!e.recurrence, start:e.allDay?null:e.start, end:e.allDay?null:e.end, allDay:e.allDay, hours:e.allDay?null:durHours(e.start,e.end), label:(e.private?"🔒 ":"")+(e.title||"NGH Event")+" ("+eventRoomsLabel(e)+")", id:e.id, isEvent:true, _src:e, _ds:dateStr});
@@ -4080,7 +4080,7 @@ function _auditItems(){
     var pend=(r.status!=="approved");
     var s=timeToMins(r.start), e=Math.min(s+(Number(r.hours)||1)*60,1440);
     (r.rooms||[]).forEach(function(room){
-      items.push({date:r.date, room:room, s:s, e:e, cat:"booking", id:r.id, label:(pend?"⏳ Pending · ":"")+(r.name||"Booking"), rec:!!r.groupId, allDay:false, pend:pend});
+      items.push({date:r.date, room:room, s:s, e:e, cat:"booking", id:r.id, label:(pend?"⏳ Pending · ":"\uD83D\uDD11 ")+(r.name||"Booking"), rec:!!r.groupId, allDay:false, pend:pend}); /* NGH-BUILD 2026-09-12q */
     });
   });
   expandedEvents().forEach(function(ev){

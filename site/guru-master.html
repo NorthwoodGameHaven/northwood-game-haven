@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Master Guru Calendar — Northwood Game Haven</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<!--
+  NGH-BUILD 2026-09-12q — the Master Guru Calendar.
+
+  One view for everything that occupies a room, a person or a day. Until now
+  each of those lived on its own page with its own idea of the truth: the Guru
+  Schedule never loaded bookings at all, the booking console never showed who
+  was working, and an off-site card show that tied up two Gurus appeared on
+  neither.
+
+  This page does no merging of its own. /api/schedule returns the whole week
+  already normalized (see netlify/functions/_shared/schedule-core.mjs), which
+  is deliberate — the repo already carried five divergent copies of recurrence
+  expansion, and that is precisely how the old calendars drifted apart. This
+  file draws; it does not decide.
+-->
+<style>
+  :root {
+    --forest:#2e5d3b; --forest-light:#3f7a50; --gold:#b8862d; --gold-light:#d4a94e;
+    --den:#2b2b1f; --cream:#faf6ec; --dark:#1d2a1f; --maroon:#6e1f2b; --teal-dark:#134b57;
+    /* One colour per kind, used identically in the rail, the grid and the key. */
+    --k-event:#2e5d3b; --k-booking:#6e1f2b; --k-birthday:#b8862d;
+    --k-external:#134b57; --k-shift:#5b6f4a; --k-unavail:#8a8a7a; --k-blackout:#4a4a4a;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Georgia,'Times New Roman',serif; background:var(--cream); color:var(--den); }
+  h1,h2,h3 { font-family:'Cinzel',serif; color:var(--forest); }
+  a { color:var(--forest); }
+  .wrap { max-width:1600px; margin:0 auto; padding:16px; }
+  header.topbar { background:linear-gradient(135deg,var(--forest),#234a2e); color:#fff; padding:14px 18px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header.topbar h1 { color:#fff; margin:0; font-size:1.15rem; letter-spacing:0.05em; }
+  header.topbar .caveat { font-family:'Caveat',cursive; color:var(--gold-light); font-size:1.15rem; }
+  header.topbar .sp { flex:1; }
+  .card { background:#fff; border:1px solid #e2e0d2; border-radius:14px; padding:16px 18px; margin-bottom:14px; box-shadow:0 4px 14px rgba(30,40,25,0.06); }
+  .hint { font-size:0.8rem; color:#7a7a5a; }
+  .btn { background:linear-gradient(135deg,var(--forest),var(--forest-light)); color:#fff; border:none; border-radius:50px; padding:11px 24px; font-family:'Cinzel',serif; font-size:0.82rem; letter-spacing:0.06em; cursor:pointer; }
+  .btn:hover { transform:translateY(-1px); }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+  .btn-ghost { background:transparent; border:1.5px solid var(--forest); color:var(--forest); }
+  .btn-gold { background:linear-gradient(135deg,var(--gold),var(--gold-light)); }
+  .btn-danger { background:linear-gradient(135deg,var(--maroon),#8d2b39); }
+  .btn-sm { padding:7px 14px; font-size:0.72rem; }
+  .btn-xs { padding:4px 10px; font-size:0.66rem; border-radius:50px; }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .tab { background:#fff; border:1.5px solid #d8d5c2; color:var(--den); border-radius:50px; padding:8px 18px; font-family:'Cinzel',serif; font-size:0.76rem; cursor:pointer; }
+  .tab.active { background:var(--forest); border-color:var(--forest); color:#fff; }
+  input,select,textarea { font-family:Georgia,serif; font-size:0.9rem; padding:7px 9px; border:1px solid #d8d5c2; border-radius:8px; background:#fff; color:var(--den); }
+  label.f { display:block; font-size:0.72rem; letter-spacing:0.06em; text-transform:uppercase; color:#7a7a5a; margin-bottom:3px; }
+
+  /* ---------- top bar / range ---------- */
+  .rangebar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .rangebar .when { font-family:'Cinzel',serif; font-size:1.05rem; color:var(--forest); min-width:280px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { border:1.5px solid #d8d5c2; background:#fff; border-radius:50px; padding:4px 11px; font-size:0.72rem; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
+  .chip.on { border-color:var(--forest); background:#eef4ec; }
+  .chip .sw { width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .chip.off { opacity:0.45; }
+
+  /* ---------- guru coverage rail ---------- */
+  .rail { overflow-x:auto; }
+  table.rail-t { border-collapse:collapse; width:100%; min-width:900px; }
+  table.rail-t th, table.rail-t td { border:1px solid #e6e3d4; padding:0; vertical-align:middle; }
+  table.rail-t th.dayh { background:#f4f1e4; font-family:'Cinzel',serif; font-size:0.72rem; color:var(--forest); padding:6px 4px; text-align:center; font-weight:500; }
+  table.rail-t th.dayh.today { background:var(--gold-light); color:var(--dark); }
+  table.rail-t th.dayh small { display:block; font-family:Georgia,serif; font-size:0.66rem; color:#7a7a5a; font-weight:normal; }
+  table.rail-t th.dayh.today small { color:#4a3d16; }
+  td.gname { background:#faf8ef; font-size:0.78rem; padding:4px 8px !important; white-space:nowrap; font-weight:bold; width:96px; }
+  td.gcell { height:26px; padding:2px !important; }
+  .bar { display:block; border-radius:4px; font-size:0.63rem; line-height:1.25; padding:2px 5px; color:#fff; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  .bar:last-child { margin-bottom:0; }
+  .bar.event { background:var(--k-event); }
+  .bar.booking { background:var(--k-booking); }
+  .bar.birthday { background:var(--k-birthday); color:#241c07; }
+  .bar.external { background:var(--k-external); }
+  .bar.shift { background:var(--k-shift); }
+  .bar.unavail { background:repeating-linear-gradient(45deg,#8a8a7a,#8a8a7a 4px,#9d9d8c 4px,#9d9d8c 8px); }
+  .bar.tentative { background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.34),rgba(255,255,255,0.34) 4px,transparent 4px,transparent 8px); }
+  .free { color:#b9b6a4; font-size:0.66rem; text-align:center; display:block; padding-top:5px; }
+
+  /* ---------- time grid ---------- */
+  .gridwrap { overflow-x:auto; }
+  table.grid { border-collapse:collapse; width:100%; min-width:1000px; table-layout:fixed; }
+  table.grid th, table.grid td { border:1px solid #e6e3d4; vertical-align:top; }
+  table.grid col.hcol { width:62px; }
+  td.hour { background:#faf8ef; font-size:0.68rem; color:#7a7a5a; text-align:right; padding:3px 6px; white-space:nowrap; }
+  td.slot { padding:2px; height:38px; }
+  td.slot.closed { background:repeating-linear-gradient(45deg,#f2efe2,#f2efe2 6px,#eae7d8 6px,#eae7d8 12px); }
+  td.slot.uncovered { background:#fdf2f0; }
+  td.slot.today { background:#fdfbf2; }
+  td.slot.today.uncovered { background:#fdeeea; }
+  .ev { border-radius:6px; padding:3px 6px; font-size:0.7rem; line-height:1.3; margin-bottom:3px; color:#fff; cursor:pointer; border-left:4px solid rgba(0,0,0,0.28); }
+  .ev b { display:block; font-size:0.73rem; }
+  .ev small { display:block; opacity:0.9; font-size:0.63rem; }
+  .ev.event { background:var(--k-event); }
+  .ev.booking { background:var(--k-booking); border-left-style:double; border-left-width:6px; }
+  .ev.birthday { background:var(--k-birthday); color:#241c07; }
+  .ev.external { background:var(--k-external); border-left-style:dashed; }
+  .ev.blackout { background:var(--k-blackout); }
+  .ev.tentative { background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.3),rgba(255,255,255,0.3) 5px,transparent 5px,transparent 10px); }
+  .ev .tag { display:inline-block; background:rgba(255,255,255,0.25); border-radius:20px; padding:0 6px; font-size:0.6rem; margin-right:3px; }
+  .allday-row td { background:#f7f5ea; }
+
+  /* ---------- day view ---------- */
+  .lanes { overflow-x:auto; }
+  table.lane-t { border-collapse:collapse; width:100%; min-width:900px; }
+  table.lane-t th, table.lane-t td { border:1px solid #e6e3d4; padding:4px 6px; vertical-align:top; font-size:0.76rem; }
+  table.lane-t th { background:#f4f1e4; font-family:'Cinzel',serif; font-size:0.72rem; color:var(--forest); text-align:left; font-weight:500; }
+  td.lname { background:#faf8ef; white-space:nowrap; font-weight:bold; width:150px; }
+  .pill { display:inline-block; border-radius:6px; padding:2px 7px; margin:2px 3px 2px 0; font-size:0.7rem; color:#fff; cursor:pointer; }
+  .pill.event { background:var(--k-event); } .pill.booking { background:var(--k-booking); }
+  .pill.birthday { background:var(--k-birthday); color:#241c07; } .pill.external { background:var(--k-external); }
+  .pill.shift { background:var(--k-shift); } .pill.blackout { background:var(--k-blackout); }
+  .pill.unavail { background:var(--k-unavail); }
+  .pill.tentative { background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.3),rgba(255,255,255,0.3) 5px,transparent 5px,transparent 10px); }
+
+  /* ---------- coverage strip ---------- */
+  .cov { display:flex; height:16px; border-radius:5px; overflow:hidden; border:1px solid #ddd9c6; background:#f2efe2; }
+  .cov i { display:block; font-style:normal; font-size:0.58rem; color:#fff; text-align:center; line-height:16px; overflow:hidden; white-space:nowrap; }
+  .cov i.ok { background:var(--k-shift); }
+  .cov i.gap { background:repeating-linear-gradient(45deg,#a8452f,#a8452f 4px,#bb5540 4px,#bb5540 8px); }
+
+  /* ---------- alerts ---------- */
+  .alert { border-left:4px solid var(--maroon); background:#fdf3f2; border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:0.8rem; }
+  .alert.warn { border-left-color:var(--gold); background:#fdf8ec; }
+  .alert b { font-family:'Cinzel',serif; font-size:0.74rem; }
+
+  /* ---------- modal ---------- */
+  .modal { position:fixed; inset:0; background:rgba(20,26,18,0.55); display:none; align-items:center; justify-content:center; padding:16px; z-index:900; }
+  .modal.open { display:flex; }
+  .modal .box { background:#fff; border-radius:16px; max-width:620px; width:100%; max-height:88vh; overflow:auto; padding:20px 22px; }
+  .kv { font-size:0.85rem; padding:4px 0; border-bottom:1px dotted #e6e3d4; }
+  .kv b { display:inline-block; min-width:120px; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:#7a7a5a; }
+  .gpick { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+  .gpick .chip.on { background:var(--forest); color:#fff; border-color:var(--forest); }
+
+  .hrow { display:grid; grid-template-columns:66px 1fr 84px 12px 84px 1fr; gap:8px; align-items:center; margin-bottom:6px; }
+  @media (max-width:820px) { .hrow { grid-template-columns:60px 1fr; } .hrow .wide { grid-column:1 / -1; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>🗓️ Master Guru Calendar</h1>
+  <span class="caveat">everything, in one place</span>
+  <span class="sp"></span>
+  <span id="who" class="hint" style="color:#dfe9dc;"></span>
+</header>
+
+<div class="wrap">
+
+  <div id="login-card" class="card" style="display:none;max-width:420px;margin:40px auto;">
+    <h2 style="margin-top:0;">Guru sign-in</h2>
+    <p class="hint">Enter the admin code to open the calendar.</p>
+    <input id="code" type="password" placeholder="Admin code" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn" onclick="doLogin()">Sign in</button>
+    <p id="login-err" class="hint" style="color:var(--maroon);"></p>
+  </div>
+
+  <div id="main" style="display:none;">
+
+    <div class="rangebar">
+      <button class="btn btn-sm btn-ghost" onclick="step(-1)">◀</button>
+      <button class="btn btn-sm btn-ghost" onclick="goToday()">Today</button>
+      <button class="btn btn-sm btn-ghost" onclick="step(1)">▶</button>
+      <span id="when" class="when"></span>
+      <span class="sp" style="flex:1;"></span>
+      <div class="tabs" style="margin:0;">
+        <button class="tab active" id="tab-week" onclick="setView('week')">Week</button>
+        <button class="tab" id="tab-day" onclick="setView('day')">Day</button>
+        <button class="tab" id="tab-hours" onclick="setView('hours')">🏪 Store hours</button>
+      </div>
+      <button class="btn btn-sm btn-ghost" onclick="load()">↻ Refresh</button>
+    </div>
+
+    <div id="alerts"></div>
+
+    <div class="card" style="padding:10px 14px;">
+      <div class="chips" id="kindchips"></div>
+      <div class="chips" id="guruchips" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- ============ WEEK ============ -->
+    <div id="view-week">
+      <div class="card">
+        <h3 style="margin:0 0 4px;">Who's on</h3>
+        <p class="hint" style="margin:0 0 10px;">Every person, every day. A blank cell means nothing is scheduled for them — which is not the same as knowing they're available.</p>
+        <div class="rail" id="rail"></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 4px;">Rooms &amp; the day</h3>
+        <p class="hint" style="margin:0 0 10px;">Shaded columns are hours the store is closed. Pink is open with nobody on the floor.</p>
+        <div class="gridwrap" id="grid"></div>
+      </div>
+    </div>
+
+    <!-- ============ DAY ============ -->
+    <div id="view-day" style="display:none;">
+      <div class="card" id="daycover"></div>
+      <div class="card">
+        <h3 style="margin:0 0 10px;">By room</h3>
+        <div class="lanes" id="dayrooms"></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 10px;">By Guru</h3>
+        <div class="lanes" id="daygurus"></div>
+      </div>
+    </div>
+
+    <!-- ============ STORE HOURS ============ -->
+    <div id="view-hours" style="display:none;">
+      <div class="card">
+        <h3 style="margin:0 0 4px;">Store hours</h3>
+        <p class="hint" style="margin:0 0 12px;">
+          Until this is set, the calendar can't tell an uncovered afternoon from a day you're closed — so it stays quiet and reports nothing.
+          Everything else on the page works either way.
+        </p>
+        <div id="hours-week"></div>
+        <h3 style="margin:18px 0 4px;">Exceptions</h3>
+        <p class="hint" style="margin:0 0 8px;">Holidays, private hire, a late open. An exception always beats the weekly pattern.</p>
+        <div id="hours-over"></div>
+        <button class="btn btn-sm btn-ghost" style="margin-top:8px;" onclick="addOverride()">+ Add an exception</button>
+        <div style="margin-top:16px;">
+          <button class="btn" onclick="saveHours()">Save store hours</button>
+          <span id="hours-msg" class="hint" style="margin-left:10px;"></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal" id="modal" onclick="if(event.target===this) closeModal()">
+  <div class="box" id="modal-box"></div>
+</div>
+
+<script src="ngh-config.js"></script>
+<script src="guru-common.js"></script>
+<script>
+/* eslint-disable */
+var API_BASE = window.NGH_API_BASE || "/.netlify/functions";
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function pad(n){ return (n<10?"0":"")+n; }
+function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function addDays(s,n){ var d=new Date(s+"T12:00:00"); d.setDate(d.getDate()+n); return ymd(d); }
+function fmtMin(m){ var h=Math.floor(m/60), mm=m%60, ap=h>=12?"PM":"AM"; h=h%12; if(h===0)h=12; return h+(mm?(":"+pad(mm)):"")+ap; }
+function longDate(s){ var d=new Date(s+"T12:00:00"); return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()]+", "+["January","February","March","April","May","June","July","August","September","October","November","December"][d.getMonth()]+" "+d.getDate(); }
+var DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+var DOWFULL=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+var TODAY = ymd(new Date());
+
+var KINDS = [
+  {k:"booking",  label:"🔑 Room bookings", c:"var(--k-booking)"},
+  {k:"event",    label:"🎲 NGH events",    c:"var(--k-event)"},
+  {k:"birthday", label:"🎂 Birthdays",     c:"var(--k-birthday)"},
+  {k:"external", label:"🚗 Off-site",      c:"var(--k-external)"},
+  {k:"shift",    label:"🏪 Store shifts",  c:"var(--k-shift)"},
+  {k:"unavail",  label:"🚫 Unavailable",   c:"var(--k-unavail)"},
+  {k:"blackout", label:"⛔ Closures",      c:"var(--k-blackout)"}
+];
+
+var state = {
+  view: "week",
+  anchor: TODAY,
+  data: null,
+  hideKinds: {},
+  hideGurus: {},
+  hoursDraft: null
+};
+
+/* ---------------- auth + fetch ---------------- */
+function authHeaders(){
+  return Object.assign({"Content-Type":"application/json"}, (window.GuruAuth ? GuruAuth.headers() : {}));
+}
+async function api(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign(authHeaders(), opts.headers || {});
+  var res = await fetch(API_BASE + path, opts);
+  if(res.status === 401){ if(window.GuruAuth) GuruAuth.clear(); showLogin(); throw new Error("unauthorized"); }
+  if(res.status === 204) return null;
+  var body = null; try { body = await res.json(); } catch(e){}
+  if(!res.ok) throw new Error((body && body.error) || ("HTTP " + res.status));
+  return body;
+}
+function showLogin(){ $("login-card").style.display="block"; $("main").style.display="none"; }
+async function doLogin(){
+  $("login-err").textContent = "";
+  try {
+    var res = await fetch(API_BASE + "/admin-login", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ code: $("code").value }) });
+    var b = await res.json();
+    if(!res.ok || !b.token) throw new Error(b.error || "Sign-in failed");
+    GuruAuth.set(b.token);
+    $("login-card").style.display="none"; $("main").style.display="block";
+    load();
+  } catch(e){ $("login-err").textContent = e.message; }
+}
+
+/* ---------------- range ---------------- */
+function weekStart(d){ var day=new Date(d+"T12:00:00").getDay(); return addDays(d, day===0 ? -6 : -(day-1)); }
+function rangeOf(){
+  if(state.view === "day") return { from: state.anchor, to: state.anchor };
+  var f = weekStart(state.anchor);
+  return { from: f, to: addDays(f, 6) };
+}
+function step(n){
+  state.anchor = addDays(state.anchor, state.view === "day" ? n : 7*n);
+  load();
+}
+function goToday(){ state.anchor = TODAY; load(); }
+function setView(v){
+  state.view = v;
+  ["week","day","hours"].forEach(function(x){
+    $("tab-"+x).className = "tab" + (x===v ? " active" : "");
+    $("view-"+x).style.display = (x===v ? "block" : "none");
+  });
+  if(v === "hours"){ renderHours(); return; }
+  load();
+}
+
+/* ---------------- load ---------------- */
+async function load(){
+  var r = rangeOf();
+  var q = state.view === "day" ? ("date=" + r.from) : ("from=" + r.from + "&to=" + r.to);
+  try {
+    state.data = await api("/schedule?" + q);
+  } catch(e){
+    if(e.message === "unauthorized") return;
+    $("alerts").innerHTML = '<div class="alert"><b>Could not load the schedule.</b><br>' + esc(e.message) + '</div>';
+    return;
+  }
+  if(!state.hoursDraft) state.hoursDraft = JSON.parse(JSON.stringify(state.data.hours || {}));
+  render();
+}
+
+/* ---------------- filters ---------------- */
+function toggleKind(k){ state.hideKinds[k] = !state.hideKinds[k]; render(); }
+function toggleGuru(g){ state.hideGurus[g] = !state.hideGurus[g]; render(); }
+function kindOn(k){ return !state.hideKinds[k]; }
+function guruOn(g){ return !state.hideGurus[g]; }
+
+function renderChips(){
+  $("kindchips").innerHTML = KINDS.map(function(k){
+    return '<span class="chip '+(kindOn(k.k)?"on":"off")+'" onclick="toggleKind(\''+k.k+'\')">' +
+      '<i class="sw" style="background:'+k.c+'"></i>' + esc(k.label) + '</span>';
+  }).join("");
+  var gs = (state.data && state.data.gurus) || [];
+  $("guruchips").innerHTML = (gs.length ? '<span class="hint" style="align-self:center;margin-right:4px;">Gurus:</span>' : '') +
+    gs.map(function(g){
+      return '<span class="chip '+(guruOn(g)?"on":"off")+'" onclick="toggleGuru(\''+esc(g).replace(/'/g,"\\'")+'\')">'+esc(g)+'</span>';
+    }).join("");
+}
+
+// An item survives the filters if its kind is on AND — when it has gurus — at
+// least one of them is on. An item with nobody assigned is never filtered out
+// by a guru chip; hiding unstaffed work is how it gets forgotten.
+function visible(it){
+  if(!kindOn(it.kind)) return false;
+  if(it.gurus && it.gurus.length) return it.gurus.some(guruOn);
+  return true;
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  var d = state.data; if(!d) return;
+  renderChips();
+  var r = rangeOf();
+  $("when").textContent = state.view === "day"
+    ? longDate(r.from)
+    : (longDate(r.from) + "  —  " + longDate(r.to));
+  renderAlerts();
+  if(state.view === "week"){ renderRail(); renderGrid(); }
+  else if(state.view === "day"){ renderDay(); }
+}
+
+function renderAlerts(){
+  var all = [];
+  state.data.days.forEach(function(day){
+    day.conflicts.forEach(function(c){ all.push(c); });
+  });
+  if(!state.data.hours || !state.data.hours.configured){
+    all.unshift({ type:"no-hours", detail:"Store hours haven't been set, so nobody is being warned about uncovered shifts. Set them on the Store hours tab." });
+  }
+  if(!all.length){ $("alerts").innerHTML = ""; return; }
+  var order = { "guru-double-booked":0, "guru-unavailable":1, "room-double-booked":2, "guru-understaffed":3, "store-uncovered":4, "no-hours":5 };
+  all.sort(function(a,b){ return (order[a.type]==null?9:order[a.type]) - (order[b.type]==null?9:order[b.type]); });
+  var TITLE = {
+    "guru-double-booked":"Double-booked Guru", "guru-unavailable":"Assigned while unavailable",
+    "room-double-booked":"Room clash", "guru-understaffed":"Guru add-on unstaffed",
+    "store-uncovered":"Nobody on the floor", "no-hours":"Store hours not set"
+  };
+  $("alerts").innerHTML = all.slice(0,14).map(function(c){
+    var soft = (c.type === "store-uncovered" || c.type === "guru-understaffed" || c.type === "no-hours");
+    return '<div class="alert'+(soft?" warn":"")+'"><b>'+esc(TITLE[c.type]||c.type)+'</b>' +
+      (c.date ? ' <span class="hint">'+esc(longDate(c.date))+'</span>' : '') +
+      '<br>'+esc(c.detail)+'</div>';
+  }).join("") + (all.length>14 ? '<p class="hint">…and '+(all.length-14)+' more.</p>' : "");
+}
+
+function barLabel(x){
+  if(x.kind === "shift") return "🏪 store " + fmtMin(x.sMin) + "–" + fmtMin(x.eMin);
+  if(x.kind === "unavail") return "🚫 " + (x.allDay ? "off" : (fmtMin(x.sMin)+"–"+fmtMin(x.eMin)));
+  var icon = x.kind === "booking" ? "🔑" : x.kind === "birthday" ? "🎂" : x.kind === "external" ? "🚗" : "🎲";
+  return icon + " " + (x.allDay ? "" : (fmtMin(x.sMin) + " ")) + x.title;
+}
+
+function renderRail(){
+  var d = state.data;
+  var gurus = d.gurus.filter(guruOn);
+  if(!gurus.length){ $("rail").innerHTML = '<p class="hint">Every Guru is filtered out.</p>'; return; }
+  var h = '<table class="rail-t"><tr><td class="gname" style="background:#f4f1e4;"></td>';
+  d.days.forEach(function(day){
+    h += '<th class="dayh'+(day.date===TODAY?" today":"")+'">'+DOW[day.dow]+' '+(+day.date.slice(8))+
+         '<small>'+(day.hours.closed ? "closed" : (day.hours.configured ? (fmtMin(day.hours.sMin)+"–"+fmtMin(day.hours.eMin)) : "&nbsp;"))+'</small></th>';
+  });
+  h += '</tr>';
+  gurus.forEach(function(g){
+    h += '<tr><td class="gname">'+esc(g)+'</td>';
+    d.days.forEach(function(day){
+      var lane = (day.guruLanes[g] || []).filter(function(x){ return kindOn(x.kind); });
+      h += '<td class="gcell'+(day.date===TODAY?" today":"")+'">';
+      if(!lane.length){ h += '<span class="free">·</span>'; }
+      else {
+        h += lane.map(function(x){
+          return '<span class="bar '+x.kind+(x.tone==="tentative"?" tentative":"")+'" title="'+esc(x.title+" · "+x.sub)+'" onclick="openItem(\''+esc(day.date)+'\',\''+esc(x.key).replace(/'/g,"\\'")+'\')">'+esc(barLabel(x))+'</span>';
+        }).join("");
+      }
+      h += '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</table>';
+  $("rail").innerHTML = h;
+}
+
+function renderGrid(){
+  var d = state.data;
+  var lo = d.grid.loMin, hi = d.grid.hiMin;
+  var h = '<table class="grid"><colgroup><col class="hcol">';
+  d.days.forEach(function(){ h += '<col>'; });
+  h += '</colgroup><tr><th class="hour" style="background:#f4f1e4;"></th>';
+  d.days.forEach(function(day){
+    h += '<th class="dayh'+(day.date===TODAY?" today":"")+'" style="font-family:\'Cinzel\',serif;font-size:0.74rem;color:var(--forest);background:'+(day.date===TODAY?"var(--gold-light)":"#f4f1e4")+';padding:6px 4px;">'+
+         DOWFULL[day.dow]+' '+(+day.date.slice(8))+
+         '<small style="display:block;font-family:Georgia,serif;font-size:0.66rem;font-weight:normal;color:'+(day.date===TODAY?"#4a3d16":"#7a7a5a")+';">'+
+         (day.hours.closed ? "Closed" : day.hours.configured ? (fmtMin(day.hours.sMin)+"–"+fmtMin(day.hours.eMin)) : "hours not set")+
+         '</small></th>';
+  });
+  h += '</tr>';
+
+  // Shifts and unavailability are person-state, not room-and-clock, so they
+  // live in the rail and never in the grid. Drawing them here put an
+  // unstyled white-on-white box in the all-day band.
+  function inGrid(i){ return visible(i) && i.kind !== "shift" && i.kind !== "unavail"; }
+
+  // All-day band: things with no clock position of their own.
+  var anyAllDay = d.days.some(function(day){ return day.items.some(function(i){ return i.allDay && inGrid(i); }); });
+  if(anyAllDay){
+    h += '<tr class="allday-row"><td class="hour">all day</td>';
+    d.days.forEach(function(day){
+      var list = day.items.filter(function(i){ return i.allDay && inGrid(i); });
+      h += '<td class="slot'+(day.date===TODAY?" today":"")+'">' + list.map(evHtml).join("") + '</td>';
+    });
+    h += '</tr>';
+  }
+
+  // Overnight band: the small hours carried over from the night before. These
+  // are kept out of the hour rows on purpose — one 3am lock-in would otherwise
+  // add eight empty rows to every column in the week.
+  var anyTail = d.days.some(function(day){ return day.items.some(function(i){ return i.tail && inGrid(i); }); });
+  if(anyTail){
+    h += '<tr class="allday-row"><td class="hour">overnight</td>';
+    d.days.forEach(function(day){
+      var list = day.items.filter(function(i){ return i.tail && inGrid(i); });
+      h += '<td class="slot'+(day.date===TODAY?" today":"")+'">' + list.map(evHtml).join("") + '</td>';
+    });
+    h += '</tr>';
+  }
+
+  for(var m = lo; m < hi; m += 60){
+    h += '<tr><td class="hour">'+fmtMin(m)+'</td>';
+    d.days.forEach(function(day){
+      var cls = "slot";
+      if(day.date === TODAY) cls += " today";
+      var open = day.hours;
+      if(open.closed || (open.configured && (m + 59 < open.sMin || m >= open.eMin))) cls += " closed";
+      else if(open.configured && (day.coverage.gaps || []).some(function(g){ return m < g.eMin && g.sMin < m+60; })) cls += " uncovered";
+      var list = day.items.filter(function(i){
+        return !i.allDay && !i.tail && inGrid(i) && Math.floor(i.sMin/60)*60 === m;
+      });
+      // Anything that began before the grid opens still has to appear once,
+      // in the first visible row, rather than falling off the top.
+      if(m === lo){
+        day.items.forEach(function(i){
+          if(!i.allDay && !i.tail && inGrid(i) && i.sMin < lo && i.eMin > lo && list.indexOf(i) < 0) list.push(i);
+        });
+      }
+      h += '<td class="'+cls+'">' + list.map(evHtml).join("") + '</td>';
+    });
+    h += '</tr>';
+  }
+  h += '</table>';
+  $("grid").innerHTML = h;
+}
+
+function evHtml(i){
+  var icon = i.kind === "booking" ? "🔑" : i.kind === "birthday" ? "🎂" : i.kind === "external" ? "🚗" : i.kind === "blackout" ? "⛔" : "🎲";
+  var tags = "";
+  if(i.kind === "booking" && i.status !== "approved") tags += '<span class="tag">'+esc(i.status)+'</span>';
+  if(i.kind === "booking" && i.guruNeed) tags += '<span class="tag">'+i.gurus.length+'/'+i.guruNeed+' guru</span>';
+  if(i.meta && i.meta.draft) tags += '<span class="tag">draft</span>';
+  if(i.meta && i.meta.private) tags += '<span class="tag">private</span>';
+  if(i.tail) tags += '<span class="tag">cont.</span>';
+  if(i.recurring) tags += '<span class="tag">🔁</span>';
+  return '<div class="ev '+i.kind+(i.tone==="tentative"?" tentative":"")+'" onclick="openItem(\''+esc(i.date)+'\',\''+esc(i.key).replace(/'/g,"\\'")+'\')">' +
+    '<b>'+icon+' '+esc(i.title)+'</b>' +
+    (i.allDay ? '' : '<small>'+fmtMin(i.sMin)+'–'+fmtMin(i.eMin)+'</small>') +
+    '<small>'+esc(i.sub)+'</small>' +
+    (i.gurus.length ? '<small>👤 '+esc(i.gurus.join(", "))+'</small>' : '') +
+    (tags ? '<div style="margin-top:2px;">'+tags+'</div>' : '') +
+    '</div>';
+}
+
+function covStrip(day){
+  var open = day.hours;
+  if(!open.configured) return '<p class="hint">Store hours not set for this day.</p>';
+  if(open.closed) return '<p class="hint">Closed'+(open.label?(" — "+esc(open.label)):"")+'.</p>';
+  var span = open.eMin - open.sMin;
+  var segs = (day.coverage.covered || []).map(function(s){ return {s:s, ok:true}; })
+    .concat((day.coverage.gaps || []).map(function(s){ return {s:s, ok:false}; }))
+    .sort(function(a,b){ return a.s.sMin - b.s.sMin; });
+  return '<div class="cov">' + segs.map(function(x){
+    var pct = Math.max(0, (x.s.eMin - x.s.sMin) / span * 100);
+    return '<i class="'+(x.ok?"ok":"gap")+'" style="width:'+pct.toFixed(2)+'%" title="'+esc(x.s.from+"–"+x.s.to+(x.ok?(" · "+x.s.gurus.join(", ")):" · nobody"))+'">'+
+      (pct > 12 ? esc(x.ok ? x.s.gurus.join(", ") : "uncovered") : "")+'</i>';
+  }).join("") + '</div>' +
+  '<p class="hint" style="margin:6px 0 0;">Open '+fmtMin(open.sMin)+'–'+fmtMin(open.eMin)+
+    ((day.coverage.gaps||[]).length ? ' · <b style="color:var(--maroon);">'+day.coverage.gaps.length+' uncovered stretch'+(day.coverage.gaps.length>1?"es":"")+'</b>' : ' · fully covered')+'</p>';
+}
+
+function renderDay(){
+  var day = state.data.days[0];
+  if(!day){
+    // Better to say so than to leave the previous day's lanes on screen
+    // looking like this day's — the exact failure that made the Rejected tab
+    // in the booking console show twenty bookings you could not reach.
+    $("daycover").innerHTML = '<h3 style="margin:0;">'+esc(longDate(state.anchor))+'</h3><p class="hint">Nothing came back for this date.</p>';
+    $("dayrooms").innerHTML = ''; $("daygurus").innerHTML = '';
+    return;
+  }
+  $("daycover").innerHTML = '<h3 style="margin:0 0 8px;">'+esc(longDate(day.date))+'</h3>' + covStrip(day);
+
+  var rooms = state.data.rooms.concat([{id:"offsite", label:"🚗 Off-site"}]);
+  var h = '<table class="lane-t"><tr><th>Room</th><th>What&rsquo;s in it</th></tr>';
+  rooms.forEach(function(r){
+    var list = (day.roomLanes[r.id] || []).filter(visible);
+    h += '<tr><td class="lname">'+esc(r.label)+(r.vrbo?' <span class="hint">(VRBO)</span>':'')+'</td><td>' +
+      (list.length ? list.map(pillHtml).join("") : '<span class="hint">—</span>') + '</td></tr>';
+  });
+  h += '</table>';
+  $("dayrooms").innerHTML = h;
+
+  var gurus = state.data.gurus.filter(guruOn);
+  var g = '<table class="lane-t"><tr><th>Guru</th><th>Doing what</th></tr>';
+  gurus.forEach(function(name){
+    var lane = (day.guruLanes[name] || []).filter(function(x){ return kindOn(x.kind); });
+    g += '<tr><td class="lname">'+esc(name)+'</td><td>' +
+      (lane.length ? lane.map(function(x){ return pillHtml(x, day.date); }).join("") : '<span class="hint">nothing scheduled</span>') +
+      '</td></tr>';
+  });
+  g += '</table>';
+  $("daygurus").innerHTML = g;
+}
+
+function pillHtml(i, date){
+  var when = i.allDay ? "all day" : (fmtMin(i.sMin)+"–"+fmtMin(i.eMin));
+  return '<span class="pill '+i.kind+(i.tone==="tentative"?" tentative":"")+'" onclick="openItem(\''+esc(date||i.date)+'\',\''+esc(i.key).replace(/'/g,"\\'")+'\')">' +
+    esc(when + " · " + i.title) +
+    (i.kind === "booking" && i.status !== "approved" ? " ("+esc(i.status)+")" : "") +
+    '</span>';
+}
+
+/* ---------------- item detail + assignment ---------------- */
+function findItem(date, key){
+  var day = state.data.days.filter(function(d){ return d.date === date; })[0];
+  if(!day) return null;
+  return day.items.filter(function(i){ return i.key === key; })[0] || null;
+}
+
+var modalItem = null, modalPick = [];
+function openItem(date, key){
+  var i = findItem(date, key);
+  if(!i) return;
+  modalItem = i; modalPick = (i.gurus || []).slice();
+  var m = i.meta || {};
+  var rows = [];
+  rows.push(["When", i.allDay ? "All day" : (fmtMin(i.sMin)+" – "+fmtMin(i.eMin))]);
+  rows.push(["Date", longDate(i.date) + (i.tail ? " (continued from the night before)" : "")]);
+  if(i.rooms.length) rows.push(["Rooms", i.rooms.map(roomName).join(", ")]);
+  if(i.offsite) rows.push(["Location", i.location || "Off-site"]);
+  if(i.status) rows.push(["Status", i.status]);
+  if(m.guests) rows.push(["Guests", m.guests]);
+  if(m.phone) rows.push(["Phone", m.phone]);
+  if(m.email) rows.push(["Email", m.email]);
+  if(m.contact) rows.push(["Contact", m.contact]);
+  if(i.kind === "booking") rows.push(["Payment", (m.onAccount ? "On account" : ((m.feePaid?"Fee paid":"Fee due") + " · " + (m.depositPaid?"Deposit paid":"Deposit due — payable on the day")))]);
+  if(i.guruNeed) rows.push(["Gurus bought", i.guruNeed]);
+  if(m.recTotal) rows.push(["Series", "Occurrence " + m.recIndex + " of " + m.recTotal]);
+  if(m.notes) rows.push(["Notes", m.notes]);
+  if(m.comments) rows.push(["Comments", m.comments]);
+  if(m.supportTypes && m.supportTypes.length) rows.push(["Our role", m.supportTypes.join(", ")]);
+
+  var assignable = ASSIGN_FIELD(i);
+  var html = '<h2 style="margin:0 0 2px;">'+esc(i.title)+'</h2>' +
+    '<p class="hint" style="margin:0 0 12px;">'+esc(i.sub)+'</p>' +
+    rows.map(function(r){ return '<div class="kv"><b>'+esc(r[0])+'</b> '+esc(String(r[1]))+'</div>'; }).join("");
+
+  if(assignable){
+    html += '<h3 style="margin:16px 0 4px;">Gurus on this</h3>' +
+      '<p class="hint" style="margin:0 0 6px;">A Guru marked unavailable will be refused — the server checks, not the browser.</p>' +
+      '<div class="gpick" id="gpick"></div>' +
+      '<div style="margin-top:10px;">' +
+        '<button class="btn btn-sm" onclick="saveAssign(false)">Save</button> ' +
+        '<button class="btn btn-sm btn-ghost" onclick="saveAssign(true)">Nobody needed</button> ' +
+        '<span id="assign-msg" class="hint" style="margin-left:8px;"></span>' +
+      '</div>';
+  } else {
+    html += '<p class="hint" style="margin-top:14px;">' +
+      (i.kind === "shift" ? "Shifts are edited on the Guru Schedule page." :
+       i.kind === "unavail" ? "Unavailability is edited on the Guru Schedule page." :
+       "Closures are edited in the booking console.") + '</p>';
+  }
+  html += '<div style="margin-top:16px;text-align:right;">' + linkOut(i) +
+    ' <button class="btn btn-sm btn-ghost" onclick="closeModal()">Close</button></div>';
+  $("modal-box").innerHTML = html;
+  $("modal").className = "modal open";
+  if(assignable) paintPick();
+}
+
+function roomName(id){
+  var r = (state.data.rooms || []).filter(function(x){ return x.id === id; })[0];
+  return r ? r.label : id;
+}
+function ASSIGN_FIELD(i){
+  if(i.kind === "event") return "eventId";
+  if(i.kind === "booking") return "bookingId";
+  if(i.kind === "birthday") return "birthdayId";
+  if(i.kind === "external") return "externalId";
+  return null;
+}
+function baseId(i){
+  // Shifts/unavail/external carry an "@date" suffix so each day is its own
+  // item; the underlying record id is the part before it.
+  return String(i.id).split("@")[0];
+}
+function linkOut(i){
+  if(i.kind === "booking") return '<a class="btn btn-sm btn-ghost" href="booking.html?admin=1&view=list#'+encodeURIComponent(baseId(i))+'">Open in Requests</a>';
+  if(i.kind === "event") return '<a class="btn btn-sm btn-ghost" href="booking.html?admin=1&view=events&editEvent='+encodeURIComponent(baseId(i))+'">Edit event</a>';
+  if(i.kind === "birthday") return '<a class="btn btn-sm btn-ghost" href="guru.html#birthdays">Open birthdays</a>';
+  if(i.kind === "external") return '<a class="btn btn-sm btn-ghost" href="guru-radar.html">Open Radar</a>';
+  return "";
+}
+function paintPick(){
+  $("gpick").innerHTML = (state.data.gurus || []).map(function(g){
+    var on = modalPick.indexOf(g) >= 0;
+    return '<span class="chip'+(on?" on":"")+'" onclick="pickGuru(\''+esc(g).replace(/'/g,"\\'")+'\')">'+esc(g)+'</span>';
+  }).join("");
+}
+function pickGuru(g){
+  var ix = modalPick.indexOf(g);
+  if(ix >= 0) modalPick.splice(ix,1); else modalPick.push(g);
+  paintPick();
+}
+async function saveAssign(none){
+  var i = modalItem; if(!i) return;
+  var field = ASSIGN_FIELD(i); if(!field) return;
+  var item = { gurus: none ? [] : modalPick, none: !!none };
+  item[field] = baseId(i);
+  // Events recur, so an assignment defaults to the whole series unless the
+  // Guru is being changed for one night only. Everything else is a single
+  // date by nature and is pinned to it.
+  if(i.kind === "event"){
+    if(modalPick.length || none){
+      item.date = confirm("Apply to EVERY occurrence of this event?\n\nOK = the whole series\nCancel = just " + longDate(i.date)) ? null : i.date;
+    }
+  } else if(i.kind === "external"){
+    item.date = i.date;
+  }
+  $("assign-msg").textContent = "Saving…";
+  try {
+    await api("/gurus", { method:"POST", body: JSON.stringify({ action:"save-assignment", item: item }) });
+    $("assign-msg").textContent = "Saved.";
+    closeModal(); await load();
+  } catch(e){
+    $("assign-msg").textContent = "";
+    if(/unavailable/i.test(e.message)) alert("That Guru is marked unavailable then.\n\nClear the unavailability on the Guru Schedule page first, or pick somebody else.");
+    else alert("Couldn't save: " + e.message);
+  }
+}
+function closeModal(){ $("modal").className = "modal"; modalItem = null; }
+
+/* ---------------- store hours ---------------- */
+function renderHours(){
+  var H = state.hoursDraft || { weekly: [], overrides: [] };
+  if(!H.weekly || H.weekly.length !== 7){
+    H.weekly = []; for(var i=0;i<7;i++) H.weekly.push({ closed:true, open:"", close:"" });
+  }
+  $("hours-week").innerHTML = H.weekly.map(function(d, ix){
+    return '<div class="hrow">' +
+      '<div style="font-family:\'Cinzel\',serif;font-size:0.8rem;">'+DOW[ix]+'</div>' +
+      '<label style="font-size:0.78rem;"><input type="checkbox" '+(d.closed?"checked":"")+' onchange="hClosed('+ix+',this.checked)"> Closed</label>' +
+      '<input type="time" value="'+esc(d.open||"")+'" '+(d.closed?"disabled":"")+' onchange="hSet('+ix+',\'open\',this.value)">' +
+      '<div style="text-align:center;color:#9a9a86;">–</div>' +
+      '<input type="time" value="'+esc(d.close||"")+'" '+(d.closed?"disabled":"")+' onchange="hSet('+ix+',\'close\',this.value)">' +
+      '<input class="wide" type="text" placeholder="note (optional)" value="'+esc(d.label||"")+'" onchange="hSet('+ix+',\'label\',this.value)">' +
+      '</div>';
+  }).join("");
+  var ov = H.overrides || [];
+  $("hours-over").innerHTML = ov.length ? ov.map(function(o, ix){
+    return '<div class="hrow">' +
+      '<input type="date" value="'+esc(o.date||"")+'" onchange="oSet('+ix+',\'date\',this.value)" style="grid-column:span 2;">' +
+      '<label style="font-size:0.78rem;"><input type="checkbox" '+(o.closed?"checked":"")+' onchange="oClosed('+ix+',this.checked)"> Closed</label>' +
+      '<input type="time" value="'+esc(o.open||"")+'" '+(o.closed?"disabled":"")+' onchange="oSet('+ix+',\'open\',this.value)">' +
+      '<input type="time" value="'+esc(o.close||"")+'" '+(o.closed?"disabled":"")+' onchange="oSet('+ix+',\'close\',this.value)">' +
+      '<span><input type="text" placeholder="reason" value="'+esc(o.label||"")+'" onchange="oSet('+ix+',\'label\',this.value)" style="width:70%;"> ' +
+      '<button class="btn btn-xs btn-danger" onclick="oDel('+ix+')">✕</button></span>' +
+      '</div>';
+  }).join("") : '<p class="hint">No exceptions yet.</p>';
+}
+function hSet(ix,k,v){ state.hoursDraft.weekly[ix][k]=v; }
+function hClosed(ix,v){ state.hoursDraft.weekly[ix].closed=v; renderHours(); }
+function oSet(ix,k,v){ state.hoursDraft.overrides[ix][k]=v; }
+function oClosed(ix,v){ state.hoursDraft.overrides[ix].closed=v; renderHours(); }
+function oDel(ix){ state.hoursDraft.overrides.splice(ix,1); renderHours(); }
+function addOverride(){
+  state.hoursDraft.overrides = state.hoursDraft.overrides || [];
+  state.hoursDraft.overrides.push({ date: TODAY, closed:true, open:"", close:"", label:"" });
+  renderHours();
+}
+async function saveHours(){
+  $("hours-msg").textContent = "Saving…";
+  try {
+    var rec = await api("/gurus", { method:"POST", body: JSON.stringify({ action:"save-hours", item: state.hoursDraft }) });
+    state.hoursDraft = JSON.parse(JSON.stringify(rec));
+    $("hours-msg").textContent = "Saved. Coverage warnings are live.";
+    renderHours();
+  } catch(e){
+    $("hours-msg").textContent = "";
+    alert("Couldn't save: " + e.message);
+  }
+}
+
+/* ---------------- boot ---------------- */
+(function(){
+  var t = window.GuruAuth ? GuruAuth.get() : "";
+  if(!t){ showLogin(); return; }
+  $("main").style.display = "block";
+  var qs = new URLSearchParams(location.search);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(qs.get("date") || "")){ state.anchor = qs.get("date"); }
+  if(qs.get("view") === "day") { state.view = "day"; }
+  setView(state.view);
+})();
+</script>
+</body>
+</html>

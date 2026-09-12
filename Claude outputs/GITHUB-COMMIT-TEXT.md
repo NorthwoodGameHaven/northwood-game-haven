@@ -1,13 +1,13 @@
-# Copy/paste for GitHub Desktop — NGH-BUILD 2026-09-12n + 2026-09-12p
+# Copy/paste for GitHub Desktop — NGH-BUILD 2026-09-12q
 
-Both builds go in **one commit** so the 12n work can't get buried.
+All 15 files are already written into your repo. Commit and push.
 
 ---
 
 ## Summary (the one-line box)
 
 ```
-Stop auto-canceling bookings; deposit can never cancel anyone (12n+12p)
+Master Guru Calendar; every Guru calendar now shows pending bookings (12q)
 ```
 
 ---
@@ -15,74 +15,100 @@ Stop auto-canceling bookings; deposit can never cancel anyone (12n+12p)
 ## Description (the big box)
 
 ```
-NGH-BUILD 2026-09-12n + 2026-09-12p — bundled.
+NGH-BUILD 2026-09-12q — Master Guru Calendar, and bookings on every internal
+Guru calendar.
 
-WHY
-Robyn's Depths booking was canceled even though she paid. She owed only the
-refundable deposit, which is payable on the day. Re-approving it did not stick:
-the next console refresh canceled it again and emailed her another notice.
+THE BUG UNDERNEATH ALL OF THIS
+guru-schedule.html — the page the shop plans the week from — has never loaded
+/bookings. reload() fetched /events and /gurus and nothing else. So every
+private room booking, approved or pending, was invisible on it. A Guru could
+look at Wednesday, see an empty Depths, and promise the room to somebody else.
 
-Two separate cancellers were doing this, plus a third copy that shadowed a fix.
+Three other things turned out to be missing rather than broken:
+  * NOTHING RECORDED WHICH GURU SUPPORTS A BOOKING. The Guru add-on stored a
+    quantity (addons[].qty) and that was the entire trace. guru_data
+    assignments had an eventId and no bookingId. Birthday parties had no guru
+    field at all.
+  * THERE WAS NO DEFINITION OF STORE HOURS anywhere in the codebase. Shifts
+    have an open and close time but nothing to check them against, so an
+    uncovered Thursday afternoon and a Thursday you are shut looked identical.
+  * OFF-SITE COMMITMENTS were recorded (event.offsite, and the Radar's
+    interest_events) but no calendar drew them next to on-site work, so a card
+    show that tied up two Gurus appeared on nothing.
 
-1. THE BROWSER NO LONGER CANCELS ANYBODY (site/booking.html)
-   autoCancelUnpaid() ran in a Guru's browser tab on EVERY console load. It
-   canceled approved bookings and emailed the guest directly from the browser.
-   Before 09-10c it required BOTH the fee and the deposit to be settled, which
-   is exactly how Robyn was canceled.
-   It is deleted. The function returns false and carries a comment saying why it
-   must not come back. Opening the console is not a decision to cancel a
-   customer. Unpaid bookings are still surfaced as "Fee: Due" / "Deposit: Due"
-   badges on the card - surfacing is the page's job, deciding is the Guru's.
-   The autoCancelExempt flag is gone too; there is nothing left to be exempt
-   from, and approve() now writes exactly {status:"approved"}.
+NEW: MASTER GURU CALENDAR  (site/guru-master.html, /master)
+Weekly view: a per-Guru coverage rail over a 7-day time grid. Daily view: room
+lanes and Guru lanes. Both integrate events, bookings (approved AND pending),
+birthday requests, blackouts, retail shifts, unavailability and committed
+off-site events. Shaded columns are hours the store is closed; pink is open
+with nobody on the floor. Click anything to see detail and assign Gurus.
+Includes a store-hours editor (weekly template + dated exceptions).
 
-2. THE NIGHTLY SWEEP HAD ITS RULES REWRITTEN (netlify/functions/auto-cancel.mjs)
-   * THE DEPOSIT NEVER CANCELS ANYBODY, EVER. It is payable on the day and it is
-     refundable. It now appears in that file only as something that can SPARE a
-     booking. Only the booking fee is ever a reason.
-   * NOTHING IS CANCELED UNTIL THE BOOKING IS OVER - after start + hours, in
-     America/Chicago. Not the night before, and not the start time: this cron
-     runs @daily = midnight UTC = 7 PM Central, so canceling at the start time
-     would release a 6 PM room with the guests still sitting in it.
-   * Guests are emailed only within 48h of the booking ending. Older no-shows
-     are closed out quietly and listed in the ops digest - nobody needs a
-     cancellation notice for a party three weeks ago.
-   * The guest email no longer blames "the deposit hold", names the booking fee
-     as the reason, and invites a reply if it was wrong.
-   * Kill switch: set AUTO_CANCEL_ENABLED=0 in Netlify and trigger a deploy to
-     make the sweep report-only. It is read at module load, so the redeploy is
-     required.
-   * Timezone is derived from the runtime tz database, so CST/CDT is handled
-     without a code edit.
+NEW: /api/schedule  (netlify/functions/schedule.mjs + _shared/schedule-core.mjs)
+One admin GET returns the whole merged, normalized week — per-day Guru lanes,
+room lanes, coverage gaps and conflicts. The merge is server-side ON PURPOSE:
+the guru-* pages are plain ES5 with no module loader, and every previous
+attempt to share scheduling logic with them ended in a copy-paste. The repo
+already carried FIVE divergent reimplementations of recurrence expansion,
+which is exactly how these calendars drifted into disagreeing. schedule-core
+reuses expandOccurrences from conflicts.mjs rather than adding a sixth.
 
-3. A THIRD COPY WAS SHADOWING THE FIX (netlify/functions/_shared/auto-cancel.mjs)
-   This was a full duplicate of the scheduled function. Netlify only schedules
-   functions in netlify/functions/, not in _shared/, so it never ran - but it
-   DID receive the 09-10c "don't cancel partially-paid bookings" fix that the
-   live function never got. For a day the fix looked deployed while bookings
-   kept being canceled. Replaced with a tombstone that throws if imported. Safe
-   to `git rm` whenever.
+Conflicts it surfaces: a Guru in two places at once; a Guru assigned while
+marked unavailable; two things in one room; a booking that bought Gurus and
+hasn't been given any; the store open with nobody on the floor.
 
-ALSO IN THIS COMMIT (2026-09-12n, previously unpushed)
-   The Rejected tab rendered nothing while the tab header said "Rejected (20)".
-   renderAdmin built the list as `el.innerHTML = list.map(reqCardHtml).join("")`,
-   so one booking that throws took the exception out of the function BEFORE
-   innerHTML was assigned - leaving the previous tab's empty state on screen.
-   Cards now render one at a time; a bad record costs you that one card, shown
-   with its id, name, date and the actual error, and the id goes to the console.
+CHANGED: /gurus
+  * Assignments accept bookingId, birthdayId and externalId alongside eventId
+    (exactly one required). The server-side "unavailable Guru" hard block now
+    covers all four — it only ever applied to events, because nothing else
+    could be assigned.
+  * New save-hours action: the store-hours template. Validated — a closing
+    time before its opening time is refused, because an inverted window reads
+    as permanently uncovered.
+  * ICS feed: booking, party and off-site assignments now reach a Guru's
+    Google Calendar. And it stopped hardcoding 115 W Spring St on offsite
+    entries, which was sending subscribers to the wrong town.
+
+CHANGED: guru-schedule.html
+Loads /bookings. Approved and pending both draw, in maroon with a doubled left
+edge and a hatch while still a request — deliberately unlike an event. A Guru
+filter chip never hides an unstaffed booking; the room is occupied either way,
+and hiding it is how a double-booking gets promised. A booking that bought
+Gurus reads "NEEDS 2 GURUS" until somebody is assigned.
+
+CHANGED: guru-tonight.html
+A "Room bookings" section for today and the next 7 days. Kept as its own
+section rather than threaded through the event card renderers — an event and a
+booking are different objects, and forcing one through the other's renderer
+means faking fields it does not have, forever.
+
+CHANGED: booking.html
+Room bookings in the admin calendar carry a key icon, so the kind is readable
+without relying on colour alone now that the same booking appears on four
+calendars with different palettes. Existing colours unchanged.
+
+CHANGED: tests/check-scripts.mjs
+Skips non-JS <script> blocks. booking.html carries a application/ld+json block
+of structured data, so this checker reported a failure on EVERY run against
+that file — a validator that always fails is one everyone learns to ignore.
 
 TESTS
-   314 pass, one command: node --test tests/*.test.mjs
-   - tests/auto-cancel.test.mjs (new, 26): the two promises above, run end to
-     end against an in-memory database with the clock pinned.
-   - tests/booking-admin-render.test.mjs (29): every combination of date,
-     payment state and flag now asserts the browser writes nothing and sends
-     nothing. Source-level assertions prove the function cannot reach
-     updateBooking or sendEmail, and that nothing on the page calls it.
-   11 mutations checked - each fix reverted individually, each turned a test red.
+  node --test tests/*.test.mjs        426 pass
+  node tests/guru-master.e2e.mjs      51 browser checks, 4 screenshots
+  * tests/schedule-core.test.mjs (80) — the merge engine
+  * tests/schedule-api.test.mjs (32) — /api/schedule and the new /gurus actions
+    against an in-memory database
+  * tests/guru-master.e2e.mjs — drives the real page in Chromium, including
+    that a pending booking is actually ON SCREEN and that a booking does not
+    look like an event (computed styles compared, not just class names)
+  13 mutations checked. Two of them exposed real gaps: one mutation left every
+  conflict test green because each had the unavailable Guru assigned to the
+  item being checked, so nothing proved that one person's day off doesn't flag
+  someone else's work. Test added.
 
-NO ACTION NEEDED IN NETLIFY. AUTO_CANCEL_ENABLED is only for turning cancelling
-off entirely; leaving it unset gives the new rules above.
+NO NETLIFY CONFIGURATION NEEDED. Store hours start unset, and while unset the
+calendar deliberately raises no coverage warnings at all rather than
+pretending every day is a nine-to-five.
 ```
 
 ---
@@ -91,19 +117,40 @@ off entirely; leaving it unset gives the new rules above.
 
 | File | Change |
 |---|---|
-| `site/booking.html` | Rejected-tab render fix (12n) + browser auto-cancel deleted (12p) |
-| `netlify/functions/auto-cancel.mjs` | Deposit can never cancel; nothing cancels until the booking is over |
-| `netlify/functions/_shared/auto-cancel.mjs` | Tombstone — was a duplicate that shadowed a fix |
-| `netlify.toml` | Comment on the cron block describing the new rules |
-| `tests/auto-cancel.test.mjs` | **New** — 26 tests |
-| `tests/booking-admin-render.test.mjs` | 29 tests, rewritten around "never cancels" |
-| `patches/patch-kill-client-autocancel-2026-09-12p.py` | Record of the surgical edit |
-| `docs/START-HERE-2026-09-12.md` | Morning brief corrected — the old text described the wrong fix |
+| `site/guru-master.html` | **New** — the Master Guru Calendar |
+| `netlify/functions/schedule.mjs` | **New** — `/api/schedule` aggregator |
+| `netlify/functions/_shared/schedule-core.mjs` | **New** — the merge engine (pure, testable) |
+| `netlify/functions/gurus.mjs` | Booking/party/off-site assignments, store hours, ICS fixes |
+| `site/guru-schedule.html` | Loads bookings at last; distinct formatting |
+| `site/guru-tonight.html` | Room-bookings section |
+| `site/guru-common.js` | Nav link + staff-page whitelist |
+| `site/booking.html` | Key icon on calendar bookings |
+| `netlify.toml` | `/api/schedule` + `/master` redirects |
+| `tests/schedule-core.test.mjs` | **New** — 80 tests |
+| `tests/schedule-api.test.mjs` | **New** — 32 tests |
+| `tests/guru-master.e2e.mjs` | **New** — 51 browser checks |
+| `tests/check-scripts.mjs` | Stops crying wolf on JSON-LD |
+| `patches/patch-guru-schedule-bookings-2026-09-12q.py` | Record of the surgical edits |
+| `patches/patch-guru-tonight-bookings-2026-09-12q.py` | Record of the surgical edits |
 
-## After pushing
+## First five minutes after it deploys
 
-Netlify deploys on its own. To check it worked:
+1. Open **🗓️ Master Cal** in the Guru nav (or `gamehaven.guru/master`).
+2. Go to **Store hours** and fill in the week. Nothing else works off it until
+   you do, and until then the coverage warnings stay silent by design.
+3. Back on **Week** — check the "Who's on" rail against what you know is true
+   for this week. That rail is the thing that has never existed before.
+4. Click a booking → assign a Guru. That's the data that never had a home.
+5. Open **🦦 Schedule** and confirm bookings now appear there too, in maroon.
 
-1. Open the Guru console. It must **not** flip anything to rejected on load.
-2. Re-approve Robyn's Depths booking. Refresh. It stays approved.
-3. Tomorrow morning's ops digest is the only place unpaid bookings get raised.
+## Known gaps, deliberately left
+
+- **Recurring unavailability can't be expressed.** Shifts recur; unavailability
+  is a date span only. "Every Tuesday off" needs a data-model change.
+- **A blank cell in the rail means "nothing scheduled", not "available."**
+  The page says so out loud rather than implying otherwise.
+- **`lodge` and `rest` are still invisible to the server conflict engine**
+  (`conflicts.mjs` ROOM_IDS has three rooms; the front end knows five). The
+  master calendar shows all five, but a VRBO-space double-booking still won't
+  be caught at request time. Worth fixing separately — it changes what the
+  booking form will accept.
