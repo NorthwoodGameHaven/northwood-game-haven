@@ -61,11 +61,21 @@ function payErrorPage(msg) {
   return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 }
 
-// NGH-BUILD 2026-09-11a: on-account = the same sale written to X-Series
-// with the "On Account" payment type. X-Series has no API to take a card or mint
-// a pay link, so a Guru sends the "Email receipt with pay link" from Sell →
-// Sales history (Lightspeed Payments) or the customer pays at the counter.
-function onAccountEnabled() { return !!process.env.LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT; }
+// NGH-BUILD 2026-09-11a: on-account = the same sale written to X-Series with
+// status ONACCOUNT, so the balance lands on the customer's account. X-Series has
+// no API to take a card or mint a pay link, so a Guru sends the "Email receipt
+// with pay link" from Sell → Sales history (Lightspeed Payments) or the customer
+// pays at the counter.
+// NGH-BUILD 2026-09-12a: the switch is LIGHTSPEED_ONACCOUNT ("1"/"true"/"yes"),
+// set once on-account is turned on under Setup → On-account in Lightspeed. It
+// used to key off LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT, but X-Series exposes no
+// on-account payment type to copy an id from, so that flag could never be set
+// and the feature could never switch on. That var still works where a store has
+// made a custom type (it then also adds the payment line).
+function onAccountEnabled() {
+  const v = String(process.env.LIGHTSPEED_ONACCOUNT || '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || !!process.env.LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT;
+}
 async function onAccountEmail(email, name, what, amountCents, ref) {
   if (!email) return;
   try {

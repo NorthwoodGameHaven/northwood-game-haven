@@ -102,7 +102,8 @@ Resolved from the connected store. These are resource IDs, not secrets, but they
 | `LIGHTSPEED_PAYMENT_TYPE_ONLINE` | `dd70e4fe-6a8c-4bb7-8a30-fbcf701c2bc6` | **Online — Stripe** (Other payment method, type_id 3, no gateway) |
 | `LIGHTSPEED_TAX_ID` | `021b1f22-6802-11f1-e846-303e01b4e56e` | **CHIPPEWA FALLS City Sales Tax (5.500%)** — a group of WI State 5% + Chippewa County 0.5% |
 | `LIGHTSPEED_TAX_ID_NONE` | `021b1f22-6802-11f1-f909-2a220b998c40` | built-in **No Tax** 0% (the store default), used for the deposit line |
-| `LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT` | *not set* | no On-account payment type exists yet — on-account is off under Setup → On-account. Enable it there and the type (and its ID) appear. |
+| `LIGHTSPEED_ONACCOUNT` | `true` | switches on the pay-on-account path (see below) |
+| `LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT` | *deliberately unset* | X-Series has **no** on-account payment type — on-account is a sale *status*. Leave it unset. |
 
 Service products created 2026-09-12 (inventory tracking off, price $0 — the website sends the real amount, and the line `tax_id` comes from env, so the products' own tax default is cosmetic):
 
@@ -117,3 +118,13 @@ Service products created 2026-09-12 (inventory tracking off, price $0 — the we
 `GET search?type=products&sku=<sku>` **does not match a SKU containing a hyphen.** Verified live against this store: `sku=10022` returns the product, `sku=NGH-ROOM` returns `[]` while `q=NGH-ROOM` returns it. Every service SKU is hyphenated, so `findProductBySku()`'s API fallback would have failed on all four — meaning any booking or registration sale written before the first `shop-sync` populated `ls_products` would have thrown `product SKU NGH-ROOM not found in Lightspeed`. `_shared/lightspeed.mjs` now tries `sku=` first and falls back to the free-text `q=` search, matching the SKU exactly client-side. `tests/lightspeed.test.mjs` stubs the quirk (hyphenated `sku=` returns empty), so the suite fails if the fallback is ever removed — 7 of 36 tests fail without it.
 
 Also confirmed live: assumption 3 (products expose `price_excluding_tax`, `has_inventory`, `active`) and assumption 4 (tax `rate` is a fraction — 0.05 / 0.005). Product writes from the admin session require the `X-XSRF-TOKEN` header; the OAuth API path is unaffected.
+
+### On-account is a sale status, not a payment type — fixed in NGH-BUILD 2026-09-12a
+Turned on 2026-09-12: Setup → On-account now has *Allow on-account balance* = **Yes, with no balance limit** (pre-existing) and *Online payments* = **Yes** (needed for "Email receipt with pay link").
+
+`GET /api/2.0/payment_types` on the live store afterwards returns only Store Credit, Online payments, Other Payment Method, Gift Card, lspayments (Online), Lightspeed Payments, Cash and our Online — Stripe. **There is no On Account type**, so `LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT` can never be filled in. Two things depended on it and both were wrong:
+
+1. `recordSale()` threw `LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT not set` before posting any on-account sale. Removed — an ONACCOUNT sale now posts with an empty `register_sale_payments`, which is how the legacy endpoint takes it (the amount lands on the customer's account balance). `buildSalePayload` still adds a payment line if the var *is* set, for a store that made a custom type.
+2. `create-checkout.mjs` used that same var as the on/off switch for the whole feature, so on-account could never be switched on. The switch is now **`LIGHTSPEED_ONACCOUNT`** (`1`/`true`/`yes`), with the old var still honoured for back-compat.
+
+Covered by `tests/lightspeed.test.mjs` (the flag alone enables checkout; the sale posts `status: ONACCOUNT` with `register_sale_payments: []`). Still unverified against the live API: whether `POST /api/register_sales` accepts `status: ONACCOUNT` with no payments — the $1 test booking is what confirms it. If it rejects, set `LIGHTSPEED_ONACCOUNT_STATUS=CLOSED` (already supported) and the sale posts closed instead.

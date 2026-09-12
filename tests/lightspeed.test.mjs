@@ -610,10 +610,20 @@ describe('stripe-webhook + create-checkout: bookings & registrations', () => {
     assert.equal(res.status, 200, JSON.stringify(j)); assert.match(j.url, /checkout\.stripe\.test/);
     const cs = M.stripe.sessions.at(-1);
     assert.deepEqual(cs.items, [{ name: 'Catan', amountCents: 5000, qty: 2 }]); assert.deepEqual(cs.metadata, { kind: 'order', orderId: 'ORD-ZZZZ' }); assert.equal(o.checkoutSessionId, cs ? 'cs_test_' + M.stripe.sessions.length : null);
-    // on-account disabled → 400
-    delete process.env.LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT;
+    // on-account disabled → 400 (needs BOTH switches off)
+    delete process.env.LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT; delete process.env.LIGHTSPEED_ONACCOUNT;
     try { assert.equal((await checkoutFn(req('POST', '/api/create-checkout', { body: { kind: 'booking', id: 'NGH-88', part: 'deposit', method: 'onaccount' } }))).status, 400); }
     finally { process.env.LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT = 'pt-onaccount'; }
+    // NGH-BUILD 2026-09-12a: LIGHTSPEED_ONACCOUNT alone switches it on, and with no
+    // payment-type id the ONACCOUNT sale posts with an empty payments array — which is
+    // how X-Series takes it, since on-account is a sale status and not a payment type.
+    delete process.env.LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT; process.env.LIGHTSPEED_ONACCOUNT = 'true';
+    try {
+      const oa = core.buildSalePayload({ sourceId: 'OA-1', state: 'closed', payment: 'onaccount', lines: [{ productId: 'p1', qty: 1, priceIncTax: 25 }], taxRate: 0.055 });
+      assert.equal(oa.body.status, 'ONACCOUNT');
+      assert.deepEqual(oa.body.register_sale_payments, []);
+      assert.equal((await checkoutFn(req('POST', '/api/create-checkout', { body: { kind: 'booking', id: 'NGH-88', part: 'deposit', method: 'onaccount' } }))).status, 200);
+    } finally { process.env.LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT = 'pt-onaccount'; delete process.env.LIGHTSPEED_ONACCOUNT; }
   });
 
   test('create-checkout method=onaccount part=both settles fee + deposit as two ONACCOUNT sales in one click (NGH-BUILD 2026-09-11a)', async () => {

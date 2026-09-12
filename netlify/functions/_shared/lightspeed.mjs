@@ -325,7 +325,13 @@ export async function recordSale(opts) {
     const c = core.cfg();
     if (!c.registerId) throw new Error('LIGHTSPEED_REGISTER_ID not set');
     if (opts.payment === 'online' && !c.paymentTypeOnline) throw new Error('LIGHTSPEED_PAYMENT_TYPE_ONLINE not set');
-    if (opts.payment === 'onaccount' && !c.paymentTypeOnAccount) throw new Error('LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT not set');
+    // NGH-BUILD 2026-09-12a: X-Series exposes no "On Account" payment type
+    // (GET payment_types on the live store lists Cash, Lightspeed Payments,
+    // Store Credit, Gift Card and custom types only — on-account is a sale
+    // STATUS, not a payment type). So an ONACCOUNT sale posts with an empty
+    // payments array and the balance lands on the customer's account.
+    // LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT stays optional for stores that do have
+    // a custom type; buildSalePayload only adds the payment line when it's set.
 
     // customer: match by email, else create with loyalty enabled
     let customer = null;

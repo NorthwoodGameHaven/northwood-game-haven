@@ -97,7 +97,8 @@ netlify deploy --build --prod
 | `KARAOKE_WIFI_SSID` / `KARAOKE_WIFI_PASS` | guest WiFi name / password (optional — the host console can also set it per session) | Step 2 (optional) |
 | `LIGHTSPEED_CLIENT_ID` | Client ID from the dev portal (Online Booking app) | Step 4 |
 | `LIGHTSPEED_CLIENT_SECRET` | **the regenerated** secret (C1) | Step 4 |
-| `LIGHTSPEED_OUTLET_ID`, `LIGHTSPEED_REGISTER_ID`, `LIGHTSPEED_USER_ID`, `LIGHTSPEED_PAYMENT_TYPE_ONLINE`, `LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT`, `LIGHTSPEED_TAX_ID`, `LIGHTSPEED_TAX_ID_NONE` | copy from `/app/guru-lightspeed.html` after you connect the store (C3–C4); each row there has a Copy button and shows the variable name it belongs to | Step 4 |
+| `LIGHTSPEED_OUTLET_ID`, `LIGHTSPEED_REGISTER_ID`, `LIGHTSPEED_USER_ID`, `LIGHTSPEED_PAYMENT_TYPE_ONLINE`, `LIGHTSPEED_TAX_ID`, `LIGHTSPEED_TAX_ID_NONE`, `LIGHTSPEED_DOMAIN`, `LIGHTSPEED_ONACCOUNT` | **all set 2026-09-12** — values are listed in NGH-LIGHTSPEED-INTEGRATION.md §9. Copy fresh ones from `/app/guru-lightspeed.html` if anything changes in the store; each row there has a Copy button and shows the variable name it belongs to | done |
+| ~~`LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT`~~ | **do not set** — X-Series has no on-account payment type (on-account is a sale *status*). `LIGHTSPEED_ONACCOUNT=true` is the switch instead. | — |
 
 `LIGHTSPEED_DOMAIN`, `LIGHTSPEED_TOKEN`, `LOYALTY_GROUP_DISCOUNTS`, and everything else already in there stay exactly as they are. If `LIGHTSPEED_TOKEN` is a working personal token, the new features use it and connecting over OAuth (C3) is optional.
 
