@@ -315,6 +315,14 @@
       <div class="card">
         <h3 style="margin:0 0 10px;">Hours on the floor this week</h3>
         <div id="floortally"></div>
+        <div style="margin-top:14px;border-top:1px dotted #e2e0d2;padding-top:12px;">
+          <button class="btn btn-sm btn-ghost" onclick="tidyShifts()">\u29c9 Tidy duplicate shifts</button>
+          <span id="tidy-msg" class="hint" style="margin-left:10px;"></span>
+          <p class="hint" style="margin:6px 0 0;">
+            Merges any overlapping shifts the same Guru has on the same day into one.
+            New ones can't be created any more, but this clears out anything already there.
+          </p>
+        </div>
       </div>
     </div>
 
@@ -588,11 +596,11 @@ function resolveRow(c, ix){
     var here = (c.inBuilding || []).map(function(x){ return x.guru; })
       .filter(function(v,i,a){ return a.indexOf(v)===i; });
     body = here.map(function(g){
-      return '<button class="btn btn-xs" onclick="fixCover(\''+esc(c.date)+'\','+c.sMin+','+c.eMin+',\''+esc(g).replace(/'/g,"\\'")+'\')">' +
+      return '<button class="btn btn-xs" onclick="fixCover(\''+esc(c.date)+'\','+c.sMin+','+c.eMin+',\''+esc(g).replace(/'/g,"\\'")+'\',this)">' +
         'Roster '+esc(g)+' on the floor</button> ';
     }).join("") +
     guruSelect(sel) +
-    ' <button class="btn btn-xs btn-ghost" onclick="fixCover(\''+esc(c.date)+'\','+c.sMin+','+c.eMin+',document.getElementById(\''+sel+'\').value)">Add shift '+esc(c.from)+'–'+esc(c.to)+'</button>';
+    ' <button class="btn btn-xs btn-ghost" onclick="fixCover(\''+esc(c.date)+'\','+c.sMin+','+c.eMin+',document.getElementById(\''+sel+'\').value,this)">Add shift '+esc(c.from)+'–'+esc(c.to)+'</button>';
   }
   else if(c.type === "guru-understaffed"){
     var sel2 = "rz-un-" + ix;
@@ -641,9 +649,18 @@ async function afterFix(msg){
 // Rostering somebody on the floor IS creating a store shift — there is no
 // separate "cover" concept, and inventing one would give the shop two answers
 // to "who is working".
-async function fixCover(date, sMin, eMin, guru){
+function lockRow(el){
+  // The click that starts a fix must visibly end the row's life. resolveBusy
+  // guarded the network call, but the buttons stayed live and inviting — which
+  // is how one gap became two identical shifts.
+  var row = el && el.closest ? el.closest(".rz") : null;
+  if(!row) return;
+  row.className += " rz-done";
+  Array.prototype.forEach.call(row.querySelectorAll("button,select"), function(b){ b.disabled = true; });
+}
+async function fixCover(date, sMin, eMin, guru, el){
   if(!guru){ alert("Pick a Guru first."); return; }
-  if(resolveBusy) return; resolveBusy = true;
+  if(resolveBusy) return; resolveBusy = true; lockRow(el);
   try {
     await api("/gurus", { method:"POST", body: JSON.stringify({ action:"save-shift", item:{
       guru: guru, date: date, open: minsToHHMM(sMin), close: minsToHHMM(eMin), notes: "Added from Review & fix"
@@ -1089,6 +1106,21 @@ function renderFloorWeek(){
       }).join("") + '</table>' +
       '<p class="hint" style="margin:8px 0 0;">Anyone not listed has no floor shift this week.</p>'
     : '<p class="hint">Nobody is rostered on the floor this week.</p>';
+}
+
+/* One button for the duplicates that pre-date the server-side merge. Same
+   rule, applied to what is already in the table. */
+async function tidyShifts(){
+  $("tidy-msg").textContent = "Checking\u2026";
+  try {
+    var res = await api("/gurus", { method:"POST", body: JSON.stringify({ action:"merge-shifts" }) });
+    if(res && res.removed){
+      $("tidy-msg").textContent = "Merged " + res.removed + " duplicate shift" + (res.removed>1?"s":"") + ".";
+      await load();
+    } else {
+      $("tidy-msg").textContent = "Nothing to merge \u2014 no overlapping shifts.";
+    }
+  } catch(e){ $("tidy-msg").textContent = "Couldn't tidy: " + e.message; }
 }
 
 /* ================= ROOMS — every room, every day ================= */

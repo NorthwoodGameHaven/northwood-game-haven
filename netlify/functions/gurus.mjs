@@ -481,9 +481,100 @@ const _handler = async (req) => {
         recurrence: item.recurrence && item.recurrence.freq ? { freq: item.recurrence.freq, count: Math.max(1, Math.min(60, +item.recurrence.count || 1)) } : null,
         notes: item.notes || ''
       };
+
+      // NGH-BUILD 2026-09-12t: one person cannot work two overlapping shifts.
+      //
+      // The Review & fix queue posts a shift per click, and a double-click — or
+      // a second pass over a gap the list had not caught up with yet — produced
+      // a second identical shift. That is not a UI slip to paper over on one
+      // page: any caller can post twice, and the result was Chad on the floor
+      // 4PM-10PM twice with the week's tally reading 52 hours.
+      //
+      // So a CREATE that overlaps or abuts an existing shift for the same Guru
+      // on the same day is absorbed into that shift rather than added beside
+      // it. Only plain one-off shifts are merged; a recurring shift spans dates
+      // this record knows nothing about, and an edit (one carrying an id) is a
+      // deliberate act that must be honoured as written.
+      let merged = 0;
+      if (!item.id && !rec.recurrence) {
+        // ORDER BY created_at so "keep the oldest" is deterministic — an
+        // unordered SELECT would pick a different survivor run to run.
+        const rows = await sql`SELECT id, data FROM guru_data WHERE kind = 'shift' ORDER BY created_at ASC`;
+        const sameDay = rows.filter(r => r.data && r.data.guru === rec.guru && r.data.date === rec.date && !r.data.recurrence);
+
+        // Absorb to a fixpoint, not in one pass. 10-14 plus 13-18 plus a new
+        // 17-22 is ONE continuous stretch, but the new shift only touches
+        // 13-18 directly; stopping there would leave two overlapping shifts
+        // behind, which is the exact thing this is here to prevent.
+        let lo = timeToMins(rec.open), hi = timeToMins(rec.close);
+        const absorbed = [];
+        let grew = true;
+        while (grew) {
+          grew = false;
+          for (const r of sameDay) {
+            if (absorbed.indexOf(r) >= 0) continue;
+            const rs = timeToMins(r.data.open), re = timeToMins(r.data.close);
+            if (rs > hi || re < lo) continue;                  // no touch yet
+            absorbed.push(r);
+            lo = Math.min(lo, rs); hi = Math.max(hi, re);
+            grew = true;                                       // the window moved — rescan
+          }
+        }
+        if (absorbed.length) {
+          // The absorb order follows how the window grew, not age — so pick the
+          // keeper back out of the created_at-ordered list. Keeping the oldest
+          // record means anything already pointing at a shift still resolves.
+          const inAgeOrder = sameDay.filter(r => absorbed.indexOf(r) >= 0);
+          const keep = inAgeOrder[0];
+          rec.id = keep.id;
+          rec.open = minsToTime(lo);
+          rec.close = minsToTime(hi);
+          rec.notes = rec.notes || keep.data.notes || '';
+          const drop = inAgeOrder.slice(1).map(r => r.id);
+          if (drop.length) await sql`DELETE FROM guru_data WHERE id = ANY(${drop})`;
+          merged = absorbed.length;
+        }
+      }
+
       await sql`INSERT INTO guru_data (id, kind, data) VALUES (${rec.id}, 'shift', ${JSON.stringify(rec)}::jsonb)
                 ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data`;
-      return json(rec, 201);
+      if (merged) console.log('[gurus] merged', merged, 'overlapping shift(s) for', rec.guru, rec.date, '->', rec.open + '-' + rec.close);
+      return json(merged ? { ...rec, merged } : rec, 201);
+    }
+
+    // NGH-BUILD 2026-09-12t: clean up duplicates that were already created
+    // before the merge above existed. Same rule, applied to what is in there.
+    if (action === 'merge-shifts') {
+      const rows = await sql`SELECT id, data FROM guru_data WHERE kind = 'shift'`;
+      const byKey = {};
+      for (const r of rows) {
+        if (!r.data || r.data.recurrence) continue;
+        const k = r.data.guru + '|' + r.data.date;
+        (byKey[k] = byKey[k] || []).push(r);
+      }
+      let removed = 0, widened = 0;
+      for (const k of Object.keys(byKey)) {
+        const list = byKey[k].sort((a, b) => timeToMins(a.data.open) - timeToMins(b.data.open));
+        let i = 0;
+        while (i < list.length) {
+          const group = [list[i]];
+          let hi = timeToMins(list[i].data.close);
+          while (i + 1 < list.length && timeToMins(list[i + 1].data.open) <= hi) {
+            hi = Math.max(hi, timeToMins(list[i + 1].data.close));
+            group.push(list[++i]);
+          }
+          i++;
+          if (group.length < 2) continue;
+          const keep = group[0];
+          const lo = timeToMins(keep.data.open);
+          const next = { ...keep.data, open: minsToTime(lo), close: minsToTime(hi) };
+          await sql`UPDATE guru_data SET data = ${JSON.stringify(next)}::jsonb WHERE id = ${keep.id}`;
+          const drop = group.slice(1).map(r => r.id);
+          await sql`DELETE FROM guru_data WHERE id = ANY(${drop})`;
+          removed += drop.length; widened++;
+        }
+      }
+      return json({ removed, widened });
     }
 
     if (action === 'save-unavail') {

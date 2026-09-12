@@ -37,7 +37,9 @@ function db(tables) {
     if (/FROM bookings/.test(text)) return (tables.bookings || []).map(d => ({ data: d }));
     if (/FROM events/.test(text)) return (tables.events || []).map(d => ({ data: d }));
     if (/FROM blackouts/.test(text)) return tables.blackouts ? [{ data: tables.blackouts }] : [];
-    if (/FROM guru_data/.test(text)) return (tables.guru || []).map(d => ({ kind: d.kind, data: d.data }));
+    // The real table is (id, kind, data) and the merge logic reads r.id, so the
+    // mock has to hand back an id or it tests a shape that does not exist.
+    if (/FROM guru_data/.test(text)) return (tables.guru || []).map(d => ({ id: (d.data && d.data.id) || d.id, kind: d.kind, data: d.data }));
     if (/FROM birthday_requests/.test(text)) {
       if (tables.noBirthdayTable) throw new Error('relation "birthday_requests" does not exist');
       return (tables.birthdays || []).map(d => ({ data: d }));
@@ -241,6 +243,157 @@ describe('assigning a guru to something other than an event', () => {
     const rec = await (await gurusFn(POST({ action: 'save-assignment', item: { eventId: 'EVT-1', gurus: ['Dustin'] } }))).json();
     assert.equal(rec.eventId, 'EVT-1');
     assert.equal(rec.date, null, 'no date still means the whole series');
+  });
+});
+
+describe('deleting things actually works', () => {
+  // This whole suite exists because of one line. noContent() returned
+  //     new Response('', { status: 204 })
+  // and 204 is a null-body status, so the Response constructor threw a
+  // TypeError on every call. EVERY delete endpoint in the codebase was broken
+  // — bookings, events, gurus, interest-events, karaoke, mtg, registrations,
+  // specials, speedgaming — and it stayed hidden because each function's
+  // top-level catch turned the throw into a generic "Server error", and
+  // because tests/_mock-hooks.mjs carried a byte-identical copy of the bug.
+  test('a 204 can be constructed at all', () => {
+    assert.doesNotThrow(() => new Response(null, { status: 204 }));
+    assert.throws(() => new Response('', { status: 204 }), /Invalid response status code 204/,
+      'if this ever stops throwing, the guard below is no longer needed');
+  });
+
+  test('deleting a shift returns 204, not a server error', async () => {
+    db({ guru: [{ kind: 'shift', data: { id: 'GS-1', guru: 'Chad', date: '2026-09-16', open: '12:00', close: '20:00' } }] });
+    const r = await gurusFn(POST({ action: 'delete-shift', item: { id: 'GS-1' } }));
+    assert.equal(r.status, 204, await r.text().catch(() => ''));
+    assert.ok(M().db.calls.some(c => /^DELETE FROM guru_data/.test(c.text)), 'and it really deletes');
+  });
+
+  for (const action of ['delete-assignment', 'delete-unavail']) {
+    test(action + ' returns 204 too', async () => {
+      db({});
+      assert.equal((await gurusFn(POST({ action, item: { id: 'X-1' } }))).status, 204);
+    });
+  }
+
+  test('an OPTIONS preflight does not throw', async () => {
+    db({});
+    const r = await gurusFn(new Request('https://gamehaven.guru/api/gurus', { method: 'OPTIONS' }));
+    assert.equal(r.status, 204);
+  });
+});
+
+describe('one Guru cannot be on the floor twice at once', () => {
+  // Clicking "Roster Chad on the floor" twice produced two identical shifts
+  // and a week tally of 52 hours. A UI guard is not enough — any caller can
+  // post twice — so the merge is server-side.
+  const existing = (o = {}) => ({ kind: 'shift', data: { id: 'GS-1', guru: 'Chad', date: '2026-09-26', open: '10:00', close: '22:00', ...o } });
+  // POST() builds the Request; gurusFn is what turns it into a Response.
+  const add = (o = {}) => gurusFn(POST({ action: 'save-shift', item: { guru: 'Chad', date: '2026-09-26', open: '10:00', close: '22:00', ...o } }));
+  const deletes = () => M().db.calls.filter(c => /^DELETE FROM guru_data/.test(c.text));
+
+  test('posting the same shift twice keeps one record', async () => {
+    db({ guru: [existing()] });
+    const rec = await (await add()).json();
+    assert.equal(rec.id, 'GS-1', 'it must reuse the existing record, not mint a second');
+    assert.equal(rec.open, '10:00');
+    assert.equal(rec.close, '22:00');
+    assert.equal(rec.merged, 1);
+  });
+
+  test('an overlapping shift widens the existing one', async () => {
+    db({ guru: [existing({ open: '10:00', close: '18:00' })] });
+    const rec = await (await add({ open: '16:00', close: '22:00' })).json();
+    assert.equal(rec.id, 'GS-1');
+    assert.equal(rec.open, '10:00');
+    assert.equal(rec.close, '22:00', 'the union, not the newer one');
+  });
+
+  test('an abutting shift merges rather than sitting beside it', async () => {
+    db({ guru: [existing({ open: '10:00', close: '14:00' })] });
+    const rec = await (await add({ open: '14:00', close: '18:00' })).json();
+    assert.equal(rec.close, '18:00');
+    assert.equal(rec.open, '10:00');
+  });
+
+  test('three overlapping shifts collapse to one and the extras are deleted', async () => {
+    db({
+      guru: [existing({ id: 'GS-1', open: '10:00', close: '14:00' }),
+        existing({ id: 'GS-2', open: '13:00', close: '18:00' })]
+    });
+    const rec = await (await add({ open: '17:00', close: '22:00' })).json();
+    assert.equal(rec.id, 'GS-1');
+    assert.equal(rec.open, '10:00');
+    assert.equal(rec.close, '22:00');
+    assert.equal(deletes().length, 1, 'GS-2 gets absorbed');
+  });
+
+  test('a separate shift later the same day is left alone', async () => {
+    db({ guru: [existing({ open: '09:00', close: '12:00' })] });
+    const rec = await (await add({ open: '17:00', close: '20:00' })).json();
+    assert.notEqual(rec.id, 'GS-1', 'a genuine second shift is not a duplicate');
+    assert.equal(rec.merged, undefined);
+    assert.equal(deletes().length, 0);
+  });
+
+  test('another Guru on the same hours is not a duplicate', async () => {
+    db({ guru: [existing()] });
+    const rec = await (await gurusFn(POST({ action: 'save-shift', item: { guru: 'Mike', date: '2026-09-26', open: '10:00', close: '22:00' } }))).json();
+    assert.notEqual(rec.id, 'GS-1');
+    assert.equal(rec.merged, undefined);
+  });
+
+  test('the same hours on a different day is not a duplicate', async () => {
+    db({ guru: [existing()] });
+    const rec = await (await add({ date: '2026-09-27' })).json();
+    assert.notEqual(rec.id, 'GS-1');
+  });
+
+  test('editing a shift is honoured exactly, never merged', async () => {
+    // An id means somebody deliberately changed this record. Widening it to
+    // swallow a neighbour would silently undo the edit they just made.
+    db({ guru: [existing({ id: 'GS-1', open: '10:00', close: '22:00' }), existing({ id: 'GS-2', open: '10:00', close: '14:00' })] });
+    const rec = await (await add({ id: 'GS-2', open: '11:00', close: '13:00' })).json();
+    assert.equal(rec.id, 'GS-2');
+    assert.equal(rec.open, '11:00');
+    assert.equal(rec.close, '13:00');
+    assert.equal(deletes().length, 0);
+  });
+
+  test('a recurring shift is never merged into a one-off', async () => {
+    db({ guru: [existing()] });
+    const rec = await (await add({ recurrence: { freq: 'weekly', count: 8 } })).json();
+    assert.notEqual(rec.id, 'GS-1', 'it spans dates the day-level merge knows nothing about');
+    assert.equal(rec.recurrence.count, 8);
+  });
+});
+
+describe('tidying up duplicates that already exist', () => {
+  test('merge-shifts collapses overlapping runs and reports what it did', async () => {
+    db({
+      guru: [
+        { kind: 'shift', data: { id: 'A1', guru: 'Chad', date: '2026-09-25', open: '16:00', close: '22:00' } },
+        { kind: 'shift', data: { id: 'A2', guru: 'Chad', date: '2026-09-25', open: '16:00', close: '22:00' } },
+        { kind: 'shift', data: { id: 'B1', guru: 'Chad', date: '2026-09-26', open: '10:00', close: '22:00' } },
+        { kind: 'shift', data: { id: 'B2', guru: 'Chad', date: '2026-09-26', open: '10:00', close: '22:00' } },
+        { kind: 'shift', data: { id: 'C1', guru: 'Mike', date: '2026-09-27', open: '12:00', close: '20:00' } }
+      ]
+    });
+    const res = await (await gurusFn(POST({ action: 'merge-shifts' }))).json();
+    assert.equal(res.removed, 2, 'one duplicate on each of the two days');
+    assert.equal(res.widened, 2);
+  });
+
+  test('it leaves a clean rota completely alone', async () => {
+    db({
+      guru: [
+        { kind: 'shift', data: { id: 'A1', guru: 'Chad', date: '2026-09-25', open: '10:00', close: '14:00' } },
+        { kind: 'shift', data: { id: 'A2', guru: 'Chad', date: '2026-09-25', open: '17:00', close: '20:00' } },
+        { kind: 'shift', data: { id: 'A3', guru: 'Mike', date: '2026-09-25', open: '10:00', close: '14:00' } }
+      ]
+    });
+    const res = await (await gurusFn(POST({ action: 'merge-shifts' }))).json();
+    assert.equal(res.removed, 0);
+    assert.equal(res.widened, 0);
   });
 });
 

@@ -19,8 +19,11 @@ const MOCKS = {
     const CORS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
     export function json(body, status = 200) { return new Response(body == null ? '' : JSON.stringify(body), { status, headers: CORS }); }
     export function bad(msg, status = 400) { return json({ error: msg }, status); }
-    export function noContent() { return new Response('', { status: 204, headers: CORS }); }
-    export function preflight() { return new Response('', { status: 204, headers: CORS }); }
+    /* NGH-BUILD 2026-09-12t: mirrors the real db.mjs. A null-body status must be
+       given a null body or the Response constructor throws — keeping the mock
+       faithful here is what lets a test catch that class of bug at all. */
+    export function noContent() { return new Response(null, { status: 204, headers: CORS }); }
+    export function preflight() { return new Response(null, { status: 204, headers: CORS }); }
     export function issueToken() { return 'admin-ok'; }
     export function verifyToken(t) { return t === 'admin-ok'; }
     export function requireAdmin(req) { return (req.headers.get('authorization') || '') === 'Bearer admin-ok'; }

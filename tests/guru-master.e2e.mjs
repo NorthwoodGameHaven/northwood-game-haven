@@ -109,7 +109,15 @@ const server = http.createServer((req, res) => {
   if (url.pathname.endsWith('/gurus')) {
     if (req.method !== 'POST') return send(200, JSON.stringify({ assignments: [], shifts: [], unavail: [], hours: HOURS }));
     let body = ''; req.on('data', c => body += c);
-    return req.on('end', () => { saved.push(JSON.parse(body || '{}')); send(201, JSON.stringify({ ok: true })); });
+    return req.on('end', () => {
+      const b = JSON.parse(body || '{}');
+      saved.push(b);
+      // Mirror the real endpoint: deletes answer 204 with NO body, which is
+      // what broke every delete in the app until 12t.
+      if (/^delete-/.test(b.action || '')) { res.writeHead(204); return res.end(); }
+      if (b.action === 'merge-shifts') return send(200, JSON.stringify({ removed: 2, widened: 1 }));
+      send(201, JSON.stringify({ ok: true }));
+    });
   }
   if (url.pathname.endsWith('/admin-login')) return send(200, JSON.stringify({ token: 'tok' }));
   // Raw endpoints, for the pages that merge client-side (guru-schedule).
@@ -212,8 +220,15 @@ ok('[resolve] a floor gap offers an explicit shift window', /Add shift .*–/.te
 
 // Roster the person who is already there.
 const rosterBtn = await page.$('#resolve-list button:has-text("Roster")');
+const beforeRoster = saved.filter(x => x && x.action === 'save-shift').length;
 await rosterBtn.click();
-await sleep(700);
+// The impatient second click. This is literally how the shop ended up with
+// Chad rostered 4PM-10PM twice on the same Friday.
+await rosterBtn.click().catch(() => {});
+await sleep(900);
+const afterRoster = saved.filter(x => x && x.action === 'save-shift').length;
+ok('[resolve] a double-click cannot post two shifts', afterRoster - beforeRoster === 1,
+  (afterRoster - beforeRoster) + ' posted');
 const shiftPost = saved.find(x => x && x.action === 'save-shift');
 ok('[resolve] rostering writes a real store shift', !!shiftPost, JSON.stringify(shiftPost));
 ok('[resolve] with the gap\'s own times', shiftPost && /^\d{2}:\d{2}$/.test(shiftPost.item.open) && shiftPost.item.close > shiftPost.item.open,
@@ -308,6 +323,29 @@ await sleep(250);
 
 ok('[floor] the week tallies hours per Guru', /h/.test(await page.textContent('#floortally')) &&
   (await page.$$('#floortally .tbar')).length >= 1);
+
+// Deleting a shift must not blow up on a 204. This is the bug the shop hit:
+// "Couldn't delete: Server error: Response constructor: Invalid response
+// status code 204" — because noContent() handed a 204 an empty-string body.
+const delChip = await page.$('#floorwk .schip:not(.add)');
+await delChip.click();
+await page.waitForSelector('#sf-guru', { timeout: 5000 });
+page.once('dialog', d => d.accept());          // the "Remove this store shift?" confirm
+await page.click('#modal-box .btn-danger');
+await sleep(700);
+const delPost = saved.filter(x => x && x.action === 'delete-shift').pop();
+ok('[floor] deleting a shift posts a delete', !!delPost, JSON.stringify(delPost));
+ok('[floor] and a 204 does not surface as a server error',
+  !errors.some(e => /204|Invalid response status/.test(e)), errors.join(' | '));
+ok('[floor] the modal closes on a successful delete', !(await page.isVisible('#modal.open')));
+
+// Tidying pre-existing duplicates.
+ok('[floor] there is a way to tidy duplicate shifts', !!(await page.$('#view-floor button:has-text("Tidy")')));
+await page.click('#view-floor button:has-text("Tidy")');
+await sleep(600);
+ok('[floor] tidy posts merge-shifts', saved.some(x => x && x.action === 'merge-shifts'));
+ok('[floor] and reports what it merged', /Merged 2/.test(await page.textContent('#tidy-msg')),
+  await page.textContent('#tidy-msg'));
 await page.screenshot({ path: path.join(SHOTS, 'guru-master-floor.png'), fullPage: true });
 
 // ----------------------------------------------------------------- rooms

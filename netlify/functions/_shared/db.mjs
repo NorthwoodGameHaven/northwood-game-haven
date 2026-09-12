@@ -68,8 +68,21 @@ const CORS = {
 export function json(body, status = 200) {
   return new Response(body == null ? '' : JSON.stringify(body), { status, headers: CORS });
 }
-export function noContent() { return new Response('', { status: 204, headers: CORS }); }
-export function preflight() { return new Response('', { status: 204, headers: CORS }); }
+// NGH-BUILD 2026-09-12t: the body MUST be null, not ''.
+//
+// 204, 205 and 304 are "null body status" codes in the fetch spec, and the
+// Response constructor throws a TypeError if you hand one of them any body at
+// all — an empty string included. Both of these threw on every single call:
+//
+//   Response constructor: Invalid response status code 204
+//
+// Which meant EVERY delete endpoint in the codebase was broken (bookings,
+// events, gurus, interest-events, karaoke, mtg, registrations, specials,
+// speedgaming) and every CORS preflight failed. It stayed hidden because the
+// throw is caught by each function's top-level handler and re-reported as a
+// generic "Server error", and because same-origin fetches never preflight.
+export function noContent() { return new Response(null, { status: 204, headers: CORS }); }
+export function preflight() { return new Response(null, { status: 204, headers: CORS }); }
 export function bad(msg, status = 400) { return json({ error: msg }, status); }
 
 // ---- admin auth (stateless HMAC token) ----
