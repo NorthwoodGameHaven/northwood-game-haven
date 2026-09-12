@@ -186,7 +186,16 @@
     clearTimeout(t._h);
     t._h = setTimeout(function () { t.classList.remove("show"); }, 2200);
   }
-  function haptic() { if (navigator.vibrate) try { navigator.vibrate(30); } catch (e) {} }
+  /* NGH-BUILD 2026-09-12l: when this page is hosted inside the NGH app (app/trivia/
+     play.html frames it so the game runs as an app screen rather than in a
+     browser sheet), it is cross-origin to the app shell and cannot reach
+     Capacitor Haptics directly. Posting up lets the shell fire a real native
+     haptic on iOS; navigator.vibrate still covers Android and plain browsers,
+     and if nobody is listening this costs nothing. */
+  function hostHaptic(kind) {
+    try { if (window.parent && window.parent !== window) window.parent.postMessage({ ngh: 'haptic', kind: kind || 'light' }, '*'); } catch (e) {}
+  }
+  function haptic() { hostHaptic('light'); if (navigator.vibrate) try { navigator.vibrate(30); } catch (e) {} }
   function ord(n) {
     var s = ["th", "st", "nd", "rd"], vv = n % 100;
     return n + (s[(vv - 20) % 10] || s[vv] || s[0]);
@@ -710,6 +719,7 @@
     mgTappedSweep = s.sweep;
     var pts = mgZonePts(s.x);
     mgTotal += pts;
+    hostHaptic(pts >= 100 ? 'success' : pts > 0 ? 'light' : 'warn');   /* NGH-BUILD 2026-09-12l */
     if (navigator.vibrate) navigator.vibrate(pts >= 100 ? [20, 30, 20] : pts > 0 ? 20 : [60, 40, 60]);
     mgToast((pts > 0 ? "+" : "") + pts, pts >= 100 ? "good" : pts > 0 ? "mid" : "bad");
     mgEl("mgMe").innerHTML = "Your raw score: <span class='pts'>" + mgTotal + "</span>";

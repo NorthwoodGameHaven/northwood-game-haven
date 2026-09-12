@@ -31,4 +31,4 @@ window.NGH_ADMIN_EMAIL = "stash@northwoodgamehaven.com";
 
 /* ---- DEMO-ONLY staff gate code. Ignored in live server mode, where
         the real password lives in a Netlify environment variable. ---- */
-window.NGH_ADMIN_CODE = "stash2026";
+window.NGH_ADMIN_CODE = "";   /* NGH-BUILD 2026-09-12l: removed — the live code lives in ADMIN_SECRET */

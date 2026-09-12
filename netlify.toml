@@ -165,6 +165,47 @@
   from = "/api/karaoke"
   to   = "/.netlify/functions/karaoke"
   status = 200
+# NGH-BUILD 2026-09-12l — Speed Gaming Meet-up (EVT-PITPB5-103): 2v2 pairing engine,
+# TV pairings board and the Guru run-the-night console.
+[[redirects]]
+  from = "/api/speedgaming/*"
+  to   = "/.netlify/functions/speedgaming/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/speedgaming"
+  to   = "/.netlify/functions/speedgaming"
+  status = 200
+[[redirects]]
+  from = "/speedgaming"
+  to   = "/app/speedgaming/index.html"
+  status = 200
+[[redirects]]
+  from = "/speedgaming-tv"
+  to   = "/speedgaming-tv.html"
+  status = 200
+[[redirects]]
+  from = "/speedgaming-guru"
+  to   = "/speedgaming-guru.html"
+  status = 200
+
+# NGH-BUILD 2026-09-12l — Magic night board (sits beside EventLink Mirror).
+[[redirects]]
+  from = "/api/mtg/*"
+  to   = "/.netlify/functions/mtg/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/mtg"
+  to   = "/.netlify/functions/mtg"
+  status = 200
+[[redirects]]
+  from = "/mtg"
+  to   = "/app/mtg/index.html"
+  status = 200
+[[redirects]]
+  from = "/mtg-tv"
+  to   = "/mtg-tv.html"
+  status = 200
+
 [[redirects]]
   from = "/api/companion/*"
   to   = "/.netlify/functions/companion/:splat"

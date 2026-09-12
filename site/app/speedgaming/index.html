@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<!-- NGH APP · Speed Gaming Meet-up — NGH-BUILD 2026-09-12l
+     The player's phone. Check in, then this is a heads-up display for the
+     night: where to sit, who you're with, who you're against, and how long is
+     left of the current phase.
+
+     Informative by design (Dustin, 2026-09-12) — no scoring or voting from the
+     phone. The Guru enters results at the table, so the phone can never be a
+     thing anyone has to fight with mid-game.
+
+     Served at /app/speedgaming/ (in-app) and /speedgaming (mobile web + the QR
+     on the TV). Same file either way. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Speed Gaming — Northwood Game Haven</title>
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .hero{text-align:center;padding:20px 16px 18px;border-color:var(--gold);
+    background:linear-gradient(160deg,rgba(232,184,75,.2),rgba(232,184,75,.03)),linear-gradient(180deg,var(--panel-2),var(--panel))}
+  .livepill{display:inline-flex;align-items:center;gap:8px;background:var(--red);color:#fff;font-weight:900;
+    letter-spacing:.14em;font-size:.74rem;padding:5px 13px;border-radius:999px;text-transform:uppercase}
+  .livepill .dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.7)}70%{box-shadow:0 0 0 9px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+
+  /* The table number is the single most important thing on this screen —
+     someone glances at it across a noisy room while walking. */
+  .tableno{font-family:var(--font-display);font-size:4.6rem;line-height:1;color:var(--gold-lt);
+    text-shadow:0 3px 0 rgba(0,0,0,.35);margin:6px 0 2px}
+  .tablelbl{font-family:var(--font-head);letter-spacing:.22em;text-transform:uppercase;font-size:.78rem;color:var(--muted)}
+
+  .who{display:grid;gap:10px;margin-top:16px}
+  .who .row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--radius-sm);
+    border:1px solid var(--line);background:rgba(255,255,255,.03);text-align:left}
+  .who .row.partner{border-color:var(--gold);background:linear-gradient(90deg,rgba(232,184,75,.16),rgba(232,184,75,.03))}
+  .who .tag{font-family:var(--font-head);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);width:74px;flex:none}
+  .who .names{font-weight:700;font-size:1.06rem;color:var(--cream)}
+  .who .row.partner .names{color:var(--gold-lt)}
+  .vs{font-family:var(--font-head);color:var(--muted);text-align:center;font-size:.8rem;letter-spacing:.2em}
+
+  .clock{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+  .clock .phase{font-family:var(--font-head);letter-spacing:.1em;text-transform:uppercase;font-size:.8rem;color:var(--gold-lt)}
+  .clock .time{font-family:var(--font-display);font-size:3rem;line-height:1;margin:2px 0 4px;
+    font-variant-numeric:tabular-nums}
+  .clock.warn .time{color:var(--gold-lt)}
+  .clock.urgent .time{color:#ff9b8a;animation:blink 1s steps(2,start) infinite}
+  @keyframes blink{50%{opacity:.45}}
+  .bar{height:7px;border-radius:999px;background:rgba(0,0,0,.35);overflow:hidden;margin-top:8px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-lt));
+    transition:width .9s linear;border-radius:999px}
+
+  .bye{border-color:var(--teal);background:linear-gradient(160deg,rgba(20,136,166,.22),rgba(20,136,166,.04)),linear-gradient(180deg,var(--panel-2),var(--panel))}
+  .bye .display{color:#7fd4e8}
+
+  .join input{width:100%;padding:14px;font-size:1.05rem;border-radius:var(--radius-sm);
+    border:1px solid var(--line);background:rgba(0,0,0,.25);color:var(--cream);font-family:var(--font-body)}
+  .join label{display:block;font-family:var(--font-head);font-size:.8rem;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin:12px 0 5px}
+  .codebox{letter-spacing:.5em;text-transform:uppercase;text-align:center;font-size:1.6rem;font-weight:800}
+
+  .rounds{display:flex;gap:6px;justify-content:center;margin-top:12px}
+  .rounds span{width:34px;height:5px;border-radius:999px;background:rgba(255,255,255,.14)}
+  .rounds span.done{background:var(--gold)}
+  .rounds span.now{background:var(--gold-lt);box-shadow:0 0 10px rgba(232,184,75,.7)}
+
+  .board li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .board li:last-child{border-bottom:0}
+  .board .pos{width:26px;font-family:var(--font-head);color:var(--muted);font-size:.9rem;flex:none}
+  .board .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .board .pts{font-family:var(--font-head);color:var(--gold-lt);font-weight:600}
+  .board li.me{background:rgba(232,184,75,.1);border-radius:8px;padding-left:6px;padding-right:6px}
+  .stale{opacity:.55}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/app/" aria-label="Back">‹</a>
+    <div class="title">Speed Gaming</div>
+    <img class="logo" src="/brand/crest.png" alt="">
+  </header>
+
+  <div id="view"></div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var N = window.NGH, $ = N.$, esc = N.esc;
+  var API = '/api/speedgaming';
+  var view = $('view');
+
+  // One identity per session code, kept on the device so a reload or a walk
+  // out of wifi doesn't lose your seat.
+  function meStore(code) { return N.store('ngh_sg_' + code); }
+
+  var code = (new URLSearchParams(location.search).get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  var me = null, poller = null, S = null, ticker = null;
+
+  // ---------- render ----------
+  function h(html) { view.innerHTML = html; }
+
+  function checking() {
+    h('<div class="card" style="text-align:center;padding:40px 0">' +
+      '<div class="spinner"></div><p class="muted">Looking for tonight’s meet-up…</p></div>');
+  }
+
+  function noSession() {
+    h('<div class="card hero">' +
+      '<div class="display" style="font-size:1.4rem">Speed Gaming Meet-up</div>' +
+      '<p class="muted" style="margin-top:10px">Nothing running right now.</p>' +
+      '<p class="small">Come with a friend or come alone — we’ll match you with a partner and against another pair, ' +
+      'then swap partners every round. 3 rounds, prizes each round.</p>' +
+      '<a class="btn ghost" href="/events.html" style="margin-top:12px">See when it’s on</a>' +
+      '</div>' + howBox());
+  }
+
+  function howBox() {
+    return '<div class="card how"><h2>How the night works</h2><ol style="margin:0;padding-left:20px">' +
+      '<li>Check in — alone or with whoever you came with.</li>' +
+      '<li>You get a table, a partner and two opponents.</li>' +
+      '<li>10 min to learn the game, 40 to play, 10 to swap.</li>' +
+      '<li>New partner every round. Prizes each round.</li>' +
+      '</ol><p class="tiny muted" style="margin-top:10px">You’ll never be paired with the same person twice, ' +
+      'and if you arrived together we’ll split you up so you both meet people.</p></div>';
+  }
+
+  function joinForm(s, err) {
+    h('<div class="card hero">' +
+        '<span class="livepill"><span class="dot"></span>' + (s.status === 'live' ? 'In progress' : 'Checking in') + '</span>' +
+        '<div class="display" style="font-size:1.35rem;margin-top:12px">' + esc(s.title) + '</div>' +
+        '<p class="muted small">' + s.playing + ' checked in' + (s.current ? ' · round ' + s.current + ' of ' + s.settings.rounds : '') + '</p>' +
+      '</div>' +
+      '<div class="card join">' +
+        '<h2>Check in</h2>' +
+        (err ? '<p class="small" style="color:#ff9b8a">' + esc(err) + '</p>' : '') +
+        '<label for="nm">Your name</label>' +
+        '<input id="nm" autocomplete="given-name" placeholder="First name is plenty" maxlength="30">' +
+        '<label for="wf">Came with someone? (optional)</label>' +
+        '<input id="wf" autocomplete="off" placeholder="Their name" maxlength="30">' +
+        '<p class="tiny muted" style="margin-top:6px">We’ll make sure you’re on <b>opposite</b> teams — that’s the whole point.</p>' +
+        '<button class="btn primary big" id="go" style="margin-top:14px;width:100%">Check in</button>' +
+      '</div>' + howBox());
+    $('nm').focus();
+    $('nm').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('go').click(); });
+    $('go').addEventListener('click', function () {
+      var name = $('nm').value.trim();
+      if (!name) { N.toast('Pop your name in first'); $('nm').focus(); return; }
+      var btn = this; btn.disabled = true; btn.textContent = 'Checking in…';
+      // arrivedWith is a shared tag, not a name lookup: both people typing each
+      // other's name lands them in the same group whichever order they arrive.
+      var withWho = $('wf').value.trim();
+      var tag = withWho ? [name.toLowerCase(), withWho.toLowerCase()].sort().join('&') : '';
+      N.fetchJSON(API + '/sessions/' + code + '/join', {
+        method: 'POST', body: { name: name, deviceId: N.DEVICE_ID, arrivedWith: tag }
+      }).then(function (j) {
+        me = { playerId: j.playerId, token: j.token, name: name };
+        meStore(code).set(me);
+        N.haptic('success');
+        render(j.state);
+        start();
+      }).catch(function (e) {
+        btn.disabled = false; btn.textContent = 'Check in';
+        joinForm(s, e.message || 'Could not check you in');
+      });
+    });
+  }
+
+  function roundDots(s) {
+    var out = '';
+    for (var i = 1; i <= s.settings.rounds; i++) {
+      out += '<span class="' + (i < s.current ? 'done' : (i === s.current ? 'now' : '')) + '"></span>';
+    }
+    return '<div class="rounds">' + out + '</div>';
+  }
+
+  function render(s) {
+    S = s;
+    if (!s || !s.code) return noSession();
+    if (!me) return joinForm(s);
+
+    var y = s.you;
+    if (!y) {   // token no longer recognised (session reset) — start over
+      meStore(code).del(); me = null; return joinForm(s);
+    }
+
+    var body = '';
+
+    if (s.status === 'ended') {
+      body += '<div class="card hero"><div class="display" style="font-size:1.4rem">That’s a wrap</div>' +
+        '<p class="muted">Thanks for playing. Final standings below.</p></div>';
+    } else if (y.bye) {
+      body += '<div class="card hero bye">' +
+        '<div class="tablelbl">Round ' + (s.current || 1) + '</div>' +
+        '<div class="display" style="font-size:1.5rem;margin-top:8px">Sitting this one out</div>' +
+        '<p class="muted">Grab a drink — you’re first back in next round.</p>' +
+        roundDots(s) + '</div>';
+    } else if (y.table) {
+      body += '<div class="card hero">' +
+        '<div class="tablelbl">Round ' + s.current + ' of ' + s.settings.rounds + ' · you’re at</div>' +
+        '<div class="tableno">' + y.table + '</div>' +
+        '<div class="tablelbl">Table' + (y.game ? ' · ' + esc(y.game) : '') + '</div>' +
+        '<div class="who">' +
+          '<div class="row partner"><span class="tag">With</span><span class="names">' + esc(y.partner ? y.partner.name : '—') + '</span></div>' +
+          '<div class="vs">VS</div>' +
+          '<div class="row"><span class="tag">Against</span><span class="names">' +
+            y.opponents.map(function (o) { return esc(o.name); }).join(' &amp; ') + '</span></div>' +
+        '</div>' +
+        clockBox(s) +
+        roundDots(s) +
+      '</div>';
+    } else {
+      body += '<div class="card hero">' +
+        '<div class="display" style="font-size:1.3rem">You’re checked in</div>' +
+        '<p class="muted">' + esc(y.nextUp || 'Waiting for the next round') + '</p>' +
+        '<p class="small">' + s.playing + ' here so far</p>' + roundDots(s) + '</div>';
+    }
+
+    body += board(s, y);
+    body += '<div class="card"><p class="tiny muted" style="margin:0">Checked in as <b>' + esc(y.name) + '</b>. ' +
+      '<a href="#" id="leave">Leaving early?</a></p></div>';
+
+    h(body);
+    if ($('leave')) $('leave').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (!confirm('Let the Guru know you’re heading off? You’ll be left out of the next pairing.')) return;
+      N.fetchJSON(API + '/sessions/' + code + '/leave', { method: 'POST', body: { token: me.token } })
+        .then(function () { N.toast('Thanks for coming!'); poller && poller.kick(); });
+    });
+    tick();
+  }
+
+  function clockBox(s) {
+    if (!s.clock) return '';
+    return '<div class="clock" id="clk"><div class="phase" id="cph"></div>' +
+      '<div class="time" id="ctm">—</div><div class="bar"><i id="cbar" style="width:0%"></i></div></div>';
+  }
+
+  // The countdown runs locally off the server-supplied end time, so it stays
+  // smooth between polls and a dropped request never stalls it.
+  function tick() {
+    clearInterval(ticker);
+    if (!S || !S.clock || !S.round || !S.round.phases) return;
+    var el = $('clk'); if (!el) return;
+    function paint() {
+      var now = N.clock.now();
+      var plan = S.round.phases, cur = null, pending = null;
+      if (now < plan[0].startsAt) pending = plan[0];
+      else for (var i = 0; i < plan.length; i++) if (now < plan[i].endsAt) { cur = plan[i]; break; }
+      var ph = $('cph'), tm = $('ctm'), bar = $('cbar');
+      if (!ph) { clearInterval(ticker); return; }
+      if (pending) {
+        ph.textContent = 'Starting soon';
+        tm.textContent = fmt(pending.startsAt - now);
+        bar.style.width = '0%';
+        el.className = 'clock';
+        return;
+      }
+      if (!cur) { ph.textContent = 'Round complete'; tm.textContent = '0:00'; bar.style.width = '100%'; el.className = 'clock'; return; }
+      var left = cur.endsAt - now, total = cur.endsAt - cur.startsAt;
+      ph.textContent = cur.label;
+      tm.textContent = fmt(left);
+      bar.style.width = Math.max(0, Math.min(100, 100 * (1 - left / (total || 1)))) + '%';
+      el.className = 'clock' + (left <= 60000 ? ' urgent' : (left <= 300000 ? ' warn' : ''));
+      if (left <= 0) { clearInterval(ticker); poller && poller.kick(); }
+    }
+    paint();
+    ticker = setInterval(paint, 500);
+  }
+  function fmt(ms) {
+    var t = Math.max(0, Math.round(ms / 1000));
+    return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  }
+
+  function board(s, y) {
+    var rows = (s.standings || []).filter(function (x) { return x.played || x.byes; });
+    if (!rows.length) return '';
+    var top = rows.slice(0, 8);
+    // Always show the player their own line, even if they're 14th.
+    if (y && !top.some(function (x) { return x.id === y.id; })) {
+      var mine = rows.find(function (x) { return x.id === y.id; });
+      if (mine) top = top.concat([mine]);
+    }
+    return '<div class="card"><h2>Tonight’s standings</h2><ul class="board" style="list-style:none;margin:0;padding:0">' +
+      top.map(function (x) {
+        var pos = rows.indexOf(x) + 1;
+        return '<li class="' + (y && x.id === y.id ? 'me' : '') + '">' +
+          '<span class="pos">' + pos + '</span>' +
+          '<span class="nm">' + esc(x.name) + '</span>' +
+          '<span class="pts">' + x.points + '</span></li>';
+      }).join('') +
+      '</ul><p class="tiny muted" style="margin-top:8px">Win 2 · draw 1. Sitting out never costs you anything.</p></div>';
+  }
+
+  // ---------- wiring ----------
+  function start() {
+    if (poller) poller.stop();
+    var url = API + '/sessions/' + code + '/state' + (me ? '?token=' + encodeURIComponent(me.token) : '');
+    poller = N.poll(url, {
+      interval: function () { return (S && S.clock && S.clock.state === 'running') ? 5000 : 3000; },
+      hidden: 20000,
+      onState: function (j) { document.body.classList.remove('stale'); render(j); },
+      onError: function (e, misses) { if (misses > 2) document.body.classList.add('stale'); }
+    });
+  }
+
+  function boot() {
+    checking();
+    N.clock.sync(API + '/time').catch(function () {});
+    var go = code
+      ? Promise.resolve({ code: code })
+      : N.fetchJSON(API + '/active').then(function (j) { return j.active; });
+    go.then(function (a) {
+      if (!a || !a.code) return noSession();
+      code = a.code;
+      me = meStore(code).get(null);
+      start();
+    }).catch(function () { noSession(); });
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

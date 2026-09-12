@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<!-- NGH · Speed Gaming Guru Console — NGH-BUILD 2026-09-12l
+     Run the night from a tablet behind the desk.
+
+     Written for someone standing up, holding a tablet, with a room waiting:
+     ONE primary action is highlighted at any moment ("Pair round 2", "Start the
+     clock", "Publish"), everything destructive is behind a confirm, and the
+     draft is always shown before the room sees it.
+
+     Deliberately NOT merged into guru.html — this is a live-ops screen for one
+     night, and it wants the whole tablet. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Speed Gaming — Guru Console</title>
+<meta name="theme-color" content="#132a1d">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .app{max-width:1100px}
+  .bar{position:sticky;top:0;z-index:30;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+    padding:12px 14px;margin:0 -16px 14px;background:rgba(19,42,29,.97);border-bottom:1px solid var(--line);backdrop-filter:blur(8px)}
+  .bar .grow{flex:1}
+  .pill{font-family:var(--font-head);font-size:.76rem;letter-spacing:.12em;text-transform:uppercase;
+    padding:5px 11px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .pill.live{background:var(--red);color:#fff;border-color:transparent}
+  .pill.gold{background:var(--gold);color:#26211a;border-color:transparent;font-weight:700}
+
+  /* The next thing to do is always the big gold button, and there is only
+     ever one of them on screen. */
+  .doit{width:100%;min-height:64px;font-size:1.2rem;margin-bottom:14px}
+
+  .cols{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}
+  @media (max-width:860px){.cols{grid-template-columns:1fr}}
+
+  .tbl{border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;
+    background:rgba(255,255,255,.03)}
+  .tbl .hd{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .tbl .no{font-family:var(--font-display);font-size:1.7rem;color:var(--gold-lt);line-height:1}
+  .tbl .team{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:9px;margin:3px 0;
+    background:rgba(0,0,0,.22);font-weight:700}
+  .tbl .team .n{flex:1}
+  .tbl .team.win{background:rgba(201,151,58,.24);box-shadow:inset 0 0 0 1px var(--gold)}
+  .tbl .res{display:flex;gap:6px;margin-top:8px}
+  .tbl .res button{flex:1;font-size:.84rem;min-height:38px}
+  .swapsel{outline:2px solid var(--gold-lt);outline-offset:2px}
+
+  .roster li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07)}
+  .roster li:last-child{border-bottom:0}
+  .roster .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .roster .out{opacity:.45;text-decoration:line-through}
+  .roster .with{font-size:.72rem;color:var(--teal)}
+  .warn{background:rgba(192,57,43,.16);border:1px solid rgba(192,57,43,.5);border-radius:10px;
+    padding:9px 11px;font-size:.86rem;margin-bottom:10px}
+  .note{background:rgba(232,184,75,.12);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:.86rem;margin-bottom:10px}
+  .clockbig{font-family:var(--font-display);font-size:2.6rem;line-height:1;font-variant-numeric:tabular-nums;text-align:center}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .row .btn{flex:1;min-width:96px}
+  input.mini{padding:9px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.25);color:var(--cream);font-family:var(--font-body);width:100%}
+  details.adv summary{cursor:pointer;color:var(--muted);font-size:.86rem;padding:6px 0}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="bar">
+    <strong class="display" style="font-size:1.05rem">Speed Gaming</strong>
+    <span id="pills"></span>
+    <span class="grow"></span>
+    <a class="btn btn-sm ghost" href="/speedgaming-tv.html" target="_blank" rel="noopener">TV</a>
+    <button class="btn btn-sm ghost" id="logout" hidden>Sign out</button>
+  </div>
+  <div id="view"></div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var N = window.NGH, $ = N.$, esc = N.esc;
+  var API = '/api/speedgaming';
+  var view = $('view'), pills = $('pills');
+  var code = (new URLSearchParams(location.search).get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  var S = null, poller = null, ticker = null, swapFrom = null, busy = false;
+
+  function post(body) {
+    if (busy) return Promise.reject(new Error('one thing at a time'));
+    busy = true;
+    return N.admin.fetch(API + '/sessions/' + code + '/control', { method: 'POST', body: body })
+      .then(function (j) { busy = false; S = j.state; paint(); return j; })
+      .catch(function (e) { busy = false; N.toast(e.message || 'Failed'); throw e; });
+  }
+
+  // ---------- login ----------
+  function login(err) {
+    view.innerHTML = '<div class="card" style="max-width:420px;margin:40px auto">' +
+      '<h2>Guru sign-in</h2>' + (err ? '<p class="small" style="color:#ff9b8a">' + esc(err) + '</p>' : '') +
+      '<input class="mini" id="pw" type="password" placeholder="Guru code" autocomplete="current-password">' +
+      '<button class="btn primary" id="in" style="width:100%;margin-top:12px">Sign in</button></div>';
+    $('pw').focus();
+    $('pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('in').click(); });
+    $('in').addEventListener('click', function () {
+      N.admin.login($('pw').value).then(boot).catch(function (e) { login(e.message || 'Wrong code'); });
+    });
+  }
+
+  // ---------- session picker ----------
+  function picker() {
+    N.admin.fetch(API + '/sessions').then(function (list) {
+      var open = list.filter(function (x) { return x.status !== 'ended'; });
+      view.innerHTML = '<div class="card"><h2>Tonight</h2>' +
+        (open.length
+          ? '<ul class="roster" style="list-style:none;padding:0;margin:0 0 12px">' + open.map(function (x) {
+              return '<li><span class="n"><b>' + esc(x.code) + '</b> · ' + esc(x.date || '') +
+                ' · ' + x.players + ' players · round ' + x.rounds + '</span>' +
+                '<button class="btn btn-sm primary" data-c="' + esc(x.code) + '">Open</button></li>';
+            }).join('') + '</ul>'
+          : '<p class="muted">No meet-up running.</p>') +
+        '<button class="btn primary doit" id="new" style="margin-top:6px">Start a new meet-up</button>' +
+        '</div>' +
+        (list.length ? '<details class="adv"><summary>Past meet-ups</summary><ul class="roster" style="list-style:none;padding:0">' +
+          list.filter(function (x) { return x.status === 'ended'; }).map(function (x) {
+            return '<li><span class="n">' + esc(x.code) + ' · ' + esc(x.date || '') + ' · ' + x.players + ' players</span>' +
+              '<button class="btn btn-sm ghost" data-c="' + esc(x.code) + '">View</button></li>';
+          }).join('') + '</ul></details>' : '');
+      Array.prototype.forEach.call(view.querySelectorAll('[data-c]'), function (b) {
+        b.addEventListener('click', function () { code = b.getAttribute('data-c'); history.replaceState(null, '', '?c=' + code); start(); });
+      });
+      $('new').addEventListener('click', function () {
+        var d = new Date(); var iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        N.admin.fetch(API + '/sessions', { method: 'POST', body: { date: iso, eventId: 'EVT-PITPB5-103' } })
+          .then(function (j) { code = j.code; history.replaceState(null, '', '?c=' + code); start(); })
+          .catch(function (e) { N.toast(e.message); });
+      });
+    }).catch(function (e) { if (e.status === 401) { N.admin.logout(); login('Session expired'); } else N.toast(e.message); });
+  }
+
+  // ---------- the console ----------
+  function paint() {
+    if (!S) return;
+    var s = S, r = s.round, d = s.draft;
+
+    pills.innerHTML =
+      '<span class="pill gold">' + esc(s.code) + '</span> ' +
+      '<span class="pill' + (s.status === 'live' ? ' live' : '') + '">' + esc(s.status) + '</span> ' +
+      '<span class="pill">' + s.playing + ' playing</span>' +
+      (s.current ? ' <span class="pill">round ' + s.current + '/' + s.settings.rounds + '</span>' : '');
+    $('logout').hidden = false;
+
+    var html = '';
+
+    // --- the one next action -------------------------------------------------
+    if (s.status === 'ended') {
+      html += '<div class="note">This meet-up is finished. <a href="#" id="reopen">Reopen it</a> if that was a mistake.</div>';
+    } else if (d) {
+      html += '<button class="btn primary doit" id="publish">✅ Publish round ' + d.n + ' to the room</button>';
+    } else if (r && !r.startAt && !r.endedEarly) {
+      html += '<button class="btn primary doit" id="startclk">▶︎ Start the round ' + r.n + ' clock</button>';
+    } else if (r && (r.endedEarly || (s.clock && s.clock.state === 'done')) && s.current < s.settings.rounds) {
+      /* Tables finishing before the timer is the normal case, so a round the
+         Guru ended early must lead straight to pairing the next one. */
+      html += '<button class="btn primary doit" id="pair">↻ Pair round ' + (s.current + 1) + '</button>';
+    } else if (!r) {
+      html += '<button class="btn primary doit" id="pair"' + (s.playing < 4 ? ' disabled' : '') + '>' +
+        (s.playing < 4 ? 'Need 4 checked in to pair (' + s.playing + ')' : '↻ Pair round 1') + '</button>';
+    } else if (s.current >= s.settings.rounds && (r.endedEarly || (s.clock && s.clock.state === 'done'))) {
+      html += '<button class="btn primary doit" id="endit">🏁 Finish the night &amp; show final standings</button>';
+    }
+
+    html += '<div class="cols"><div>';
+
+    // --- draft (Guru only, room can't see it yet) ---------------------------
+    if (d) {
+      html += '<div class="card gold"><h2>Draft · round ' + d.n + ' <span class="pill">not published</span></h2>' +
+        '<p class="small muted">Tap two names to swap them. The room sees nothing until you publish.</p>' +
+        (d.warnings || []).map(function (w) { return '<div class="warn">' + esc(w) + '</div>'; }).join('') +
+        d.tables.map(tableCard.bind(null, true)).join('') +
+        (d.byes.length ? '<div class="note">Sitting out: ' + d.byes.map(function (p) {
+          return '<a href="#" class="swap" data-id="' + p.id + '">' + esc(p.name) + '</a>'; }).join(', ') + '</div>' : '') +
+        '<div class="row" style="margin-top:10px">' +
+          '<button class="btn ghost" id="reshuffle">🎲 Reshuffle</button>' +
+          '<button class="btn ghost" id="discard">Discard</button>' +
+        '</div></div>';
+    }
+
+    // --- live round ----------------------------------------------------------
+    if (r) {
+      html += '<div class="card"><h2>Round ' + r.n +
+        (r.endedEarly ? ' · finished' : (r.startAt ? '' : ' · clock not started')) + '</h2>' +
+        (r.startAt ? clockPanel(s) : '') +
+        r.tables.map(tableCard.bind(null, false)).join('') +
+        (r.byes.length ? '<div class="note">Sitting out: <b>' + r.byes.map(function (p) { return esc(p.name); }).join(', ') + '</b></div>' : '') +
+        '</div>';
+    }
+
+    html += '</div><div>';   // ---- right column ----
+
+    // --- roster --------------------------------------------------------------
+    html += '<div class="card"><h2>Checked in · ' + s.playing + '</h2>' +
+      '<ul class="roster" style="list-style:none;padding:0;margin:0">' +
+      s.players.map(function (p) {
+        return '<li><span class="n' + (p.active ? '' : ' out') + '">' + esc(p.name) +
+          (p.arrivedWith ? ' <span class="with">⇄ came with someone</span>' : '') + '</span>' +
+          '<button class="btn btn-sm ghost" data-tog="' + p.id + '">' + (p.active ? 'Out' : 'Back') + '</button></li>';
+      }).join('') + '</ul>' +
+      '<div class="row" style="margin-top:10px"><input class="mini" id="addnm" placeholder="Add someone at the desk" maxlength="30">' +
+      '<button class="btn btn-sm primary" id="add">Add</button></div>' +
+      '<p class="tiny muted" style="margin-top:8px">Marking someone <b>Out</b> keeps their results but leaves them out of the next pairing.</p>' +
+      '</div>';
+
+    // --- standings -----------------------------------------------------------
+    var board = (s.standings || []).filter(function (x) { return x.played || x.byes; });
+    if (board.length) {
+      html += '<div class="card"><h2>Standings</h2><ul class="roster" style="list-style:none;padding:0;margin:0">' +
+        board.slice(0, 12).map(function (x, i) {
+          return '<li><span style="width:24px;color:var(--muted)">' + (i + 1) + '</span><span class="n">' + esc(x.name) + '</span>' +
+            '<span style="color:var(--gold-lt);font-weight:700">' + x.points + '</span></li>';
+        }).join('') + '</ul></div>';
+    }
+
+    // --- join QR -------------------------------------------------------------
+    html += '<div class="card" style="text-align:center"><h2>Check-in QR</h2>' +
+      '<img src="' + API + '/sessions/' + s.code + '/join-qr.png" alt="" style="width:180px;background:#fff;border-radius:12px;padding:8px">' +
+      '<p class="small" style="margin-top:6px">gamehaven.guru/speedgaming<br><b class="gold" style="font-size:1.3rem;letter-spacing:.2em">' + esc(s.code) + '</b></p></div>';
+
+    // --- less-used controls, out of the way ----------------------------------
+    html += '<details class="adv"><summary>More</summary><div class="card">' +
+      '<div class="row">' +
+        (r && r.startAt ? '<button class="btn btn-sm ghost" id="stopclk">End round early</button>' : '') +
+        (s.rounds.length ? '<button class="btn btn-sm ghost" id="unpub">Pull back round ' + s.rounds[s.rounds.length - 1].n + '</button>' : '') +
+        (s.status !== 'ended' ? '<button class="btn btn-sm danger" id="endit2">Finish the night</button>' : '') +
+      '</div>' +
+      '<p class="tiny muted" style="margin-top:10px">Pulling a round back un-does its pairings so the next draw is computed as if it never happened.</p>' +
+      '</div></details>';
+
+    html += '</div></div>';
+    view.innerHTML = html;
+    wire();
+    tick();
+  }
+
+  function tableCard(isDraft, t) {
+    var nm = function (list, side) {
+      return list.map(function (p) {
+        return isDraft ? '<a href="#" class="swap" data-id="' + p.id + '">' + esc(p.name) + '</a>' : esc(p.name);
+      }).join(' &amp; ');
+    };
+    return '<div class="tbl">' +
+      '<div class="hd"><span class="no">' + t.table + '</span>' +
+        '<span class="grow" style="flex:1"></span>' +
+        (t.game ? '<span class="pill">' + esc(t.game) + '</span>' : '') + '</div>' +
+      '<div class="team' + (t.result === 'A' ? ' win' : '') + '"><span class="n">' + nm(t.teamA, 'A') + '</span></div>' +
+      '<div class="team' + (t.result === 'B' ? ' win' : '') + '"><span class="n">' + nm(t.teamB, 'B') + '</span></div>' +
+      (isDraft ? '' :
+        '<div class="res">' +
+          '<button class="btn ' + (t.result === 'A' ? 'primary' : 'ghost') + '" data-res="A" data-t="' + t.table + '">Top won</button>' +
+          '<button class="btn ' + (t.result === 'draw' ? 'primary' : 'ghost') + '" data-res="draw" data-t="' + t.table + '">Draw</button>' +
+          '<button class="btn ' + (t.result === 'B' ? 'primary' : 'ghost') + '" data-res="B" data-t="' + t.table + '">Bottom won</button>' +
+        '</div>') +
+      '</div>';
+  }
+
+  function clockPanel(s) {
+    return '<div style="margin-bottom:12px">' +
+      '<div class="clockbig" id="gclk">—</div>' +
+      '<div class="small muted center" id="gph" style="text-align:center"></div>' +
+      '<div class="row" style="margin-top:8px">' +
+        '<button class="btn btn-sm ghost" data-adj="-5">−5 min</button>' +
+        '<button class="btn btn-sm ghost" data-adj="5">+5 min</button>' +
+      '</div></div>';
+  }
+
+  function tick() {
+    clearInterval(ticker);
+    var el = $('gclk'); if (!el || !S || !S.round || !S.round.phases) return;
+    function paintClock() {
+      var e2 = $('gclk'); if (!e2) { clearInterval(ticker); return; }
+      var plan = S.round.phases, n = N.clock.now(), cur = null, pend = null;
+      if (n < plan[0].startsAt) pend = plan[0];
+      else for (var i = 0; i < plan.length; i++) if (n < plan[i].endsAt) { cur = plan[i]; break; }
+      var t = pend ? pend.startsAt - n : (cur ? cur.endsAt - n : 0);
+      var sec = Math.max(0, Math.round(t / 1000));
+      e2.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+      e2.style.color = (!pend && cur && t <= 60000) ? '#ff9b8a' : '';
+      $('gph').textContent = pend ? 'starts in' : (cur ? cur.label : 'round complete');
+      if (t <= 0) { clearInterval(ticker); poller && poller.kick(); }
+    }
+    paintClock();
+    ticker = setInterval(paintClock, 500);
+  }
+
+  function wire() {
+    var on = function (id, fn) { var e = $(id); if (e) e.addEventListener('click', fn); };
+    on('pair', function () { post({ action: 'pairRound' }); });
+    on('reshuffle', function () { post({ action: 'reshuffle' }); });
+    on('discard', function () { if (confirm('Throw this draft away?')) post({ action: 'discardDraft' }); });
+    on('publish', function () { post({ action: 'publishRound' }).then(function () { N.haptic('success'); }); });
+    on('startclk', function () { post({ action: 'startRound' }); });
+    on('stopclk', function () { if (confirm('Everyone finished? This ends round ' + S.current + ' so you can pair the next one.')) post({ action: 'endRoundEarly' }); });
+    on('unpub', function () {
+      if (!confirm('Pull the last round back? Its pairings are un-done and the room will see the draft again.')) return;
+      post({ action: 'unpublishRound' }).catch(function (e) {
+        if (/already started/.test(e.message) && confirm('That round has already started. Pull it back anyway?')) post({ action: 'unpublishRound', force: true });
+      });
+    });
+    var end = function () { if (confirm('Finish the night and lock in the standings?')) post({ action: 'endSession' }); };
+    on('endit', end); on('endit2', end);
+    on('reopen', function (e) { e.preventDefault(); post({ action: 'reopen' }); });
+    on('add', function () {
+      var v = $('addnm').value.trim(); if (!v) return;
+      post({ action: 'addPlayer', name: v }).then(function () { N.toast(v + ' added'); });
+    });
+    var addnm = $('addnm');
+    if (addnm) addnm.addEventListener('keydown', function (e) { if (e.key === 'Enter') $('add').click(); });
+
+    Array.prototype.forEach.call(view.querySelectorAll('[data-tog]'), function (b) {
+      b.addEventListener('click', function () {
+        var id = b.getAttribute('data-tog');
+        var p = S.players.find(function (x) { return x.id === id; });
+        post({ action: 'setActive', playerId: id, active: !p.active });
+      });
+    });
+    Array.prototype.forEach.call(view.querySelectorAll('[data-res]'), function (b) {
+      b.addEventListener('click', function () {
+        var want = b.getAttribute('data-res'), tno = Number(b.getAttribute('data-t'));
+        var t = S.round.tables.find(function (x) { return x.table === tno; });
+        post({ action: 'setResult', table: tno, result: t && t.result === want ? '' : want });
+      });
+    });
+    Array.prototype.forEach.call(view.querySelectorAll('[data-adj]'), function (b) {
+      b.addEventListener('click', function () { post({ action: 'adjustClock', minutes: Number(b.getAttribute('data-adj')) }); });
+    });
+    // Tap-tap to swap two people in the draft.
+    Array.prototype.forEach.call(view.querySelectorAll('a.swap'), function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        var id = a.getAttribute('data-id');
+        if (!swapFrom) { swapFrom = id; a.classList.add('swapsel'); N.toast('Now tap who to swap with'); return; }
+        if (swapFrom === id) { swapFrom = null; a.classList.remove('swapsel'); return; }
+        var from = swapFrom; swapFrom = null;
+        post({ action: 'swapDraft', a: from, b: id });
+      });
+    });
+  }
+
+  // ---------- wiring ----------
+  function start() {
+    if (poller) poller.stop();
+    swapFrom = null;
+    // The Guru's poll carries the admin token so `draft` comes back; the state
+    // route is public but the draft is only meaningful to this screen.
+    poller = N.poll(API + '/sessions/' + code + '/state', {
+      interval: 3000, hidden: 15000,
+      onState: function (j) { S = j; paint(); },
+      onError: function (e) { if (e.status === 404) { code = ''; picker(); } }
+    });
+  }
+
+  function boot() {
+    N.clock.sync(API + '/time').catch(function () {});
+    if (!N.admin.isLoggedIn()) return login();
+    $('logout').hidden = false;
+    if (code) start(); else picker();
+  }
+  $('logout').addEventListener('click', function () { N.admin.logout(); location.href = location.pathname; });
+  N.wakeLock();
+  boot();
+})();
+</script>
+</body>
+</html>

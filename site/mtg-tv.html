@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<!-- NGH TV · Magic night board — NGH-BUILD 2026-09-12l
+     The screen NEXT TO EventLink Mirror, not instead of it.
+
+     EventLink Mirror is Wizards' own second-monitor view and it owns pairings,
+     standings and the round timer — it is always right and costs nothing to
+     maintain. This board answers everything Mirror doesn't, and puts the event
+     code where nobody has to ask for it.
+
+     Point a TV here via the TV network's `url` mode, or open it directly:
+     gamehaven.guru/mtg-tv -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Magic Night — Northwood Game Haven</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --forest-dk:#132a1d; --panel:#17321f; --panel-2:#1c3d27;
+    --gold:#c9973a; --gold-lt:#e8b84b; --cream:#f6efdd; --teal:#1488a6;
+    --line:rgba(232,184,75,.3); --muted:rgba(246,239,221,.66);
+    --font-display:'Cinzel Decorative',Georgia,serif; --font-head:'Cinzel',Georgia,serif;
+    --font-body:'Nunito',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%;overflow:hidden}
+  body{background:var(--forest-dk);color:var(--cream);font-family:var(--font-body);
+    background-image:radial-gradient(1600px 800px at 50% -15%,rgba(61,122,84,.4),transparent 62%),
+      radial-gradient(circle at 12% 112%,rgba(201,151,58,.13),transparent 42%);
+    display:flex;flex-direction:column}
+
+  header{display:flex;align-items:center;gap:22px;padding:22px 44px 16px;border-bottom:1px solid var(--line);flex:none}
+  header img{height:62px}
+  header .ttl{font-family:var(--font-display);font-size:2.2rem;color:var(--gold-lt);line-height:1}
+  header .sub{font-family:var(--font-head);color:var(--muted);letter-spacing:.2em;text-transform:uppercase;font-size:.95rem;margin-top:6px}
+
+  main{flex:1;display:flex;gap:30px;padding:28px 44px 34px;min-height:0}
+  .left{flex:1;display:flex;flex-direction:column;gap:20px;min-height:0}
+  aside{width:430px;flex:none;display:flex;flex-direction:column;gap:20px}
+
+  .card{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);
+    border-radius:22px;padding:22px 26px}
+  .card h2{font-family:var(--font-head);font-size:1.05rem;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--gold-lt);margin-bottom:12px;font-weight:600}
+
+  /* THE CODE. This is the single most-asked question on a Magic night and the
+     Companion app joins by typed code only — no deep link, no join QR exists
+     to generate. So it gets the biggest thing on the screen, in a face where
+     8/B and 0/O cannot be confused from across the room. */
+  .codecard{text-align:center;border-color:var(--gold);
+    background:linear-gradient(160deg,rgba(232,184,75,.22),rgba(232,184,75,.03)),linear-gradient(180deg,var(--panel-2),var(--panel));
+    box-shadow:0 0 0 1px rgba(201,151,58,.35),0 14px 40px rgba(0,0,0,.4)}
+  .codecard .lbl{font-family:var(--font-head);letter-spacing:.24em;text-transform:uppercase;color:var(--muted);font-size:1rem}
+  .code{font-family:'Cinzel',Georgia,serif;font-weight:600;font-size:7.4rem;line-height:1.05;color:var(--gold-lt);
+    letter-spacing:.16em;text-shadow:0 4px 0 rgba(0,0,0,.4);word-break:break-all}
+  .codecard .how{color:var(--muted);font-size:1.15rem;margin-top:6px}
+
+  .facts{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .fact{background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+  .fact .k{font-family:var(--font-head);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-size:.82rem}
+  .fact .v{font-size:1.7rem;font-weight:800;margin-top:4px;line-height:1.15}
+  .prizes{font-size:1.28rem;line-height:1.5}
+  .note{font-size:1.2rem;line-height:1.5;color:var(--cream)}
+
+  .join{text-align:center}
+  .join img{width:260px;height:260px;background:#fff;border-radius:16px;padding:10px;display:block;margin:0 auto 12px}
+  .join .u{font-family:var(--font-head);font-size:1.25rem}
+  .join .s{color:var(--muted);font-size:1rem;margin-top:6px}
+
+  .next{font-size:1.18rem;line-height:1.55;color:var(--muted)}
+  .next b{color:var(--cream)}
+
+  .idle{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center;padding:50px}
+  .idle .big{font-family:var(--font-display);font-size:3.6rem;color:var(--gold-lt);line-height:1.15}
+  .idle p{font-size:1.5rem;color:var(--muted);max-width:1000px}
+  .offline{position:fixed;bottom:12px;right:16px;background:#c0392b;color:#fff;padding:5px 12px;border-radius:999px;
+    font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;display:none}
+  body.stale .offline{display:block}
+</style>
+</head>
+<body>
+<div class="offline">Reconnecting</div>
+<div id="root" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
+<script>
+(function () {
+  'use strict';
+  var API = '/api/mtg';
+  var root = document.getElementById('root');
+  var version = 0, misses = 0, timer = null;
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function get(u){ return fetch(u).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }); }
+
+  function idle() {
+    root.innerHTML =
+      '<div class="idle">' +
+        '<img src="/brand/crest.png" alt="" style="height:150px">' +
+        '<div class="big">Magic at the Haven</div>' +
+        '<p>Wednesday Commander · Friday Night Magic · Pre-releases</p>' +
+        '<p style="font-size:1.2rem">gamehaven.guru/events</p>' +
+      '</div>';
+  }
+
+  function render(b) {
+    if (!b || !b.live) return idle();
+    var facts = [];
+    if (b.format) facts.push(['Format', esc(b.format)]);
+    if (b.startLabel) facts.push(['Starts', esc(b.startLabel)]);
+    if (b.entry) facts.push(['Entry', esc(b.entry)]);
+
+    root.innerHTML =
+      '<header>' +
+        '<img src="/brand/crest.png" alt="">' +
+        '<div><div class="ttl">' + esc(b.title || 'Magic Night') + '</div>' +
+        '<div class="sub">' + [esc(b.format || 'Magic: The Gathering'), esc(b.startLabel || '')].filter(Boolean).join(' · ') + '</div></div>' +
+      '</header>' +
+      '<main>' +
+        '<div class="left">' +
+          (b.code
+            ? '<div class="card codecard">' +
+                '<div class="lbl">Join in the Magic Companion app</div>' +
+                '<div class="code">' + esc(b.code) + '</div>' +
+                '<div class="how">Companion → Events → enter this code</div>' +
+              '</div>'
+            : '<div class="card codecard"><div class="lbl">Event code</div>' +
+              '<div class="how" style="font-size:1.4rem;padding:18px 0">Ask a Guru — sign-ups are at the counter</div></div>') +
+          (facts.length ? '<div class="facts">' + facts.map(function(f){
+              return '<div class="fact"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + '</div></div>'; }).join('') + '</div>' : '') +
+          (b.prizes ? '<div class="card"><h2>Prizes</h2><div class="prizes">' + esc(b.prizes) + '</div></div>' : '') +
+          (b.note ? '<div class="card"><h2>Tonight</h2><div class="note">' + esc(b.note) + '</div></div>' : '') +
+        '</div>' +
+        '<aside>' +
+          '<div class="card join">' +
+            '<h2>New here?</h2>' +
+            '<img src="' + API + '/join-qr.png" alt="">' +
+            '<div class="u">gamehaven.guru/mtg</div>' +
+            '<div class="s">The code, the app links, and how it all works</div>' +
+          '</div>' +
+          (b.nextNote ? '<div class="card"><h2>Coming up</h2><div class="next">' + esc(b.nextNote) + '</div></div>' : '') +
+          (b.mirrorUrl
+            ? '<div class="card join"><h2>Pairings on your phone</h2>' +
+                '<img src="' + API + '/mirror-qr.png?v=' + b.version + '" alt="">' +
+                '<div class="s">Live pairings, standings and the round clock</div></div>'
+            : '<div class="card"><h2>Pairings</h2><div class="next">On the <b>EventLink</b> screen, and pushed to your <b>Companion</b> app the moment each round starts.</div></div>') +
+        '</aside>' +
+      '</main>';
+  }
+
+  // A TV runs unattended for hours: back off on failure, never give up.
+  function loop() {
+    get(API + '/board?v=' + version).then(function (j) {
+      misses = 0; document.body.classList.remove('stale');
+      if (!j.unchanged) { version = j.version; render(j); }
+      schedule(10000);
+    }).catch(function () {
+      misses++;
+      if (misses > 3) document.body.classList.add('stale');
+      schedule(Math.min(30000, 4000 * misses));
+    });
+  }
+  function schedule(ms) { clearTimeout(timer); timer = setTimeout(loop, ms); }
+  idle(); loop();
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { clearTimeout(timer); loop(); } });
+})();
+</script>
+</body>
+</html>

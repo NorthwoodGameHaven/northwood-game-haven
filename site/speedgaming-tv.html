@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<!-- NGH TV · Speed Gaming Meet-up — NGH-BUILD 2026-09-12l
+     The big screen. Designed to be read from across a noisy room, so: table
+     numbers enormous, four names per table, one clock, nothing else competing.
+
+     Point a TV at /speedgaming-tv (optionally ?c=CODE to pin one session, or
+     ?tv=1 via the TV network's `url` mode). It finds the live meet-up on its
+     own and survives a session ending and another starting.
+
+     1920x1080 is the design target; it scales down to a laptop fine. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speed Gaming — Northwood Game Haven</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --forest-dk:#132a1d; --panel:#17321f; --panel-2:#1c3d27;
+    --gold:#c9973a; --gold-lt:#e8b84b; --cream:#f6efdd; --teal:#1488a6; --red:#c0392b;
+    --line:rgba(232,184,75,.3); --muted:rgba(246,239,221,.66);
+    --font-display:'Cinzel Decorative',Georgia,serif; --font-head:'Cinzel',Georgia,serif;
+    --font-body:'Nunito',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%;overflow:hidden}
+  body{background:var(--forest-dk);color:var(--cream);font-family:var(--font-body);
+    background-image:radial-gradient(1600px 800px at 50% -15%,rgba(61,122,84,.4),transparent 62%),
+      radial-gradient(circle at 12% 112%,rgba(201,151,58,.13),transparent 42%);
+    display:flex;flex-direction:column}
+
+  header{display:flex;align-items:center;gap:22px;padding:22px 40px 14px;border-bottom:1px solid var(--line);flex:none}
+  header img{height:62px;width:auto}
+  header .ttl{font-family:var(--font-display);font-size:2.1rem;color:var(--gold-lt);line-height:1;
+    text-shadow:0 3px 0 rgba(0,0,0,.4)}
+  header .sub{font-family:var(--font-head);color:var(--muted);letter-spacing:.2em;text-transform:uppercase;font-size:.95rem;margin-top:6px}
+  header .spacer{flex:1}
+
+  /* The clock is the second thing anyone looks for, so it lives top-right and
+     never moves — no layout shift when a phase label gets longer. */
+  .clock{text-align:right;min-width:340px}
+  .clock .phase{font-family:var(--font-head);letter-spacing:.16em;text-transform:uppercase;color:var(--gold-lt);font-size:1.15rem}
+  .clock .time{font-family:var(--font-display);font-size:5rem;line-height:.95;font-variant-numeric:tabular-nums}
+  .clock.warn .time{color:var(--gold-lt)}
+  .clock.urgent .time{color:#ff9b8a;animation:blink 1s steps(2,start) infinite}
+  @keyframes blink{50%{opacity:.4}}
+  .clock .bar{height:10px;border-radius:999px;background:rgba(0,0,0,.4);overflow:hidden;margin-top:10px}
+  .clock .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-lt));transition:width .9s linear}
+
+  main{flex:1;display:flex;gap:26px;padding:24px 40px 30px;min-height:0}
+  .tables{flex:1;display:grid;gap:20px;min-height:0;align-content:start}
+  /* Column count is set from JS by table count so four tables never render as
+     a lonely single column and twelve never shrink to unreadable. */
+
+  .tbl{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);
+    border-radius:20px;padding:18px 22px;display:flex;align-items:center;gap:22px;min-height:0}
+  .tbl .no{font-family:var(--font-display);font-size:3.6rem;line-height:1;color:var(--gold-lt);
+    width:96px;flex:none;text-align:center;text-shadow:0 3px 0 rgba(0,0,0,.4)}
+  .tbl .teams{flex:1;min-width:0}
+  .tbl .team{font-size:1.72rem;font-weight:800;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tbl .vs{font-family:var(--font-head);color:var(--muted);letter-spacing:.3em;font-size:.9rem;margin:5px 0}
+  .tbl .game{font-family:var(--font-head);color:var(--gold);font-size:1rem;letter-spacing:.06em;margin-top:8px}
+  .tbl.won-a .team.a,.tbl.won-b .team.b{color:var(--gold-lt)}
+  .tbl.won-a .team.b,.tbl.won-b .team.a{opacity:.5}
+  .tbl .win{font-family:var(--font-head);font-size:.8rem;letter-spacing:.14em;color:var(--gold);text-transform:uppercase}
+
+  aside{width:400px;flex:none;display:flex;flex-direction:column;gap:20px;min-height:0}
+  .card{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);
+    border-radius:20px;padding:18px 20px;min-height:0}
+  .card h2{font-family:var(--font-head);font-size:1.05rem;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--gold-lt);margin-bottom:10px;font-weight:600}
+  .join{text-align:center}
+  .join img{width:212px;height:212px;background:#fff;border-radius:14px;padding:9px;display:block;margin:0 auto 10px}
+  .join .url{font-family:var(--font-head);font-size:1.2rem;color:var(--cream)}
+  .join .code{font-family:var(--font-display);font-size:2.5rem;color:var(--gold-lt);letter-spacing:.16em;line-height:1.1}
+
+  .board{flex:1;overflow:hidden}
+  .board ol{list-style:none;padding:0;margin:0}
+  .board li{display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:1.12rem}
+  .board li:last-child{border-bottom:0}
+  .board .pos{width:30px;font-family:var(--font-head);color:var(--muted);flex:none}
+  .board .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .board .pts{font-family:var(--font-head);color:var(--gold-lt);font-weight:600}
+  .board li:nth-child(1) .pos,.board li:nth-child(1) .nm{color:var(--gold-lt)}
+
+  .byes{color:var(--muted);font-size:1.05rem;line-height:1.5}
+  .byes b{color:var(--cream);font-weight:700}
+
+  .idle{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;padding:40px}
+  .idle .big{font-family:var(--font-display);font-size:4rem;color:var(--gold-lt);line-height:1.1}
+  .idle p{font-size:1.5rem;color:var(--muted);max-width:1000px}
+  .idle .qr{width:300px;height:300px;background:#fff;border-radius:18px;padding:12px}
+
+  .rounds{display:flex;gap:9px;justify-content:center;margin-top:12px}
+  .rounds span{width:52px;height:7px;border-radius:999px;background:rgba(255,255,255,.15)}
+  .rounds span.done{background:var(--gold)}
+  .rounds span.now{background:var(--gold-lt);box-shadow:0 0 14px rgba(232,184,75,.75)}
+  .offline{position:fixed;bottom:12px;right:16px;background:var(--red);color:#fff;padding:5px 12px;
+    border-radius:999px;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;display:none}
+  body.stale .offline{display:block}
+</style>
+</head>
+<body>
+<div class="offline">Reconnecting</div>
+<div id="root" style="flex:1;display:flex;flex-direction:column;min-height:0"></div>
+
+<script>
+(function () {
+  'use strict';
+  var API = '/api/speedgaming';
+  var qs = new URLSearchParams(location.search);
+  var code = (qs.get('c') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  var root = document.getElementById('root');
+  var S = null, ticker = null, offset = 0, misses = 0, timer = null;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function now() { return Date.now() + offset; }
+  function fmt(ms) { var t = Math.max(0, Math.round(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
+  function get(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+
+  function idle(msg) {
+    root.innerHTML =
+      '<div class="idle">' +
+        '<img src="/brand/crest.png" alt="" style="height:130px">' +
+        '<div class="big">Speed Gaming Meet-up</div>' +
+        '<p>' + esc(msg || 'Come with a friend, or come alone — we’ll match you up. 2 vs 2, new partner every round, prizes each round.') + '</p>' +
+      '</div>';
+  }
+
+  function render(s) {
+    S = s;
+    var r = s.round;
+    if (!r) {
+      // Checked in but not paired yet: the QR is the only thing that matters.
+      root.innerHTML = header(s) +
+        '<div class="idle">' +
+          '<div class="big">Checking in</div>' +
+          '<p>' + s.playing + ' player' + (s.playing === 1 ? '' : 's') + ' so far — scan to join</p>' +
+          '<img class="qr" src="' + API + '/sessions/' + s.code + '/join-qr.png" alt="">' +
+          '<p style="font-size:1.15rem">gamehaven.guru/speedgaming · code <b style="color:#e8b84b">' + esc(s.code) + '</b></p>' +
+        '</div>';
+      return;
+    }
+
+    var cols = r.tables.length <= 2 ? 1 : (r.tables.length <= 8 ? 2 : 3);
+    var tables = r.tables.map(function (t) {
+      var cls = t.result === 'A' ? ' won-a' : (t.result === 'B' ? ' won-b' : '');
+      var nm = function (list) { return list.map(function (p) { return esc(p.name); }).join(' &amp; '); };
+      return '<div class="tbl' + cls + '">' +
+        '<div class="no">' + t.table + '</div>' +
+        '<div class="teams">' +
+          '<div class="team a">' + nm(t.teamA) + (t.result === 'A' ? ' <span class="win">win</span>' : '') + '</div>' +
+          '<div class="vs">VS</div>' +
+          '<div class="team b">' + nm(t.teamB) + (t.result === 'B' ? ' <span class="win">win</span>' : '') + '</div>' +
+          (t.game ? '<div class="game">' + esc(t.game) + '</div>' : '') +
+          (t.result === 'draw' ? '<div class="game">Draw</div>' : '') +
+        '</div></div>';
+    }).join('');
+
+    var board = (s.standings || []).filter(function (x) { return x.played || x.byes; }).slice(0, 10);
+
+    root.innerHTML = header(s) +
+      '<main>' +
+        '<div class="tables" style="grid-template-columns:repeat(' + cols + ',1fr)">' + tables + '</div>' +
+        '<aside>' +
+          (r.byes.length
+            ? '<div class="card"><h2>Sitting out this round</h2><div class="byes">' +
+              r.byes.map(function (p) { return '<b>' + esc(p.name) + '</b>'; }).join(' · ') +
+              '<div style="margin-top:6px;font-size:.92rem">First back in next round</div></div></div>'
+            : '') +
+          (board.length
+            ? '<div class="card board"><h2>Standings</h2><ol>' + board.map(function (x, i) {
+                return '<li><span class="pos">' + (i + 1) + '</span><span class="nm">' + esc(x.name) + '</span><span class="pts">' + x.points + '</span></li>';
+              }).join('') + '</ol></div>'
+            : '') +
+          '<div class="card join"><h2>Join in</h2>' +
+            '<img src="' + API + '/sessions/' + s.code + '/join-qr.png" alt="">' +
+            '<div class="url">gamehaven.guru/speedgaming</div>' +
+            '<div class="code">' + esc(s.code) + '</div>' +
+          '</div>' +
+        '</aside>' +
+      '</main>';
+    tick();
+  }
+
+  function header(s) {
+    var dots = '';
+    for (var i = 1; i <= s.settings.rounds; i++) dots += '<span class="' + (i < s.current ? 'done' : (i === s.current ? 'now' : '')) + '"></span>';
+    return '<header>' +
+      '<img src="/brand/crest.png" alt="">' +
+      '<div><div class="ttl">' + esc(s.title) + '</div>' +
+        '<div class="sub">' + (s.current ? 'Round ' + s.current + ' of ' + s.settings.rounds : 'Checking in') +
+        ' · ' + s.playing + ' playing</div>' +
+        '<div class="rounds">' + dots + '</div></div>' +
+      '<div class="spacer"></div>' +
+      '<div class="clock" id="clk"><div class="phase" id="cph">—</div><div class="time" id="ctm">—</div>' +
+      '<div class="bar"><i id="cbar" style="width:0%"></i></div></div>' +
+      '</header>';
+  }
+
+  function tick() {
+    clearInterval(ticker);
+    if (!S || !S.round || !S.round.phases) {
+      var p = document.getElementById('cph'), t = document.getElementById('ctm');
+      if (p) { p.textContent = 'Not started'; t.textContent = '—'; }
+      return;
+    }
+    function paint() {
+      var el = document.getElementById('clk'); if (!el) { clearInterval(ticker); return; }
+      var plan = S.round.phases, n = now(), cur = null, pending = null;
+      if (n < plan[0].startsAt) pending = plan[0];
+      else for (var i = 0; i < plan.length; i++) if (n < plan[i].endsAt) { cur = plan[i]; break; }
+      var ph = document.getElementById('cph'), tm = document.getElementById('ctm'), bar = document.getElementById('cbar');
+      if (pending) { ph.textContent = 'Starting'; tm.textContent = fmt(pending.startsAt - n); bar.style.width = '0%'; el.className = 'clock'; return; }
+      if (!cur) { ph.textContent = 'Round complete'; tm.textContent = '0:00'; bar.style.width = '100%'; el.className = 'clock'; return; }
+      var left = cur.endsAt - n, total = cur.endsAt - cur.startsAt;
+      ph.textContent = cur.label;
+      tm.textContent = fmt(left);
+      bar.style.width = Math.max(0, Math.min(100, 100 * (1 - left / (total || 1)))) + '%';
+      el.className = 'clock' + (left <= 60000 ? ' urgent' : (left <= 300000 ? ' warn' : ''));
+      if (left <= 0) { clearInterval(ticker); kick(); }
+    }
+    paint();
+    ticker = setInterval(paint, 500);
+  }
+
+  // ---- polling. A TV runs unattended for hours, so this never gives up: on a
+  // failure it backs off, and if the session ends it goes looking for the next
+  // one rather than sitting on a dead code.
+  var version = 0;
+  function kick() { clearTimeout(timer); loop(); }
+  function loop() {
+    var url = API + '/sessions/' + code + '/state?v=' + version;
+    get(url).then(function (j) {
+      misses = 0; document.body.classList.remove('stale');
+      if (typeof j.serverNow === 'number') offset = j.serverNow - Date.now();
+      if (j.unchanged) return schedule();
+      version = j.version;
+      if (j.status === 'ended') { idle('Thanks for playing — see you next time'); code = ''; version = 0; return schedule(8000); }
+      render(j);
+      schedule();
+    }).catch(function () {
+      misses++;
+      if (misses > 3) document.body.classList.add('stale');
+      if (misses > 6) { code = ''; version = 0; }     // session probably gone; re-discover
+      schedule(Math.min(20000, 2000 * misses));
+    });
+  }
+  function schedule(ms) {
+    clearTimeout(timer);
+    timer = setTimeout(function () { code ? loop() : discover(); }, ms || (S && S.clock && S.clock.state === 'running' ? 5000 : 3000));
+  }
+  function discover() {
+    get(API + '/active').then(function (j) {
+      if (j && j.active && j.active.code) { code = j.active.code; version = 0; loop(); }
+      else { idle(); schedule(10000); }
+    }).catch(function () { schedule(10000); });
+  }
+
+  idle();
+  if (code) loop(); else discover();
+  // TVs sleep; nudge the clock back into step when the tab wakes.
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) kick(); });
+})();
+</script>
+</body>
+</html>

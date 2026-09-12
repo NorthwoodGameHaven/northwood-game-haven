@@ -135,6 +135,7 @@ function publicState(s, serverNow) {
   if (out.settings.wifi) out.settings.wifi = { ssid: out.settings.wifi.ssid || '', hasQr: !!(out.settings.wifi.ssid) };
   else if (process.env.KARAOKE_WIFI_SSID) out.settings.wifi = { ssid: process.env.KARAOKE_WIFI_SSID, hasQr: true };
   out.onDeck = onDeck(s, (s.settings && s.settings.onDeck) || 5).map(e => e.id);
+  out.mg = mgPublic(s.mg, serverNow);   /* NGH-BUILD 2026-09-12l */
   out.serverNow = serverNow;
   return out;
 }
@@ -177,6 +178,73 @@ async function songMedia(songId) {
   return { id: r.id, title: r.title, artist: r.artist, durationMs: r.duration_ms || d.durationMs || null, provider: r.provider,
            media: { audio: d.media && d.media.audio || null, cdg: hostedCdg(r.id, d), video: d.media && d.media.video || null },
            hasLyrics: !!(d.lyrics && d.lyrics.lines && d.lyrics.lines.length) };
+}
+
+// ---- Name That Tune (Battle Karaoke minigame) — NGH-BUILD 2026-09-12l ----------
+// Between performances the next singer is setting up and the room goes flat.
+// This fills it: a few seconds of a song intro, first phone to buzz gets to
+// name it, points go to their ROOM's battle score.
+//
+// The buzz model is lifted from arcade.mjs because it is already right:
+//   * The host ARMS the round. goAt = armAt + a short lead, and every phone
+//     flips to "GO" on its OWN clock-synced timer — no server round trip in
+//     the hot path, so the race is fair regardless of who has better wifi.
+//   * A press posts the phone's offset-corrected server time. Reaction is
+//     t - goAt. Pressing before goAt is a JUMP: recorded, ordered last, and
+//     the Guru can see who jumped the gun.
+//   * Anti-cheat: t is clamped to the server's arrival time (nobody presses
+//     from the future) and anything wildly early is rejected outright.
+//
+// Deliberately NOT automated end to end: the Guru arms it at the moment they
+// start the clip, whatever the audio is coming from. Only the rack player can
+// reach the LAN audio files (browsers get HTTPS-only URLs), so tying the game
+// to rack-player automation would make it unusable on any night the rack PC is
+// off. `mg.media` is published for the rack player to pick up when it can, and
+// the game works perfectly without it.
+const MG_LEAD_MS = 2500;          // between arming and GO
+const MG_ANSWER_MS = 15000;       // how long the first buzzer has to answer
+const MG_SETTLE_MS = 1200;        // window in which a faster press can still take the floor
+const MG_POINTS = 10;
+const MG_STEAL_POINTS = 5;        // a steal after someone else missed
+
+function mgPublic(mg, serverNow) {
+  if (!mg) return null;
+  const out = {
+    id: mg.id, kind: mg.kind, round: mg.round, phase: mg.phase,
+    armAt: mg.armAt || 0, goAt: mg.goAt || 0, clipMs: mg.clipMs || 0,
+    points: mg.points, answerBy: mg.answerBy || 0,
+    buzzes: (mg.buzzes || []).map(b => ({ memberId: b.memberId, name: b.name, room: b.room, rt: b.rt, jumped: !!b.jumped })),
+    answering: mg.answering || null, settleUntil: mg.settleUntil || 0,
+    result: mg.result || null,
+    missed: mg.missed || []
+  };
+  // The whole game is not knowing what the song is. Title, artist and songId
+  // stay server-side until the reveal — a curious player reading the JSON in
+  // devtools would otherwise win every round.
+  if (mg.phase === 'reveal') { out.title = mg.title; out.artist = mg.artist; out.songId = mg.songId; }
+  return out;
+}
+function mgRoomOf(s, memberId) {
+  const m = (s.members || []).find(x => x.id === memberId);
+  return m ? m.room : null;
+}
+function mgAward(s, memberId, pts) {
+  const room = mgRoomOf(s, memberId);
+  if (!room || !s.rooms || !s.rooms[room]) return null;
+  s.rooms[room].score = round1((Number(s.rooms[room].score) || 0) + pts);
+  return room;
+}
+// Buzz order: everyone who went early is sorted behind everyone who didn't,
+// then by reaction time.
+function mgSortBuzzes(list) {
+  return list.slice().sort((a, b) => (a.jumped - b.jumped) || (a.rt - b.rt) || (a.at - b.at));
+}
+// Who has the floor: the fastest clean buzz that has not already had a turn.
+// Jumping the gun puts you out for the round — you do not get a steal either,
+// which is the only thing that makes the penalty mean anything.
+function mgNextUp(mg) {
+  const done = mg.missed || [];
+  return mgSortBuzzes(mg.buzzes || []).find(b => !b.jumped && done.indexOf(b.memberId) < 0) || null;
 }
 
 // ---- transport ----
@@ -557,6 +625,59 @@ export default async (req) => {
       return json({ ok: true, serverNow: now(), version: state ? state.version : 0, nowPlaying: state ? state.nowPlaying : null, status: state ? state.status : null });
     }
 
+    // ---- PUBLIC: Name That Tune buzz (NGH-BUILD 2026-09-12l) ----
+    if (sub === 'mgbuzz' && req.method === 'POST') {
+      const b = await readBody(req);
+      const arrival = now();
+      const r = await mutate(code, (s) => {
+        const mg = s.mg;
+        // Buzzes keep landing while someone is answering — that queue IS the
+        // steal chain. Ordering is by reaction time, so anyone who only buzzes
+        // after hearing the first player's guess sorts to the back on their own
+        // and gains nothing by waiting.
+        if (!mg || (mg.phase !== 'armed' && mg.phase !== 'answering')) throw { status: 409, error: 'no round is live' };
+        if (b.mgId && b.mgId !== mg.id) throw { status: 409, error: 'stale round' };
+        const m = findMember(s, b.token);
+        if (!m) throw { status: 403, error: 'not checked in' };
+        // One buzz per person per round. Answering "you already buzzed" is not
+        // an error — a double-tap on a phone is the most ordinary thing there is.
+        const prior = (mg.buzzes || []).find(x => x.memberId === m.id);
+        if (prior) return { noChange: true, already: true, rt: prior.rt, jumped: prior.jumped, position: mgSortBuzzes(mg.buzzes).findIndex(x => x.memberId === m.id) + 1 };
+        // A non-finite goAt means the round was armed wrong. Scoring against
+        // `goAt || 0` would hand back reaction times in the billions and look
+        // like a client bug, so refuse instead of guessing.
+        const goAt = Number(mg.goAt);
+        if (!isFinite(goAt) || goAt <= 0) throw { status: 409, error: 'this round was not armed properly — re-arm it' };
+        let t = Number(b.t);
+        if (!isFinite(t)) t = arrival;                  // phone never synced its clock
+        if (t > arrival + 250) t = arrival;             // no presses from the future
+        if (t < Number(mg.armAt || 0) - 2000) throw { status: 409, error: 'too early' };
+        const jumped = t < goAt;
+        const rt = Math.round(t - goAt);
+        mg.buzzes = mg.buzzes || [];
+        mg.buzzes.push({ memberId: m.id, name: m.name, room: m.room, at: t, rt, jumped });
+        // The floor goes to the FASTEST reaction, not to whichever packet
+        // reached us first — those are not the same thing on a room full of
+        // phones sharing one access point, and handing the buzz to whoever had
+        // the better wifi is precisely the unfairness the clock-synced press
+        // time exists to remove. So for a short settling window after the first
+        // buzz, a faster press still takes the floor; after that it is locked
+        // and late arrivals queue for a steal.
+        if (!mg.settleUntil) mg.settleUntil = now() + MG_SETTLE_MS;
+        if (!mg.answering || now() < mg.settleUntil) {
+          const lead = mgNextUp(mg);
+          if (lead && lead.memberId !== mg.answering) {
+            mg.answering = lead.memberId;
+            mg.answerBy = now() + MG_ANSWER_MS;
+            mg.phase = 'answering';
+          }
+        }
+        return { rt, jumped, position: mgSortBuzzes(mg.buzzes).findIndex(x => x.memberId === m.id) + 1 };
+      });
+      if (r.error) return bad(r.error, r.status);
+      return json(Object.assign({ ok: true, serverNow: now() }, r.result));
+    }
+
     // ---- host control ----
     if (sub === 'control' && req.method === 'POST') {
       if (!requireAdmin(req)) return bad('unauthorized', 401);
@@ -603,11 +724,95 @@ export default async (req) => {
           case 'removeEntry': { const i = s.queue.findIndex(q => q.id === body.entryId); if (i < 0) throw { status: 404, error: 'no such entry' }; if (s.nowPlaying && s.nowPlaying.entryId === body.entryId) endCurrent(s, 'skip'); else s.queue.splice(i, 1); return {}; }
           case 'setSingers': { const e = s.queue.find(q => q.id === body.entryId); if (!e) throw { status: 404, error: 'no such entry' }; e.singers = (body.singers || []).map(x => clean(x, 30)).filter(Boolean).slice(0, Math.max(1, s.settings.maxSingers || 2)); if (!e.singers.length) throw { status: 400, error: 'singer required' }; if (body.room && s.rooms[body.room]) e.room = body.room; return {}; }
           case 'setTeam': { const rm = s.rooms[body.room]; if (!rm) throw { status: 404, error: 'no such room' }; if (body.team != null) rm.team = clean(body.team, 40) || rm.name; if (body.score != null) rm.score = round1(Number(body.score) || 0); return {}; }
+          /* ===== NGH-BUILD 2026-09-12l: Name That Tune ===================== */
+          case 'mgStart': {
+            // Pick a song the room has a chance at: prefer the catalog, and
+            // never one that has already been used tonight.
+            const used = (s.mgUsed || []);
+            let song = null;
+            if (body.songId) {
+              const rows = await sql`SELECT id, title, artist, data FROM karaoke_songs WHERE id = ${String(body.songId)}`;
+              if (!rows.length) throw { status: 404, error: 'no such song' };
+              song = rows[0];
+            } else {
+              const rows = await sql`SELECT id, title, artist, data FROM karaoke_songs ORDER BY random() LIMIT 40`;
+              song = rows.find(r => used.indexOf(r.id) < 0) || rows[0] || null;
+              if (!song) throw { status: 409, error: 'the song catalog is empty — add songs first' };
+            }
+            const d = song.data || {};
+            s.mg = {
+              id: rid('mg'), kind: 'nametune', round: ((s.mg && s.mg.round) || 0) + 1,
+              phase: 'idle', songId: song.id, title: song.title, artist: song.artist,
+              armAt: 0, goAt: 0, clipMs: Math.min(30000, Math.max(2000, Math.round(Number(body.clipMs) || 7000))),
+              points: MG_POINTS, buzzes: [], answering: null, answerBy: 0, result: null, missed: [],
+              // Only the rack player can use a LAN audio path; browsers never see it.
+              media: d.media && d.media.audio ? { audio: d.media.audio } : null
+            };
+            return { mgId: s.mg.id, title: song.title, artist: song.artist, hasAudio: !!s.mg.media };
+          }
+          case 'mgArm': {
+            if (!s.mg) throw { status: 409, error: 'start a round first' };
+            if (s.mg.phase === 'armed' || s.mg.phase === 'answering') throw { status: 409, error: 'this round is already live' };
+            s.mg.armAt = now();
+            // `Number(undefined) != null` is TRUE (NaN != null), so the obvious
+            // one-liner here silently produced goAt = NaN whenever the caller
+            // omitted leadMs — which the host UI always does. JSON turns that
+            // into null, `mg.goAt || 0` then reads as 0, and every reaction
+            // time comes back as a Unix timestamp. Check for the value being
+            // absent, not for the coerced number.
+            const lead = body.leadMs == null ? MG_LEAD_MS : Math.min(10000, Math.max(0, Math.round(Number(body.leadMs) || 0)));
+            s.mg.goAt = s.mg.armAt + lead;
+            s.mg.phase = 'armed';
+            s.mg.buzzes = []; s.mg.answering = null; s.mg.answerBy = 0; s.mg.result = null; s.mg.missed = []; s.mg.settleUntil = 0;
+            return { goAt: s.mg.goAt };
+          }
+          // Correct: points to the answerer's room, and the answer is revealed.
+          // Wrong: they are struck off and the floor opens to the next buzzer
+          // for a steal, which is the bit that makes the game fun.
+          case 'mgJudge': {
+            const mg = s.mg;
+            if (!mg || !mg.answering) throw { status: 409, error: 'nobody is answering' };
+            const who = mg.answering;
+            if (body.ok) {
+              const steal = (mg.missed || []).length > 0;
+              const pts = steal ? MG_STEAL_POINTS : mg.points;
+              const room = mgAward(s, who, pts);
+              mg.result = 'correct'; mg.phase = 'reveal'; mg.wonBy = who; mg.wonPoints = pts; mg.wonRoom = room;
+              s.mgUsed = (s.mgUsed || []).concat([mg.songId]).slice(-200);
+              return { correct: true, points: pts, room };
+            }
+            mg.missed = (mg.missed || []).concat([who]);
+            const next = mgNextUp(mg);
+            if (next) { mg.answering = next.memberId; mg.answerBy = now() + MG_ANSWER_MS; mg.phase = 'answering'; return { steal: next.name }; }
+            mg.answering = null; mg.answerBy = 0; mg.phase = 'armed';
+            return { reopened: true };
+          }
+          // The answer clock ran out. Same shape as a wrong answer so the game
+          // never stalls waiting for a Guru who is dealing with something else.
+          case 'mgTimeout': {
+            const mg = s.mg;
+            if (!mg || !mg.answering) return { noChange: true };
+            if (mg.answerBy && now() < mg.answerBy && !body.force) return { noChange: true };
+            mg.missed = (mg.missed || []).concat([mg.answering]);
+            const next = mgNextUp(mg);
+            if (next) { mg.answering = next.memberId; mg.answerBy = now() + MG_ANSWER_MS; mg.phase = 'answering'; return { steal: next.name }; }
+            mg.answering = null; mg.answerBy = 0; mg.phase = 'armed';
+            return { reopened: true };
+          }
+          case 'mgReveal': {
+            if (!s.mg) throw { status: 409, error: 'no round' };
+            s.mg.phase = 'reveal';
+            if (!s.mg.result) s.mg.result = 'nobody';
+            s.mgUsed = (s.mgUsed || []).concat([s.mg.songId]).slice(-200);
+            return {};
+          }
+          case 'mgEnd': { s.mg = null; return {}; }
+          /* ===================================================== end NGH-BUILD 2026-09-12l */
           case 'setSettings': Object.assign(s.settings, sanitizeSettings(body.settings || {})); return {};
           case 'setMode': s.mode = body.mode === 'openmic' ? 'openmic' : 'battle'; return {};
           case 'resetScores': Object.values(s.rooms).forEach(r => { r.score = 0; r.songs = 0; }); s.results = []; s.history = []; s.lastResult = null; return {};
           case 'kick': { const i = s.members.findIndex(m => m.id === body.memberId); if (i < 0) throw { status: 404, error: 'no such member' }; s.members.splice(i, 1); return {}; }
-          case 'endSession': if (s.nowPlaying) endCurrent(s, 'skip'); if (s.scoring) await tallyVotes(code, s, true); s.status = 'ended'; s.endedAt = now(); return {};
+          case 'endSession': s.mg = null; /* NGH-BUILD 2026-09-12l */ if (s.nowPlaying) endCurrent(s, 'skip'); if (s.scoring) await tallyVotes(code, s, true); s.status = 'ended'; s.endedAt = now(); return {};
           case 'reopen': s.status = 'live'; delete s.endedAt; return {};
           default: throw { status: 400, error: 'unknown action ' + action };
         }

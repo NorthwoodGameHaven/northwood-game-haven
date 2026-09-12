@@ -31,6 +31,13 @@ function run(q, v) {
   // ---------------- karaoke_songs ----------------
   if (/^SELECT id, title, artist, duration_ms, provider, data FROM karaoke_songs WHERE id = \$/.test(q)) { const s = D.songs.get(v[0]); return s ? [s] : []; }
   if (/^SELECT data FROM karaoke_songs WHERE id = \$/.test(q)) { const s = D.songs.get(v[0]); return s ? [{ data: s.data }] : []; }
+  /* NGH-BUILD 2026-09-12l: Name That Tune song picks. ORDER BY random() is
+     deterministic here on purpose — a test that shuffles is a test that
+     flakes. The handler returns catalog order and the caller filters out
+     songs already used tonight, which is the behaviour under test.
+     (No backticks in this comment: the whole mock is one template literal.) */
+  if (/^SELECT id, title, artist, data FROM karaoke_songs WHERE id = \$/.test(q)) { const s = D.songs.get(v[0]); return s ? [{ id: s.id, title: s.title, artist: s.artist, data: s.data }] : []; }
+  if (/^SELECT id, title, artist, data FROM karaoke_songs ORDER BY random\(\) LIMIT/.test(q)) { return [...D.songs.values()].map(s => ({ id: s.id, title: s.title, artist: s.artist, data: s.data })); }
   if (/^SELECT id, title, artist, duration_ms, provider, \(data->'lyrics'\) IS NOT NULL AS has_lyrics, data->'media'->>'cdg' IS NOT NULL AS has_cdg FROM karaoke_songs ORDER BY updated_at DESC LIMIT/.test(q)) return [...D.songs.values()].slice(0, v[0]).map(songRow);
   if (/^SELECT id, title, artist, duration_ms, provider, \(data->'lyrics'\) IS NOT NULL AS has_lyrics, data->'media'->>'cdg' IS NOT NULL AS has_cdg FROM karaoke_songs WHERE lower\(title\) LIKE/.test(q)) {
     const [l1, l2, p1, p2, lim] = v; return [...D.songs.values()].filter(s => like(s.title.toLowerCase(), l1) || like(s.artist.toLowerCase(), l2)).sort((a, b) => (like(b.title.toLowerCase(), p1) - like(a.title.toLowerCase(), p1)) || a.title.localeCompare(b.title)).slice(0, lim).map(songRow); }

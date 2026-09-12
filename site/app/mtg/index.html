@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<!-- NGH APP · Magic night — NGH-BUILD 2026-09-12l
+     Two audiences, one page.
+
+     PLAYER: what's on, what it costs, what you win, and THE CODE — big, with a
+     one-tap copy, because Companion joins by typed code and nothing else. Plus
+     the links to actually get Companion, and a button through to tonight's
+     EventLink Mirror for live pairings.
+
+     GURU: the same page, with an admin strip that only appears when signed in.
+     Set the code from your phone in ten seconds, standing at the counter. No
+     separate console to find, because on a Magic night nobody is at a desk.
+
+     Served at /app/mtg/ (in-app) and /mtg (the QR on the TV). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Magic Night — Northwood Game Haven</title>
+<meta name="theme-color" content="#132a1d">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/app/app.css">
+<style>
+  .hero{text-align:center;padding:20px 16px 18px;border-color:var(--gold);
+    background:linear-gradient(160deg,rgba(232,184,75,.2),rgba(232,184,75,.03)),linear-gradient(180deg,var(--panel-2),var(--panel))}
+  /* Cinzel, not the display face: 0/O and 8/B have to survive being read off a
+     TV across the room and typed into a phone. */
+  .code{font-family:'Cinzel',Georgia,serif;font-weight:600;font-size:3.2rem;letter-spacing:.16em;
+    color:var(--gold-lt);line-height:1.1;word-break:break-all;margin:6px 0 2px}
+  .codebtn{width:100%;margin-top:10px}
+  .facts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px}
+  .fact{background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:12px;padding:10px 12px;text-align:left}
+  .fact .k{font-family:var(--font-head);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-size:.7rem}
+  .fact .v{font-weight:800;font-size:1.05rem;margin-top:2px}
+  .steps{margin:0;padding-left:20px}
+  .steps li{margin:5px 0}
+  .admin{border-color:var(--teal)}
+  .admin input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);
+    background:rgba(0,0,0,.25);color:var(--cream);font-family:var(--font-body);margin-top:4px}
+  .admin label{display:block;font-family:var(--font-head);font-size:.72rem;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted);margin-top:10px}
+  .admin .row{display:flex;gap:8px;margin-top:12px}
+  .admin .row .btn{flex:1}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <a class="back" href="/app/" aria-label="Back">‹</a>
+    <div class="title">Magic Night</div>
+    <img class="logo" src="/brand/crest.png" alt="">
+  </header>
+  <div id="view"></div>
+</div>
+
+<script src="/app/ngh-app.js"></script>
+<script>
+(function () {
+  'use strict';
+  var N = window.NGH, $ = N.$, esc = N.esc;
+  var API = '/api/mtg';
+  var view = $('view');
+  var B = null, poller = null;
+
+  // Companion is a typed-code join — there is no deep link to hand people, so
+  // the most useful thing we can do is make the code trivial to copy and the
+  // app trivial to install.
+  var STORE = {
+    ios: 'https://apps.apple.com/us/app/id1455161962',
+    android: 'https://play.google.com/store/apps/details?id=com.wizards.winter_orb'
+  };
+  function storeLink() {
+    var ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua)) return STORE.ios;
+    if (/Android/i.test(ua)) return STORE.android;
+    return null;
+  }
+
+  function copyCode(code) {
+    var done = function () { N.haptic('success'); N.toast('Code copied — paste it in Companion'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(done).catch(fallback);
+    } else fallback();
+    function fallback() {
+      // Clipboard API is refused in plenty of in-app webviews; select the text
+      // so a long-press copy still works rather than leaving a dead button.
+      try {
+        var el = document.getElementById('codeText');
+        var r = document.createRange(); r.selectNodeContents(el);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        N.toast('Press and hold to copy');
+      } catch (e) { N.toast('Code: ' + code); }
+    }
+  }
+
+  function render(b) {
+    B = b;
+    var isGuru = N.admin.isLoggedIn();
+    var h = '';
+
+    if (!b || !b.live) {
+      h += '<div class="card hero">' +
+        '<div class="display" style="font-size:1.4rem">Magic at the Haven</div>' +
+        '<p class="muted" style="margin-top:8px">No Magic event running right now.</p>' +
+        '<p class="small">Wednesday Commander · Friday Night Magic · Pre-releases</p>' +
+        '<a class="btn ghost" href="/events.html" style="margin-top:10px">See what’s on</a>' +
+        '</div>';
+    } else {
+      h += '<div class="card hero">' +
+        '<div class="display" style="font-size:1.3rem">' + esc(b.title || 'Magic Night') + '</div>' +
+        (b.format || b.startLabel ? '<p class="muted small">' + [esc(b.format || ''), esc(b.startLabel || '')].filter(Boolean).join(' · ') + '</p>' : '') +
+        (b.code
+          ? '<div style="margin-top:12px"><div class="tiny muted" style="letter-spacing:.18em;text-transform:uppercase">Event code</div>' +
+            '<div class="code" id="codeText">' + esc(b.code) + '</div>' +
+            '<button class="btn primary codebtn" id="btnCopy">📋 Copy the code</button></div>'
+          : '<p class="small" style="margin-top:10px">Sign-ups are at the counter — ask a Guru for the code.</p>') +
+        (function () {
+          var f = [];
+          if (b.entry) f.push(['Entry', esc(b.entry)]);
+          if (b.startLabel) f.push(['Starts', esc(b.startLabel)]);
+          return f.length ? '<div class="facts">' + f.map(function (x) {
+            return '<div class="fact"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('') + '</div>' : '';
+        })() +
+        '</div>';
+
+      if (b.prizes) h += '<div class="card"><h2>Prizes</h2><p style="margin:0">' + esc(b.prizes) + '</p></div>';
+      if (b.note) h += '<div class="card"><h2>Tonight</h2><p style="margin:0">' + esc(b.note) + '</p></div>';
+
+      h += '<div class="card"><h2>Live pairings</h2>' +
+        (b.mirrorUrl
+          ? '<p class="small">Pairings, standings and the round clock, straight from EventLink.</p>' +
+            '<a class="btn primary" style="width:100%" id="btnMirror" href="' + esc(b.mirrorUrl) + '" target="_blank" rel="noopener">📊 Open live pairings</a>'
+          : '<p class="small muted" style="margin:0">Watch the EventLink screen in the shop — Companion also pushes your pairing the moment each round starts.</p>') +
+        '</div>';
+    }
+
+    h += '<div class="card"><h2>Getting into the event</h2><ol class="steps">' +
+      '<li>Install <b>Magic: The Gathering Companion</b>.</li>' +
+      '<li>Open it, go to <b>Events</b>, tap <b>Join</b>.</li>' +
+      '<li>Type the event code' + (B && B.code ? ' above' : ' from the shop TV') + '.</li>' +
+      '<li>Your pairing arrives on your phone each round.</li>' +
+      '</ol>' +
+      (storeLink()
+        ? '<a class="btn ghost" style="width:100%;margin-top:10px" href="' + storeLink() + '" target="_blank" rel="noopener">Get the Companion app</a>'
+        : '<div class="row" style="display:flex;gap:8px;margin-top:10px">' +
+          '<a class="btn ghost" style="flex:1" href="' + STORE.ios + '" target="_blank" rel="noopener">iPhone</a>' +
+          '<a class="btn ghost" style="flex:1" href="' + STORE.android + '" target="_blank" rel="noopener">Android</a></div>') +
+      '</div>';
+
+    if (b && b.nextNote) h += '<div class="card"><h2>Coming up</h2><p class="small" style="margin:0">' + esc(b.nextNote) + '</p></div>';
+
+    // ---- Guru strip: same page, no separate console to hunt for ----
+    if (isGuru) {
+      h += '<div class="card admin"><h2>🔑 Guru · set tonight’s board</h2>' +
+        '<label for="aTitle">Event name</label><input id="aTitle" maxlength="80" value="' + esc((b && b.title) || '') + '">' +
+        '<label for="aFormat">Format</label><input id="aFormat" maxlength="40" placeholder="Commander / Modern / Pre-release" value="' + esc((b && b.format) || '') + '">' +
+        '<label for="aStart">Starts</label><input id="aStart" maxlength="40" placeholder="6:30 pm" value="' + esc((b && b.startLabel) || '') + '">' +
+        '<label for="aEntry">Entry</label><input id="aEntry" maxlength="40" placeholder="$5" value="' + esc((b && b.entry) || '') + '">' +
+        '<label for="aPrizes">Prizes</label><input id="aPrizes" maxlength="200" value="' + esc((b && b.prizes) || '') + '">' +
+        '<label for="aCode">EventLink code</label><input id="aCode" maxlength="12" autocapitalize="characters" style="letter-spacing:.2em;text-transform:uppercase" value="' + esc((b && b.code) || '') + '">' +
+        '<label for="aMirror">EventLink Mirror link</label><input id="aMirror" maxlength="300" placeholder="https://eventlink.wizards.com/stores/…/events/…/mirror" value="' + esc((b && b.mirrorUrl) || '') + '">' +
+        '<label for="aNote">Note for tonight</label><input id="aNote" maxlength="200" value="' + esc((b && b.note) || '') + '">' +
+        '<label for="aNext">Coming up</label><input id="aNext" maxlength="200" value="' + esc((b && b.nextNote) || '') + '">' +
+        '<div class="row">' +
+          '<button class="btn primary" id="aSave">Put it on the TVs</button>' +
+          '<button class="btn ghost" id="aClear">Take it down</button>' +
+        '</div>' +
+        '<p class="tiny muted" style="margin-top:8px">The Mirror link is the second-monitor URL from EventLink — it becomes the QR on the TV and the pairings button here.</p>' +
+        '</div>';
+    } else {
+      h += '<div class="card"><p class="tiny muted" style="margin:0">Guru? <a href="#" id="aLogin">Sign in</a> to set tonight’s board.</p></div>';
+    }
+
+    view.innerHTML = h;
+    wire();
+  }
+
+  function wire() {
+    var c = $('btnCopy');
+    if (c) c.addEventListener('click', function () { copyCode(B.code); });
+    var m = $('btnMirror');
+    if (m) m.addEventListener('click', function () { N.haptic('light'); });
+    var li = $('aLogin');
+    if (li) li.addEventListener('click', function (e) {
+      e.preventDefault();
+      var code = prompt('Guru code');
+      if (!code) return;
+      N.admin.login(code).then(function () { render(B); }).catch(function (err) { N.toast(err.message || 'Wrong code'); });
+    });
+    var save = $('aSave');
+    if (save) save.addEventListener('click', function () {
+      save.disabled = true; save.textContent = 'Saving…';
+      N.admin.fetch(API + '/board', {
+        method: 'PUT',
+        body: {
+          title: $('aTitle').value, format: $('aFormat').value, startLabel: $('aStart').value,
+          entry: $('aEntry').value, prizes: $('aPrizes').value, code: $('aCode').value,
+          mirrorUrl: $('aMirror').value, note: $('aNote').value, nextNote: $('aNext').value,
+          date: new Date().toISOString().slice(0, 10), live: true
+        }
+      }).then(function (j) { N.haptic('success'); N.toast('On the TVs'); render(j); if (poller) poller.reset(); })
+        .catch(function (e) { save.disabled = false; save.textContent = 'Put it on the TVs'; N.toast(e.message || 'Failed'); });
+    });
+    var clr = $('aClear');
+    if (clr) clr.addEventListener('click', function () {
+      if (!confirm('Take the Magic board off the TVs?')) return;
+      N.admin.fetch(API + '/board/clear', { method: 'POST' })
+        .then(function (j) { N.toast('Taken down'); render(j); if (poller) poller.reset(); })
+        .catch(function (e) { N.toast(e.message); });
+    });
+  }
+
+  poller = N.poll(API + '/board', {
+    interval: 15000, hidden: 60000,
+    onState: function (j) { if (!j.unchanged) render(j); }
+  });
+})();
+</script>
+</body>
+</html>
