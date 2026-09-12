@@ -310,7 +310,12 @@ describe('refundSale (NGH-BUILD 2026-09-12d) — real X-Series returns flow', ()
   // must NOT hand-roll a negative-line sale (that awards loyalty instead).
   function stubReturns({ parkedTotalIncTax = -42.2, onPut } = {}) {
     const V = 'https://teststore.retail.lightspeed.app/api/2026-07';
+    // The POST response deliberately carries NO totals — that is how the live
+    // API behaves, and reading the amount off it is what broke NGH-RFND-891.
     routes.push({ match: (u, i) => u === V + '/sales/sale-9/actions/return' && i.method === 'POST',
+      reply: () => jres({ data: { id: 'ret-1', state: 'parked', return: { is_return: true, original_sale_id: 'sale-9' } } }) });
+    // Step 2: the parked return must be READ BACK to learn what it's worth.
+    routes.push({ match: (u, i) => u === V + '/sales/ret-1' && (i.method || 'GET') === 'GET',
       reply: () => jres({ data: { id: 'ret-1', state: 'parked', return: { is_return: true, original_sale_id: 'sale-9' },
         totals: { price_incl_tax: parkedTotalIncTax, loyalty: 0 } } }) });
     routes.push({ match: u => u.includes('/api/2.0/payment_types'),
@@ -332,6 +337,8 @@ describe('refundSale (NGH-BUILD 2026-09-12d) — real X-Series returns flow', ()
     assert.deepEqual({ ok: res.ok, saleId: res.saleId, error: res.error }, { ok: true, saleId: 'ret-1', error: null });
     // it must hit the date-versioned returns endpoint, never /api/2.0/
     assert.ok(calls.some(c => c.url.endsWith('/api/2026-07/sales/sale-9/actions/return')), 'did not call the returns endpoint');
+    // must read the parked return back — the POST response has no totals
+    assert.ok(calls.some(c => c.url.endsWith('/api/2026-07/sales/ret-1') && ((c.init && c.init.method) || 'GET') === 'GET'), 'did not GET the parked return');
     assert.equal(put.state, 'closed');
     // payment balances the parked return exactly, and negative
     assert.equal(put.payments[0].amount, -42.2);

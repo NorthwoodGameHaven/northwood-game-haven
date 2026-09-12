@@ -449,11 +449,18 @@ export async function refundSale(opts) {
     const returnId = made && made.id ? String(made.id) : null;
     if (!returnId) throw new Error('return not created for sale ' + originalSaleId);
 
-    // 2) balance it with a negative payment. Prefer the parked return's own
-    //    total so partial/edited returns still reconcile exactly.
-    let cents = (opts && opts.amountCents != null) ? Math.abs(Number(opts.amountCents)) : null;
-    const totalIncTax = made.totals && made.totals.price_incl_tax;
-    if (cents == null && totalIncTax != null) cents = Math.round(Math.abs(Number(totalIncTax)) * 100);
+    // 2) READ the parked return back. This is a required step, not a nicety:
+    //    the POST response does NOT carry `totals`, so reading the amount off it
+    //    yields undefined and the close can't be balanced (verified live on
+    //    NGH-RFND-891: "could not determine the return amount").
+    let cents = null;
+    try {
+      const parked = oneOf(await lsFetch('sales/' + enc(returnId), { version: V }));
+      const t = parked && parked.totals && parked.totals.price_incl_tax;
+      if (t != null) cents = Math.round(Math.abs(Number(t)) * 100);
+    } catch (e) { console.error('[lightspeed] could not read parked return', returnId, e && e.message); }
+    // Caller's amount is the fallback (and the authority for a partial refund).
+    if (cents == null && opts && opts.amountCents != null) cents = Math.abs(Number(opts.amountCents));
     if (!cents) throw new Error('could not determine the return amount for ' + originalSaleId);
 
     const typeRef = await paymentTypeRef(

@@ -13,7 +13,6 @@ import { checkWindow, loadBlockers, describe, toMins as cToMins, MIN_GAP_MINS } 
 // bookings anywhere in the codebase (only event registrations had one).
 import { refundPaymentIntent } from './_shared/stripe.mjs';
 import { refundSale } from './_shared/lightspeed.mjs';
-import * as lscore from './_shared/lightspeed-core.mjs';
 
 const ROOM_IDS = ['holt', 'den', 'depths'];
 
@@ -114,12 +113,14 @@ const _handler = async (req) => {
     return json(list, 201);
   }
 
-  // ---- POST /bookings/:id/refund (admin) — NGH-BUILD 2026-09-12c ----
-  // { parts:['fee'|'deposit'], cancel?:bool, reason?:string }
+  // ---- POST /bookings/:id/refund (admin) — NGH-BUILD 2026-09-12e ----
+  // { parts:['fee'|'deposit'], cancel?:bool, reason?:string, lightspeedOnly?:bool }
   // Refunds the Stripe charge for each requested part, reverses the matching
-  // Lightspeed sale (a RETURN with negative lines, which is what takes the
-  // loyalty points back off), records an audit entry, and optionally cancels
-  // the booking with an email that says what was actually refunded.
+  // Lightspeed sale via the real returns API (which is what takes the loyalty
+  // points back off), records an audit entry, and optionally cancels the
+  // booking with an email that says what was actually refunded.
+  // lightspeedOnly:true retries just the books after a failed reversal — the
+  // Stripe refund is NOT repeated.
   if (req.method === 'POST' && parts[1] === 'refund' && parts[0]) {
     if (!requireAdmin(req)) return bad('unauthorized', 401);
     const id = decodeURIComponent(parts[0]);
@@ -136,26 +137,38 @@ const _handler = async (req) => {
       const pi = part === 'deposit' ? b.depositPI : b.feePI;
       const cents = part === 'deposit' ? b.depositPaidCents : b.feePaidCents;
       const paid = part === 'deposit' ? b.depositPaid : b.feePaid;
-      if (!paid) { results.push({ part, skipped: true, reason: 'not paid' }); continue; }
-      if (!pi) { results.push({ part, skipped: true, reason: 'no Stripe payment on record (paid in person or on account) — refund at the register' }); continue; }
-      const already = (b.refunds || []).some(r => r.part === part);
-      if (already) { results.push({ part, skipped: true, reason: 'already refunded' }); continue; }
+      const prior = (b.refunds || []).find(r => r.part === part);
+      // A prior entry whose Lightspeed leg failed can be retried with
+      // lightspeedOnly:true — the customer already has their money, so the
+      // Stripe refund must NOT run again; only the books need correcting.
+      // Such a booking is already marked unpaid, so the `paid` guard below is
+      // deliberately skipped on that path.
+      const lsOnly = !!(p && p.lightspeedOnly);
+      if (lsOnly && !prior) { results.push({ part, skipped: true, reason: 'no prior refund to retry' }); continue; }
+      if (lsOnly && !prior.lightspeedError) { results.push({ part, skipped: true, reason: 'Lightspeed already reversed' }); continue; }
+      if (prior && !lsOnly) { results.push({ part, skipped: true, reason: 'already refunded' }); continue; }
+      if (!lsOnly) {
+        if (!paid) { results.push({ part, skipped: true, reason: 'not paid' }); continue; }
+        if (!pi) { results.push({ part, skipped: true, reason: 'no Stripe payment on record (paid in person or on account) — refund at the register' }); continue; }
+      }
 
       // 1) money back first — if Stripe fails, change nothing else.
-      let refundId = null;
-      try {
-        const r = await refundPaymentIntent(pi, cents);
-        refundId = (r && r.id) || null;
-      } catch (e) {
-        results.push({ part, ok: false, error: 'stripe refund failed: ' + (e && e.message ? e.message : String(e)) });
-        continue;
+      let refundId = lsOnly ? (prior && prior.stripeRefundId) || null : null;
+      if (!lsOnly) {
+        try {
+          const r = await refundPaymentIntent(pi, cents);
+          refundId = (r && r.id) || null;
+        } catch (e) {
+          results.push({ part, ok: false, error: 'stripe refund failed: ' + (e && e.message ? e.message : String(e)) });
+          continue;
+        }
       }
 
       // 2) reverse in Lightspeed (never throws; a failure is reported, not fatal —
       //    the customer already has their money and must not be blocked on our books).
       const rev = await refundSale({
         sourceId: b.id + ':' + part, kind: 'booking-refund',
-        lines: lscore.bookingSaleLines(b, part, cents != null ? cents : null),
+        amountCents: (cents != null ? cents : (prior && prior.amountCents) || null),
         payment: 'online', customerEmail: b.email,
         note: 'Refund — NGH booking ' + b.id + ' (' + part + ')' + (p.reason ? ' · ' + String(p.reason).slice(0, 200) : '')
       });
@@ -163,6 +176,7 @@ const _handler = async (req) => {
       // 3) record it
       if (part === 'deposit') b.depositPaid = false; else b.feePaid = false;
       b.payment = (b.feePaid || b.depositPaid) ? 'due' : 'refunded';
+      if (prior) b.refunds = (b.refunds || []).filter(r => r !== prior);   // retry replaces the failed entry
       b.refunds = (b.refunds || []).concat([{
         at: new Date().toISOString(), part, amountCents: cents || null,
         stripeRefundId: refundId, lightspeedSaleId: rev.saleId || null,
