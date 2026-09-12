@@ -12,6 +12,10 @@
 // Capacity (min/max) counts PEOPLE (sum of qty), not rows.
 import { sql, ensureSchema, json, bad, noContent, preflight, requireAdmin } from './_shared/db.mjs';
 import { refundPaymentIntent } from './_shared/stripe.mjs';
+// NGH-BUILD 2026-09-12g: a Stripe refund used to leave the Lightspeed sale
+// standing — revenue, tax AND the customer's loyalty points all stayed put,
+// so the two systems silently diverged on every cancelled registration.
+import { refundSale } from './_shared/lightspeed.mjs';
 import { sendBrandedMail } from './_shared/email.mjs';
 import { computeRegTotals, ticketUrl, siteBase, money } from './_shared/ticket.mjs';
 
@@ -224,6 +228,15 @@ const _handler = async (req) => {
                 await refundPaymentIntent(pi, refundCents);
                 reg.amountPaidCents = Number(prev.amountPaidCents) - refundCents;
                 reg.partialRefunds = (prev.partialRefunds || []).concat([{ at: new Date().toISOString(), amountCents: refundCents, removedQty: removed }]);
+                // NGH-BUILD 2026-09-12g: a PARTIAL refund needs a PARTIAL Lightspeed
+                // return — the parked return Lightspeed builds negates the WHOLE sale,
+                // so its line quantities must be edited down before closing. That
+                // mechanic is not yet verified against the live API, and closing a
+                // full return here would over-credit revenue and loyalty. So the
+                // reversal is flagged for staff instead of guessed at.
+                reg.lightspeedPartialPending = (Number(reg.lightspeedPartialPending) || 0) + refundCents;
+                console.warn('[registrations] PARTIAL refund ' + refundCents + 'c on ' + reg.id +
+                  ' — Lightspeed sale NOT reversed; process a partial return in Sales history');
                 changed.push(money(refundCents) + ' refunded to your card for the ' + removed + ' released ticket' + (removed === 1 ? '' : 's'));
               } catch (e) {
                 console.error('[registrations] partial refund failed', e);
@@ -252,7 +265,16 @@ const _handler = async (req) => {
             image: { url: ticketUrl(reg.id) + '/qr.png', alt: 'Your entry QR code', width: 200 } });
       }
       await sendMail(adminEmail, 'Registration modified: ' + (reg.eventTitle || 'NGH Event'),
-        reg.name + ' (' + (reg.email || '—') + ') modified registration ' + reg.id + ':\n\n• ' + changed.join('\n• '));
+        reg.name + ' (' + (reg.email || '—') + ') modified registration ' + reg.id + ':\n\n• ' + changed.join('\n• ')
+        // NGH-BUILD 2026-09-12g: partial refunds are not reversed in Lightspeed
+        // automatically (a partial return needs its line quantities edited down),
+        // so staff must be told or the books quietly drift.
+        + (reg.lightspeedPartialPending
+            ? ('\n\n⚠️ ACTION NEEDED IN LIGHTSPEED: ' + money(reg.lightspeedPartialPending)
+               + ' was refunded to the card but the Lightspeed sale has NOT been reduced.'
+               + '\nSales history → find the sale noted "' + reg.id + '" → Process return → keep only the '
+               + 'released ticket(s) → close it. Until then this registration overstates revenue, tax and loyalty.')
+            : ''));
       return json(Object.assign({}, reg, { ticketUrl: ticketUrl(reg.id), changed }));
     }
 
@@ -329,7 +351,21 @@ async function maybeRefund(reg) {
   } catch (e) {
     console.error('[registrations] refund failed', e);
     reg.refundError = String(e && e.message || e);
+    return;   // money did not move — do not touch the books
   }
+  // Reverse the Lightspeed sale: a full return, which is the only thing that
+  // takes the loyalty points back off the customer. Never throws; a failure is
+  // recorded so it can be retried rather than blocking the refund the customer
+  // has already received.
+  const rev = await refundSale({
+    sourceId: reg.id, kind: 'registration-refund',
+    amountCents: Number(reg.amountPaidCents) || null,
+    payment: 'online',
+    note: 'Refund — registration ' + reg.id + (reg.eventTitle ? (' · ' + reg.eventTitle) : '')
+  });
+  reg.lightspeedRefundSaleId = rev.saleId || null;
+  reg.lightspeedRefundError = rev.error || null;
+  if (rev.error) console.error('[registrations] Lightspeed reversal failed', reg.id, rev.error);
 }
 
 // NGH-BUILD 11a
