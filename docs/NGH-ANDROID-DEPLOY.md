@@ -67,19 +67,31 @@ Now create the key. Run this in a folder you'll remember (`cd ~\Documents`):
 keytool -genkey -v -keystore ngh-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias ngh
 ```
 
-It will ask you things:
+It asks eight things, **one per line**. Answer them in this exact order — the
+prompts do not say what format they want, and an answer in the wrong box ends
+up baked into the certificate:
 
-| Prompt | What to type |
-|---|---|
-| Enter keystore password | A strong password. **Write it down.** You need it forever |
-| Re-enter | Same |
-| First and last name | `Northwood Game Haven` |
-| Organizational unit | Leave blank, press Enter |
-| Organization | `Northwood Game Haven` |
-| City, State | `Chippewa Falls`, `WI` |
-| Two-letter country code | `US` |
-| Is CN=... correct? | `yes` |
-| Key password for `<ngh>` | **Press Enter** to reuse the keystore password. Simpler, and one less thing to lose |
+| # | Prompt (exact wording) | What to type |
+|---|---|---|
+| 1 | `Enter keystore password` | A strong password. **Nothing appears as you type** — no dots, no asterisks. That is normal. **Write it down first.** |
+| 2 | `Re-enter new password` | The same thing, also invisible |
+| 3 | `What is your first and last name?` | `Northwood Experiences` |
+| 4 | `What is the name of your organizational unit?` | *(nothing — just press Enter)* |
+| 5 | `What is the name of your organization?` | `Northwood Experiences LLC` |
+| 6 | `What is the name of your City or Locality?` | `Chippewa Falls` — **city only, no state** |
+| 7 | `What is the name of your State or Province?` | `WI` |
+| 8 | `What is the two-letter country code for this unit?` | `US` — the country, **not** yes/no |
+| 9 | `Is CN=… correct?` | `yes` — *this* is the yes/no one |
+| 10 | `Enter key password for <ngh>` | **Press Enter** to reuse the keystore password. One less thing to lose |
+
+> **Read line 9 back before you type `yes`.** It should say:
+> `CN=Northwood Experiences, OU=Unknown, O=Northwood Experiences LLC, L=Chippewa Falls, ST=WI, C=US`
+>
+> If it says `ST=US, C=yes`, the answers have slipped one box down — type `n`
+> and it walks you through again with your previous answers as defaults. Google
+> never validates this, so a mangled name will not block anything, but it is
+> stamped into your upload certificate permanently and it is thirty seconds to
+> get right.
 
 ### Back it up now, before anything else
 
@@ -88,6 +100,16 @@ It will ask you things:
 3. Ideally a third copy on a USB stick in the shop safe.
 
 I am not exaggerating about this. Losing it is unrecoverable.
+
+> **And the other half of that sentence: do not send it anywhere.** Not into a
+> chat, not by email, not to a contractor, not to me. The only places it
+> belongs are your own backups and — as base64 — the GitHub secret. Anyone with
+> the file *and* the password can sign an update as you.
+>
+> If it does get out before you have published anything, the fix is free:
+> delete it, run `keytool` again, and replace the secret. Once the app is live
+> on Play you can still rotate an upload key, but it means a support request to
+> Google, so the cheap moment is now.
 
 ### Turn it into a GitHub secret
 
@@ -99,8 +121,28 @@ and no Windows line endings to go wrong:
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\ngh-upload.jks")) | Set-Clipboard
 ```
 
-Nothing is printed. The base64 is now on your clipboard — paste it straight
-into the secret below.
+Nothing is printed. Check it actually landed:
+
+```powershell
+(Get-Clipboard).Length
+```
+
+**Expect roughly 3,700.** A small number — 22, 40, whatever — means
+`Set-Clipboard` did not take and the clipboard still holds whatever you copied
+last (quite possibly the password you just pasted into `keytool`). Do not paste
+that into GitHub. Use the file route instead, which never touches the
+clipboard and tells you the real length:
+
+```powershell
+$b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\Documents\ngh-upload.jks"))
+$b64.Length
+Set-Content -Path "$HOME\Documents\ngh-b64.txt" -Value $b64 -NoNewline
+notepad "$HOME\Documents\ngh-b64.txt"
+```
+
+`$b64.Length` is the truth — it is the string itself, not the clipboard. In
+Notepad: **Ctrl+A, Ctrl+C**, paste into the secret, then **delete
+`ngh-b64.txt`** — it is your signing key in plain text.
 
 > *Why not `certutil -encode`?* It wraps the output in
 > `-----BEGIN CERTIFICATE-----` lines you have to delete by hand, and it writes
@@ -110,7 +152,28 @@ into the secret below.
 > and checks the result really is a keystore, so either method works, but the
 > PowerShell line avoids the whole problem *(NGH-BUILD 2026-09-12ac)*.
 
-Then in GitHub: repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**, four times:
+> ### These four go in GitHub, **not** Netlify
+>
+> This project has two separate places for secrets and it is genuinely easy to
+> put a value in the wrong one — especially right after setting
+> `PLAY_REVIEW_EMAIL` and `PLAY_REVIEW_CODE`, which *do* live in Netlify.
+>
+> | | What belongs there | Why |
+> |---|---|---|
+> | **Netlify** env vars | Anything the **website or a Netlify Function** reads at runtime — `ADMIN_SECRET`, `LIGHTSPEED_*`, `PLAY_REVIEW_*` | Netlify runs the site |
+> | **GitHub** Actions secrets | Anything the **Android build** needs — the four `ANDROID_*` below | GitHub Actions builds the app; Netlify never touches it |
+>
+> Put the `ANDROID_*` four in Netlify and nothing breaks loudly — the workflow's
+> `if: env.KS != ''` guard just finds an empty secret, skips the signing step,
+> and hands you a debug APK with no release AAB and no error to explain why.
+>
+> It is also the wrong place for the keystore on its own terms: a Netlify
+> variable is readable by every build and every serverless function at runtime,
+> and unless you tick "secret" it is visible in the Netlify UI as plain text.
+> If you have already added them there, **delete all four from Netlify.**
+
+Then in GitHub: repo → **Settings** → **Secrets and variables** → **Actions** →
+**Repository secrets** tab → **New repository secret**, four times:
 
 | Name | Value |
 |---|---|
