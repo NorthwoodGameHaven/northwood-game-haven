@@ -231,13 +231,21 @@ export async function getRetailer() {
   if (_retailer) return _retailer;
   let r = oneOf(await lsFetch('retailer'));
   r = (r && r.retailer) || r || {};
-  let ratio = Number(r.loyalty_ratio);
+  // NGH-BUILD 2026-09-12a: 2.0 nests loyalty as `loyalty: {enabled, ratio}` —
+  // there is no top-level `loyalty_ratio`, and the legacy /api/retailer fallback
+  // below 404s on this store, so the ratio always resolved to 0 and no sale ever
+  // carried loyalty_value. Read the nested shape first.
+  let ratio = Number(r.loyalty && r.loyalty.ratio);
+  const loyaltyEnabled = r.loyalty ? r.loyalty.enabled !== false : true;
+  if (!isFinite(ratio)) ratio = Number(r.loyalty_ratio);
   if (!isFinite(ratio)) {
-    // 2.0 may omit loyalty settings; the legacy endpoint carries loyalty_ratio.
+    // Older accounts: the legacy endpoint carries loyalty_ratio.
     try { const lg = await lsFetch('retailer', { version: null }); const rr = (lg && (lg.retailer || lg.data || lg)) || {}; ratio = Number(rr.loyalty_ratio); } catch { /* ignore */ }
   }
   if (!isFinite(ratio)) ratio = Number(process.env.LIGHTSPEED_LOYALTY_RATIO) || 0;
-  _retailer = { id: r.id || '', name: r.name || '', domain: r.domain_prefix || '', currency: r.default_currency || r.currency || 'USD', loyaltyRatio: ratio };
+  // Loyalty switched off store-wide (Setup → Loyalty) earns nothing, whatever the ratio says.
+  if (!loyaltyEnabled) ratio = 0;
+  _retailer = { id: r.id || '', name: r.name || '', domain: r.domain_prefix || '', currency: r.default_currency || r.currency || 'USD', loyaltyRatio: ratio, loyaltyEnabled };
   return _retailer;
 }
 export async function getTaxRate() {

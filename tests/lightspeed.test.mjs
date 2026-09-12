@@ -292,8 +292,11 @@ function stubStore({ customers = [], products = [], saleReply, taxes } = {}) {
     const q = (new URL(u).searchParams.get('q') || '').toLowerCase();
     return jres({ data: products.filter(p => String(p.sku || '').toLowerCase().includes(q) || String(p.name || '').toLowerCase().includes(q)) });
   } });
-  routes.push({ match: u => u.includes('/api/2.0/taxes'), reply: () => jres({ data: taxes || [{ id: 'tax-wi', name: 'WI', rate: 0.055 }] }) });
-  routes.push({ match: u => u.includes('/api/2.0/retailer'), reply: () => jres({ data: { id: 'r1', name: 'NGH', default_currency: 'USD', loyalty_ratio: 0.05 } }) });
+  // NGH-BUILD 2026-09-12a: real X-Series 2.0 shape — no top-level `rate`, a `rates[]`
+  // array of components (WI State 5% + Chippewa County 0.5%). taxRateOf must sum them.
+  routes.push({ match: u => u.includes('/api/2.0/taxes'), reply: () => jres({ data: taxes || [{ id: 'tax-wi', name: 'WI', rates: [{ id: 'r-state', rate: 0.05 }, { id: 'r-county', rate: 0.005 }] }] }) });
+  // NGH-BUILD 2026-09-12a: 2.0 nests loyalty as {enabled, ratio}; there is no top-level loyalty_ratio.
+  routes.push({ match: u => u.includes('/api/2.0/retailer'), reply: () => jres({ data: { id: 'r1', name: 'NGH', default_currency: 'USD', loyalty: { enabled: true, ratio: 0.05 } } }) });
   routes.push({ match: u => u.includes('/api/2.0/customer_groups'), reply: () => jres({ data: [{ id: 'g1', name: 'VIP' }] }) });
   routes.push({ match: (u, i) => u === 'https://teststore.retail.lightspeed.app/api/register_sales' && i.method === 'POST', reply: (u, i) => (saleReply || (() => jres({ register_sale: { id: 'sale-1' } })))(JSON.parse(i.body)) });
 }

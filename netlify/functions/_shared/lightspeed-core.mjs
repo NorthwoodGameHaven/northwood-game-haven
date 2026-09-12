@@ -163,8 +163,17 @@ export function validEmail(s) { s = String(s || '').trim(); return s.length <= 2
 export function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 export function round5(n) { return Math.round((Number(n) || 0) * 100000) / 100000; }
 // X-Series tax `rate` is a fraction (0.055); tolerate percent-style values too.
+// NGH-BUILD 2026-09-12a: an X-Series 2.0 tax has NO top-level `rate` — it carries
+// `rates: [{rate}, …]`, one entry per component (Northwood: WI State 0.05 +
+// Chippewa County 0.005 = 0.055). Reading `tax.rate` yielded NaN → 0, so every
+// recorded sale booked the full gross as ex-tax revenue with $0 sales tax.
+// Verified live on booking NGH-Y3NOS3-349: $42.20 line, tax 0.00.
 export function taxRateOf(tax) {
-  const r = Number(tax && tax.rate);
+  if (!tax) return 0;
+  let r = Number(tax.rate);
+  if (!isFinite(r) && Array.isArray(tax.rates)) {
+    r = tax.rates.reduce((sum, x) => sum + (Number(x && x.rate) || 0), 0);
+  }
   if (!isFinite(r) || r < 0) return 0;
   return r > 1 ? r / 100 : r;
 }
