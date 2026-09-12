@@ -106,10 +106,19 @@ This is not fatal — Google does not check that the publisher owns the brand in
 the app, and publishing on behalf of another business is ordinary. But three
 things follow from it, and two want a decision before you publish.
 
-**a) Set the Developer name.** Play Console → Developer account → Developer
-page → **Developer name**. This is the line shown under the app title in the
-store. Set it to `Northwood Game Haven`. Left alone it will say Northwood
-Experiences LLC, and customers searching for the shop will not recognise it.
+**a) Developer name — ✅ set to `Northwood Experiences LLC` (2026-09-12).**
+I had suggested `Northwood Game Haven` here; you went with the LLC, which is
+consistent now that Northwood Experiences owns the app and the website. Two
+consequences worth knowing rather than discovering:
+
+* The store will show **Northwood Experiences LLC** under the app title, and
+  the developer page will list it as the publisher of this and any future app.
+  Someone searching "Northwood Game Haven" finds the app by its **title**, not
+  by the developer line — which is exactly why §1 uses the full
+  `Northwood Game Haven` as the app name rather than `Game Haven`.
+* The change went through a Google review before taking effect. Confirm the
+  banner is gone and it no longer says "users will see Dustin Jepperson"
+  **before you publish**, or the listing goes out under your personal name.
 
 **b) Check which address goes public — this one matters.** Play definitely
 shows the developer **email and phone** publicly for organization accounts, and
@@ -130,17 +139,16 @@ it. Before you publish, open Developer account → Developer page, see exactly
 what is marked public, and put 115 W Spring St Unit 3 there. If D&B is the
 source Google pulls from, update the D&B record too.
 
-**c) Decide who the privacy policy speaks for.** `gamehaven.guru/privacy` says
-Northwood Game Haven collects the data, throughout. The Play publisher will be
-Northwood Experiences LLC. A reviewer comparing the two could reasonably ask
-which company holds the data, and it is a fair question independent of Google.
+**c) Who the privacy policy speaks for — ✅ done (12ab, corrected in 12ad).**
+`gamehaven.guru/privacy` now has a "Who 'we' means" section: Northwood
+Experiences LLC builds, hosts and publishes the site and app and is the
+developer on the listing; Northwood Game Haven (ECCentric LLC) is the business
+the customer deals with and holds their data; overnight stays go to VRBO under
+VRBO's own policy. The deletion page footer says the same, and eight tests keep
+the two pages from drifting apart.
 
-Cheapest fix is one line on the privacy page and the deletion page — something
-like *"The Game Haven app is published by Northwood Experiences LLC on behalf
-of Northwood Game Haven (ECCentric LLC)."* Whether that is the right
-description of the arrangement is a question for whoever handles your LLC
-paperwork, not for me — but do not publish with the two documents disagreeing.
-Say the word and I will add the line.
+Read it once on the live site and confirm the description of the two companies
+is right — it is the one thing in that commit I could not verify myself.
 
 ### 0.4 Cleared
 
@@ -457,9 +465,9 @@ The first release of the Game Haven app. Game tools for the table — first play
 
 - [x] **Account deletion**: in-app path + public web URL (§0.1) — **live**, verified 2026-09-12
 - [x] **Review account** built and **live** (§0.2) — verified on gamehaven.guru 2026-09-12
-- [ ] Developer name set to "Northwood Game Haven" (§0.3a)
+- [x] Developer name set — `Northwood Experiences LLC` (§0.3a); confirm the review banner has cleared before publishing
 - [ ] Public address checked — shop, not home (§0.3b)
-- [ ] Decided how the privacy policy names the publisher (§0.3c)
+- [x] Privacy policy names the publisher (§0.3c) — *read it live and confirm*
 - [x] `stash2026` removed from `site/booking.html` (§0.4) — *12aa*
 - [ ] App name, short and full descriptions pasted (§1)
 - [ ] Category, contact and privacy URL set (§2)
