@@ -9,6 +9,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+// The Play review account's data, imported from the module the live function
+// uses, so this test breaks if the shape ever drifts from what the page reads.
+// review-account.mjs is deliberately pure — no db, no Lightspeed — so it can
+// be imported here without the mock hooks.
+const REVIEW_EMAIL_E2E = 'play-review@gamehaven.guru';
+process.env.PLAY_REVIEW_EMAIL = REVIEW_EMAIL_E2E;
+process.env.PLAY_REVIEW_CODE = '480126';
+const { reviewCustomer, reviewBundle } = await import('../netlify/functions/_shared/review-account.mjs');
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -336,6 +344,57 @@ try {
     await shot(page, '41-lightspeed-disconnected');
     await page.close();
   }
+  // ================================================ Play review account
+  // What Google's reviewer will actually do. The risk with invented data is
+  // not that it is wrong but that it is SHAPED wrong — one renamed field and
+  // they open Rewards to a blank card and reject the listing. So this feeds
+  // the real reviewBundle() through the real page rather than a copy of it.
+  {
+    const page = await newPage(ctx, 'review-account');
+    const session = 'review-session-token';
+    await page.route('**/api/account/start', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, expiresInSec: 600 }) }));
+    await page.route('**/api/account/verify', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ session, customer: reviewCustomer(), email: REVIEW_EMAIL_E2E }) }));
+    await page.route('**/api/account/me', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviewBundle()) }));
+
+    // The context is shared with the earlier account block, which left a
+    // session behind — start from signed-out, the way a reviewer would.
+    await page.goto(BASE + '/app/account.html');
+    await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+    await page.reload();
+    await page.waitForSelector('#vEmail:not([hidden])', { timeout: 8000 });
+    await page.fill('#email', REVIEW_EMAIL_E2E);
+    await page.click('#btnSend');
+    await page.waitForSelector('#vCode:not([hidden])');
+    await page.type('#code', '480126');            // auto-submits on the 6th digit
+    await page.waitForSelector('#vDash:not([hidden])', { timeout: 8000 });
+
+    ok('review: the fixed code lands on the dashboard, not the sign-up form', true);
+    ok('review: balance renders', (await page.textContent('#dBalance')).trim() === '$8.75',
+      await page.textContent('#dBalance'));
+    ok('review: earn rule renders from loyalty.ratio', /Earn 5¢/.test(await page.textContent('#dRule')),
+      await page.textContent('#dRule'));
+    ok('review: customer code renders', (await page.textContent('#dCode')).trim() === 'NGH-0000');
+    ok('review: group pill renders', (await page.textContent('#dGroup')).trim() === 'Haven Regulars');
+    ok('review: QR code image actually loads', await page.$eval('#dQr', (i) => i.complete && i.naturalWidth > 0));
+    ok('review: upcoming shows the booking and the registration', (await page.$$('#dUp li')).length === 2,
+      String((await page.$$('#dUp li')).length));
+    ok('review: purchase history renders', (await page.$$('#dPurchases li')).length === 2,
+      String((await page.$$('#dPurchases li')).length));
+    const dash = await page.textContent('#vDash');
+    // The list shows a rolled-up item count rather than product names, so this
+    // is what proves the nested items[].qty / loyalty / total actually parse:
+    // 3 boosters + 1 float must come out as "4 items", at $32.47, +$1.62.
+    const purchases = await page.textContent('#dPurchases');
+    ok('review: nested line items roll up to a count', /4 items/.test(purchases), purchases.replace(/\s+/g, ' ').slice(0, 120));
+    ok('review: the purchase total renders', /\$32\.47/.test(purchases));
+    ok('review: loyalty earned on the purchase renders', /\+\$1\.62 rewards/.test(purchases), purchases.replace(/\s+/g, ' ').slice(0, 120));
+    ok('review: the event title comes through', /Commander Night/.test(dash));
+    ok('review: nothing rendered as undefined or NaN', !/undefined|NaN|\[object/.test(dash),
+      (dash.match(/undefined|NaN|\[object \w+/) || [''])[0]);
+    await shot(page, '43-review-account');
+    await page.close();
+  }
+
   // ============================================== public account-delete page
   // This URL goes in the Play Data safety form. Google checks that it loads,
   // that the deletion path is prominent on it, and that it names the app — and

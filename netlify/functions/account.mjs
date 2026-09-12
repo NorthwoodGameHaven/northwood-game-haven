@@ -25,6 +25,7 @@
 // ---------------------------------------------------------------------
 import crypto from 'node:crypto';
 import { sql, ensureSchema } from './_shared/db.mjs';
+import { reviewOn, reviewCode, reviewId, isReviewEmail, isReviewSession, reviewCustomer, reviewBundle } from './_shared/review-account.mjs';
 import { sendBrandedMail } from './_shared/email.mjs';
 import { ticketUrl } from './_shared/ticket.mjs';
 import * as core from './_shared/lightspeed-core.mjs';
@@ -58,6 +59,10 @@ export default async (req) => {
       const body = await readJson(req);
       const email = String((body && body.email) || '').trim().toLowerCase();
       if (!core.validEmail(email)) return bad('please enter a valid email address');
+      // The review address has a fixed code, so there is nothing to generate
+      // and nothing to send. Answer exactly as we would for anybody else — the
+      // reviewer taps "Send code" and moves to the code screen as normal.
+      if (isReviewEmail(email)) return json({ ok: true, expiresInSec: CODE_TTL_MS / 1000 });
       const rows = await sql`SELECT sent_count, window_start FROM login_codes WHERE email = ${email}`;
       const now = Date.now();
       let sent = 0, windowStart = now;
@@ -88,6 +93,20 @@ export default async (req) => {
       const email = String((body && body.email) || '').trim().toLowerCase();
       const code = String((body && body.code) || '').replace(/\D/g, '');
       if (!core.validEmail(email) || code.length !== 6) return bad('enter the 6-digit code from your email');
+      if (isReviewEmail(email)) {
+        // Attempts are still counted, in the same table and against the same
+        // ceiling as a real sign-in, so this is not an unrated 6-digit oracle.
+        const att = await sql`SELECT attempts FROM login_codes WHERE email = ${email}`;
+        if (att.length && Number(att[0].attempts) >= MAX_ATTEMPTS) return bad('too many incorrect attempts — request a new code', 429);
+        if (!core.safeEq(reviewCode(), code)) {
+          await sql`INSERT INTO login_codes (email, code_hash, expires_at, attempts, sent_count, window_start)
+                    VALUES (${email}, NULL, NULL, 1, 0, now())
+                    ON CONFLICT (email) DO UPDATE SET attempts = login_codes.attempts + 1`;
+          return bad('incorrect code', 400);
+        }
+        await sql`UPDATE login_codes SET attempts = 0 WHERE email = ${email}`;
+        return json({ session: core.issueSession(core.secret(), reviewId()), customer: reviewCustomer(), email });
+      }
       const rows = await sql`SELECT code_hash, expires_at, attempts FROM login_codes WHERE email = ${email}`;
       if (!rows.length || !rows[0].code_hash) return bad('no code has been sent to that email — request a new one');
       const row = rows[0];
@@ -188,6 +207,11 @@ export default async (req) => {
     // ---- POST /signup ----
     if (head === 'signup' && req.method === 'POST') {
       const b = bodyForSession || {};
+      // The review session is not pseudo, so without this it would fall past
+      // the getCustomer() miss below and create a REAL Lightspeed customer.
+      // The reviewer should never reach signup — /verify hands them a customer
+      // — but a stray call must not write to the POS.
+      if (isReviewSession(s)) return json({ session: core.issueSession(core.secret(), reviewId()), customer: reviewCustomer(), existing: true });
       if (!s.pseudo) {
         const existing = await getCustomer(s.customerId).catch(() => null);
         if (existing) return json({ session: core.issueSession(core.secret(), existing.id), customer: existing, existing: true });
@@ -210,6 +234,8 @@ export default async (req) => {
 
     // ---- GET /me ----
     if (head === 'me' && req.method === 'GET') {
+      // Before anything reaches Lightspeed — this id is not a customer there.
+      if (isReviewSession(s)) return json(reviewBundle());
       if (s.pseudo) return json({ customer: null, email: s.email, loyalty: null, purchases: [], bookings: [], registrations: [], orders: [] });
       let customer;
       try { customer = await getCustomer(s.customerId); }
@@ -253,6 +279,10 @@ export default async (req) => {
 
     // ---- PUT /me ----
     if (head === 'me' && req.method === 'PUT') {
+      // The reviewer may well try the profile form. Let it succeed visibly and
+      // change nothing — writing to Lightspeed under a fake id would 404, and
+      // an error here reads as a broken app.
+      if (isReviewSession(s)) return json({ customer: reviewCustomer() });
       if (s.pseudo) return bad('create your account first', 400);
       const b = bodyForSession || {};
       const fields = {};

@@ -40,37 +40,119 @@ because they say so*. Do not quietly widen what you keep.
 The deletion page and the privacy page have to keep agreeing with each other
 and with §4 below. That three-way match is the thing Google actually checks.
 
-### 0.2 A reviewer cannot sign in
+### 0.2 The Rewards review account — ✅ built 2026-09-12z, needs 4 minutes from you
 
 Sign-in is email plus a six-digit code sent to that address. Google's reviewer
-has no access to any of your inboxes, so every account-gated screen is
-unreachable to them, and "App access" is a required section.
+has no access to any of your inboxes, so every account-gated screen was
+unreachable to them, and "App access" is a required section you cannot skip.
 
-Options, worst to best:
+There is now one address with a fixed code. It shows a fully populated Rewards
+screen — balance, customer code, QR, two purchases, an upcoming booking and an
+event registration — **all of it invented in the code and none of it from
+Lightspeed**. There is no real customer behind it, so guessing the code wins
+you a page of fiction. Wrong guesses are counted against the same five-attempt
+ceiling as any other sign-in.
+
+It is **off** until you set two environment variables, and it stays off if you
+only set one.
+
+#### What you do — exactly
+
+**1. Pick a six-digit code.** Any six digits. Make them random — not 123456,
+not the shop's phone number. It has to be exactly six digits, because that is
+what the app's code box accepts.
+
+> **Do not put the code in the repo, in a commit message, or in this file.** It
+> lives in exactly two places: the Netlify environment variable below, and the
+> Play Console App access field. That is the whole point of it being an env var.
+
+**2. Netlify → your site → Site configuration → Environment variables →
+Add a variable**, twice:
+
+| Key | Value |
+|---|---|
+| `PLAY_REVIEW_EMAIL` | `play-review@gamehaven.guru` |
+| `PLAY_REVIEW_CODE` | the six digits you just picked |
+
+The address does **not** have to be a real mailbox — nothing is ever sent to
+it. It just has to look like an address and be one nobody would sign up with.
+
+**3. Trigger a deploy.** Netlify → Deploys → **Trigger deploy** → *Deploy site*.
+Environment variables do not reach the running functions until a deploy runs.
+This is the step people forget, and then it looks broken.
+
+**4. Check it.** Open `gamehaven.guru/app/account.html`, enter
+`play-review@gamehaven.guru`, tap **Send code**, type your six digits. You
+should land on a Rewards screen showing **$8.75** and customer code
+**NGH-0000**. If it asks you to sign up instead, the env vars have not taken —
+go back to step 3.
+
+**5. Paste the App access text** from §6, with the real code in it.
+
+#### Turning it off later
+
+Delete either variable in Netlify and trigger a deploy. Sessions already issued
+stop working too — that is tested. You do **not** need to turn it off between
+releases; Google re-reviews on updates and will need it again.
+
+### 0.3 The publisher is a different company from the app — decide how to handle it
+
+The Play account is verified as **Northwood Experiences LLC** (D-U-N-S
+14-743-1636, `northwoodexperiences@gmail.com`). The app is for **Northwood
+Game Haven**, which is **ECCentric LLC** trading as Northwood Game Haven. Two
+different legal entities.
+
+This is not fatal — Google does not check that the publisher owns the brand in
+the app, and publishing on behalf of another business is ordinary. But three
+things follow from it, and two want a decision before you publish.
+
+**a) Set the Developer name.** Play Console → Developer account → Developer
+page → **Developer name**. This is the line shown under the app title in the
+store. Set it to `Northwood Game Haven`. Left alone it will say Northwood
+Experiences LLC, and customers searching for the shop will not recognise it.
+
+**b) Check which address goes public — this one matters.** Play definitely
+shows the developer **email and phone** publicly for organization accounts, and
+many developers report the verified legal name and address appearing under
+"About the developer" too. Your D&B record currently carries **N1827 945th St,
+Eau Claire** — your home.
+
+You do not have to publish that. The Articles of Organization give Northwood
+Experiences LLC two addresses:
 
 | | |
 |---|---|
-| Tick "all functionality available without special access" | **Don't.** It is untrue, and a reviewer who finds a login wall you didn't declare can reject on that alone |
-| Explain in review notes that Rewards needs a real customer account | Might pass. Might come back asking for credentials, costing a review cycle |
-| **Seed a review account with a fixed code** | **Recommended.** One seeded email whose OTP check accepts a known constant, holding nothing real |
+| Registered office | N1827 945th Street, Eau Claire — *your home* |
+| **Principal office** | **115 West Spring Street, Unit 3, Chippewa Falls** — *the Haven* |
 
-The third is a small change in `netlify/functions/account.mjs` — one email
-address, one fixed code, no real customer data behind it. §6 has the exact
-words to put in the App access form once it exists.
+The principal office is every bit as much the company's real address, so use
+it. Before you publish, open Developer account → Developer page, see exactly
+what is marked public, and put 115 W Spring St Unit 3 there. If D&B is the
+source Google pulls from, update the D&B record too.
 
-### 0.3 Also worth clearing first
+**c) Decide who the privacy policy speaks for.** `gamehaven.guru/privacy` says
+Northwood Game Haven collects the data, throughout. The Play publisher will be
+Northwood Experiences LLC. A reviewer comparing the two could reasonably ask
+which company holds the data, and it is a fair question independent of Google.
 
-`site/booking.html` still ships the staff gate code in the page source, and
-prints it on screen:
+Cheapest fix is one line on the privacy page and the deletion page — something
+like *"The Game Haven app is published by Northwood Experiences LLC on behalf
+of Northwood Game Haven (ECCentric LLC)."* Whether that is the right
+description of the arrangement is a question for whoever handles your LLC
+paperwork, not for me — but do not publish with the two documents disagreeing.
+Say the word and I will add the line.
 
-```
-line 543:  <p class="hint">Demo code: <code>stash2026</code>. …
-line 646:  var ADMIN_CODE = window.NGH_ADMIN_CODE || "stash2026";
-```
+### 0.4 Cleared
 
-That is on the website rather than in the app, so it will not fail a Play
-review by itself. It is still a published staff code sitting on a page a
-reviewer may well open, and it has been on the checklist since 2026-09-12i.
+- ~~`stash2026` in `site/booking.html`~~ — you have said you no longer need it.
+  It is still in the file at lines 543 and 646; removing it is a two-line
+  change whenever you want it done.
+- ~~D-U-N-S number~~ — **14-743-1636**.
+- ~~Play Console account~~ — **Organization, verified**, ID
+  `7315290518002454172`. Because it is an organization account, the
+  12-testers-for-14-days closed-testing requirement **does not apply to you**.
+  You can go straight to production.
+- ~~WPN password~~ — changed.
 
 ---
 
@@ -334,10 +416,11 @@ restricted**:
 > review account that accepts a fixed code:
 >
 > Email: `play-review@gamehaven.guru`
-> Code: `<the fixed code>`
+> Code: `<the six digits you set as PLAY_REVIEW_CODE>`
 >
-> Enter the email on the Rewards screen, tap "Send code", then enter the code
-> above. The account holds sample data only.
+> Open the app, tap Rewards, enter the email above, tap "Send code", then enter
+> the code above. No email is sent for this address — the code is fixed. The
+> account holds sample data only.
 >
 > **Please also note:** Karaoke Battle, Team Trivia, Speed Gaming and Magic
 > Night are live in-venue features. They show a "nothing on right now" state
@@ -370,8 +453,11 @@ The first release of the Game Haven app. Game tools for the table — first play
 ## 8. Checklist for this document
 
 - [x] **Account deletion**: in-app path + public web URL (§0.1) — *built 2026-09-12y, deploy it*
-- [ ] **Review account** seeded with a fixed code (§0.2) — *near-blocker, still to do*
-- [ ] `stash2026` removed from `site/booking.html` (§0.3)
+- [x] **Review account** built (§0.2) — *set the two Netlify env vars + deploy*
+- [ ] Developer name set to "Northwood Game Haven" (§0.3a)
+- [ ] Public address checked — shop, not home (§0.3b)
+- [ ] Decided how the privacy policy names the publisher (§0.3c)
+- [ ] `stash2026` removed from `site/booking.html` (§0.4)
 - [ ] App name, short and full descriptions pasted (§1)
 - [ ] Category, contact and privacy URL set (§2)
 - [ ] Icon and feature graphic uploaded (§3)
