@@ -35,9 +35,17 @@ jobs:
         run: |
           npm run sync-web
           npx cap add android
-          node scripts/patch-android.mjs
           npm run assets -- --android || echo "asset generation skipped"
           npx cap sync android
+          # NGH-BUILD 2026-09-12ae — patch LAST, after sync. It used to run
+          # immediately after `cap add`, which relies on nothing downstream
+          # regenerating AndroidManifest.xml or app/build.gradle. That happens
+          # to hold today, but if a future Capacitor ever rewrites either, the
+          # App Links, the CAMERA permission and the versionCode stamp would
+          # vanish silently — a QR scanner that does nothing and a Play upload
+          # rejected after it finishes. The script is idempotent, so running it
+          # last is free and removes the whole class of failure.
+          node scripts/patch-android.mjs
       - name: Build debug APK
         working-directory: capacitor/android
         run: ./gradlew assembleDebug --no-daemon
