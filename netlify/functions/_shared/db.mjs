@@ -55,6 +55,18 @@ export async function ensureSchema() {
     data          JSONB NOT NULL,
     created_at    TIMESTAMPTZ DEFAULT now()
   )`);
+  // NGH-BUILD 2026-09-12y — account deletion requests.
+  // Google Play requires both an in-app path and a public web URL where a
+  // customer can ask for their account to be deleted. A Guru does the actual
+  // removal, so this table is the queue and the audit trail: who asked, when,
+  // from where, and whether it has been dealt with.
+  await createIfMissing(sql`CREATE TABLE IF NOT EXISTS deletion_requests (
+    id            TEXT PRIMARY KEY,
+    email         TEXT,
+    status        TEXT,
+    data          JSONB NOT NULL,
+    created_at    TIMESTAMPTZ DEFAULT now()
+  )`);
   _schemaReady = true;
 }
 

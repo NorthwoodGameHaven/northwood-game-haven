@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<!-- NGH · Account deletion request — NGH-BUILD 2026-09-12y
+     This page exists because Google Play requires a publicly reachable URL
+     where somebody can ask for their account to be deleted, separate from the
+     in-app path in site/app/account.html. It is declared in the Play Data
+     safety form. Requirements Google checks: the URL loads without error, the
+     deletion path is prominent and easy to find on it, and it names the app.
+
+     It must keep working for a person who has already uninstalled the app, so
+     it asks for nothing but an email address and does not require sign-in.
+     Nothing is deleted automatically — POST /api/account/delete-request queues
+     it and emails the shop. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delete your account — Northwood Game Haven</title>
+<meta name="description" content="Request deletion of your Northwood Game Haven account and the personal information held in the Game Haven app.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--forest-dk:#132a1d;--panel:#17321f;--panel-2:#1c3d27;--gold:#c9973a;--gold-lt:#e8b84b;
+    --cream:#f6efdd;--line:rgba(232,184,75,.28);--muted:rgba(246,239,221,.72);--ink:#132a1d;
+    --fd:'Cinzel Decorative',Georgia,serif;--fh:'Cinzel',Georgia,serif;--fb:'Nunito',system-ui,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--forest-dk);color:var(--cream);font-family:var(--fb);line-height:1.6;
+    background-image:radial-gradient(1200px 600px at 50% -10%,rgba(61,122,84,.3),transparent 60%)}
+  .wrap{max-width:780px;margin:0 auto;padding:40px 20px 80px}
+  header{text-align:center;margin-bottom:32px}
+  header img{width:96px;max-width:100%}
+  h1{font-family:var(--fd);color:var(--gold-lt);font-size:2rem;margin:14px 0 4px;line-height:1.2}
+  .sub{font-family:var(--fh);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-size:.82rem}
+  h2{font-family:var(--fh);color:var(--gold-lt);font-size:1.15rem;margin:30px 0 8px;font-weight:600}
+  p,li{color:var(--muted)}
+  a{color:var(--gold-lt)}
+  ul{padding-left:22px}
+  .card{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);
+    border-radius:16px;padding:20px 22px;margin:22px 0}
+  .card p:last-child{margin-bottom:0}
+  label{display:block;font-family:var(--fh);font-size:.84rem;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--gold-lt);margin:14px 0 5px}
+  input,textarea{width:100%;padding:12px 13px;border-radius:10px;border:1px solid var(--line);
+    background:rgba(0,0,0,.28);color:var(--cream);font:400 1rem var(--fb);outline:none}
+  input:focus,textarea:focus{border-color:var(--gold-lt)}
+  textarea{min-height:88px;resize:vertical}
+  button{margin-top:18px;width:100%;padding:14px 18px;border:0;border-radius:999px;cursor:pointer;
+    background:linear-gradient(180deg,var(--gold-lt),var(--gold));color:var(--ink);
+    font:800 1.02rem var(--fb);letter-spacing:.01em}
+  button[disabled]{opacity:.6;cursor:default}
+  .err{color:#ff9b8a;font-size:.92rem;margin-top:10px;min-height:1.2em}
+  .done{display:none;text-align:center}
+  .done .tick{font-size:2.4rem;line-height:1}
+  footer{margin-top:50px;padding-top:20px;border-top:1px solid var(--line);text-align:center;font-size:.88rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/brand/crest.png" alt="">
+    <h1>Delete your account</h1>
+    <div class="sub">Northwood Game Haven · Game Haven app</div>
+  </header>
+
+  <p>You can ask us to delete your Northwood Game Haven account — the one you sign
+  into in the <b>Game Haven</b> app and use for rewards at the register — along with
+  the personal information attached to it. You do not need the app installed, and
+  you do not need to sign in.</p>
+
+  <div class="card" id="formCard">
+    <h2 style="margin-top:0">Ask us to delete it</h2>
+    <p>Use the email address on the account. We will email you to confirm.</p>
+    <form id="f" novalidate>
+      <label for="email">Email address</label>
+      <input id="email" type="email" inputmode="email" autocomplete="email"
+             autocapitalize="off" spellcheck="false" placeholder="you@example.com" required>
+
+      <label for="name">Your name <span style="text-transform:none;letter-spacing:0;color:var(--muted)">(optional)</span></label>
+      <input id="name" autocomplete="name" placeholder="So we can find you">
+
+      <label for="note">Anything to add? <span style="text-transform:none;letter-spacing:0;color:var(--muted)">(optional)</span></label>
+      <textarea id="note" placeholder="Optional — tell us if only part of it should go."></textarea>
+
+      <button type="submit" id="go">Request deletion</button>
+      <div class="err" id="err" role="alert"></div>
+    </form>
+  </div>
+
+  <div class="card done" id="doneCard">
+    <div class="tick">✅</div>
+    <h2>That's with us</h2>
+    <p>We have emailed you a confirmation. A person here will deal with it within
+    30 days and email you again when it is done.</p>
+    <p style="margin-top:10px">Nothing to do at your end. If you did not mean to send
+    this, just reply to that email.</p>
+  </div>
+
+  <h2>What gets deleted</h2>
+  <ul>
+    <li>Your customer record — name, email address and phone number</li>
+    <li>Your rewards balance and customer code</li>
+    <li>Room bookings and event registrations held under that address</li>
+    <li>Display names you have used in Karaoke Battle, Team Trivia and Speed Gaming</li>
+  </ul>
+
+  <h2>What we have to keep</h2>
+  <p>Records of completed purchases — the receipt, what was bought and what it cost.
+  We are required to keep those for tax and accounting, so they stay, with your
+  personal details removed from them where we can. This is the same exception
+  described in our <a href="/privacy">privacy policy</a>.</p>
+
+  <h2>How long it takes</h2>
+  <p>Within 30 days. In practice it is usually the next time somebody is at the desk.</p>
+
+  <h2>Rather just email us?</h2>
+  <p>That works too — write to
+  <a href="mailto:stash@northwoodgamehaven.com?subject=Account%20deletion%20request">stash@northwoodgamehaven.com</a>
+  from the address on the account and say you would like it deleted. You can also
+  ask a Guru in person at 115 W Spring St, Chippewa Falls, WI 54729.</p>
+
+  <h2>Inside the app</h2>
+  <p>If you still have the Game Haven app, there is the same option under
+  <b>Rewards → Delete my account</b>.</p>
+
+  <footer>
+    <p><a href="/">Northwood Game Haven</a> · <a href="/privacy">Privacy policy</a><br>
+    115 W Spring St, Chippewa Falls, WI 54729</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var f = document.getElementById('f'), err = document.getElementById('err'),
+      go = document.getElementById('go');
+  function fail(m) { err.textContent = m; go.disabled = false; go.textContent = 'Request deletion'; }
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    err.textContent = '';
+    var email = document.getElementById('email').value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { fail('Please enter a valid email address.'); document.getElementById('email').focus(); return; }
+    go.disabled = true; go.textContent = 'Sending…';
+    fetch('/api/account/delete-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email,
+        name: document.getElementById('name').value.trim(),
+        note: document.getElementById('note').value.trim()
+      })
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var j = null; try { j = t ? JSON.parse(t) : null; } catch (x) {}
+        if (!r.ok) throw new Error((j && j.error) || ('Something went wrong (' + r.status + ').'));
+        return j;
+      });
+    }).then(function () {
+      document.getElementById('formCard').style.display = 'none';
+      document.getElementById('doneCard').style.display = 'block';
+      document.getElementById('doneCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }).catch(function (e2) {
+      fail((e2 && e2.message) || 'Could not send that. Please email stash@northwoodgamehaven.com instead.');
+    });
+  });
+})();
+</script>
+</body>
+</html>

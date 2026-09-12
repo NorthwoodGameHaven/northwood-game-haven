@@ -98,6 +98,35 @@ try {
     // an earlier toast ("Signed in…") can still be on screen — wait for the save message itself
     await page.waitForFunction(() => { const t = document.querySelector('.toast.show'); return t && /Profile saved/.test(t.textContent); }, null, { timeout: 8000 }).catch(() => {});
     ok('account: profile save toast', ((await page.textContent('.toast')) || '').includes('Profile saved'));
+
+    // ---- in-app account deletion (NGH-BUILD 2026-09-12y) ----
+    // Google Play requires an in-app path as well as the public web URL. Two
+    // taps on purpose: the first reveals the explanation, it does not send.
+    ok('delete: the option is on the rewards screen', await page.isVisible('#btnDelStart'));
+    ok('delete: nothing is exposed before you ask', await page.isHidden('#delPanel'));
+    await page.click('#btnDelStart');
+    await page.waitForSelector('#delPanel:not([hidden])');
+    ok('delete: explains what goes and what is kept',
+      /tax/i.test(await page.textContent('#delPanel')) && /30 days/i.test(await page.textContent('#delPanel')));
+    ok('delete: links to the privacy policy',
+      await page.$eval('#delPanel a[href="/privacy"]', (a) => !!a).catch(() => false));
+    await page.click('#btnDelCancel');
+    ok('delete: "never mind" backs all the way out',
+      (await page.isHidden('#delPanel')) && (await page.isVisible('#btnDelStart')));
+
+    await page.click('#btnDelStart');
+    const delReq = page.waitForRequest((r) => r.url().includes('/api/account/delete-request') && r.method() === 'POST');
+    await page.click('#btnDelConfirm');
+    const sent = await delReq;
+    const sentBody = JSON.parse(sent.postData() || '{}');
+    ok('delete: posts the signed-in address, not a typed one', sentBody.email === 'jordan@example.com', sent.postData());
+    ok('delete: sends the session so the shop knows who asked',
+      !!(sent.headers()['x-ngh-session'] || '').length);
+    ok('delete: names the customer for the Guru actioning it', /Jordan/.test(sentBody.name || ''), sentBody.name);
+    await page.waitForSelector('#delDone:not([hidden])', { timeout: 8000 });
+    ok('delete: confirms to the customer', /with us/i.test(await page.textContent('#delDone')));
+    ok('delete: the button cannot be double-fired', await page.isHidden('#delPanel'));
+    await shot(page, '13-account-delete-requested');
     // 401 handling: poison the session and reload
     await page.evaluate(() => localStorage.setItem('ngh_account', JSON.stringify({ session: 'bogus.0.0', email: 'jordan@example.com' })));
     expect401 = true;
@@ -307,6 +336,54 @@ try {
     await shot(page, '41-lightspeed-disconnected');
     await page.close();
   }
+  // ============================================== public account-delete page
+  // This URL goes in the Play Data safety form. Google checks that it loads,
+  // that the deletion path is prominent on it, and that it names the app — and
+  // it has to work for somebody who has already uninstalled, so: no session.
+  {
+    const page = await newPage(ctx, 'account-delete');
+    const resp = await page.goto(BASE + '/account-delete');
+    ok('delete page: /account-delete resolves without the .html', resp && resp.status() === 200, resp && String(resp.status()));
+    const text = await page.textContent('body');
+    ok('delete page: names the app', /Game Haven/.test(text));
+    ok('delete page: says what is deleted', /rewards balance/i.test(text));
+    ok('delete page: discloses the tax retention exception', /tax/i.test(text));
+    ok('delete page: gives a deadline', /30 days/i.test(text));
+    ok('delete page: offers a plain email route too', /stash@northwoodgamehaven\.com/.test(text));
+    ok('delete page: links to the privacy policy', await page.$eval('a[href="/privacy"]', (a) => !!a).catch(() => false));
+    // The page must not depend on being signed in — the person most likely to
+    // use it has already uninstalled the app. Wipe any stored session and
+    // reload: the form still has to be there.
+    await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
+    await page.reload();
+    ok('delete page: renders with no stored session',
+      (await page.isVisible('#f')) && (await page.isVisible('#email')));
+
+    // a bad address must not reach the server
+    let posted = 0;
+    page.on('request', (r) => { if (r.url().includes('/delete-request')) posted++; });
+    await page.fill('#email', 'not-an-email');
+    await page.click('#go');
+    await page.waitForFunction(() => document.getElementById('err').textContent.length > 0, null, { timeout: 5000 });
+    ok('delete page: rejects a bad address in the browser', posted === 0 && /valid email/i.test(await page.textContent('#err')));
+    ok('delete page: the button comes back after a rejection', await page.isEnabled('#go'));
+
+    await page.fill('#email', 'pat@example.com');
+    await page.fill('#note', 'moving out of state');
+    const req = page.waitForRequest((r) => r.url().includes('/api/account/delete-request') && r.method() === 'POST');
+    await page.click('#go');
+    const sentReq = await req;
+    const body = JSON.parse(sentReq.postData() || '{}');
+    ok('delete page: posts what was typed', body.email === 'pat@example.com' && /moving out/.test(body.note || ''));
+    ok('delete page: sends no session — the endpoint must accept it anyway',
+      !sentReq.headers()['x-ngh-session'] && !body.session);
+    await page.waitForSelector('#doneCard', { state: 'visible', timeout: 8000 });
+    ok('delete page: confirms and hides the form',
+      (await page.isVisible('#doneCard')) && !(await page.isVisible('#formCard')));
+    await shot(page, '42-account-delete');
+    await page.close();
+  }
+
   await ctx.close();
 } catch (e) {
   issues.push('exception: ' + e.message);

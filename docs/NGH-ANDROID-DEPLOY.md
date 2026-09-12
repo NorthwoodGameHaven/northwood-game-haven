@@ -3,7 +3,14 @@
 
 Nothing here needs a Mac. Everything builds in GitHub Actions; your laptop only generates one file and does some typing.
 
-**Rough timing:** Parts 1–2 are about 20 minutes and you can do them right now. Part 3 (the Play account) has a **verification wait of a few days** — start it first if you want to move fast. Part 6 is the actual upload, ~30 minutes.
+**Rough timing:** Parts 1–2 are about 20 minutes and you can do them right now.
+Part 6 is the actual upload, ~30 minutes.
+
+**Do this before you read any further:** apply for a free **D-U-N-S number**
+from Dun & Bradstreet. It takes **1–2 weeks**, it is the longest lead time in
+this whole process, nothing else waits on it, and Part 3 explains why the
+Organization account it unlocks saves you roughly a month compared with a
+personal one.
 
 ---
 
@@ -110,11 +117,41 @@ Delete `tmp.b64` when you're done — it's your signing key in text form.
 ## Part 3 — Play Console account ($25, then a wait)
 
 1. **play.google.com/console** → sign in → **Create developer account**.
-2. **Choose the account type carefully:**
-   - **Organization** — needs a **D-U-N-S number** (free from Dun & Bradstreet, takes 1–2 weeks). The listing says "Northwood Game Haven".
-   - **Personal** — immediate, listing says your name.
-   
-   You can change it later but it's fiddly. If you want the store's name on the listing and can wait, go Organization. If you want the app in testers' hands this month, go Personal.
+2. **Choose the account type carefully. This is the single most consequential
+   click in the whole process** *(corrected 2026-09-12x — the earlier advice
+   here was wrong in a way that would have cost you a month)*:
+
+   - **Organization** — needs a **D-U-N-S number** (free from Dun & Bradstreet,
+     takes 1–2 weeks). The listing says "Northwood Game Haven".
+   - **Personal** — registers immediately, listing says your name.
+
+   The name on the listing is the *small* difference. The large one:
+
+   > Personal accounts created after **13 November 2023** cannot publish to
+   > production at all until they have run a **closed test with at least 12
+   > testers, opted in continuously for 14 days**, and then applied for
+   > production access and been approved (Google's review of that application
+   > is typically up to 7 days on top).
+
+   So the choice is really:
+
+   | | Time to a public listing | Needs 12 real testers? |
+   |---|---|---|
+   | **Organization** | D-U-N-S 1–2 weeks, then verification | **No** — this requirement is scoped to personal accounts |
+   | **Personal** | Immediate signup, then **14 days of closed testing with 12 people**, then up to 7 more days | **Yes** |
+
+   **Register as an Organization.** You are a real business with a storefront,
+   the listing should say Northwood Game Haven rather than your own name, and
+   the D-U-N-S wait runs in parallel with everything else in this document. The
+   "go Personal to move fast" instinct is a trap: personal is faster to *sign
+   up* and slower to *publish*, and finding twelve people who will keep the app
+   installed for fourteen unbroken days is a genuine chore.
+
+   **Apply for the D-U-N-S number today** — it is free, it is the longest lead
+   time in this whole process, and nothing else waits on it.
+
+   You can convert a personal account to an organization later, but it is
+   fiddly and does not retroactively waive the testing requirement.
 3. Pay the **$25**.
 4. **Identity verification** — Google will ask for ID and, for organizations, business documents. **This takes a few days to a couple of weeks.** You can build the listing while you wait; you just can't publish.
 
@@ -144,13 +181,36 @@ Play rejects any upload whose `versionCode` isn't higher than the last — and i
 
 *(Capacitor hardcodes `versionCode 1`, which would have made your second upload fail. The build now stamps it from package.json — added 2026-09-12m.)*
 
+### 4.2b Two things do not exist yet and will stop the listing
+
+Added 2026-09-12x, after auditing the app against the Play policies rather than
+against this document:
+
+1. ~~**There is no way to delete an account.**~~ **Built 2026-09-12y.** Play
+   requires both an in-app path and a public web URL, and the Data safety form
+   has a required field for the URL. Both now exist:
+   `https://gamehaven.guru/account-delete` and Rewards → Delete my account.
+   Requests queue in a `deletion_requests` table and email you; a Guru does the
+   actual removal. **It has to be deployed before you fill in the form.**
+2. **A reviewer cannot sign in.** Sign-in is an emailed six-digit code, and
+   Google's reviewer has no access to your inbox, so every account-gated screen
+   is unreachable to them. Needs a seeded review account with a fixed code.
+   *Still outstanding.*
+
+Both are written up, with the decision each one needs, in
+**`NGH-PLAY-LISTING-PACK.md` §0**.
+
 ### 4.3 Store assets
+
+The full paste-ready copy, every Data safety answer, the content-rating
+answers and the App access text now live in **`NGH-PLAY-LISTING-PACK.md`** —
+use that rather than the sketch below, which it supersedes.
 
 | Asset | Spec | Notes |
 |---|---|---|
 | App icon | **512×512** PNG, no transparency | The crest on the forest-green background |
 | Feature graphic | **1024×500** PNG | Banner at the top of the listing. No small text — it gets scaled down hard |
-| Phone screenshots | **at least 2**, up to 8 | Take these on a real phone |
+| Phone screenshots | **at least 2**, up to 8 | 15 drafts exist: `node tests/app-store-shots.mjs` → `tests/store-shots/`. Re-shoot on the phone for the real fonts |
 | Short description | ≤ 80 characters | |
 | Full description | ≤ 4000 characters | |
 
@@ -254,11 +314,38 @@ Right now `gamehaven.guru/app/...` links open the browser. To fix that, Google n
 
 ## Part 8 — Going public
 
-Once internal testing feels right:
+Once internal testing feels right — **but which path you take depends on the
+account type you picked in Part 3.**
+
+### If you registered as an Organization
 
 **Production** → **Create new release** → same AAB → roll out.
 
-First review takes **a few days to two weeks** for a new developer account. Later updates are usually hours.
+First review takes **a few days to two weeks** for a new developer account.
+Later updates are usually hours.
+
+### If you registered as a Personal account
+
+You cannot go straight to production, and the button will not let you. You have
+to serve the 14 days first:
+
+1. **Testing → Closed testing → Create a new track** (or use the default
+   "Alpha"). Internal testing does **not** count toward this — it has to be a
+   closed track.
+2. Add **at least 12 testers** by email, or via a Google Group. They each have
+   to open the opt-in link and **accept**. Twelve people who opted in and then
+   opted out do not count.
+3. They must stay opted in for **14 continuous days**. If someone drops out and
+   the count falls below 12, the clock restarts. Recruit 15 or 16 so you have
+   slack — Gurus, regulars, the Thursday Commander table.
+4. On day 15: **Dashboard → Apply for production**. You will be asked what you
+   learned from the test and what you changed. Answer it properly; a one-line
+   answer gets bounced.
+5. Google reviews the application, typically **up to 7 days**.
+6. *Then* Production → Create new release.
+
+Realistically that is **three weeks minimum** from the day the twelfth tester
+accepts. This is exactly why Part 3 recommends registering as an Organization.
 
 If it's rejected, the reason is in the Play Console inbox and is usually specific. The two likely ones:
 
@@ -269,15 +356,19 @@ If it's rejected, the reason is in the Play Console inbox and is usually specifi
 
 ## Checklist
 
+- [ ] **D-U-N-S number applied for** (do this first — 1–2 week lead time)
 - [ ] Debug APK installed and tested on a real phone (Part 1)
 - [ ] `ngh-upload.jks` created and **backed up in two places**
 - [ ] Four GitHub secrets set; the release AAB builds
-- [ ] Play Console account paid for and verified
-- [ ] `https://gamehaven.guru/privacy` is live and you've read it
+- [ ] Play Console account paid for and verified — **as an Organization** (Part 3)
+- [x] **Account deletion**: in-app path + public web URL *(built 2026-09-12y — deploy, then check `https://gamehaven.guru/account-delete` loads)*
+- [ ] **Review account** seeded with a fixed sign-in code *(does not exist yet)*
+- [ ] `stash2026` removed from `site/booking.html`
+- [x] `https://gamehaven.guru/privacy` is live *(verified 2026-09-12x)* — read it
 - [ ] Version bumped in `capacitor/package.json`
-- [ ] Icon, feature graphic, 2+ screenshots
-- [ ] Data safety form matches the privacy page
-- [ ] Content rating done
+- [ ] Icon, feature graphic, 2+ screenshots *(drafts exist; re-shoot for real fonts)*
+- [ ] Data safety form matches the privacy page (`NGH-PLAY-LISTING-PACK.md` §4)
+- [ ] Content rating done (`NGH-PLAY-LISTING-PACK.md` §5)
 - [ ] Internal testing release live, installed from Play on your phone
 - [ ] `assetlinks.json` has the real SHA-256; App Links verified
 - [ ] Camera QR scan tested on a real device *(never yet tested)*

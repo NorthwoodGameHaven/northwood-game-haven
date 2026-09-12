@@ -18,7 +18,12 @@
 //   GET  /me       session → {customer, loyalty:{ratio,currency}, purchases, bookings, registrations, orders}
 //   PUT  /me       session {first_name,last_name,phone,email,do_not_email} → {customer}
 //   POST /logout   session → {ok}  (tokens are stateless; the app just forgets it)
+//   POST /delete-request  PUBLIC  {email, name?, note?} → {ok}
+//        Queues an account-deletion request and emails the shop + the requester.
+//        Deletes nothing itself — a Guru actions it. Public on purpose: Google
+//        Play requires a deletion URL that works without the app.
 // ---------------------------------------------------------------------
+import crypto from 'node:crypto';
 import { sql, ensureSchema } from './_shared/db.mjs';
 import { sendBrandedMail } from './_shared/email.mjs';
 import { ticketUrl } from './_shared/ticket.mjs';
@@ -99,6 +104,78 @@ export default async (req) => {
       if (customer) customer.customer_group = customer.customer_group || await customerGroupName(customer.customer_group_id);
       const id = customer ? customer.id : core.pseudoId(email);
       return json({ session: core.issueSession(core.secret(), id), customer, email });
+    }
+
+    // ---- POST /delete-request  PUBLIC ----
+    // NGH-BUILD 2026-09-12y. Google Play requires an in-app path AND a public
+    // web URL for account-deletion requests, so this route deliberately does
+    // NOT require a session: site/account-delete.html has to work for somebody
+    // who has uninstalled the app or cannot get in. The app sends its session
+    // when it has one, purely so the record says who was signed in.
+    //
+    // Nothing is deleted here. A Guru actions it by hand — the customer's sales
+    // history lives in Lightspeed and some of it has to be kept for tax, so an
+    // automated purge is the wrong shape. This writes the queue row and sends
+    // the two emails.
+    if (head === 'delete-request' && req.method === 'POST') {
+      const b = (await readJson(req)) || {};
+      const email = String(b.email || '').trim().toLowerCase();
+      if (!core.validEmail(email)) return bad('please enter a valid email address');
+      const name = cleanName(b.name);
+      const note = String(b.note || '').trim().slice(0, 1000);
+      const sess = sessionOf(req, url, b);
+
+      // Three per hour per address. Over that we still answer ok — the reply
+      // must not become a way to probe which addresses have accounts, and a
+      // frustrated double-tap should not page the shop four times.
+      const recent = await sql`SELECT count(*)::int AS n FROM deletion_requests
+        WHERE email = ${email} AND created_at > now() - interval '1 hour'`;
+      if (recent.length && recent[0].n >= 3) return json({ ok: true, queued: false });
+
+      const id = 'del_' + Date.now().toString(36) + '_' + crypto.randomBytes(4).toString('hex');
+      const record = {
+        id, email, name, note,
+        source: sess ? 'app' : 'web',
+        signedInAs: sess ? (sess.pseudo ? null : sess.customerId) : null,
+        requestedAt: new Date().toISOString()
+      };
+      await sql`INSERT INTO deletion_requests (id, email, status, data)
+                VALUES (${id}, ${email}, 'open', ${JSON.stringify(record)}::jsonb)`;
+
+      const adminEmail = process.env.ADMIN_EMAIL || 'stash@northwoodgamehaven.com';
+      await sendBrandedMail(adminEmail, 'Account deletion request — ' + email, {
+        heading: 'Someone has asked to be deleted',
+        bodyText:
+          'A customer has asked us to delete their Haven account.\n\n' +
+          'Email: ' + email + '\n' +
+          (name ? 'Name they gave: ' + name + '\n' : '') +
+          'Came from: ' + (sess ? 'inside the app, signed in' : 'the website form') + '\n' +
+          (record.signedInAs ? 'Lightspeed customer id: ' + record.signedInAs + '\n' : '') +
+          (note ? '\nWhat they said:\n' + note + '\n' : '') +
+          '\nRequest id: ' + id + '\n\n' +
+          'We tell people this is done within 30 days. What to remove: their ' +
+          'Lightspeed customer record (or its personal fields), and any bookings ' +
+          'or event registrations held under that address. Completed sales have ' +
+          'to be kept for tax — the privacy page says so.\n\n— Northwood Game Haven',
+        replyTo: email
+      }).catch((e) => { console.error('[account] deletion admin mail failed', e && e.message); });
+
+      // Confirmation to the requester. Deliberately worded so that it is not a
+      // disclosure: it confirms the REQUEST, never that an account exists.
+      await sendBrandedMail(email, 'We got your deletion request', {
+        heading: 'Your request is with us',
+        bodyText:
+          'Hi' + (name ? ' ' + name : '') + ',\n\n' +
+          'We have received your request to delete your Northwood Game Haven ' +
+          'account and the personal details attached to it. A person here will ' +
+          'take care of it within 30 days and email you when it is done.\n\n' +
+          'Records of completed purchases are kept for tax and accounting, as ' +
+          'described at gamehaven.guru/privacy — everything else goes.\n\n' +
+          'If you did not make this request, reply to this email and we will ' +
+          'stop it.\n\nReference: ' + id + '\n\n— Northwood Game Haven'
+      }).catch((e) => { console.error('[account] deletion confirmation mail failed', e && e.message); });
+
+      return json({ ok: true, queued: true, id });
     }
 
     // ---- everything below needs a session ----

@@ -36,6 +36,12 @@
   .amount{font-weight:800;color:var(--gold-lt);white-space:nowrap}
   .empty{color:var(--muted);font-size:.9rem;padding:6px 0}
   .signout{text-align:center;padding:10px 0 4px}
+  .danger-zone{text-align:center;padding:18px 4px 6px;margin-top:10px;border-top:1px solid rgba(246,239,221,.12)}
+  .danger-zone .small{text-align:left;color:rgba(246,239,221,.66);font-size:.86rem;line-height:1.5;margin:10px 0}
+  .danger-zone .linky{background:none;border:0;color:rgba(246,239,221,.55);font:600 .86rem var(--font-body);
+    text-decoration:underline;cursor:pointer;padding:6px 10px}
+  .danger-zone .linky:hover{color:var(--cream)}
+  .btn.danger{background:linear-gradient(180deg,#a3374a,#7d2334);color:#fff}
   .staffcode{border-color:var(--teal)}
   .staffcode .code-big{font-size:1.6rem;margin:2px 0 4px}
 </style>
@@ -173,6 +179,30 @@
     </section>
 
     <div class="signout"><button class="btn ghost sm" id="btnSignOut">Sign out</button></div>
+
+    <!-- NGH-BUILD 2026-09-12y — Google Play requires an in-app path to request
+         account deletion, as well as the public page at /account-delete.
+         Two taps on purpose: the first only reveals the explanation. -->
+    <div class="danger-zone">
+      <button class="linky" id="btnDelStart">Delete my account</button>
+
+      <div id="delPanel" hidden>
+        <p class="small">This asks us to delete your Haven account and the personal
+        details on it — your name, email, phone, rewards balance and customer code,
+        and any bookings or event registrations under this address.</p>
+        <p class="small">Records of completed purchases are kept for tax, as described
+        in the <a href="/privacy">privacy policy</a>. A person here does it by hand
+        within 30 days, and emails you when it is done.</p>
+        <div class="err" id="delErr"></div>
+        <button class="btn block danger" id="btnDelConfirm">Yes, request deletion</button>
+        <button class="linky" id="btnDelCancel">Never mind</button>
+      </div>
+
+      <div id="delDone" hidden>
+        <p class="small"><b>Your request is with us.</b> Check your email for the
+        confirmation — we will be in touch within 30 days.</p>
+      </div>
+    </div>
   </section>
 
   <div class="footer-links">
@@ -409,6 +439,32 @@
   $('btnSignup').onclick = signup;
   $('btnSave').onclick = saveProfile;
   $('btnSignOut').onclick = signOut;
+
+  // ---- account deletion request (NGH-BUILD 2026-09-12y) ----
+  // Queues it and emails the shop; nothing is destroyed here. The same thing
+  // the public page at /account-delete does, but pre-filled and signed in.
+  $('btnDelStart').onclick = function () {
+    $('delPanel').hidden = false; $('btnDelStart').hidden = true;
+    $('delPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  $('btnDelCancel').onclick = function () {
+    $('delPanel').hidden = true; $('btnDelStart').hidden = false; setErr('delErr', '');
+  };
+  $('btnDelConfirm').onclick = function () {
+    var s = sess(), email = (s && s.email) || (me && me.customer && me.customer.email) || '';
+    if (!email) { setErr('delErr', 'We could not tell which account this is — please use gamehaven.guru/account-delete.'); return; }
+    var b = this; b.disabled = true; b.textContent = 'Sending…'; setErr('delErr', '');
+    var c = (me && me.customer) || {};
+    acct('/api/account/delete-request', {
+      method: 'POST',
+      body: { email: email, name: [c.first_name, c.last_name].filter(Boolean).join(' '), note: 'Requested from inside the app.' }
+    }).then(function () {
+      $('delPanel').hidden = true; $('delDone').hidden = false; NGH.haptic('success');
+    }).catch(function (e) {
+      b.disabled = false; b.textContent = 'Yes, request deletion';
+      setErr('delErr', cap((e && e.message) || 'Could not send that. Email stash@northwoodgamehaven.com instead.'));
+    });
+  };
 
   // ---- boot ----
   var staff = qs.get('c');

@@ -251,6 +251,14 @@
   to   = "/privacy.html"
   status = 200
 
+# NGH-BUILD 2026-09-12y — account deletion. Google Play requires a public URL
+# where a customer can request deletion, declared in the Data Safety form, and
+# it has to keep working for somebody who has uninstalled the app.
+[[redirects]]
+  from = "/account-delete"
+  to   = "/account-delete.html"
+  status = 200
+
 [[redirects]]
   from = "/api/companion/*"
   to   = "/.netlify/functions/companion/:splat"

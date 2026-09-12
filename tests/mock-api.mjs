@@ -29,6 +29,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { liveApi, EVENTS } from './mock-live.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE_DIR = path.resolve(__dirname, '..', 'site');
@@ -94,6 +95,7 @@ const registrations = [
   { id: 'reg_a1b2', eventId: 'ev_cmdr', eventTitle: 'Commander Night', occDate: ymdOffset(3), qty: 1, status: 'confirmed', feePaid: true, payment: 'stripe', ticketUrl: '/ticket/T-A1B2C3' }
 ];
 function ymdOffset(n) { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+const deletionRequests = [];   // POST /api/account/delete-request
 
 let lightspeed = {
   connected: true, mode: 'oauth', domain: 'northwoodgamehaven', expires: Math.floor(now / 1000) + 42 * 60, redirectUri: 'https://gamehaven.guru/api/lightspeed/callback',
@@ -205,6 +207,20 @@ function serveStatic(req, res, pathname) {
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
   } catch {
+    // NGH-BUILD 2026-09-12y — Netlify serves /foo from foo.html without any
+    // redirect rule, and real URLs depend on that: /privacy and /account-delete
+    // are both given out extensionless (the latter goes in the Play Data safety
+    // form). The mock 404'd them, so a page could pass its own tests and still
+    // be unreachable at the address we publish.
+    if (!path.extname(rel)) {
+      try {
+        const alt = path.join(SITE_DIR, rel + '.html');
+        const st = fs.statSync(alt);
+        res.writeHead(200, { 'Content-Type': MIME['.html'], 'Content-Length': st.size, 'Cache-Control': 'no-cache' });
+        if (req.method === 'HEAD') return res.end();
+        return fs.createReadStream(alt).pipe(res);
+      } catch { /* fall through to the 404 below */ }
+    }
     // customer-facing site pages that live in the production repo, not here
     send(res, 404, `<!doctype html><meta charset="utf-8"><title>Not in mock</title><body style="font-family:sans-serif;padding:40px;background:#132a1d;color:#f6efdd"><h1>Not served by the mock</h1><p><code>${pathname.replace(/</g, '&lt;')}</code> is not under <code>site/</code>. <a style="color:#e8b84b" href="/app/">Back to the app</a></p>`, { 'Content-Type': 'text/html; charset=utf-8' });
   }
@@ -216,8 +232,12 @@ async function api(req, res, url) {
   const body = (m === 'POST' || m === 'PUT') ? await readBody(req) : {};
   if (body.__invalid) return bad(res, 'Invalid JSON');
 
+  // ---- the app's live screens (specials / karaoke / trivia / speed gaming / Magic) ----
+  const live = liveApi(p, m, url);
+  if (live) return json(res, live.body, live.status || 200);
+
   // ---- misc used by the app shell ----
-  if (p === '/api/events' && m === 'GET') return json(res, []);
+  if (p === '/api/events' && m === 'GET') return json(res, EVENTS());
   if (p === '/api/tv/time' && m === 'GET') return json(res, { serverNow: Date.now() });
   if (p === '/api/tv/qr.png' && m === 'GET') {
     const data = String(url.searchParams.get('data') || ''); if (!/^(https?:\/\/|\/)/i.test(data)) return bad(res, 'bad data');
@@ -248,6 +268,15 @@ async function api(req, res, url) {
     return json(res, { session, customer: customers.get(email) || null, email });
   }
   if (p === '/api/account/logout' && m === 'POST') { const s = req.headers['x-ngh-session']; if (s) sessions.delete(s); return json(res, { ok: true }); }
+  // NGH-BUILD 2026-09-12y — deliberately above the session gate below, exactly
+  // like the real account.mjs: /account-delete.html has to work signed out.
+  if (p === '/api/account/delete-request' && m === 'POST') {
+    const email = String(body.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return bad(res, 'please enter a valid email address');
+    deletionRequests.push({ id: 'del_mock_' + deletionRequests.length, email, name: String(body.name || ''), note: String(body.note || ''), source: req.headers['x-ngh-session'] ? 'app' : 'web' });
+    log('deletion request', email);
+    return json(res, { ok: true, queued: true, id: 'del_mock_' + (deletionRequests.length - 1) });
+  }
 
   const email = sessionEmail(req) || (body.session && sessions.get(body.session)) || null;
   if (p.startsWith('/api/account/')) {
