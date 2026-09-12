@@ -219,11 +219,28 @@
     window.open(url, '_blank', 'noopener');
   }
   function siteUrl(path) { return /^https?:/i.test(path) ? path : SITE + (path.charAt(0) === '/' ? '' : '/') + path; }
+  // NGH-BUILD 2026-09-12ah — make a directory path explicit before navigating.
+  //
+  // Capacitor's Android WebViewLocalServer serves the ROOT index.html for any
+  // request whose last path segment contains no dot. So in the packaged app
+  // "/app/companion/" did not open the companion index — it served www/index.html,
+  // the stub that redirects to /app/index.html, and the tap silently bounced you
+  // back to the top of the app home page. It worked perfectly on the website,
+  // where Netlify resolves the directory, which is why it survived to a device.
+  //
+  // Every link is now written as .../index.html, and this catches anything that
+  // slips through later — a new page, or a TV QR pointing at a directory.
+  function withIndex(path) {
+    var m = /^([^?#]*)([?#][\s\S]*)?$/.exec(path);
+    var p = m[1], rest = m[2] || '';
+    if (p.charAt(p.length - 1) === '/') p += 'index.html';
+    return p + rest;
+  }
   // Navigate to any site path from script (used instead of location.href = '/events.html…')
   function go(path) {
     if (!path) return;
     if (onSite) { location.href = path; return; }
-    if (path.indexOf('/app/') === 0) { location.href = path; return; }
+    if (path.indexOf('/app/') === 0) { location.href = withIndex(path); return; }
     openExternal(siteUrl(path));
   }
   if (!onSite) {
@@ -232,7 +249,12 @@
       if (!a || e.defaultPrevented) return;
       var h = a.getAttribute('href') || '';
       if (!h || h.charAt(0) === '#' || /^(tel|mailto|sms|geo|maps):/i.test(h) || /^javascript:/i.test(h)) return;
-      if (h.indexOf('/app/') === 0) return;                          // bundled shell page
+      if (h.indexOf('/app/') === 0) {                                // bundled shell page
+        // A directory href would hit the root-index fallback described above.
+        var fixed = withIndex(h);
+        if (fixed !== h) { e.preventDefault(); location.href = fixed; }
+        return;
+      }
       if (h.charAt(0) === '/' || /^https?:/i.test(h)) {
         if (/^https?:\/\/(localhost|capacitor)/i.test(h)) return;
         e.preventDefault(); openExternal(siteUrl(h));
@@ -247,7 +269,7 @@
       if (App) App.addListener('appUrlOpen', function (ev) {
         try {
           var u = new URL(ev.url);
-          if (u.pathname.indexOf('/app/') === 0) location.href = u.pathname + u.search + u.hash;
+          if (u.pathname.indexOf('/app/') === 0) location.href = withIndex(u.pathname + u.search + u.hash);
           else if (/gamehaven\.guru$/.test(u.hostname)) openExternal(ev.url);
         } catch (e) {}
       });

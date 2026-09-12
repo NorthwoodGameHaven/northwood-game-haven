@@ -6,10 +6,22 @@ Nothing here needs a Mac. Everything builds in GitHub Actions; your laptop only 
 **Rough timing:** Parts 1–2 are about 20 minutes and you can do them right now.
 Part 6 is the actual upload, ~30 minutes.
 
-**Where you are (2026-09-12):** D-U-N-S number and a verified **organization**
-Play Console account are both done (Part 3), which means no closed-testing
-wait — you can publish straight to production. What is left is the upload key
-(Part 2), two environment variables (4.2b), and the listing itself.
+**Where you are (2026-09-12):** D-U-N-S, a verified **organization** Play
+Console account, the upload key, the four GitHub secrets, account deletion and
+the review account are all done. **The signed release AAB builds** — run #9 at
+`62c23e8` produced both `game-haven-debug-apk` and `game-haven-release-aab`,
+with the log confirming `Keystore decoded: 2786 bytes`.
+
+Because the account is an organization, there is **no closed-testing wait** —
+you can publish straight to production. What is left is: test the debug APK on
+a real phone (it has still never run on one), then create the app in Play
+Console and paste in the listing.
+
+> **Careful with "Re-run all".** A re-run replays the ORIGINAL run's commit, not
+> the latest. Re-running an old run on 2026-09-12 rebuilt a commit that was 23
+> commits and 142 files behind `main` — it succeeded, and the artifacts were
+> useless. To build current code, always use **Run workflow** on the workflow's
+> own page, and check the run header shows the commit you expect.
 
 Nothing left is waiting on anyone else — it is all work you control.
 
@@ -28,26 +40,99 @@ Nothing left is waiting on anyone else — it is all work you control.
 
 ---
 
-## Part 1 — Test what you already have (10 minutes, free, no accounts)
+## Part 1 — Get the app onto your phone and actually use it
 
-Do this first. It proves the build works before you spend money.
+*The build works (run #9). This is the step that has never been done: the app
+has never run on real hardware.*
 
-1. Go to **github.com/NorthwoodGameHaven/northwood-game-haven** → **Actions** tab.
-2. Left sidebar → **NGH App (Android)**.
-3. **Run workflow** button (right side) → branch `main` → green **Run workflow**.
-4. Wait ~5–8 minutes. Click into the run when it goes green.
-5. Scroll to **Artifacts** at the bottom → download **`game-haven-debug-apk`**.
-6. Unzip it. You'll get `app-debug.apk`.
-7. Get it onto your phone — email it to yourself, or drop it in Google Drive and open it there.
-8. Tap it. Android will say "you can't install unknown apps" → **Settings** → allow for that app → back → **Install**.
+### 1a. Download the APK — on the laptop, not the phone
 
-**Now actually test it.** In rough priority:
+GitHub only lets a signed-in account download artifacts, and it hands them over
+as a **ZIP**. Android cannot install a ZIP. So: laptop first.
 
-- **Game Companion → Turn tracker.** Two phones on the same code. Check the **haptic buzz on end-turn** — that's native, and it's your best defence if Apple ever pushes back on "this is just a website".
-- **Karaoke → join a session → Scan.** The camera QR scanner. *This was broken before 2026-09-12i — `CAMERA` was missing from the manifest, so it failed silently in the packaged app while working fine in a mobile browser. Never been tested on a real device.*
-- **Speed Gaming** and **Magic** — new screens, first time in the app.
-- **Trivia → Join.** Should open the player **inside the app**, no browser address bar. New in 2026-09-12l.
-- Text yourself a `gamehaven.guru/app/...` link and tap it. It should open **in the app**. If it opens the browser, App Links aren't verified yet — that's Part 7, expected.
+1. Open the run:
+   **github.com/NorthwoodGameHaven/northwood-game-haven/actions** → **NGH App
+   (Android)** → the newest run with a green tick. Check the commit next to the
+   branch name is the one you expect.
+2. Scroll to the very bottom — **Artifacts**.
+3. Click **`game-haven-debug-apk`**. You get `game-haven-debug-apk.zip` in
+   Downloads.
+4. **Right-click it → Extract All → Extract.** Inside is **`app-debug.apk`**.
+   That is the file you want. If you skip this and send the ZIP to your phone,
+   Android will just shrug at it.
+
+> Use the **debug** APK for this, not the release AAB. An `.aab` is not an app —
+> it is a bundle Google opens and turns into per-device APKs. Nothing but Play
+> can install it.
+
+### 1b. Get it to the phone
+
+Any of these; pick whichever you already have open.
+
+| | How |
+|---|---|
+| **Google Drive** *(easiest)* | Upload `app-debug.apk` to Drive on the laptop → open the Drive app on the phone → tap the file |
+| **USB cable** | Plug in, set the phone to **File transfer**, drop the APK into `Downloads`, then open **Files** on the phone |
+| **Email** | Send it to yourself. Gmail may block a `.apk` attachment — if it does, use Drive |
+| **Quick Share** | Windows 11 → right-click → Share → Quick Share, if your phone supports it |
+
+### 1c. Install it
+
+1. Tap `app-debug.apk` on the phone.
+2. Android blocks it: **"For your security, your phone is not allowed to install
+   unknown apps from this source."** Tap **Settings** → turn on **Allow from
+   this source** → press **Back**. *(The permission attaches to the app you
+   tapped from — Drive, Files, Chrome — so if you switch methods later you will
+   be asked again.)*
+3. Tap **Install**.
+4. **Play Protect will probably warn you: "Unsafe app blocked" or "App scan
+   recommended".** Tap **More details** → **Install anyway**. This is normal and
+   expected — the APK is signed with a debug key, not your upload key, so Google
+   has never seen it before. It is not a sign anything is wrong.
+5. Open **Game Haven** from the app drawer.
+
+> **Uninstall this debug build before you ever install the app from Play.** Same
+> package name (`guru.gamehaven.app`), different signature — Android refuses to
+> install over it and the error does not explain why.
+
+### 1d. What to actually test
+
+Two lists, because half of this needs something running at the Haven.
+
+**Works anywhere, no session needed — do these first:**
+
+- [ ] The app opens without a white screen or a browser address bar
+- [ ] **Game Companion → Who goes first** — several fingers on the screen, one wins
+- [ ] **Game Companion → Life counter** — 2–6 players, 20/30/40, Commander damage, undo
+- [ ] **Game Companion → RPG tools** — build a dice formula, roll, advantage/disadvantage
+- [ ] **Turn tracker on two phones** — same code on both; the **haptic buzz on end-turn** is the single most important native behaviour in the app
+- [ ] **Rewards** — sign in with your own email and the code you are emailed. Balance, customer code and QR should render
+- [ ] **Specials**, **Shop**, the **libraries** and **tonight's events** all load
+- [ ] Turn on **airplane mode** and reopen Game Companion — the tools must still work. That is the offline promise on the store listing
+- [ ] Nothing scrolls sideways on any screen
+
+**⚠️ The one that has never worked on a device:**
+
+- [ ] **Karaoke → Join → Scan.** Does the camera actually open and ask permission?
+      *`CAMERA` was missing from the manifest until 2026-09-12i, so this failed
+      silently in the packaged app while working perfectly in a mobile browser.
+      You do not need a valid QR code to test it — you only need the camera
+      view to appear. If it does nothing, that is the bug back again.*
+
+**Needs a live session — start one from the Guru console:**
+
+- [ ] **Speed Gaming** — check in, see a table/partner/opponents and the countdown
+- [ ] **Magic night** — the event code and pairings link
+- [ ] **Trivia → Join** — must open **inside the app**, with no browser address bar
+
+**Expected to FAIL for now, do not chase it:**
+
+- [ ] Text yourself `https://gamehaven.guru/app/karaoke/join.html` and tap it. It
+      will open the **browser**, not the app. App Links need the Play signing
+      SHA-256 in `assetlinks.json`, which does not exist until after your first
+      upload — that is Part 7.
+
+Anything broken here is far cheaper to find now than after a reviewer finds it.
 
 ---
 
@@ -186,7 +271,17 @@ Clear your clipboard afterwards (copy anything else) — it currently holds
 your signing key in text form. If you did use `certutil` and made a
 `tmp.b64`, delete that file too.
 
-**Check it worked:** Actions → NGH App (Android) → Run workflow. When it finishes there should now be **two** artifacts: the debug APK *and* `game-haven-release-aab`. That `.aab` is what Play wants.
+**Check it worked:** Actions → NGH App (Android) → **Run workflow** (on the
+workflow's page, not inside a run). When it finishes there should be **two**
+artifacts: the debug APK *and* `game-haven-release-aab`. That `.aab` is what
+Play wants. The signing step prints `Keystore decoded: N bytes` when the
+secret was good, before Gradle starts.
+
+> Every run shows **2 warnings** — Node 20 deprecation and `setup-java@v4`.
+> Both are GitHub deprecating action versions, not faults in the build, and
+> the actions are already being forced onto Node 24 successfully. Bumping the
+> five actions to `@v5` is a tidy-up for a quiet moment, not something to do
+> while you are depending on the build working.
 
 ---
 
@@ -413,14 +508,15 @@ specific. The likely ones, in order:
 - [x] **D-U-N-S number** — 14-743-1636
 - [x] **Play Console account** — organization, verified, `7315290518002454172`
 - [ ] Debug APK installed and tested on a real phone (Part 1)
-- [ ] `ngh-upload.jks` created and **backed up in two places**
-- [ ] Four GitHub secrets set; the release AAB builds
+- [x] `ngh-upload.jks` created and backed up — *regenerated 2026-09-12 after the first one was exposed; 2,786 bytes*
+- [x] Four GitHub secrets set; **release AAB builds** — run #9 at `62c23e8`, 3m 16s, both artifacts, log confirms `Keystore decoded: 2786 bytes`
 - [x] `PLAY_REVIEW_EMAIL` + `PLAY_REVIEW_CODE` set in Netlify and deployed — *verified live 2026-09-12*
-- [ ] Developer name set to "Northwood Game Haven"; public address = the shop
+- [x] Developer name set — `Northwood Experiences LLC`
+- [ ] Public address on the developer page = the shop, not the house *(waiting on D-U-N-S / ID verification)*
 - [x] **Account deletion**: in-app path + public web URL — *`https://gamehaven.guru/account-delete` verified live 2026-09-12*
 - [x] `stash2026` removed from `site/booking.html` *(12aa — also closed a fail-open)*
 - [x] `https://gamehaven.guru/privacy` is live *(verified 2026-09-12x)* — read it
-- [ ] Version bumped in `capacitor/package.json`
+- [ ] Version bumped in `capacitor/package.json` *(1.0.0 → versionCode 10000 is fine for the FIRST upload; bump before the second)*
 - [ ] Icon, feature graphic, 2+ screenshots *(drafts exist; re-shoot for real fonts)*
 - [ ] Data safety form matches the privacy page (`NGH-PLAY-LISTING-PACK.md` §4)
 - [ ] Content rating done (`NGH-PLAY-LISTING-PACK.md` §5)
