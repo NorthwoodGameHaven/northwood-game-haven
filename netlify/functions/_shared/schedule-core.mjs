@@ -549,11 +549,28 @@ export function conflictsFor(date, dayItems, coverage) {
     }
   }
 
-  // 5. The store is open with nobody on the floor.
+  // 5. The store is open with nobody rostered on the floor.
+  //
+  // "Nobody on the floor" and "nobody in the building" are different problems,
+  // and conflating them buries the real one. A Tuesday where Chad is running
+  // Gundam night in the Holt is not an empty shop — it is an unrostered shop,
+  // which usually just means the shift was never written down. So each gap
+  // carries who is actually on site during it, and the wording follows.
   for (const gap of ((coverage && coverage.gaps) || [])) {
+    const inBuilding = uniq(real
+      .filter(i => !i.offsite && i.gurus.length && (i.allDay || (i.sMin < gap.eMin && gap.sMin < i.eMin)))
+      .reduce((acc, i) => acc.concat(i.gurus.map(g => ({ guru: g, what: i.title, key: i.key }))), [])
+      .map(x => JSON.stringify(x))).map(s => JSON.parse(s));
+    const names = uniq(inBuilding.map(x => x.guru));
     out.push({
       type: 'store-uncovered', date, sMin: gap.sMin, eMin: gap.eMin,
-      detail: 'Store open ' + gap.from + '–' + gap.to + ' with no Guru on the floor'
+      from: gap.from, to: gap.to,
+      inBuilding, unrostered: names.length > 0,
+      detail: names.length
+        ? 'Store open ' + gap.from + '–' + gap.to + ' with no Guru rostered on the floor — ' +
+          names.join(' and ') + (names.length > 1 ? ' are' : ' is') + ' on site (' +
+          uniq(inBuilding.map(x => x.what)).join(', ') + ')'
+        : 'Store open ' + gap.from + '–' + gap.to + ' with nobody in the building'
     });
   }
   return out;

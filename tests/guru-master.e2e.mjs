@@ -183,8 +183,10 @@ ok('and a booking has its own border treatment', styles && styles.bBorder !== st
 
 // ---------------------------------------------------------------- alerts
 const alertText = await page.textContent('#alerts');
-ok('an uncovered stretch of open hours is called out', /Nobody on the floor/i.test(alertText));
-ok('a booking that bought Gurus and is short-staffed is called out', /unstaffed/i.test(alertText));
+ok('issues collapse to one summary line, not a wall of banners',
+  (await page.$$('#alerts .alertbar')).length === 1 && (await page.$$('#alerts .alert')).length === 0);
+ok('the summary counts the kinds of problem', /floor gap/.test(alertText) && /unstaffed/.test(alertText));
+ok('and offers a way to act on them', /Review/.test(alertText));
 ok('an overnight booking is continued onto the next day', gridText.includes('cont.'));
 // A single 3am lock-in must not drag the whole week's grid back to midnight.
 const hourLabels = await page.$$eval('#grid td.hour', els => els.map(e => e.textContent.trim()));
@@ -196,7 +198,57 @@ ok('unavailability is not drawn in the room grid — it belongs in the rail',
   !(await page.$('#grid .ev.unavail')) && !(await page.$('#grid .ev.shift')));
 
 await page.screenshot({ path: path.join(SHOTS, 'guru-master-week.png'), fullPage: true });
+
+// ---------------------------------------------------------------- Review & fix
+await page.click('#alerts button');
+await page.waitForSelector('#resolve-list', { timeout: 5000 });
+const rz = await page.textContent('#resolve-list');
+ok('[resolve] the modal lists the issues', (await page.$$('#resolve-list .rz')).length >= 2);
+ok('[resolve] an uncovered evening where a Guru IS on site says so',
+  /no Guru rostered/.test(rz) && /on site/.test(rz), rz.slice(0, 220));
+ok('[resolve] and offers to roster that person with one click', /Roster \w+ on the floor/.test(rz));
+ok('[resolve] an unstaffed booking offers a Guru picker', /Assign/.test(rz));
+ok('[resolve] a floor gap offers an explicit shift window', /Add shift .*–/.test(rz));
+
+// Roster the person who is already there.
+const rosterBtn = await page.$('#resolve-list button:has-text("Roster")');
+await rosterBtn.click();
+await sleep(700);
+const shiftPost = saved.find(x => x && x.action === 'save-shift');
+ok('[resolve] rostering writes a real store shift', !!shiftPost, JSON.stringify(shiftPost));
+ok('[resolve] with the gap\'s own times', shiftPost && /^\d{2}:\d{2}$/.test(shiftPost.item.open) && shiftPost.item.close > shiftPost.item.open,
+  JSON.stringify(shiftPost && shiftPost.item));
+await page.screenshot({ path: path.join(SHOTS, 'guru-master-resolve.png'), fullPage: true });
+if (await page.isVisible('#modal.open')) await page.click('#modal-box .btn-ghost >> nth=-1');
+await sleep(300);
 saved.push('shot');
+
+// ------------------------------------------------------ shifts from the rail
+const shiftBar = await page.$('#rail .bar.shift');
+ok('[shift] store shifts are drawn in the rail', !!shiftBar);
+await shiftBar.click();
+await page.waitForSelector('#sf-guru', { timeout: 5000 });
+ok('[shift] clicking one opens an editor', /Store shift/.test(await page.textContent('#modal-box')));
+ok('[shift] prefilled with the right Guru', (await page.inputValue('#sf-guru')) === 'Mike');
+ok('[shift] and its actual times', (await page.inputValue('#sf-open')) === '12:00' && (await page.inputValue('#sf-close')) === '17:00');
+ok('[shift] an existing shift can be deleted', /Delete shift/.test(await page.textContent('#modal-box')));
+await page.selectOption('#sf-close', '19:00');
+await page.click('#modal-box .btn:not(.btn-ghost):not(.btn-danger) >> nth=-1');
+await sleep(600);
+const edited = saved.filter(x => x && x.action === 'save-shift').pop();
+ok('[shift] saving posts the edit against the same shift id', edited && edited.item.id === 'GS-1' && edited.item.close === '19:00',
+  JSON.stringify(edited && edited.item));
+
+// An empty cell is where you decide somebody should be working.
+const addCell = await page.$('#rail .free.addshift');
+ok('[shift] an empty rail cell offers to add one', !!addCell);
+await addCell.click();
+await page.waitForSelector('#sf-guru', { timeout: 5000 });
+ok('[shift] adding offers a repeat option', !!(await page.$('#sf-freq')));
+ok('[shift] and no delete button on something that does not exist yet',
+  !/Delete shift/.test(await page.textContent('#modal-box')));
+await page.click('#modal-box .btn-ghost >> nth=-1');
+await sleep(300);
 
 // ---------------------------------------------------------------- filters
 await page.click('#kindchips .chip:nth-child(1)');   // hide bookings
@@ -314,6 +366,17 @@ const bkStyle = await page.evaluate(() => {
 });
 ok('[guru-schedule] a booking does not look like an event', bkStyle && bkStyle.b !== bkStyle.e, JSON.stringify(bkStyle));
 await page.screenshot({ path: path.join(SHOTS, 'guru-schedule-bookings.png'), fullPage: true });
+
+// Shift bands on the Guru Schedule route into its existing shift form rather
+// than growing a second editor that could drift from it.
+ok('[guru-schedule] jumpToShift exists', await page.evaluate(() => typeof jumpToShift === 'function'));
+ok('[guru-schedule] newShiftOn exists', await page.evaluate(() => typeof newShiftOn === 'function'));
+await page.evaluate(() => newShiftOn('2026-09-16'));
+await sleep(400);
+ok('[guru-schedule] adding from a day opens the shift form on that date',
+  (await page.inputValue('#sh-date')) === '2026-09-16');
+ok('[guru-schedule] the shifts view is the one showing',
+  await page.isVisible('#view-shifts'));
 
 // =========================================================================
 // Tonight — the page a Guru reads before a shift.

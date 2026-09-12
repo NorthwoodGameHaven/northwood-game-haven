@@ -84,7 +84,10 @@
   .blk.ev.booking { background:#6e1f2b !important; border-left:5px double rgba(255,255,255,0.85); }
   .blk.ev.booking.pending { background-image:repeating-linear-gradient(45deg, rgba(255,255,255,0.30) 0, rgba(255,255,255,0.30) 4px, transparent 4px, transparent 9px); }
   .blk.ev.booking.unassigned { background:#8b4a52 !important; color:#fff; font-style:normal; }
-  .blk.shift { z-index:1; border:1.5px dashed rgba(90,43,122,0.55); background:repeating-linear-gradient(135deg, rgba(122,80,160,0.14) 0, rgba(122,80,160,0.14) 6px, rgba(122,80,160,0.05) 6px, rgba(122,80,160,0.05) 12px); color:#5a2b7a; cursor:default; }
+  .blk.shift { z-index:1; border:1.5px dashed rgba(90,43,122,0.55); background:repeating-linear-gradient(135deg, rgba(122,80,160,0.14) 0, rgba(122,80,160,0.14) 6px, rgba(122,80,160,0.05) 6px, rgba(122,80,160,0.05) 12px); color:#5a2b7a; cursor:pointer; }   /* NGH-BUILD 2026-09-12r: click to edit */
+  .blk.shift:hover { outline:2px solid rgba(90,43,122,0.5); }
+  .storeline.addable { cursor:pointer; text-decoration:underline dotted; }
+  .storeline.addable:hover { color:var(--forest); }
   .blk.unav { z-index:2; background:repeating-linear-gradient(45deg, rgba(60,60,60,0.16) 0, rgba(60,60,60,0.16) 4px, rgba(60,60,60,0.06) 4px, rgba(60,60,60,0.06) 8px); border:1.5px dotted #888; color:#444; cursor:default; }
   .blk.conf-red { outline:3px solid #c0392b; outline-offset:-1px; }
   .blk.conf-yel { outline:3px solid #e0b62a; outline-offset:-1px; }
@@ -557,7 +560,10 @@ function renderSched(){
     var hdUnAll=unav.filter(function(u){ return u.date===d && u.allDay && guruVisible(u.guru); });
     var hdNames={}; hdUnAll.forEach(function(u){ hdNames[u.guru]=1; });
     var hdUnLine=Object.keys(hdNames).length?('<div class="unavline">🚫 unavailable: '+Object.keys(hdNames).map(esc).join(", ")+'</div>'):'';
-    h+='<div class="sched-dayhead"><b>'+fmtDate(d)+'</b><div class="storeline">🏪 '+hdStore+'</div>'+hdUnLine+'</div>';
+    /* NGH-BUILD 2026-09-12r: an empty store line is the obvious place to add cover. */
+    var hdCls = hdShifts.length ? "storeline" : "storeline addable";
+    var hdClick = hdShifts.length ? "" : ' onclick="newShiftOn(\''+d+'\')" title="Add a store shift for this day"';
+    h+='<div class="sched-dayhead"><b>'+fmtDate(d)+'</b><div class="'+hdCls+'"'+hdClick+'>🏪 '+hdStore+(hdShifts.length?'':' — add')+'</div>'+hdUnLine+'</div>';
   });
   h+='</div>';
   h+='<div class="sched-grid">';
@@ -572,7 +578,8 @@ function renderSched(){
 
     // store shift bands (behind)
     dayShifts.forEach(function(s){
-      h+='<div class="blk shift" style="top:'+top(s.start)+'px;height:'+Math.max(16,top(s.end)-top(s.start))+'px;left:0;right:0;" title="Retail store: '+esc(s.guru)+'">🏪 '+esc(s.guru)+' '+s.startLbl+'–'+s.endLbl+'</div>';
+      /* NGH-BUILD 2026-09-12r: the band is the affordance. */
+      h+='<div class="blk shift" style="top:'+top(s.start)+'px;height:'+Math.max(16,top(s.end)-top(s.start))+'px;left:0;right:0;" title="Retail store: '+esc(s.guru)+' — click to edit" onclick="jumpToShift(\''+esc(s.shift.id)+'\')">🏪 '+esc(s.guru)+' '+s.startLbl+'–'+s.endLbl+'</div>';
     });
     // timed unavailability bands — all-day entries live in the day header instead;
     // identical windows for multiple Gurus merge into one block
@@ -878,6 +885,18 @@ function showConflictModal(report, onProceed, blocked, savedNote){
 
 /* ---------------- STORE SHIFTS ---------------- */
 var editShiftId=null;
+/* NGH-BUILD 2026-09-12r: jump from the calendar into the shift form, rather than
+   growing a second editor that could drift from this one. */
+var newShiftDate=null;
+function jumpToShift(id){ editShiftId=id; newShiftDate=null; setView("shifts"); focusShiftForm(); }
+function newShiftOn(date){ editShiftId=null; newShiftDate=date; setView("shifts"); focusShiftForm(); }
+function focusShiftForm(){
+  setTimeout(function(){
+    var el=$("view-shifts");
+    if(el && el.scrollIntoView) el.scrollIntoView({behavior:"smooth", block:"start"});
+    var g=$("sh-guru"); if(g && g.focus) g.focus();
+  }, 60);
+}
 function guruSelectHTML(id, val){
   var names=allGuruNames();
   var h='<select id="'+id+'" onchange="$(\''+id+'-other\').style.display=this.value===\'__other\'?\'inline-block\':\'none\'">';
@@ -896,7 +915,7 @@ function renderShifts(){
   var h='<div class="card"><h2 style="margin-top:0;font-size:1rem;">'+(s?"Edit store shift":"Add a retail store shift")+'</h2>'+
     '<div class="row">'+
     '<div class="field"><label>Guru</label>'+guruSelectHTML("sh-guru", s?s.guru:"Dustin")+'</div>'+
-    '<div class="field"><label>Date</label><input type="date" id="sh-date" value="'+(s?s.date:todayStr())+'"></div>'+
+    '<div class="field"><label>Date</label><input type="date" id="sh-date" value="'+(s?s.date:(newShiftDate||todayStr()))+'"></div>'+ /* NGH-BUILD 2026-09-12r */
     '<div class="field"><label>Open</label><input type="time" id="sh-open" value="'+(s?s.open:"10:00")+'"></div>'+
     '<div class="field"><label>Close</label><input type="time" id="sh-close" value="'+(s?s.close:"20:00")+'"></div>'+
     '<div class="field"><label>Repeat</label><select id="sh-freq"><option value="">One time</option><option value="weekly"'+(s&&s.recurrence&&s.recurrence.freq==="weekly"?" selected":"")+'>Weekly</option><option value="biweekly"'+(s&&s.recurrence&&s.recurrence.freq==="biweekly"?" selected":"")+'>Every 2 weeks</option><option value="monthly"'+(s&&s.recurrence&&s.recurrence.freq==="monthly"?" selected":"")+'>Monthly</option></select></div>'+

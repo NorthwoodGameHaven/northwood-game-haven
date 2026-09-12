@@ -603,11 +603,72 @@ describe('conflicts a human needs to see', () => {
     assert.equal(day(out, '2026-09-16').conflicts.filter(x => x.type === 'guru-understaffed').length, 0);
   });
 
-  test('the store open with nobody on the floor', () => {
+  test('the store open with nobody in the building', () => {
     const out = build({ shifts: [{ id: 'GS-1', guru: 'Mike', date: '2026-09-16', open: '12:00', close: '17:00' }] });
     const c = day(out, '2026-09-16').conflicts.filter(x => x.type === 'store-uncovered');
     assert.equal(c.length, 1);
     assert.match(c[0].detail, /5:00 PM–8:00 PM/);
+    assert.match(c[0].detail, /nobody in the building/);
+    assert.equal(c[0].unrostered, false);
+    assert.deepEqual(c[0].inBuilding, []);
+  });
+
+  test('a gap where a Guru is running an event says so instead', () => {
+    // Five banners reading "nobody on the floor" on nights when Chad was
+    // demonstrably in the shop running Gundam night is noise, and noise is how
+    // the one real alert gets scrolled past. The shop is unrostered, not empty.
+    const out = build({
+      events: [event({ id: 'EVT-G', title: 'Gundam Free Play', date: '2026-09-16', start: '17:00', end: '20:00' })],
+      assignments: [{ id: 'A1', eventId: 'EVT-G', date: null, gurus: ['Chad'] }]
+    });
+    const c = day(out, '2026-09-16').conflicts.find(x => x.type === 'store-uncovered');
+    assert.ok(c);
+    assert.equal(c.unrostered, true, 'somebody IS here — this is a rostering gap, not an empty shop');
+    assert.deepEqual(c.inBuilding.map(x => x.guru), ['Chad']);
+    assert.match(c.detail, /no Guru rostered/);
+    assert.match(c.detail, /Chad is on site/);
+    assert.match(c.detail, /Gundam Free Play/);
+  });
+
+  test('two people on site are both named', () => {
+    const out = build({
+      events: [event({ id: 'EVT-A', title: 'Trivia', date: '2026-09-16', start: '17:00', end: '20:00' }),
+        event({ id: 'EVT-B', title: 'Commander', date: '2026-09-16', start: '17:00', end: '20:00', rooms: ['holt'] })],
+      assignments: [{ id: 'A1', eventId: 'EVT-A', date: null, gurus: ['Chad'] },
+        { id: 'A2', eventId: 'EVT-B', date: null, gurus: ['Jen'] }]
+    });
+    const c = day(out, '2026-09-16').conflicts.find(x => x.type === 'store-uncovered');
+    assert.match(c.detail, /Chad and Jen are on site/);
+  });
+
+  test('somebody off-site does not count as being in the building', () => {
+    const out = build({
+      events: [event({ id: 'EVT-O', title: 'Card show', date: '2026-09-16', start: '17:00', end: '20:00', offsite: true, rooms: [] })],
+      assignments: [{ id: 'A1', eventId: 'EVT-O', date: null, gurus: ['Chad'] }]
+    });
+    const c = day(out, '2026-09-16').conflicts.find(x => x.type === 'store-uncovered');
+    assert.equal(c.unrostered, false);
+    assert.match(c.detail, /nobody in the building/);
+  });
+
+  test('an event outside the gap does not count either', () => {
+    const out = build({
+      shifts: [{ id: 'GS-1', guru: 'Mike', date: '2026-09-16', open: '12:00', close: '17:00' }],
+      events: [event({ id: 'EVT-E', title: 'Early thing', date: '2026-09-16', start: '13:00', end: '15:00' })],
+      assignments: [{ id: 'A1', eventId: 'EVT-E', date: null, gurus: ['Chad'] }]
+    });
+    // The gap is 5–8pm; Chad's event ended at 3pm.
+    const c = day(out, '2026-09-16').conflicts.find(x => x.type === 'store-uncovered');
+    assert.equal(c.unrostered, false);
+  });
+
+  test('the gap carries the times a fix would need', () => {
+    const out = build({ shifts: [{ id: 'GS-1', guru: 'Mike', date: '2026-09-16', open: '12:00', close: '17:00' }] });
+    const c = day(out, '2026-09-16').conflicts.find(x => x.type === 'store-uncovered');
+    assert.equal(c.sMin, 17 * 60);
+    assert.equal(c.eMin, 20 * 60);
+    assert.equal(c.from, '5:00 PM');
+    assert.equal(c.to, '8:00 PM');
   });
 
   test('a closed day raises no coverage warning', () => {

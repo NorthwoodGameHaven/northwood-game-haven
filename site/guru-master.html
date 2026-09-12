@@ -85,6 +85,9 @@
   .bar.unavail { background:repeating-linear-gradient(45deg,#8a8a7a,#8a8a7a 4px,#9d9d8c 4px,#9d9d8c 8px); }
   .bar.tentative { background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.34),rgba(255,255,255,0.34) 4px,transparent 4px,transparent 8px); }
   .free { color:#b9b6a4; font-size:0.66rem; text-align:center; display:block; padding-top:5px; }
+  .free.addshift { cursor:pointer; border-radius:4px; }
+  .free.addshift:hover { background:#eef4ec; color:var(--forest); }
+  .bar.shift { cursor:pointer; }
 
   /* ---------- time grid ---------- */
   .gridwrap { overflow-x:auto; }
@@ -132,6 +135,18 @@
   .alert { border-left:4px solid var(--maroon); background:#fdf3f2; border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:0.8rem; }
   .alert.warn { border-left-color:var(--gold); background:#fdf8ec; }
   .alert b { font-family:'Cinzel',serif; font-size:0.74rem; }
+  /* One summary line. Six stacked banners pushed the calendar below the fold. */
+  .alertbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-left:4px solid var(--gold);
+              background:#fdf8ec; border-radius:9px; padding:9px 14px; margin-bottom:12px; font-size:0.82rem; }
+  .alertbar.hard { border-left-color:var(--maroon); background:#fdf3f2; }
+  .alertbar b { font-family:'Cinzel',serif; font-size:0.78rem; }
+  /* rows in the Review & fix modal */
+  .rz { border-left:4px solid var(--maroon); background:#fdf3f2; border-radius:9px; padding:9px 12px; margin-bottom:9px; font-size:0.83rem; }
+  .rz.warn { border-left-color:var(--gold); background:#fdf8ec; }
+  .rz b { font-family:'Cinzel',serif; font-size:0.75rem; }
+  .rz-act { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .rz-act select { font-size:0.78rem; padding:5px 7px; }
+  .rz-done { opacity:0.45; }
 
   /* ---------- modal ---------- */
   .modal { position:fixed; inset:0; background:rgba(20,26,18,0.55); display:none; align-items:center; justify-content:center; padding:16px; z-index:900; }
@@ -149,7 +164,7 @@
   .hrow:nth-child(odd) { background:#faf8ef; }
   .hrow.shut { opacity:0.62; }
   .hrow .day { font-family:'Cinzel',serif; font-size:0.82rem; width:52px; flex:none; }
-  .hrow select.t { min-width:118px; font-size:0.9rem; padding:7px 8px; }
+  select.t { min-width:118px; font-size:0.9rem; padding:7px 8px; }
   .hrow select.t:disabled { background:#f0eee2; color:#a7a492; }
   .hrow .dash { color:#9a9a86; flex:none; }
   .hrow .shutbox { font-size:0.78rem; white-space:nowrap; flex:none; }
@@ -287,7 +302,8 @@ var state = {
   data: null,
   hideKinds: {},
   hideGurus: {},
-  hoursDraft: null
+  hoursDraft: null,
+  issues: []          // everything the Review & fix queue works through
 };
 
 /* ---------------- auth + fetch ---------------- */
@@ -410,12 +426,176 @@ function renderAlerts(){
     "room-double-booked":"Room clash", "guru-understaffed":"Guru add-on unstaffed",
     "store-uncovered":"Nobody on the floor", "no-hours":"Store hours not set"
   };
-  $("alerts").innerHTML = all.slice(0,14).map(function(c){
-    var soft = (c.type === "store-uncovered" || c.type === "guru-understaffed" || c.type === "no-hours");
-    return '<div class="alert'+(soft?" warn":"")+'"><b>'+esc(TITLE[c.type]||c.type)+'</b>' +
-      (c.date ? ' <span class="hint">'+esc(longDate(c.date))+'</span>' : '') +
-      '<br>'+esc(c.detail)+'</div>';
-  }).join("") + (all.length>14 ? '<p class="hint">…and '+(all.length-14)+' more.</p>' : "");
+  // One line, not a wall. Six stacked banners pushed the actual calendar below
+  // the fold and made the one thing that mattered — a double-booked Guru —
+  // look like just another row.
+  state.issues = all;
+  var byType = {};
+  all.forEach(function(c){ byType[c.type] = (byType[c.type]||0) + 1; });
+  var hard = all.filter(function(c){ return c.type==="guru-double-booked" || c.type==="guru-unavailable" || c.type==="room-double-booked"; }).length;
+  var parts = Object.keys(byType).map(function(t){
+    var n = byType[t];
+    return n + " " + (n > 1 && PLURAL[t] ? PLURAL[t] : (SHORT[t] || t));
+  });
+  $("alerts").innerHTML =
+    '<div class="alertbar'+(hard?" hard":"")+'">' +
+      '<b>' + (hard ? "⚠️ " : "🛈 ") + all.length + ' thing' + (all.length>1?"s":"") + ' to look at</b>' +
+      '<span class="hint">' + esc(parts.join(" · ")) + '</span>' +
+      '<span style="flex:1;"></span>' +
+      '<button class="btn btn-sm'+(hard?"":" btn-ghost")+'" onclick="openResolve()">Review &amp; fix</button>' +
+    '</div>';
+}
+var PLURAL = { "store-uncovered":"floor gaps", "room-double-booked":"room clashes", "guru-double-booked":"double-booked" };
+var SHORT = {
+  "guru-double-booked":"double-booked", "guru-unavailable":"assigned while off",
+  "room-double-booked":"room clash", "guru-understaffed":"unstaffed",
+  "store-uncovered":"floor gap", "no-hours":"hours not set"
+};
+
+/* ---------------- resolve issues ---------------- */
+/* A list of problems you cannot act on is a nag. Every row here carries the
+   fix that actually clears it, so the queue empties as you work down it. */
+var resolveBusy = false;
+function openResolve(){
+  var all = state.issues || [];
+  if(!all.length){
+    $("modal-box").innerHTML = '<h2 style="margin:0 0 8px;">Nothing to fix</h2>' +
+      '<p class="hint">No conflicts, no uncovered hours. Enjoy it.</p>' +
+      '<div style="margin-top:14px;text-align:right;"><button class="btn btn-sm btn-ghost" onclick="closeModal()">Close</button></div>';
+    $("modal").className = "modal open"; return;
+  }
+  var TITLE = {
+    "guru-double-booked":"Double-booked Guru", "guru-unavailable":"Assigned while unavailable",
+    "room-double-booked":"Room clash", "guru-understaffed":"Guru add-on unstaffed",
+    "store-uncovered":"Floor not rostered", "no-hours":"Store hours not set"
+  };
+  var h = '<h2 style="margin:0 0 2px;">Review &amp; fix</h2>' +
+    '<p class="hint" style="margin:0 0 14px;">' + all.length + ' item' + (all.length>1?"s":"") +
+    '. Each fix saves straight away and the list re-reads from the server.</p>' +
+    '<div id="resolve-list">' + all.map(resolveRow).join("") + '</div>' +
+    '<div style="margin-top:16px;text-align:right;"><button class="btn btn-sm btn-ghost" onclick="closeModal()">Done</button></div>';
+  $("modal-box").innerHTML = h;
+  $("modal").className = "modal open";
+}
+
+function guruSelect(id, exclude){
+  var opts = (state.data.gurus || []).filter(function(g){ return (exclude||[]).indexOf(g) < 0; });
+  return '<select id="'+id+'"><option value="">Pick a Guru…</option>' +
+    opts.map(function(g){ return '<option value="'+esc(g)+'">'+esc(g)+'</option>'; }).join("") + '</select>';
+}
+
+function resolveRow(c, ix){
+  var TITLE = {
+    "guru-double-booked":"Double-booked Guru", "guru-unavailable":"Assigned while unavailable",
+    "room-double-booked":"Room clash", "guru-understaffed":"Guru add-on unstaffed",
+    "store-uncovered":"Floor not rostered", "no-hours":"Store hours not set"
+  };
+  var soft = (c.type === "store-uncovered" || c.type === "guru-understaffed" || c.type === "no-hours");
+  var body = '';
+
+  if(c.type === "store-uncovered"){
+    var sel = "rz-cov-" + ix;
+    // Somebody already on site is the likeliest answer, so offer them first as
+    // a single click rather than making you find them in the dropdown.
+    var here = (c.inBuilding || []).map(function(x){ return x.guru; })
+      .filter(function(v,i,a){ return a.indexOf(v)===i; });
+    body = here.map(function(g){
+      return '<button class="btn btn-xs" onclick="fixCover(\''+esc(c.date)+'\','+c.sMin+','+c.eMin+',\''+esc(g).replace(/'/g,"\\'")+'\')">' +
+        'Roster '+esc(g)+' on the floor</button> ';
+    }).join("") +
+    guruSelect(sel) +
+    ' <button class="btn btn-xs btn-ghost" onclick="fixCover(\''+esc(c.date)+'\','+c.sMin+','+c.eMin+',document.getElementById(\''+sel+'\').value)">Add shift '+esc(c.from)+'–'+esc(c.to)+'</button>';
+  }
+  else if(c.type === "guru-understaffed"){
+    var sel2 = "rz-un-" + ix;
+    body = guruSelect(sel2) +
+      ' <button class="btn btn-xs" onclick="fixAssignAdd(\''+esc(c.a).replace(/'/g,"\\'")+'\',document.getElementById(\''+sel2+'\').value)">Assign</button>';
+  }
+  else if(c.type === "guru-double-booked" || c.type === "guru-unavailable"){
+    var a = findByKey(c.a), b = c.type === "guru-double-booked" ? findByKey(c.b) : null;
+    body = '<span class="hint">Take '+esc(c.guru)+' off:</span> ' +
+      (a ? '<button class="btn btn-xs btn-danger" onclick="fixAssignDrop(\''+esc(c.a).replace(/'/g,"\\'")+'\',\''+esc(c.guru).replace(/'/g,"\\'")+'\')">'+esc(a.title)+'</button> ' : '') +
+      (b ? '<button class="btn btn-xs btn-danger" onclick="fixAssignDrop(\''+esc(c.b).replace(/'/g,"\\'")+'\',\''+esc(c.guru).replace(/'/g,"\\'")+'\')">'+esc(b.title)+'</button>' : '');
+    if(c.type === "guru-unavailable"){
+      body += ' <span class="hint">or clear the time off on the</span> <a href="guru-schedule.html">Guru Schedule</a>';
+    }
+  }
+  else if(c.type === "room-double-booked"){
+    body = '<span class="hint">Two things want the same room — one has to move.</span> ' +
+      '<a class="btn btn-xs btn-ghost" href="booking.html?admin=1&view=calendar">Open the booking calendar</a>';
+  }
+  else if(c.type === "no-hours"){
+    body = '<button class="btn btn-xs" onclick="closeModal();setView(\'hours\')">Set store hours</button>';
+  }
+
+  return '<div class="rz'+(soft?" warn":"")+'" id="rz-'+ix+'">' +
+    '<div><b>'+esc(TITLE[c.type]||c.type)+'</b>' + (c.date ? ' <span class="hint">'+esc(longDate(c.date))+'</span>' : '') + '</div>' +
+    '<div style="margin:3px 0 7px;">'+esc(c.detail)+'</div>' +
+    '<div class="rz-act">'+body+'</div>' +
+    '</div>';
+}
+
+function findByKey(key){
+  for(var i=0;i<state.data.days.length;i++){
+    var m = state.data.days[i].items.filter(function(x){ return x.key === key; })[0];
+    if(m) return m;
+  }
+  return null;
+}
+
+async function afterFix(msg){
+  closeModal();
+  await load();
+  openResolve();
+  if(msg) $("modal-box").insertAdjacentHTML("afterbegin", '<p class="hint" style="color:var(--forest);">✓ '+esc(msg)+'</p>');
+}
+
+// Rostering somebody on the floor IS creating a store shift — there is no
+// separate "cover" concept, and inventing one would give the shop two answers
+// to "who is working".
+async function fixCover(date, sMin, eMin, guru){
+  if(!guru){ alert("Pick a Guru first."); return; }
+  if(resolveBusy) return; resolveBusy = true;
+  try {
+    await api("/gurus", { method:"POST", body: JSON.stringify({ action:"save-shift", item:{
+      guru: guru, date: date, open: minsToHHMM(sMin), close: minsToHHMM(eMin), notes: "Added from Review & fix"
+    }})});
+    await afterFix(guru + " is on the floor " + fmtMin(sMin) + "–" + fmtMin(eMin));
+  } catch(e){ alert("Couldn't add the shift: " + e.message); }
+  finally { resolveBusy = false; }
+}
+function minsToHHMM(m){ var x=Math.max(0,Math.min(1439,m|0)); return pad(Math.floor(x/60))+":"+pad(x%60); }
+
+async function fixAssignAdd(key, guru){
+  if(!guru){ alert("Pick a Guru first."); return; }
+  var it = findByKey(key); if(!it) return;
+  await writeAssign(it, (it.gurus||[]).concat([guru]).filter(function(v,i,a){ return a.indexOf(v)===i; }),
+    guru + " assigned to " + it.title);
+}
+async function fixAssignDrop(key, guru){
+  var it = findByKey(key); if(!it) return;
+  await writeAssign(it, (it.gurus||[]).filter(function(g){ return g !== guru; }),
+    guru + " taken off " + it.title);
+}
+async function writeAssign(it, gurus, msg){
+  var field = ASSIGN_FIELD(it);
+  if(!field){ alert("That one isn't assignable from here."); return; }
+  if(resolveBusy) return; resolveBusy = true;
+  try {
+    var item = { gurus: gurus, none: gurus.length === 0 };
+    item[field] = baseId(it);
+    // An event assignment with no date covers the whole series. Dropping one
+    // person off ONE night must not silently restaff every future occurrence,
+    // so a change to a recurring event is pinned to the date being fixed.
+    if(it.kind === "event" && it.recurring) item.date = it.date;
+    else if(it.kind === "external") item.date = it.date;
+    await api("/gurus", { method:"POST", body: JSON.stringify({ action:"save-assignment", item: item }) });
+    await afterFix(msg);
+  } catch(e){
+    if(/unavailable/i.test(e.message)) alert("That Guru is marked unavailable then. Clear the time off on the Guru Schedule, or pick somebody else.");
+    else alert("Couldn't save: " + e.message);
+  }
+  finally { resolveBusy = false; }
 }
 
 function barLabel(x){
@@ -439,12 +619,21 @@ function renderRail(){
     h += '<tr><td class="gname">'+esc(g)+'</td>';
     d.days.forEach(function(day){
       var lane = (day.guruLanes[g] || []).filter(function(x){ return kindOn(x.kind); });
+      var gq = esc(g).replace(/'/g,"\\'");
       h += '<td class="gcell'+(day.date===TODAY?" today":"")+'">';
-      if(!lane.length){ h += '<span class="free">·</span>'; }
-      else {
+      if(!lane.length){
+        // An empty cell is where you decide somebody should be working, so it
+        // is the natural place to put them on the rota.
+        h += '<span class="free addshift" title="Put '+esc(g)+' on the floor this day" onclick="openShift(null,\''+esc(day.date)+'\',\''+gq+'\')">+</span>';
+      } else {
         h += lane.map(function(x){
-          return '<span class="bar '+x.kind+(x.tone==="tentative"?" tentative":"")+'" title="'+esc(x.title+" · "+x.sub)+'" onclick="openItem(\''+esc(day.date)+'\',\''+esc(x.key).replace(/'/g,"\\'")+'\')">'+esc(barLabel(x))+'</span>';
-        }).join("");
+          var go = x.kind === "shift"
+            ? ('openShift(\''+esc(x.key).replace(/'/g,"\\'")+'\',\''+esc(day.date)+'\',\''+gq+'\')')
+            : ('openItem(\''+esc(day.date)+'\',\''+esc(x.key).replace(/'/g,"\\'")+'\')');
+          return '<span class="bar '+x.kind+(x.tone==="tentative"?" tentative":"")+'" title="'+esc(x.title+" · "+x.sub)+(x.kind==="shift"?" — click to edit":"")+'" onclick="'+go+'">'+esc(barLabel(x))+'</span>';
+        }).join("") +
+        (lane.some(function(x){ return x.kind === "shift"; }) ? '' :
+          '<span class="free addshift" title="Put '+esc(g)+' on the floor this day" onclick="openShift(null,\''+esc(day.date)+'\',\''+gq+'\')">+ shift</span>');
       }
       h += '</td>';
     });
@@ -719,6 +908,90 @@ async function saveAssign(none){
   }
 }
 function closeModal(){ $("modal").className = "modal"; modalItem = null; }
+
+/* ---------------- store shifts, edited where you see them ---------------- */
+/* Who is on the floor was only editable on a separate form on another page,
+   which meant noticing a hole on the calendar and then leaving the calendar to
+   fix it. The shift bars are the obvious place to click. */
+var shiftCtx = null;
+function openShift(key, date, guru){
+  var it = key ? findByKey(key) : null;
+  var open = "17:00", close = "21:00";
+  if(it){ open = minsToHHMM(it.sMin); close = minsToHHMM(it.eMin); }
+  else {
+    // Default a new shift to the day's opening hours — that is what a floor
+    // shift almost always is, and it saves two dropdowns.
+    var day = (state.data.days || []).filter(function(d){ return d.date === date; })[0];
+    if(day && day.hours && !day.hours.closed && day.hours.sMin != null){
+      open = minsToHHMM(day.hours.sMin); close = minsToHHMM(day.hours.eMin);
+    }
+  }
+  shiftCtx = { id: it ? baseId(it) : null, date: date, guru: (it && it.gurus[0]) || guru || "", open: open, close: close,
+               notes: (it && it.meta && it.meta.notes) || "", recurring: !!(it && it.recurring) };
+  paintShift();
+}
+function paintShift(){
+  var s = shiftCtx;
+  var gurus = state.data.gurus || [];
+  if(gurus.indexOf(s.guru) < 0 && s.guru) gurus = [s.guru].concat(gurus);
+  var h = '<h2 style="margin:0 0 2px;">🏪 ' + (s.id ? "Store shift" : "Put someone on the floor") + '</h2>' +
+    '<p class="hint" style="margin:0 0 14px;">' + esc(longDate(s.date)) + '</p>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:end;">' +
+      '<div><label class="f">Guru</label><select id="sf-guru">' +
+        gurus.map(function(g){ return '<option value="'+esc(g)+'"'+(g===s.guru?' selected':'')+'>'+esc(g)+'</option>'; }).join("") +
+      '</select></div>' +
+      '<div><label class="f">Opens</label><select id="sf-open" class="t">'+timeOpts(s.open,"—")+'</select></div>' +
+      '<div><label class="f">Closes</label><select id="sf-close" class="t">'+timeOpts(s.close,"—",true)+'</select></div>' +
+    '</div>' +
+    '<div style="margin-top:10px;"><label class="f">Note</label>' +
+      '<input id="sf-notes" type="text" style="width:100%;" value="'+esc(s.notes)+'" placeholder="optional"></div>';
+
+  if(!s.id){
+    h += '<div style="margin-top:10px;"><label class="f">Repeat</label>' +
+      '<select id="sf-freq"><option value="">Just this day</option>' +
+        '<option value="weekly">Every week</option><option value="biweekly">Every other week</option>' +
+      '</select> <span class="hint">for</span> <input id="sf-count" type="number" min="1" max="60" value="8" style="width:70px;"> <span class="hint">weeks</span></div>';
+  } else if(s.recurring){
+    h += '<p class="hint" style="margin-top:10px;">This is part of a repeating shift. Saving changes the whole series; ' +
+         'delete it and add a one-off if you only mean this day.</p>';
+  }
+
+  h += '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">' +
+    (s.id ? '<button class="btn btn-sm btn-danger" onclick="deleteShift()">Delete shift</button>' : '') +
+    '<button class="btn btn-sm btn-ghost" onclick="closeModal()">Cancel</button>' +
+    '<button class="btn btn-sm" onclick="saveShift()">' + (s.id ? "Save" : "Add shift") + '</button>' +
+    '</div><p id="sf-msg" class="hint" style="text-align:right;margin:6px 0 0;"></p>';
+  $("modal-box").innerHTML = h;
+  $("modal").className = "modal open";
+}
+async function saveShift(){
+  var s = shiftCtx;
+  var item = {
+    id: s.id || undefined,
+    guru: $("sf-guru").value,
+    date: s.date,
+    open: $("sf-open").value,
+    close: $("sf-close").value,
+    notes: $("sf-notes").value
+  };
+  if(!item.guru || !item.open || !item.close){ $("sf-msg").textContent = "Guru, opening and closing time are all needed."; return; }
+  if(item.close <= item.open){ $("sf-msg").textContent = "The closing time has to be after the opening time."; return; }
+  var f = $("sf-freq");
+  if(f && f.value) item.recurrence = { freq: f.value, count: Math.max(1, Math.min(60, parseInt($("sf-count").value,10) || 1)) };
+  $("sf-msg").textContent = "Saving…";
+  try {
+    await api("/gurus", { method:"POST", body: JSON.stringify({ action:"save-shift", item: item }) });
+    closeModal(); await load();
+  } catch(e){ $("sf-msg").textContent = "Couldn't save: " + e.message; }
+}
+async function deleteShift(){
+  if(!shiftCtx || !shiftCtx.id) return;
+  if(!confirm("Remove this store shift?")) return;
+  try {
+    await api("/gurus", { method:"POST", body: JSON.stringify({ action:"delete-shift", item:{ id: shiftCtx.id } }) });
+    closeModal(); await load();
+  } catch(e){ alert("Couldn't delete: " + e.message); }
+}
 
 /* ---------------- store hours ---------------- */
 /* A shop opens on the quarter hour. <input type="time"> made you type four
