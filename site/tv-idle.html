@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<!-- NGH · Idle house screen — NGH-BUILD 2026-09-12m
+     What the TVs show when nothing is running. Deliberately calm and almost
+     static: this is on for hours at a time behind people trying to play board
+     games, so it must not flicker, crawl or demand attention. It also has to
+     survive being the fallback when the network is down, so it fetches nothing
+     it cannot live without — the event list is a bonus, never a requirement. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northwood Game Haven</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@500;600&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--forest-dk:#132a1d;--panel:#17321f;--panel-2:#1c3d27;--gold:#c9973a;--gold-lt:#e8b84b;
+    --cream:#f6efdd;--line:rgba(232,184,75,.28);--muted:rgba(246,239,221,.62);
+    --fd:'Cinzel Decorative',Georgia,serif;--fh:'Cinzel',Georgia,serif;--fb:'Nunito',system-ui,sans-serif}
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%;overflow:hidden}
+  body{background:var(--forest-dk);color:var(--cream);font-family:var(--fb);
+    background-image:radial-gradient(1600px 800px at 50% -12%,rgba(61,122,84,.4),transparent 62%),
+      radial-gradient(circle at 10% 112%,rgba(201,151,58,.12),transparent 42%);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:60px;text-align:center}
+  img.crest{width:190px;filter:drop-shadow(0 14px 26px rgba(0,0,0,.5))}
+  h1{font-family:var(--fd);font-size:3.5rem;color:var(--gold-lt);line-height:1.1;font-weight:700}
+  .tag{font-family:var(--fh);letter-spacing:.24em;text-transform:uppercase;color:var(--muted);font-size:1.05rem}
+  .next{margin-top:14px;display:flex;gap:18px;flex-wrap:wrap;justify-content:center;max-width:1400px}
+  .ev{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);
+    border-radius:18px;padding:16px 22px;min-width:260px;text-align:left}
+  .ev .w{font-family:var(--fh);color:var(--gold-lt);font-size:.92rem;letter-spacing:.1em;text-transform:uppercase}
+  .ev .t{font-size:1.3rem;font-weight:800;margin-top:4px}
+  .foot{position:fixed;bottom:34px;font-family:var(--fh);letter-spacing:.16em;color:var(--muted);font-size:1.05rem}
+</style>
+</head>
+<body>
+  <img class="crest" src="/brand/crest.png" alt="">
+  <h1>Northwood Game Haven</h1>
+  <div class="tag">Board games · Trading cards · Retro arcade · Craft soda</div>
+  <div class="next" id="next"></div>
+  <div class="foot">gamehaven.guru</div>
+<script>
+(function () {
+  'use strict';
+  // Best-effort only. If this fails the screen is still complete and correct,
+  // which is the entire point of an idle screen that also serves as the
+  // offline fallback for /tv-auto.
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function load() {
+    fetch('/api/events').then(function (r) { return r.ok ? r.json() : []; }).then(function (list) {
+      if (!Array.isArray(list) || !list.length) return;
+      var out = list.filter(function (e) { return e && e.title && e.status !== 'draft'; }).slice(0, 3);
+      document.getElementById('next').innerHTML = out.map(function (e) {
+        return '<div class="ev"><div class="w">' + esc(e.dayLabel || e.recurrence || 'Coming up') + '</div>' +
+               '<div class="t">' + esc(e.title) + '</div></div>';
+      }).join('');
+    }).catch(function () { /* silence is the correct behaviour here */ });
+  }
+  load();
+  setInterval(load, 600000);
+})();
+</script>
+</body>
+</html>

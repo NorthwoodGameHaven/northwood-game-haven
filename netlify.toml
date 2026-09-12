@@ -206,6 +206,27 @@
   to   = "/mtg-tv.html"
   status = 200
 
+# NGH-BUILD 2026-09-12m — Venue mode: one source of truth for what the room is doing.
+# Stream Deck / Bitfocus Companion sets it with a bare GET; the TVs, the PA and
+# the app all follow it.
+[[redirects]]
+  from = "/api/venue/*"
+  to   = "/.netlify/functions/venue/:splat"
+  status = 200
+[[redirects]]
+  from = "/api/venue"
+  to   = "/.netlify/functions/venue"
+  status = 200
+# THE one URL a screen ever needs. Point the Google TV Streamers here once.
+[[redirects]]
+  from = "/tv-auto"
+  to   = "/tv-auto.html"
+  status = 200
+[[redirects]]
+  from = "/tv-idle"
+  to   = "/tv-idle.html"
+  status = 200
+
 [[redirects]]
   from = "/api/companion/*"
   to   = "/.netlify/functions/companion/:splat"
