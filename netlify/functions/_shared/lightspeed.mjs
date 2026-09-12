@@ -395,6 +395,81 @@ export async function recordSale(opts) {
   }
 }
 
+// ---- reverse a recorded sale (NGH-BUILD 2026-09-12c) ----------------------------------
+// X-Series has no void for a CLOSED sale — the correction is a RETURN, i.e. a
+// second sale with negative quantities against the same products, register,
+// user and payment type. Negating the lines also negates `loyalty_value`, which
+// is what takes the points back off the customer; nothing else does that.
+//
+// opts: { sourceId, kind, lines, payment, note, customerEmail }
+//   sourceId  the ORIGINAL sale's source id (e.g. 'NGH-123:fee'). The return is
+//             logged as '<sourceId>:refund' so a double-click can't double-reverse.
+//   lines     same shape recordSale takes; quantities are negated here.
+// Never throws — returns { ok, saleId, skipped, error }.
+export async function refundSale(opts) {
+  const sourceId = String((opts && opts.sourceId) || '');
+  const kind = String((opts && opts.kind) || 'refund');
+  const refundId = sourceId + ':refund';
+  const out = { ok: false, saleId: null, skipped: false, error: null, sourceId: refundId };
+  try {
+    if (!sourceId) throw new Error('sourceId required');
+    await ensureLsSchema();
+
+    const prev = await sql`SELECT sale_id FROM ls_sales_log WHERE source_id = ${refundId}`;
+    if (prev.length && prev[0].sale_id) { out.ok = true; out.skipped = true; out.saleId = prev[0].sale_id; return out; }
+    // Refuse to reverse a sale we never recorded — otherwise we'd mint a credit
+    // against nothing and hand the customer negative loyalty out of thin air.
+    const orig = await sql`SELECT sale_id FROM ls_sales_log WHERE source_id = ${sourceId}`;
+    if (!orig.length || !orig[0].sale_id) throw new Error('no recorded sale for ' + sourceId + ' — nothing to reverse');
+
+    const c = core.cfg();
+    if (!c.registerId) throw new Error('LIGHTSPEED_REGISTER_ID not set');
+
+    let customer = null;
+    if (opts.customerEmail) customer = await findCustomerByEmail(opts.customerEmail);
+
+    const lines = [];
+    for (const l of (opts.lines || [])) {
+      if (!l) continue;
+      let productId = l.productId || null;
+      if (!productId && l.sku) { const p = await findProductBySku(l.sku); if (!p) throw new Error('product SKU ' + l.sku + ' not found in Lightspeed'); productId = p.id; }
+      if (!productId) continue;
+      const qty = Number(l.qty) || 0;
+      if (qty <= 0) continue;
+      lines.push({ ...l, productId, qty });            // sign is applied by buildSalePayload
+    }
+    if (!lines.length) throw new Error('no lines to reverse');
+
+    const [taxRate, retailer] = await Promise.all([getTaxRate(), getRetailer()]);
+    const { body, total } = core.buildSalePayload({
+      sourceId: refundId, state: 'closed', payment: opts.payment || 'online',
+      note: opts.note || ('Refund of ' + sourceId), saleDate: null,
+      customerId: customer ? customer.id : null, lines, taxRate,
+      loyaltyRatio: retailer.loyaltyRatio, loyaltyEnabled: !!(customer && customer.enable_loyalty),
+      sign: -1
+    }, c);
+
+    const resp = await lsFetch('register_sales', { method: 'POST', body, version: null });
+    const sale = (resp && (resp.register_sale || resp.data || resp)) || {};
+    const saleId = sale.id ? String(sale.id) : null;
+    if (!saleId) throw new Error('return created but no id in response');
+    await sql`INSERT INTO ls_sales_log (source_id, sale_id, kind, error, created_at) VALUES (${refundId}, ${saleId}, ${kind}, NULL, now())
+              ON CONFLICT (source_id) DO UPDATE SET sale_id = EXCLUDED.sale_id, kind = EXCLUDED.kind, error = NULL, created_at = now()`;
+    console.log('[lightspeed] return recorded', kind, refundId, '→', saleId, total);
+    out.ok = true; out.saleId = saleId; out.total = total;
+    return out;
+  } catch (e) {
+    const msg = String((e && e.message) || e).slice(0, 500);
+    console.error('[lightspeed] refundSale failed', kind, refundId, msg);
+    out.error = msg;
+    try {
+      await sql`INSERT INTO ls_sales_log (source_id, sale_id, kind, error, created_at) VALUES (${refundId}, NULL, ${kind}, ${msg}, now())
+                ON CONFLICT (source_id) DO UPDATE SET error = EXCLUDED.error, kind = EXCLUDED.kind, created_at = now() WHERE ls_sales_log.sale_id IS NULL`;
+    } catch (e2) { console.error('[lightspeed] sales log write failed', e2 && e2.message); }
+    return out;
+  }
+}
+
 // ---- loyalty group discount (unchanged contract) -------------------------------------------
 // Returns { percent, groupName, source } — safe to call even if unconfigured.
 export async function loyaltyDiscountForEmail(email) {

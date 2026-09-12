@@ -199,7 +199,11 @@ export function saleStatus(state, payment, c = cfg()) {
 
 // Build the POST /api/register_sales body. `lines` must already carry productId.
 //   lines: [{productId, name, qty, priceIncTax, loyalty, taxable}]
-export function buildSalePayload({ sourceId, state = 'closed', payment = null, note, saleDate, customerId, lines, taxRate = 0, loyaltyRatio = 0, loyaltyEnabled = false }, c = cfg()) {
+// NGH-BUILD 2026-09-12c: `sign` = -1 builds a RETURN (negative quantities, negative
+// loyalty, negative payment) for refundSale(). Lines are still passed with positive
+// quantities; the sign is applied here so the qty>0 validation below still works.
+export function buildSalePayload({ sourceId, state = 'closed', payment = null, note, saleDate, customerId, lines, taxRate = 0, loyaltyRatio = 0, loyaltyEnabled = false, sign = 1 }, c = cfg()) {
+  const sgn = sign < 0 ? -1 : 1;
   const products = [];
   let total = 0;
   for (const l of (lines || [])) {
@@ -208,13 +212,13 @@ export function buildSalePayload({ sourceId, state = 'closed', payment = null, n
     if (!l.productId || qty <= 0 || !isFinite(inc) || inc < 0) continue;
     const taxable = l.taxable !== false;
     const { price, tax } = taxable ? splitIncTax(inc, taxRate) : { price: round5(inc), tax: 0 };
-    const row = { product_id: l.productId, quantity: qty, price, tax, price_set: 1 };
+    const row = { product_id: l.productId, quantity: qty * sgn, price, tax, price_set: 1 };
     const taxId = taxable ? c.taxId : c.taxIdNone;
     if (taxId) row.tax_id = taxId;
-    if (loyaltyEnabled && l.loyalty !== false && loyaltyRatio > 0) row.loyalty_value = round2(price * qty * loyaltyRatio);
+    if (loyaltyEnabled && l.loyalty !== false && loyaltyRatio > 0) row.loyalty_value = round2(price * qty * loyaltyRatio) * sgn || 0;   // `|| 0` keeps -0 out of the payload
     if (l.name) row.attributes = [{ name: 'line_note', value: String(l.name).slice(0, 255) }];
     products.push(row);
-    total += inc * qty;
+    total += inc * qty * sgn;
   }
   total = round2(total);
   const status = saleStatus(state, payment, c);

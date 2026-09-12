@@ -301,6 +301,54 @@ function stubStore({ customers = [], products = [], saleReply, taxes } = {}) {
   routes.push({ match: (u, i) => u === 'https://teststore.retail.lightspeed.app/api/register_sales' && i.method === 'POST', reply: (u, i) => (saleReply || (() => jres({ register_sale: { id: 'sale-1' } })))(JSON.parse(i.body)) });
 }
 
+describe('refundSale (NGH-BUILD 2026-09-12c)', () => {
+  beforeEach(() => { resetMocks(); dbTokens(() => tokenRow()); });
+
+  test('posts a RETURN with negative quantities and negative loyalty, logged under <sourceId>:refund', async () => {
+    let posted = null, logged = null;
+    stubStore({ customers: [{ id: 'c1', email: 'jane@d.co', enable_loyalty: true }], products: [{ id: 'p-room', sku: 'NGH-ROOM' }, { id: 'p-kara', sku: 'NGH-KARAOKE' }],
+      saleReply: b => { posted = b; return jres({ register_sale: { id: 'sale-ret' } }); } });
+    // the original sale must exist in the log for a reversal to be allowed, and the
+    // '<id>:refund' key must NOT — otherwise the idempotency guard short-circuits.
+    M.db.handlers.unshift((t, v) => t.startsWith('SELECT sale_id FROM ls_sales_log')
+      ? (String(v[0]).endsWith(':refund') ? [] : [{ sale_id: 'sale-9' }]) : undefined);
+    M.db.handlers.push((t, v) => { if (t.startsWith('INSERT INTO ls_sales_log')) { logged = v; return []; } });
+
+    const res = await ls.refundSale({
+      sourceId: 'NGH-77:fee', kind: 'booking-refund', customerEmail: 'jane@d.co',
+      lines: core.bookingSaleLines({ id: 'NGH-77', rooms: ['holt'], date: '2026-10-01', addons: [{ id: 'karaoke' }] }, 'fee', 10550),
+      payment: 'online', note: 'Refund — NGH booking NGH-77 (fee)'
+    });
+    assert.equal(res.ok, true); assert.equal(res.saleId, 'sale-ret'); assert.equal(res.error, null);
+    assert.equal(posted.source_id, 'NGH-77:fee:refund');
+    // negative qty is what makes it a return; loyalty must go negative or points never come back
+    assert.deepEqual(posted.register_sale_products.map(p => [p.product_id, p.quantity, p.price, p.loyalty_value]),
+      [['p-room', -1, 100, -5], ['p-kara', -1, 0, 0]]);
+    assert.equal(posted.register_sale_payments[0].amount, -105.5);
+    assert.equal(logged[0], 'NGH-77:fee:refund'); assert.equal(logged[1], 'sale-ret');
+  });
+
+  test('refuses to reverse a sale that was never recorded — no credit out of thin air', async () => {
+    stubStore({ products: [{ id: 'p-room', sku: 'NGH-ROOM' }] });
+    M.db.handlers.unshift(t => t.startsWith('SELECT sale_id FROM ls_sales_log') ? [] : undefined);
+    const posts = calls.filter(c => c.url.endsWith('/api/register_sales')).length;
+    const r = await ls.refundSale({ sourceId: 'NGH-NOPE:fee', lines: [{ sku: 'NGH-ROOM', qty: 1, priceIncTax: 10 }] });
+    assert.equal(r.ok, false); assert.match(r.error, /nothing to reverse/);
+    assert.equal(calls.filter(c => c.url.endsWith('/api/register_sales')).length, posts);
+  });
+
+  test('idempotent: a second reversal of the same sale posts nothing', async () => {
+    stubStore({ products: [{ id: 'p-room', sku: 'NGH-ROOM' }] });
+    // the ':refund' key is already logged → the guard must short-circuit
+    M.db.handlers.unshift((t, v) => t.startsWith('SELECT sale_id FROM ls_sales_log')
+      ? (String(v[0]).endsWith(':refund') ? [{ sale_id: 'sale-ret' }] : [{ sale_id: 'sale-9' }]) : undefined);
+    const posts = calls.filter(c => c.url.endsWith('/api/register_sales')).length;
+    const r = await ls.refundSale({ sourceId: 'NGH-77:fee', lines: [{ sku: 'NGH-ROOM', qty: 1, priceIncTax: 10 }] });
+    assert.deepEqual({ ok: r.ok, skipped: r.skipped, saleId: r.saleId }, { ok: true, skipped: true, saleId: 'sale-ret' });
+    assert.equal(calls.filter(c => c.url.endsWith('/api/register_sales')).length, posts);
+  });
+});
+
 describe('recordSale', () => {
   beforeEach(() => { resetMocks(); dbTokens(() => tokenRow()); });
 

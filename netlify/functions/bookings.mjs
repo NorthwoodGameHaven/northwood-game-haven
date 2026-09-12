@@ -7,6 +7,13 @@
 import { sql, ensureSchema, json, bad, noContent, preflight, requireAdmin } from './_shared/db.mjs';
 import { sendBrandedMail } from './_shared/email.mjs';
 import { checkWindow, loadBlockers, describe, toMins as cToMins, MIN_GAP_MINS } from './_shared/conflicts.mjs';
+// NGH-BUILD 2026-09-12c: booking refunds. Until this build, cancelling a PAID
+// booking set status='rejected', emailed "we're unable to confirm your request"
+// and silently kept the customer's money — there was no refund path for
+// bookings anywhere in the codebase (only event registrations had one).
+import { refundPaymentIntent } from './_shared/stripe.mjs';
+import { refundSale } from './_shared/lightspeed.mjs';
+import * as lscore from './_shared/lightspeed-core.mjs';
 
 const ROOM_IDS = ['holt', 'den', 'depths'];
 
@@ -105,6 +112,88 @@ const _handler = async (req) => {
     // Best-effort: never fail the booking if email has a hiccup.
     try { await notifyNewBooking(list); } catch (e) { console.error('[bookings] notify email failed', e); }
     return json(list, 201);
+  }
+
+  // ---- POST /bookings/:id/refund (admin) — NGH-BUILD 2026-09-12c ----
+  // { parts:['fee'|'deposit'], cancel?:bool, reason?:string }
+  // Refunds the Stripe charge for each requested part, reverses the matching
+  // Lightspeed sale (a RETURN with negative lines, which is what takes the
+  // loyalty points back off), records an audit entry, and optionally cancels
+  // the booking with an email that says what was actually refunded.
+  if (req.method === 'POST' && parts[1] === 'refund' && parts[0]) {
+    if (!requireAdmin(req)) return bad('unauthorized', 401);
+    const id = decodeURIComponent(parts[0]);
+    let p; try { p = await req.json(); } catch { return bad('Invalid JSON'); }
+    const wanted = Array.isArray(p && p.parts) ? p.parts.filter(x => x === 'fee' || x === 'deposit') : [];
+    if (!wanted.length && !p.cancel) return bad('nothing to do: pass parts:["fee"|"deposit"] and/or cancel:true');
+
+    const rows = await sql`SELECT data FROM bookings WHERE id = ${id}`;
+    if (!rows.length) return bad('Not found', 404);
+    const b = rows[0].data;
+    const results = [];
+
+    for (const part of wanted) {
+      const pi = part === 'deposit' ? b.depositPI : b.feePI;
+      const cents = part === 'deposit' ? b.depositPaidCents : b.feePaidCents;
+      const paid = part === 'deposit' ? b.depositPaid : b.feePaid;
+      if (!paid) { results.push({ part, skipped: true, reason: 'not paid' }); continue; }
+      if (!pi) { results.push({ part, skipped: true, reason: 'no Stripe payment on record (paid in person or on account) — refund at the register' }); continue; }
+      const already = (b.refunds || []).some(r => r.part === part);
+      if (already) { results.push({ part, skipped: true, reason: 'already refunded' }); continue; }
+
+      // 1) money back first — if Stripe fails, change nothing else.
+      let refundId = null;
+      try {
+        const r = await refundPaymentIntent(pi, cents);
+        refundId = (r && r.id) || null;
+      } catch (e) {
+        results.push({ part, ok: false, error: 'stripe refund failed: ' + (e && e.message ? e.message : String(e)) });
+        continue;
+      }
+
+      // 2) reverse in Lightspeed (never throws; a failure is reported, not fatal —
+      //    the customer already has their money and must not be blocked on our books).
+      const rev = await refundSale({
+        sourceId: b.id + ':' + part, kind: 'booking-refund',
+        lines: lscore.bookingSaleLines(b, part, cents != null ? cents : null),
+        payment: 'online', customerEmail: b.email,
+        note: 'Refund — NGH booking ' + b.id + ' (' + part + ')' + (p.reason ? ' · ' + String(p.reason).slice(0, 200) : '')
+      });
+
+      // 3) record it
+      if (part === 'deposit') b.depositPaid = false; else b.feePaid = false;
+      b.payment = (b.feePaid || b.depositPaid) ? 'due' : 'refunded';
+      b.refunds = (b.refunds || []).concat([{
+        at: new Date().toISOString(), part, amountCents: cents || null,
+        stripeRefundId: refundId, lightspeedSaleId: rev.saleId || null,
+        lightspeedError: rev.error || null, reason: p.reason || null
+      }]);
+      results.push({ part, ok: true, amountCents: cents || null, stripeRefundId: refundId, lightspeed: rev.ok ? 'reversed' : ('FAILED: ' + rev.error) });
+    }
+
+    if (p.cancel) b.status = 'canceled';
+    await sql`UPDATE bookings SET data = ${JSON.stringify(b)}::jsonb, status = ${b.status || null} WHERE id = ${id}`;
+
+    if (p.cancel && b.email) {
+      const refunded = results.filter(r => r.ok);
+      const money = refunded.length
+        ? refunded.map(r => (r.part === 'fee' ? 'Booking fee' : 'Refundable deposit') + ': $' + ((r.amountCents || 0) / 100).toFixed(2)).join('\n  ')
+        : null;
+      try {
+        await sendBrandedMail(b.email, 'Your Northwood Game Haven booking ' + b.id + ' has been canceled', {
+          heading: 'Booking canceled',
+          bodyText: 'Hi ' + (b.name || 'there') + ',\n\nYour booking ' + b.id + (b.date ? ' for ' + b.date : '') + ' has been canceled.\n\n'
+            + (money ? ('The following has been refunded to your original payment method:\n  ' + money
+                + '\n\nRefunds usually appear on a card within 5–10 business days, depending on your bank.\n\n')
+              : 'No payment was refunded. If you believe that’s wrong, just reply to this email and we’ll sort it out.\n\n')
+            + (p.reason ? (String(p.reason).slice(0, 500) + '\n\n') : '')
+            + 'We’d still love to host you — reply any time and we’ll find a new date.\n\n— The Northwood Game Haven Crew 🦦'
+        });
+      } catch (e) { console.error('[bookings] cancellation email failed', e && e.message); }
+    }
+
+    console.log('[bookings] refund', id, JSON.stringify(results));
+    return json({ id, status: b.status, results, booking: b });
   }
 
   // ---- PATCH: update one or group (admin) ----
