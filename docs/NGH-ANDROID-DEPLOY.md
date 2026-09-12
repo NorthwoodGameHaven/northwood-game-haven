@@ -341,10 +341,10 @@ specific. The likely ones, in order:
 - [ ] Debug APK installed and tested on a real phone (Part 1)
 - [ ] `ngh-upload.jks` created and **backed up in two places**
 - [ ] Four GitHub secrets set; the release AAB builds
-- [ ] `PLAY_REVIEW_EMAIL` + `PLAY_REVIEW_CODE` set in Netlify, and deployed (4.2b)
+- [x] `PLAY_REVIEW_EMAIL` + `PLAY_REVIEW_CODE` set in Netlify and deployed — *verified live 2026-09-12*
 - [ ] Developer name set to "Northwood Game Haven"; public address = the shop
-- [x] **Account deletion**: in-app path + public web URL *(built 2026-09-12y — deploy, then check `https://gamehaven.guru/account-delete` loads)*
-- [ ] `stash2026` removed from `site/booking.html`
+- [x] **Account deletion**: in-app path + public web URL — *`https://gamehaven.guru/account-delete` verified live 2026-09-12*
+- [x] `stash2026` removed from `site/booking.html` *(12aa — also closed a fail-open)*
 - [x] `https://gamehaven.guru/privacy` is live *(verified 2026-09-12x)* — read it
 - [ ] Version bumped in `capacitor/package.json`
 - [ ] Icon, feature graphic, 2+ screenshots *(drafts exist; re-shoot for real fonts)*

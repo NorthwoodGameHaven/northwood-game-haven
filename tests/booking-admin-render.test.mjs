@@ -308,3 +308,74 @@ describe('approving a booking approves it, and does nothing else', () => {
     assert.equal(sb.Store.updated[0].patch.status, 'approved');
   });
 });
+
+// ---------------------------------------------------------------------------
+// NGH-BUILD 2026-09-12aa — the staff gate.
+//
+// booking.html printed "Demo code: stash2026" on screen and carried the same
+// string as the fallback for ADMIN_CODE. Live server mode has been on since
+// ngh-config.js set NGH_API_BASE, so the demo gate was unreachable and the
+// code was dead — but it still read to any visitor, and to a store reviewer,
+// as a published staff password.
+//
+// Blanking it exposed a second problem: the check was `code === ADMIN_CODE`,
+// so with no code configured an EMPTY input satisfied it. A gate with nothing
+// set must refuse everything, not accept anything.
+describe('staff access gate', () => {
+  const CONFIG = fs.readFileSync(path.join(ROOT, 'site', 'ngh-config.js'), 'utf8');
+
+  test('the demo code appears nowhere in the shipped site', () => {
+    const hits = [];
+    const walk = (dir) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) { walk(p); continue; }
+        if (!/\.(html|js|mjs|json|css)$/i.test(e.name)) continue;
+        if (fs.readFileSync(p, 'utf8').includes('stash2026')) hits.push(path.relative(ROOT, p));
+      }
+    };
+    walk(path.join(ROOT, 'site'));
+    assert.deepEqual(hits, [], 'a staff code must not be committed to a public site');
+  });
+
+  test('the gate screen no longer prints a code to the visitor', () => {
+    const gate = HTML.slice(HTML.indexOf('id="admin-gate"'), HTML.indexOf('id="admin-panel"'));
+    assert.doesNotMatch(gate, /Demo code/i);
+    assert.doesNotMatch(gate, /<code>[^<]{6,}<\/code>/, 'nothing that looks like a literal code');
+  });
+
+  test('live server mode is on, so the demo gate is unreachable', () => {
+    assert.match(CONFIG, /window\.NGH_API_BASE\s*=\s*"\/\.netlify\/functions"/,
+      'if this is ever commented out the demo gate becomes live again');
+    assert.match(CONFIG, /window\.NGH_ADMIN_CODE\s*=\s*""/);
+  });
+
+  // Evaluate the REAL shipped demo-gate expression, pulled out of the page, so
+  // this cannot drift from what booking.html actually does. `login` is an
+  // object method rather than a top-level function, so extractFunction can't
+  // reach it — the one line is what matters here anyway.
+  const GATE = /if\(!this\.apiMode\(\)\)\{\s*return ([^;]+);\s*\}/.exec(HTML);
+  function demoLogin(configuredCode, typed) {
+    assert.ok(GATE, 'the demo-gate line has moved — update this test');
+    const ctx = { ADMIN_CODE: configuredCode, code: typed, result: undefined };
+    vm.createContext(ctx);
+    vm.runInContext('result = (' + GATE[1] + ');', ctx);
+    return ctx.result;
+  }
+
+  test('with no code configured the gate refuses an empty box', () => {
+    assert.equal(demoLogin('', ''), false,
+      'this was the fail-open: "" === "" unlocked the console');
+  });
+
+  test('with no code configured the gate refuses a guess', () => {
+    assert.equal(demoLogin('', 'stash2026'), false);
+    assert.equal(demoLogin('', 'anything'), false);
+  });
+
+  test('a configured demo code still works, and only it', () => {
+    assert.equal(demoLogin('hunter2', 'hunter2'), true);
+    assert.equal(demoLogin('hunter2', 'wrong'), false);
+    assert.equal(demoLogin('hunter2', ''), false);
+  });
+});

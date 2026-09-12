@@ -540,7 +540,11 @@ html.ngh-staff #admin-view{display:block!important;}
         <input type="password" id="admin-code" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAdmin()">
         <div class="err" id="admin-err">Incorrect code. Try again.</div>
         <div style="margin-top:16px;"><button class="btn" onclick="checkAdmin()">Unlock Console</button></div>
-        <p class="hint" style="margin-top:14px;">Demo code: <code>stash2026</code>. In production this is replaced by a real server login (see DEPLOY.md).</p>
+        <!-- NGH-BUILD 2026-09-12aa: a literal staff password used to be printed
+             here. Live server mode has been on since ngh-config.js set
+             NGH_API_BASE, so the local gate below is unreachable and the string
+             was dead — but it still read to any visitor as a real one. -->
+        <p class="hint" style="margin-top:14px;">Gurus: use your staff access code. Lost it? Ask Dustin.</p>
       </div>
       <p style="text-align:center;"><a href="#" onclick="closeAdmin();return false;">← Back to booking form</a></p>
     </div>
@@ -643,7 +647,7 @@ html.ngh-staff #admin-view{display:block!important;}
 
 /* ---- CONFIG (overridable via ngh-config.js) ---- */
 var API_BASE   = window.NGH_API_BASE || "";          // e.g. "/.netlify/functions" enables server mode
-var ADMIN_CODE = window.NGH_ADMIN_CODE || "stash2026"; // demo-only gate (server mode uses real login)
+var ADMIN_CODE = window.NGH_ADMIN_CODE || "";          // demo-only gate (server mode uses a real server login)
 var ADMIN_EMAIL= window.NGH_ADMIN_EMAIL || "stash@northwoodgamehaven.com";
 var REVIEW_URL = location.origin + location.pathname + "?admin=1";
 var VRBO = { lodge:"https://www.vrbo.com/5183022", rest:"https://www.vrbo.com/5183156" };
@@ -737,7 +741,11 @@ var Store = {
 
   /* ---- ADMIN AUTH ---- */
   async login(code){
-    if(!this.apiMode()){ return code === ADMIN_CODE; }      // demo gate
+    // Demo gate — unreachable in live server mode. NGH-BUILD 2026-09-12aa:
+    // with the demo code blanked, `code === ADMIN_CODE` let an EMPTY box
+    // through ("" === ""), so a gate with no code configured failed OPEN.
+    // No code configured now means nothing is accepted.
+    if(!this.apiMode()){ return !!ADMIN_CODE && code === ADMIN_CODE; }
     var r = await this._api("/admin-login", { method:"POST", body:JSON.stringify({ code:code }) });
     if(r && r.token){ if(window.GuruAuth) GuruAuth.set(r.token); else sessionStorage.setItem("ngh_admin_token", r.token); return true; }
     return false;

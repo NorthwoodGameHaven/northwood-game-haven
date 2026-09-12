@@ -144,9 +144,12 @@ Say the word and I will add the line.
 
 ### 0.4 Cleared
 
-- ~~`stash2026` in `site/booking.html`~~ — you have said you no longer need it.
-  It is still in the file at lines 543 and 646; removing it is a two-line
-  change whenever you want it done.
+- ~~`stash2026` in `site/booking.html`~~ — **removed 2026-09-12aa.** It was
+  already dead (live server mode has been on since `ngh-config.js` set
+  `NGH_API_BASE`), but it was printed on screen to every visitor. Taking it out
+  exposed a fail-open underneath: with the code blanked, `code === ADMIN_CODE`
+  meant an *empty* box unlocked the console. The gate now refuses everything
+  when no code is configured.
 - ~~D-U-N-S number~~ — **14-743-1636**.
 - ~~Play Console account~~ — **Organization, verified**, ID
   `7315290518002454172`. Because it is an organization account, the
@@ -452,12 +455,12 @@ The first release of the Game Haven app. Game tools for the table — first play
 
 ## 8. Checklist for this document
 
-- [x] **Account deletion**: in-app path + public web URL (§0.1) — *built 2026-09-12y, deploy it*
-- [x] **Review account** built (§0.2) — *set the two Netlify env vars + deploy*
+- [x] **Account deletion**: in-app path + public web URL (§0.1) — **live**, verified 2026-09-12
+- [x] **Review account** built and **live** (§0.2) — verified on gamehaven.guru 2026-09-12
 - [ ] Developer name set to "Northwood Game Haven" (§0.3a)
 - [ ] Public address checked — shop, not home (§0.3b)
 - [ ] Decided how the privacy policy names the publisher (§0.3c)
-- [ ] `stash2026` removed from `site/booking.html` (§0.4)
+- [x] `stash2026` removed from `site/booking.html` (§0.4) — *12aa*
 - [ ] App name, short and full descriptions pasted (§1)
 - [ ] Category, contact and privacy URL set (§2)
 - [ ] Icon and feature graphic uploaded (§3)
