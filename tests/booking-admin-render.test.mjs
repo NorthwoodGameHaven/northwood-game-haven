@@ -398,12 +398,15 @@ describe('privacy / deletion page consistency', () => {
   test('the privacy page names both companies and their roles', () => {
     assert.match(P, /ECCentric LLC/);
     assert.match(P, /Northwood Experiences LLC/);
-    assert.match(P, /published on Google Play by/);
+    assert.match(P, /built, hosted and published by/, 'says what the software company actually does');
   });
 
-  test('it says the publisher does not receive the data', () => {
-    assert.match(P, /does not receive the information/i,
-      'otherwise the page leaves open which company is the controller');
+  test('it is unambiguous which company holds the data', () => {
+    // Northwood Experiences owns the software; ECCentric/NGH holds the
+    // customer data. A page that names two companies without saying which is
+    // which is worse than one that names only the operator.
+    assert.match(P, /does not use your information for anything of its own/i);
+    assert.match(P, /on Northwood Game Haven's behalf/i);
   });
 
   test('it says overnight booking leaves the site', () => {

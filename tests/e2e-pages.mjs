@@ -48,10 +48,24 @@ async function newPage(context, label) {
   const page = await context.newPage();
   page.on('console', (m) => { if (m.type() === 'error' && !IGNORE.test(m.text()) && !(expect401 && /status of 401/.test(m.text()))) consoleErrors.push(`[${label}] console: ${m.text()}`); });
   page.on('pageerror', (e) => consoleErrors.push(`[${label}] pageerror: ${e.message}`));
-  page.on('requestfailed', (r) => { const t = `${r.url()} ${r.failure() && r.failure().errorText}`; if (!IGNORE.test(t)) consoleErrors.push(`[${label}] requestfailed: ${t}`); });
+  page.on('requestfailed', (r) => {
+    const t = `${r.url()} ${(r.failure() && r.failure().errorText) || ''}`;
+    if (!IGNORE.test(t)) consoleErrors.push(`[${label}] requestfailed: ${t}`);
+  });
   page.on('dialog', (d) => d.accept());
   if (PORT !== 8888) await page.addInitScript(() => { window.NGH_SITE_URL = location.origin; });
   return page;
+}
+// The QR is a real network fetch that resolves ~60ms after the dashboard
+// renders, so `img.complete` read immediately is a coin flip — it was passing
+// on luck, and the losing side also aborted the request at page.close() and
+// tripped the console-error gate. Wait for the image, then assert.
+async function qrLoaded(page, label) {
+  const loaded = await page.waitForFunction(
+    () => { const i = document.getElementById('dQr'); return !!i && i.complete && i.naturalWidth > 0; },
+    null, { timeout: 8000 }
+  ).then(() => true).catch(() => false);
+  ok(label, loaded, 'the QR never finished loading');
 }
 async function shot(page, name) {
   await page.screenshot({ path: path.join(SHOTS, name + '.png'), fullPage: true });
@@ -93,7 +107,7 @@ try {
     ok('account: customer group pill', (await page.textContent('#dGroup')).trim() === 'Haven Regulars');
     ok('account: customer code shown', (await page.textContent('#dCode')).trim() === 'NGH-4821');
     await page.waitForFunction(() => { const i = document.getElementById('dQr'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 8000 }).catch(() => {});
-    ok('account: QR image loaded', await page.$eval('#dQr', (i) => i.complete && i.naturalWidth > 0));
+    await qrLoaded(page, 'account: QR image loaded');
     ok('account: QR url uses NGH.qrUrl with the customer code', (await page.$eval('#dQr', (i) => i.src)).includes(encodeURIComponent('https://gamehaven.guru/app/account.html?c=NGH-4821')));
     ok('account: upcoming has booking + registration', (await page.$$('#dUp li')).length === 2);
     ok('account: recent purchases listed', (await page.$$('#dPurchases li')).length === 3);
@@ -357,10 +371,16 @@ try {
     await page.route('**/api/account/me', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(reviewBundle()) }));
 
     // The context is shared with the earlier account block, which left a
-    // session behind — start from signed-out, the way a reviewer would.
+    // session behind — start signed-out, the way a reviewer would.
+    //
+    // Clearing it AFTER navigating and then reloading looks equivalent and is
+    // not: the first load restores that session, renders the dashboard, and
+    // fires off the QR image request, which the reload then aborts. That abort
+    // is a real requestfailed and it tripped the console-error gate about half
+    // the time. Dropping the session before any page script runs means the
+    // dashboard never renders and no request is ever started.
+    await page.addInitScript(() => { try { localStorage.removeItem('ngh_account'); } catch (e) {} });
     await page.goto(BASE + '/app/account.html');
-    await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} });
-    await page.reload();
     await page.waitForSelector('#vEmail:not([hidden])', { timeout: 8000 });
     await page.fill('#email', REVIEW_EMAIL_E2E);
     await page.click('#btnSend');
@@ -375,7 +395,7 @@ try {
       await page.textContent('#dRule'));
     ok('review: customer code renders', (await page.textContent('#dCode')).trim() === 'NGH-0000');
     ok('review: group pill renders', (await page.textContent('#dGroup')).trim() === 'Haven Regulars');
-    ok('review: QR code image actually loads', await page.$eval('#dQr', (i) => i.complete && i.naturalWidth > 0));
+    await qrLoaded(page, 'review: QR code image actually loads');
     ok('review: upcoming shows the booking and the registration', (await page.$$('#dUp li')).length === 2,
       String((await page.$$('#dUp li')).length));
     ok('review: purchase history renders', (await page.$$('#dPurchases li')).length === 2,
