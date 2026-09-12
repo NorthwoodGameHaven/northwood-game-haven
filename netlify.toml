@@ -227,6 +227,14 @@
   to   = "/tv-idle.html"
   status = 200
 
+# NGH-BUILD 2026-09-12n — privacy policy. Google Play will not accept a
+# listing without this URL, and the Data Safety form is checked against what
+# the page says.
+[[redirects]]
+  from = "/privacy"
+  to   = "/privacy.html"
+  status = 200
+
 [[redirects]]
   from = "/api/companion/*"
   to   = "/.netlify/functions/companion/:splat"
@@ -360,7 +368,13 @@
   to   = "/faq.html"
   status = 200
 
-# Nightly auto-cancel of unpaid approved bookings.
+# Nightly unpaid-booking sweep. NGH-BUILD 2026-09-12p:
+#   * the DEPOSIT never cancels anybody, ever - it can only spare a booking
+#   * nothing is cancelled until the booking's END time has passed (this cron
+#     fires at midnight UTC = 7 PM Central, so using the start time would
+#     release a 6 PM room with the guests still in it)
+#   * guests are only emailed within 48h of that; older no-shows close quietly
+#   * set AUTO_CANCEL_ENABLED=0 and redeploy to make it report-only
 [functions."auto-cancel"]
   schedule = "@daily"
 

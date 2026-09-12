@@ -18,6 +18,14 @@
 //      win it.
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { register } from 'node:module';
+
+// Register our own hooks rather than relying on `--import
+// ./tests/_register-karaoke.mjs` on the command line. Self-registering means
+// `node --test tests/*.test.mjs` runs this file too — otherwise the documented
+// "run the whole suite" command fails on exactly one file, which is the kind of
+// papercut that stops people running the suite at all.
+register('./_karaoke-hooks.mjs', import.meta.url);
 
 const fn = (await import('../netlify/functions/karaoke.mjs')).default;
 const D = globalThis.__kdb;

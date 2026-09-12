@@ -1585,7 +1585,10 @@ async function enterConsole(){
   setAdminView(adminView||vw);                       /* re-render the CURRENT view with fresh data */
   checkConflicts();
   _nghDeepLinkPoll();                                /* editEvent/dupEvent deep links (cache is ready) */
-  autoCancelUnpaid().then(function(changed){ if(changed) setAdminView(adminView); }).catch(function(){});
+  /* NGH-BUILD 2026-09-12p: the browser no longer cancels anybody's booking.
+     Opening the Guru console is not a decision to cancel a customer. The
+     nightly server job (netlify/functions/auto-cancel.mjs) reports unpaid
+     bookings in the ops digest; a human decides what happens to them. */
 }
 
 var adminFilter="pending";
@@ -1602,7 +1605,28 @@ function renderAdmin(filter){
   if(filter!=="all") list=list.filter(function(r){ return r.status===filter; });
   var el=$("requests-list");
   if(!list.length){ el.innerHTML='<div class="card"><p class="hint" style="margin:0;">No '+filter+' requests.</p></div>'; return; }
-  el.innerHTML=list.map(reqCardHtml).join("");
+  /* NGH-BUILD 2026-09-12n: render card by card. One booking that throws used to take
+     the entire tab down — the exception escaped before innerHTML was assigned,
+     so the list silently kept the previous tab's empty-state message while the
+     count said there were 20 to look at. */
+  var broken=0;
+  el.innerHTML=list.map(function(r){
+    try{ return reqCardHtml(r); }
+    catch(e){
+      broken++;
+      console.error('[NGH] could not render booking '+(r&&r.id)+':', e);
+      return '<div class="card" style="border-color:#f0c5be;background:#fdf3f2;">'+
+        '<h2 style="color:#9a3b2e;margin-top:0;">\u26a0\ufe0f '+esc((r&&r.id)||'unknown booking')+'</h2>'+
+        '<p class="hint" style="margin:0 0 8px;">This booking could not be displayed \u2014 something in the record is malformed. '+
+        'The details below are enough to find it; the full error is in the browser console.</p>'+
+        '<div class="kv"><b>Name</b> '+esc((r&&r.name)||'\u2014')+'</div>'+
+        '<div class="kv"><b>Date</b> '+esc((r&&r.date)||'\u2014')+'</div>'+
+        '<div class="kv"><b>Status</b> '+esc((r&&r.status)||'\u2014')+'</div>'+
+        '<div class="kv" style="color:#9a3b2e;"><b>Error</b> '+esc(String(e&&e.message||e))+'</div>'+
+        '</div>';
+    }
+  }).join("");
+  if(broken) console.warn('[NGH] '+broken+' of '+list.length+' bookings failed to render in the "'+filter+'" tab');
 }
 function getReq(id){ for(var i=0;i<cache.bookings.length;i++) if(cache.bookings[i].id===id) return cache.bookings[i]; return null; }
 
@@ -1787,6 +1811,8 @@ async function approve(id){
     if(_bkPend.length && !confirm("⏳ Other PENDING request(s) overlap this window:\n\n"+_bkPend.map(_fmt).join("\n")+"\n\nApproving this one likely means rejecting or moving those. Approve anyway?")) return;
     if(_chk.tight.length && !confirm("⚠️ Back-to-back (<15 min changeover) with:\n\n"+_chk.tight.map(_fmt).join("\n")+"\n\nApprove anyway?")) return;
   }
+  /* NGH-BUILD 2026-09-12p: no exemption flag needed — nothing in the browser
+     cancels bookings any more, so there is nothing to be exempt from. */
   await Store.updateBooking(id,{status:"approved"}); await refreshCache(); await resendApproval(id, true); renderAdmin(adminFilter); }
 async function resendApproval(id, silent){
   var r=getReq(id); if(!r) return;
@@ -2173,22 +2199,28 @@ function recomputeMil(r, val){
 function noteFile(id){ var fi=$("invfile-"+id); if(fi && fi.files && fi.files[0]) $("invfilename-"+id).textContent="Selected: "+fi.files[0].name+" (will attach on send)"; }
 
 async function autoCancelUnpaid(){
-  var now=new Date(), changed=false;
-  for(var i=0;i<cache.bookings.length;i++){
-    var r=cache.bookings[i];
-    if(r.status==="approved" && !feeIsPaid(r) && !depIsPaid(r)){ /* NGH-BUILD 2026-09-10c: was !fullyPaid(r); now cancel only when NEITHER fee nor deposit is paid */
-      var deadline=new Date(r.date+"T00:00:00"); deadline.setDate(deadline.getDate()-1); deadline.setHours(23,59,59);
-      if(now>deadline){
-        await Store.updateBooking(r.id, {status:"rejected", autoCanceled:true});
-        var recNote = r.groupId ? (" This was occurrence "+r.recIndex+" of "+r.recTotal+" in your recurring series; your other approved occurrences are NOT affected.") : "";
-        await Store.sendEmail(r.email,"Your Northwood Game Haven booking "+r.id+" was canceled (unpaid)",
-          "Hi "+r.name+",\n\nYour booking "+r.id+" for "+r.date+" was automatically canceled because payment (including the deposit hold) wasn't received by the day before the booking."+recNote+" Please submit a new request if you'd still like to come in.\n\n— NGH 🦦");
-        changed=true;
-      }
-    }
-  }
-  if(changed) await refreshCache();
-  return changed; /* NGH-BUILD 2026-08-26a: lets enterConsole re-render only when needed */
+  /* ===== NGH-BUILD 2026-09-12p: DELETED ON PURPOSE. DO NOT BRING THIS BACK. =====
+
+     This used to cancel a guest's approved booking and email them about it,
+     from a Guru's browser, on every console load. It cancelled Robyn's Depths
+     booking even though she had paid, because at the time it required BOTH the
+     booking fee AND the deposit to be settled — and the deposit is payable on
+     the day. It also treated on-account bookings as unpaid, and had no
+     same-day exemption, so it could cancel a booking while the guests were
+     sitting in the room.
+
+     The nightly server job at netlify/functions/auto-cancel.mjs is the single
+     owner of this policy, and as of 2026-09-12p it cancels nothing either — it
+     lists unpaid approved bookings in the daily ops digest and leaves them
+     approved for a human to chase. Cancelling there is opt-in behind
+     AUTO_CANCEL_ENABLED=1, and even then it spares anything with any payment
+     recorded (fee, deposit or on-account) and never touches a booking dated
+     today or earlier.
+
+     Unpaid bookings are still visible here: an approved booking shows
+     "Fee: Due" and "Deposit: Due" badges on its card. Surfacing is this page's
+     job. Deciding is the Guru's. */
+  return false;
 }
 
 /* ---------- admin view switching ---------- */

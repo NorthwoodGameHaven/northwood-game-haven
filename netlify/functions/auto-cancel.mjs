@@ -1,20 +1,45 @@
 // netlify/functions/auto-cancel.mjs
 // Scheduled (cron) function — runs nightly. Two jobs:
 //
-//   1. AUTO-CANCEL: cancel any APPROVED booking still UNPAID after the
-//      day-before-the-booking deadline, and email the guest.
-//      SAME-DAY EXEMPTION (2026-08-01): bookings dated today (America/Chicago)
-//      or in the past are NEVER auto-canceled, and neither are bookings that
-//      were submitted after their pay-by deadline had already passed (late
-//      same-/next-day requests) — those are a human collect-in-person call.
-//      Previously a same-day booking approved before the 7 PM CT cron
-//      (@daily = midnight UTC) was instantly "past deadline" and got
-//      rejected while the guests were in the room.
+//   1. UNPAID SWEEP — NGH-BUILD 2026-09-12p, RULES REWRITTEN.
+//
+//      THE DEPOSIT NEVER CANCELS ANYBODY. EVER. It is payable on the day, it
+//      is refundable, and it is not a reason to take somebody's room away. It
+//      appears below exactly once, as something that can SAVE a booking.
+//      Robyn paid her booking fee, owed only the day-of deposit, and got
+//      cancelled anyway. That is the bug this file exists to never repeat.
+//
+//      NOTHING IS CANCELLED BEFORE THE BOOKING HAS ACTUALLY HAPPENED. The old
+//      rule cancelled at a pay-by deadline the day before, which meant a guest
+//      who was going to settle up at the counter lost their room the night
+//      before while nobody was watching. The only bookings this touches now
+//      are ones where the room was held, the fee was never paid, and the time
+//      has already come and gone.
+//
+//      Specifically, a booking is auto-cancelled only when ALL of these hold:
+//        • status is approved
+//        • the BOOKING FEE is not recorded as paid, on account, or settled
+//        • NOTHING ELSE is paid either — any deposit or on-account marker on
+//          the record spares it (the deposit can only help, never hurt)
+//        • the booking's END time (start + hours, America/Chicago) is in the
+//          past. Not the start time: this cron runs @daily = midnight UTC =
+//          7 PM Central, so cancelling at the start time would have released
+//          a 6 PM booking at 7 PM with the guests sitting in the room. If a
+//          booking has no start time, the end of its day is used.
+//
+//      Guests are only emailed if the booking ended within the last
+//      GUEST_EMAIL_GRACE_H hours. Older no-shows are closed out quietly and
+//      listed in the ops digest — nobody needs a cancellation notice for a
+//      party that was three weeks ago.
+//
+//      Kill switch: set AUTO_CANCEL_ENABLED=0 in the Netlify environment and
+//      trigger a deploy. The sweep then only reports, and cancels nothing.
 //
 //   2. DAILY OPS DIGEST (closes SOP §6.6/§6.7 gaps — "auto-cancel never
 //      notifies staff" and the manual zombie-draft sweep): email ADMIN_EMAIL
 //      a summary of anything that needs eyes today:
-//        • bookings auto-canceled tonight (check refunds/rebooking)
+//        • unpaid approved bookings past their pay-by date (chase, or reject
+//          by hand — nothing is cancelled for you)
 //        • zombie draft events (>14 days old, still holding rooms)
 //        • min-to-fire events within 48h that haven't met minimum
 //          (EO run/cancel decision due per WI-105 §3)
@@ -27,6 +52,60 @@ import { sendBrandedMail } from './_shared/email.mjs';
 import { expandOccurrences, eventRoomsOf, roomLabel } from './_shared/conflicts.mjs';
 
 const ZOMBIE_DRAFT_DAYS = 14;
+const STORE_TZ = 'America/Chicago';
+const GUEST_EMAIL_GRACE_H = 48;   // don't email about a booking older than this
+
+// NGH-BUILD 2026-09-12p: kill switch. Set AUTO_CANCEL_ENABLED=0 (or false/no/off)
+// in Netlify and trigger a deploy to make this sweep report-only.
+const AUTO_CANCEL_ENABLED = !/^(0|false|no|off)$/i.test(String(process.env.AUTO_CANCEL_ENABLED ?? '').trim());
+
+// How far America/Chicago is from UTC at a given instant, in ms. Derived from
+// the runtime's own tz database rather than hardcoding -5/-6, so CST/CDT and
+// any future rule change are handled without a code edit.
+function tzOffsetMs(at, tz = STORE_TZ) {
+  const p = {};
+  for (const part of new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  }).formatToParts(at)) p[part.type] = part.value;
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, p.hour === '24' ? 0 : +p.hour, +p.minute, +p.second);
+  return asUTC - at.getTime();
+}
+
+// A wall-clock time in the store's timezone -> the actual instant it happened.
+function storeInstant(dateStr, hh, mm, ss = 0) {
+  const [Y, M, D] = String(dateStr).split('-').map(Number);
+  if (!Y || !M || !D) return null;
+  const guess = Date.UTC(Y, M - 1, D, hh, mm, ss);
+  // One correction pass is exact everywhere except inside the DST spring-
+  // forward gap, where the hour does not exist and either answer is fine.
+  return new Date(guess - tzOffsetMs(new Date(guess)));
+}
+
+// When is this booking OVER? start + hours, in store time. A booking with no
+// start time is treated as running to the end of its day, which is the latest
+// (i.e. safest) reading — it can only delay a cancellation, never hasten one.
+export function bookingEndsAt(r) {
+  if (!r || !r.date) return null;
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(r.start || ''));
+  if (!m || r.allDay) return storeInstant(r.date, 23, 59, 59);
+  const hours = Number(r.hours);
+  const durMin = Number.isFinite(hours) && hours > 0 ? Math.round(hours * 60) : 60;
+  const endMin = (+m[1]) * 60 + (+m[2]) + durMin;
+  // Past midnight stays on the booking's own date, capped at 23:59:59 — a late
+  // session should not push the cancellation a whole extra day out.
+  if (endMin >= 24 * 60) return storeInstant(r.date, 23, 59, 59);
+  return storeInstant(r.date, Math.floor(endMin / 60), endMin % 60, 0);
+}
+
+// The ONLY payment question that can lead to a cancellation. Anything at all
+// recorded against the booking — fee, deposit, on account — spares it.
+export function nothingPaid(r) {
+  return !(r.payment === 'paid' || r.payment === 'onaccount' ||
+    r.feePaid === true || r.depositPaid === true ||
+    r.feeOnAccount === true || r.depositOnAccount === true);
+}
 
 export default async () => {
   await ensureSchema();
@@ -36,66 +115,82 @@ export default async () => {
   const chiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(now);
   let canceled = 0;
   const canceledList = [];
+  const flaggedList = [];        // found, reported, deliberately left alone
 
   for (const row of rows) {
     const r = row.data;
-    // NGH-BUILD 2026-09-11a: never auto-cancel a booking that has received ANY payment
-    // (fee OR deposit) or was put on the customer's Lightspeed account. The
-    // 2026-09-10c version of this guard was committed to _shared/auto-cancel.mjs,
-    // which Netlify never runs — this scheduled file still had the old
-    // fully-paid-only check and kept cancelling fee-paid/deposit-unpaid bookings.
-    if (r.payment === 'paid' || r.payment === 'onaccount' || r.feePaid === true || r.depositPaid === true || r.feeOnAccount === true || r.depositOnAccount === true) {
+    // GUARD 1 — anything paid, anywhere, in any form, is off limits. This
+    // includes the deposit: the deposit can only ever save a booking.
+    if (!nothingPaid(r)) {
       if (r.payment !== 'paid') console.log('[auto-cancel] SPARED partially-paid / on-account booking', r.id, '(fee:' + (r.feePaid === true) + ' deposit:' + (r.depositPaid === true) + ' onaccount:' + (r.payment === 'onaccount') + ') — needs staff follow-up');
       continue;
     }
-    // Same-day / past bookings are never auto-canceled (see header).
-    if (!r.date || r.date <= chiToday) continue;
-    const deadline = new Date(r.date + 'T00:00:00');
-    deadline.setDate(deadline.getDate() - 1);
-    deadline.setHours(23, 59, 59);
-    if (now <= deadline) continue;
-    // Late-booking grace: submitted after the pay-by deadline had already
-    // passed => the guest never had a fair payment window. Leave it alone.
-    const createdTs = row.created_at ? new Date(row.created_at) : null;
-    if (createdTs && createdTs > deadline) continue;
+    // GUARD 2 — the booking must be OVER. Not "past a pay-by deadline", not
+    // "the day before". Over. Nobody's room disappears while it is still
+    // theirs, and nobody is cancelled while they are sitting in it.
+    const endsAt = bookingEndsAt(r);
+    if (!endsAt || now <= endsAt) continue;
 
-    const merged = { ...r, status: 'rejected', autoCanceled: true };
+    const hoursSince = (now - endsAt) / 3600000;
+    const line = `  • ${r.id} — ${r.name || '—'} · ${r.date}${r.start ? ' ' + fmtT(r.start) : ''} · ${(r.rooms || []).map(roomLabel).join(', ') || 'rooms?'}${r.birthdayParty ? ' · 🎂 BIRTHDAY PARTY' : ''} (${r.email || 'no email'})`;
+
+    // Kill switch: report it and change nothing.
+    if (!AUTO_CANCEL_ENABLED) {
+      flaggedList.push(line + ' — booking fee never paid');
+      console.log('[auto-cancel] REPORT ONLY (AUTO_CANCEL_ENABLED=0) —', r.id, 'left approved');
+      continue;
+    }
+
+    const merged = { ...r, status: 'rejected', autoCanceled: true, autoCanceledAt: now.toISOString() };
     await sql`UPDATE bookings SET data = ${JSON.stringify(merged)}::jsonb, status = 'rejected' WHERE id = ${r.id}`;
     canceled++;
-    canceledList.push(`  • ${r.id} — ${r.name || '—'} · ${r.date} · ${(r.rooms || []).map(roomLabel).join(', ') || 'rooms?'}${r.birthdayParty ? ' · 🎂 BIRTHDAY PARTY' : ''} (${r.email || 'no email'})`);
+    canceledList.push(line + (hoursSince > GUEST_EMAIL_GRACE_H ? ' — closed out quietly, too old to email' : ''));
 
-    // best-effort guest email
+    // Guest email — best effort, and only while it is still news to them.
+    if (hoursSince > GUEST_EMAIL_GRACE_H) {
+      console.log('[auto-cancel]', r.id, 'ended', Math.round(hoursSince / 24), 'days ago — closing out without emailing the guest');
+      continue;
+    }
     try {
       const recNote = r.groupId
         ? ` This was occurrence ${r.recIndex} of ${r.recTotal} in your recurring series; your other approved occurrences are NOT affected.`
         : '';
+      // The deposit is payable on the day and is NOT a reason to cancel.
+      // Don't tell a guest it was, and don't imply it.
       await sendMail(r.email,
-        `Your Northwood Game Haven booking ${r.id} was canceled (unpaid)`,
-        `Hi ${r.name},\n\nYour booking ${r.id} for ${r.date} was automatically canceled because payment (including the deposit hold) wasn't received by the day before the booking.${recNote} Please submit a new request if you'd still like to come in.\n\n— NGH 🦦`);
+        `Your Northwood Game Haven booking ${r.id} was closed out (booking fee unpaid)`,
+        `Hi ${r.name},\n\nYour booking ${r.id} for ${r.date} has been closed out because the booking fee was never paid.${recNote} The refundable deposit is payable on the day and had nothing to do with this.\n\nIf that's a mistake — you paid at the counter, or something went wrong on our end — just reply to this email and we'll put it right.\n\n— NGH 🦦`);
     } catch (e) { console.warn('auto-cancel email failed', e); }
   }
-  console.log(`[auto-cancel] canceled ${canceled} unpaid booking(s)`);
+  console.log(`[auto-cancel] canceled ${canceled} unpaid booking(s); flagged ${flaggedList.length} for staff`);
 
   // ---------- DAILY OPS DIGEST ----------
-  try { await sendOpsDigest(now, canceledList, chiToday); }
+  try { await sendOpsDigest(now, canceledList, chiToday, flaggedList); }
   catch (e) { console.error('[auto-cancel] ops digest failed', e); }
 
-  return new Response(`canceled ${canceled}`, { status: 200 });
+  return new Response(`canceled ${canceled}, flagged ${flaggedList.length}`, { status: 200 });
 };
 
 function ymd(d) { return d.toISOString().slice(0, 10); }
 function fmtT(t) { if (!t) return ''; const p = String(t).split(':'); let h = +p[0]; const m = p[1], ap = h >= 12 ? 'PM' : 'AM'; let hh = h % 12; if (hh === 0) hh = 12; return hh + ':' + m + ' ' + ap; }
 function regQty(d) { return Math.max(1, parseInt(d && d.qty, 10) || 1); }
 
-async function sendOpsDigest(now, canceledList, chiToday) {
+async function sendOpsDigest(now, canceledList, chiToday, flaggedList = []) {
   const adminEmail = process.env.ADMIN_EMAIL || 'stash@northwoodgamehaven.com';
   const SITE = (process.env.SITE_URL || 'https://gamehaven.guru').replace(/\/$/, '');
   const sections = [];
 
-  // ---- 1. tonight's auto-cancellations ----
+  // ---- 1a. would have been closed out, but the kill switch is on ----
+  if (flaggedList.length) {
+    sections.push('💳 FINISHED BOOKINGS WHERE THE FEE WAS NEVER PAID (' + flaggedList.length + ') — NOTHING WAS CANCELED\n' + flaggedList.join('\n') +
+      '\n  → AUTO_CANCEL_ENABLED is set to 0, so these are still APPROVED. Collect, write off, or reject by hand in the Guru Console.');
+  }
+
+  // ---- 1b. closed out overnight ----
   if (canceledList.length) {
-    sections.push('💳 AUTO-CANCELED UNPAID BOOKINGS (' + canceledList.length + ')\n' + canceledList.join('\n') +
-      '\n  → Rooms are released. Follow up if any were expected to pay in person.');
+    sections.push('🧾 CLOSED OUT — BOOKING FEE NEVER PAID, DATE ALREADY PASSED (' + canceledList.length + ')\n' + canceledList.join('\n') +
+      '\n  → These had already happened (or not) before anything was touched. Nothing upcoming was cancelled, and the deposit was never part of it.' +
+      '\n  → Guests were emailed only if the booking ended in the last ' + GUEST_EMAIL_GRACE_H + ' hours. Re-approve in the console if any of these actually paid at the counter.');
   }
 
   // ---- load events + registrations once ----
