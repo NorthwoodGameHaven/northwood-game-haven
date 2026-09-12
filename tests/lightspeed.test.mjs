@@ -301,51 +301,59 @@ function stubStore({ customers = [], products = [], saleReply, taxes } = {}) {
   routes.push({ match: (u, i) => u === 'https://teststore.retail.lightspeed.app/api/register_sales' && i.method === 'POST', reply: (u, i) => (saleReply || (() => jres({ register_sale: { id: 'sale-1' } })))(JSON.parse(i.body)) });
 }
 
-describe('refundSale (NGH-BUILD 2026-09-12c)', () => {
+describe('refundSale (NGH-BUILD 2026-09-12d) — real X-Series returns flow', () => {
   beforeEach(() => { resetMocks(); dbTokens(() => tokenRow()); });
 
-  test('posts a RETURN with negative quantities and negative loyalty, logged under <sourceId>:refund', async () => {
-    let posted = null, logged = null;
-    stubStore({ customers: [{ id: 'c1', email: 'jane@d.co', enable_loyalty: true }], products: [{ id: 'p-room', sku: 'NGH-ROOM' }, { id: 'p-kara', sku: 'NGH-KARAOKE' }],
-      saleReply: b => { posted = b; return jres({ register_sale: { id: 'sale-ret' } }); } });
-    // the original sale must exist in the log for a reversal to be allowed, and the
-    // '<id>:refund' key must NOT — otherwise the idempotency guard short-circuits.
+  // The returns endpoints live ONLY on the date-versioned API; /api/2.0/… 404s.
+  // Lightspeed builds the parked return itself (lines already negative) and
+  // computes the loyalty reversal when the return is closed — which is why we
+  // must NOT hand-roll a negative-line sale (that awards loyalty instead).
+  function stubReturns({ parkedTotalIncTax = -42.2, onPut } = {}) {
+    const V = 'https://teststore.retail.lightspeed.app/api/2026-07';
+    routes.push({ match: (u, i) => u === V + '/sales/sale-9/actions/return' && i.method === 'POST',
+      reply: () => jres({ data: { id: 'ret-1', state: 'parked', return: { is_return: true, original_sale_id: 'sale-9' },
+        totals: { price_incl_tax: parkedTotalIncTax, loyalty: 0 } } }) });
+    routes.push({ match: u => u.includes('/api/2.0/payment_types'),
+      reply: () => jres({ data: [{ id: 'pt-online', name: 'Online — Stripe', type_id: 3 }] }) });
+    routes.push({ match: (u, i) => u === V + '/sales/ret-1' && i.method === 'PUT',
+      reply: (u, i) => { const b = JSON.parse(i.body); if (onPut) onPut(b); return jres({ data: { id: 'ret-1', state: b.state } }); } });
+  }
+
+  test('opens a return on the ORIGINAL sale, closes it with a negative payment, logs <sourceId>:refund', async () => {
+    let put = null, logged = null;
+    stubStore({});
+    stubReturns({ onPut: b => { put = b; } });
     M.db.handlers.unshift((t, v) => t.startsWith('SELECT sale_id FROM ls_sales_log')
       ? (String(v[0]).endsWith(':refund') ? [] : [{ sale_id: 'sale-9' }]) : undefined);
     M.db.handlers.push((t, v) => { if (t.startsWith('INSERT INTO ls_sales_log')) { logged = v; return []; } });
 
-    const res = await ls.refundSale({
-      sourceId: 'NGH-77:fee', kind: 'booking-refund', customerEmail: 'jane@d.co',
-      lines: core.bookingSaleLines({ id: 'NGH-77', rooms: ['holt'], date: '2026-10-01', addons: [{ id: 'karaoke' }] }, 'fee', 10550),
-      payment: 'online', note: 'Refund — NGH booking NGH-77 (fee)'
-    });
-    assert.equal(res.ok, true); assert.equal(res.saleId, 'sale-ret'); assert.equal(res.error, null);
-    assert.equal(posted.source_id, 'NGH-77:fee:refund');
-    // negative qty is what makes it a return; loyalty must go negative or points never come back
-    assert.deepEqual(posted.register_sale_products.map(p => [p.product_id, p.quantity, p.price, p.loyalty_value]),
-      [['p-room', -1, 100, -5], ['p-kara', -1, 0, 0]]);
-    assert.equal(posted.register_sale_payments[0].amount, -105.5);
-    assert.equal(logged[0], 'NGH-77:fee:refund'); assert.equal(logged[1], 'sale-ret');
+    const res = await ls.refundSale({ sourceId: 'NGH-77:fee', kind: 'booking-refund', payment: 'online', note: 'Refund — NGH-77 (fee)' });
+
+    assert.deepEqual({ ok: res.ok, saleId: res.saleId, error: res.error }, { ok: true, saleId: 'ret-1', error: null });
+    // it must hit the date-versioned returns endpoint, never /api/2.0/
+    assert.ok(calls.some(c => c.url.endsWith('/api/2026-07/sales/sale-9/actions/return')), 'did not call the returns endpoint');
+    assert.equal(put.state, 'closed');
+    // payment balances the parked return exactly, and negative
+    assert.equal(put.payments[0].amount, -42.2);
+    assert.equal(put.payments[0].type.config_id, 'pt-online');
+    assert.equal(logged[0], 'NGH-77:fee:refund'); assert.equal(logged[1], 'ret-1');
   });
 
-  test('refuses to reverse a sale that was never recorded — no credit out of thin air', async () => {
-    stubStore({ products: [{ id: 'p-room', sku: 'NGH-ROOM' }] });
+  test('refuses to reverse a sale that was never recorded — no return is opened', async () => {
+    stubStore({}); stubReturns({});
     M.db.handlers.unshift(t => t.startsWith('SELECT sale_id FROM ls_sales_log') ? [] : undefined);
-    const posts = calls.filter(c => c.url.endsWith('/api/register_sales')).length;
-    const r = await ls.refundSale({ sourceId: 'NGH-NOPE:fee', lines: [{ sku: 'NGH-ROOM', qty: 1, priceIncTax: 10 }] });
+    const r = await ls.refundSale({ sourceId: 'NGH-NOPE:fee' });
     assert.equal(r.ok, false); assert.match(r.error, /nothing to reverse/);
-    assert.equal(calls.filter(c => c.url.endsWith('/api/register_sales')).length, posts);
+    assert.ok(!calls.some(c => /actions\/return/.test(c.url)), 'should not have opened a return');
   });
 
-  test('idempotent: a second reversal of the same sale posts nothing', async () => {
-    stubStore({ products: [{ id: 'p-room', sku: 'NGH-ROOM' }] });
-    // the ':refund' key is already logged → the guard must short-circuit
+  test('idempotent: a second reversal opens nothing', async () => {
+    stubStore({}); stubReturns({});
     M.db.handlers.unshift((t, v) => t.startsWith('SELECT sale_id FROM ls_sales_log')
-      ? (String(v[0]).endsWith(':refund') ? [{ sale_id: 'sale-ret' }] : [{ sale_id: 'sale-9' }]) : undefined);
-    const posts = calls.filter(c => c.url.endsWith('/api/register_sales')).length;
-    const r = await ls.refundSale({ sourceId: 'NGH-77:fee', lines: [{ sku: 'NGH-ROOM', qty: 1, priceIncTax: 10 }] });
-    assert.deepEqual({ ok: r.ok, skipped: r.skipped, saleId: r.saleId }, { ok: true, skipped: true, saleId: 'sale-ret' });
-    assert.equal(calls.filter(c => c.url.endsWith('/api/register_sales')).length, posts);
+      ? (String(v[0]).endsWith(':refund') ? [{ sale_id: 'ret-1' }] : [{ sale_id: 'sale-9' }]) : undefined);
+    const r = await ls.refundSale({ sourceId: 'NGH-77:fee' });
+    assert.deepEqual({ ok: r.ok, skipped: r.skipped, saleId: r.saleId }, { ok: true, skipped: true, saleId: 'ret-1' });
+    assert.ok(!calls.some(c => /actions\/return/.test(c.url)), 'should not have opened a return');
   });
 });
 

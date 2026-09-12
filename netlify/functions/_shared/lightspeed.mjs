@@ -395,17 +395,35 @@ export async function recordSale(opts) {
   }
 }
 
-// ---- reverse a recorded sale (NGH-BUILD 2026-09-12c) ----------------------------------
-// X-Series has no void for a CLOSED sale — the correction is a RETURN, i.e. a
-// second sale with negative quantities against the same products, register,
-// user and payment type. Negating the lines also negates `loyalty_value`, which
-// is what takes the points back off the customer; nothing else does that.
+// ---- reverse a recorded sale (NGH-BUILD 2026-09-12d) ----------------------------------
+// X-Series has a first-class RETURNS flow, and it is the ONLY way loyalty comes
+// back off a customer. Posting a normal sale with negative quantities (what
+// 12c did) produces correct negative revenue and tax, but Lightspeed treats it
+// as a fresh purchase and AWARDS loyalty again — verified live: refunding a
+// $42.20 sale moved the balance from $0.80 to $1.60 instead of to $0.00.
 //
-// opts: { sourceId, kind, lines, payment, note, customerEmail }
-//   sourceId  the ORIGINAL sale's source id (e.g. 'NGH-123:fee'). The return is
+// The real flow, and it only exists on the DATE-versioned API (2.0 → 404):
+//   1. POST /api/<date>/sales/:originalId/actions/return   → a PARKED return,
+//      lines pre-negated by Lightspeed, `return.original_sale_id` set
+//   2. PUT  /api/<date>/sales/:returnId  {state:'closed', payments:[…]}
+// Lightspeed computes the loyalty reversal itself once the return is closed.
+//
+// opts: { sourceId, kind, payment, note, amountCents? }
+//   sourceId  the ORIGINAL sale's source id (e.g. 'NGH-123:fee'); the return is
 //             logged as '<sourceId>:refund' so a double-click can't double-reverse.
-//   lines     same shape recordSale takes; quantities are negated here.
+//   amountCents optional override; defaults to the parked return's own total so
+//             the payment always balances the lines exactly.
 // Never throws — returns { ok, saleId, skipped, error }.
+export const RETURNS_API_VERSION = process.env.LIGHTSPEED_RETURNS_API_VERSION || '2026-07';
+
+async function paymentTypeRef(configId) {
+  // The date-versioned API wants { config_id, id, name }; `id` is Lightspeed's
+  // numeric payment TYPE id, not our retailer payment type id.
+  const list = listOf(await lsFetch('payment_types'));
+  const t = list.find(x => String(x.id) === String(configId));
+  return { config_id: String(configId), id: String((t && t.type_id) != null ? t.type_id : 3), name: (t && t.name) || 'Online' };
+}
+
 export async function refundSale(opts) {
   const sourceId = String((opts && opts.sourceId) || '');
   const kind = String((opts && opts.kind) || 'refund');
@@ -417,46 +435,39 @@ export async function refundSale(opts) {
 
     const prev = await sql`SELECT sale_id FROM ls_sales_log WHERE source_id = ${refundId}`;
     if (prev.length && prev[0].sale_id) { out.ok = true; out.skipped = true; out.saleId = prev[0].sale_id; return out; }
-    // Refuse to reverse a sale we never recorded — otherwise we'd mint a credit
-    // against nothing and hand the customer negative loyalty out of thin air.
+    // Refuse to reverse a sale we never recorded — the returns endpoint needs a
+    // real original sale id, and inventing one would credit against nothing.
     const orig = await sql`SELECT sale_id FROM ls_sales_log WHERE source_id = ${sourceId}`;
     if (!orig.length || !orig[0].sale_id) throw new Error('no recorded sale for ' + sourceId + ' — nothing to reverse');
+    const originalSaleId = String(orig[0].sale_id);
 
     const c = core.cfg();
-    if (!c.registerId) throw new Error('LIGHTSPEED_REGISTER_ID not set');
+    const V = RETURNS_API_VERSION;
 
-    let customer = null;
-    if (opts.customerEmail) customer = await findCustomerByEmail(opts.customerEmail);
+    // 1) ask Lightspeed to build the return (parked, lines already negative)
+    const made = oneOf(await lsFetch('sales/' + enc(originalSaleId) + '/actions/return', { method: 'POST', body: {}, version: V }));
+    const returnId = made && made.id ? String(made.id) : null;
+    if (!returnId) throw new Error('return not created for sale ' + originalSaleId);
 
-    const lines = [];
-    for (const l of (opts.lines || [])) {
-      if (!l) continue;
-      let productId = l.productId || null;
-      if (!productId && l.sku) { const p = await findProductBySku(l.sku); if (!p) throw new Error('product SKU ' + l.sku + ' not found in Lightspeed'); productId = p.id; }
-      if (!productId) continue;
-      const qty = Number(l.qty) || 0;
-      if (qty <= 0) continue;
-      lines.push({ ...l, productId, qty });            // sign is applied by buildSalePayload
-    }
-    if (!lines.length) throw new Error('no lines to reverse');
+    // 2) balance it with a negative payment. Prefer the parked return's own
+    //    total so partial/edited returns still reconcile exactly.
+    let cents = (opts && opts.amountCents != null) ? Math.abs(Number(opts.amountCents)) : null;
+    const totalIncTax = made.totals && made.totals.price_incl_tax;
+    if (cents == null && totalIncTax != null) cents = Math.round(Math.abs(Number(totalIncTax)) * 100);
+    if (!cents) throw new Error('could not determine the return amount for ' + originalSaleId);
 
-    const [taxRate, retailer] = await Promise.all([getTaxRate(), getRetailer()]);
-    const { body, total } = core.buildSalePayload({
-      sourceId: refundId, state: 'closed', payment: opts.payment || 'online',
-      note: opts.note || ('Refund of ' + sourceId), saleDate: null,
-      customerId: customer ? customer.id : null, lines, taxRate,
-      loyaltyRatio: retailer.loyaltyRatio, loyaltyEnabled: !!(customer && customer.enable_loyalty),
-      sign: -1
-    }, c);
+    const typeRef = await paymentTypeRef(
+      (opts.payment === 'onaccount' && c.paymentTypeOnAccount) ? c.paymentTypeOnAccount : c.paymentTypeOnline
+    );
+    const closed = oneOf(await lsFetch('sales/' + enc(returnId), {
+      method: 'PUT', version: V,
+      body: { state: 'closed', payments: [{ amount: -(cents / 100), type: typeRef }], note: opts.note || ('Refund of ' + sourceId) }
+    }));
 
-    const resp = await lsFetch('register_sales', { method: 'POST', body, version: null });
-    const sale = (resp && (resp.register_sale || resp.data || resp)) || {};
-    const saleId = sale.id ? String(sale.id) : null;
-    if (!saleId) throw new Error('return created but no id in response');
-    await sql`INSERT INTO ls_sales_log (source_id, sale_id, kind, error, created_at) VALUES (${refundId}, ${saleId}, ${kind}, NULL, now())
+    await sql`INSERT INTO ls_sales_log (source_id, sale_id, kind, error, created_at) VALUES (${refundId}, ${returnId}, ${kind}, NULL, now())
               ON CONFLICT (source_id) DO UPDATE SET sale_id = EXCLUDED.sale_id, kind = EXCLUDED.kind, error = NULL, created_at = now()`;
-    console.log('[lightspeed] return recorded', kind, refundId, '→', saleId, total);
-    out.ok = true; out.saleId = saleId; out.total = total;
+    console.log('[lightspeed] return closed', kind, refundId, '→', returnId, (closed && closed.state) || '?', -(cents / 100));
+    out.ok = true; out.saleId = returnId; out.total = -(cents / 100); out.state = (closed && closed.state) || null;
     return out;
   } catch (e) {
     const msg = String((e && e.message) || e).slice(0, 500);
