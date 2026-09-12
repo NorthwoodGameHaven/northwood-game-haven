@@ -89,3 +89,31 @@ The Guru Lightspeed page's "Replay unsynced" re-runs any sale that failed, so a 
 ## 8. Taking card payments *through* Lightspeed (phase 2 option)
 
 X-Series itself can't charge a card from an API. The one Lightspeed-native route for online card payments is **Lightspeed eCom (E-Series)** with **Lightspeed Payments** enabled: its payments are recorded in both merchant portals and as sales in X-Series sales history. The build path would be: an E-Series API app → create a hidden, single-use product for the booking/registration amount → send the guest to that product's checkout → an order-paid webhook marks the booking paid. Before building it, confirm (a) northwoodgamehaven.company.site is on E-Series with Lightspeed Payments turned on, (b) hidden products can be bought by direct link, and (c) you're OK that refunds must then be done in Retail POS (E-Series can't refund Lightspeed Payments), which removes the automatic refunds the event system does today.
+
+## 9. Live store reference (verified 2026-09-12, store `northwoodgamehaven`)
+
+Resolved from the connected store. These are resource IDs, not secrets, but they belong in Netlify env vars, not in code.
+
+| Env var | Value | What it is |
+|---|---|---|
+| `LIGHTSPEED_OUTLET_ID` | `021b1f22-6802-11f1-f909-2a220b9b3b9c` | Northwood Game Haven (only outlet) |
+| `LIGHTSPEED_REGISTER_ID` | `021b1f22-6802-11f1-e846-3c3d4556e39a` | **Online register** — keeps web sales off the two floor tills (TCG & Event `…303e01f083f1`, Main Retail `…2a220bacb097`) |
+| `LIGHTSPEED_USER_ID` | `521a3fae-b529-49d4-bb24-c6cfdc5e7920` | the **Website** user (no email set, so nobody can log in as it) |
+| `LIGHTSPEED_PAYMENT_TYPE_ONLINE` | `dd70e4fe-6a8c-4bb7-8a30-fbcf701c2bc6` | **Online — Stripe** (Other payment method, type_id 3, no gateway) |
+| `LIGHTSPEED_TAX_ID` | `021b1f22-6802-11f1-e846-303e01b4e56e` | **CHIPPEWA FALLS City Sales Tax (5.500%)** — a group of WI State 5% + Chippewa County 0.5% |
+| `LIGHTSPEED_TAX_ID_NONE` | `021b1f22-6802-11f1-f909-2a220b998c40` | built-in **No Tax** 0% (the store default), used for the deposit line |
+| `LIGHTSPEED_PAYMENT_TYPE_ONACCOUNT` | *not set* | no On-account payment type exists yet — on-account is off under Setup → On-account. Enable it there and the type (and its ID) appear. |
+
+Service products created 2026-09-12 (inventory tracking off, price $0 — the website sends the real amount, and the line `tax_id` comes from env, so the products' own tax default is cosmetic):
+
+| SKU | Name | Product ID |
+|---|---|---|
+| `NGH-ROOM` | Room booking (website) | `f7bc4dff-3bd3-4f3d-8974-74f144c92ac8` |
+| `NGH-DEPOSIT` | Refundable deposit (website) | `4394dded-fb15-4bb5-a1d7-e4a580a058f1` |
+| `NGH-KARAOKE` | Karaoke add-on (website) | `0e1ccd9c-1f20-4e9a-94f5-aa9bac3a4b42` |
+| `NGH-EVENT` | Event registration (website) | `4e6206d9-9462-41b1-8f1a-ff8a504baed9` |
+
+### Assumption 5 was wrong — fixed in NGH-BUILD 2026-09-12a
+`GET search?type=products&sku=<sku>` **does not match a SKU containing a hyphen.** Verified live against this store: `sku=10022` returns the product, `sku=NGH-ROOM` returns `[]` while `q=NGH-ROOM` returns it. Every service SKU is hyphenated, so `findProductBySku()`'s API fallback would have failed on all four — meaning any booking or registration sale written before the first `shop-sync` populated `ls_products` would have thrown `product SKU NGH-ROOM not found in Lightspeed`. `_shared/lightspeed.mjs` now tries `sku=` first and falls back to the free-text `q=` search, matching the SKU exactly client-side. `tests/lightspeed.test.mjs` stubs the quirk (hyphenated `sku=` returns empty), so the suite fails if the fallback is ever removed — 7 of 36 tests fail without it.
+
+Also confirmed live: assumption 3 (products expose `price_excluding_tax`, `has_inventory`, `active`) and assumption 4 (tax `rate` is a fraction — 0.05 / 0.005). Product writes from the admin session require the `X-XSRF-TOKEN` header; the OAuth API path is unaffected.

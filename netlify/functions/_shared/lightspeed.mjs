@@ -296,8 +296,12 @@ export async function findProductBySku(sku) {
     if (rows.length) hit = { id: rows[0].id, name: rows[0].data.name, sku: s };
   } catch (e) { console.error('[lightspeed] sku cache lookup failed', e.message); }
   if (!hit) {
-    const list = listOf(await lsFetch('search', { query: { type: 'products', sku: s } }));
-    const p = list.find(x => String(x.sku || '').toLowerCase() === s.toLowerCase() && !x.deleted_at) || null;
+    // NGH-BUILD 2026-09-12a: X-Series `search?type=products&sku=` misses SKUs that
+    // contain a hyphen (verified live: sku=10022 hits, sku=NGH-ROOM does not), so
+    // fall back to the free-text `q=` search and match the SKU ourselves.
+    const exact = x => String(x.sku || '').toLowerCase() === s.toLowerCase() && !x.deleted_at;
+    let p = listOf(await lsFetch('search', { query: { type: 'products', sku: s } })).find(exact) || null;
+    if (!p) p = listOf(await lsFetch('search', { query: { type: 'products', q: s } })).find(exact) || null;
     if (p) hit = { id: String(p.id), name: p.name, sku: s };
   }
   if (hit) _skuCache.set(s, hit);

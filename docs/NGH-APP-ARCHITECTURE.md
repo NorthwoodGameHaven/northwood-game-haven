@@ -115,6 +115,7 @@ karaoke_players    PK(session_id, name), data JSONB {status, position, entryId, 
 For a finished entry E sung by room R, votes come only from members **not in R**, one vote per member (`UNIQUE(session, entry, token)`), each `choice ∈ 1..5`, `delivery ∈ 1..5`.
 * `voteWeighting = "participant"` (default — every participant vote counts equally): `choiceAvg = mean(choice)`, `deliveryAvg = mean(delivery)`.
 * `voteWeighting = "room"` (each other room is one judge): average within each room first, then average the room averages.
+* One scoring round per song: the **performing room** is the only thing rated, and only participants in the **other** rooms may vote (the server rejects a vote from the performing room's own members). Rooms are never rated against each other song by song — points simply accumulate per room across the night.
 * `pointsDelivery = round1(deliveryAvg × 2)` (max 10) · `pointsChoice = round1(choiceAvg)` (max 5) · `points = pointsDelivery + pointsChoice` (max 15) · `rooms[R].score += points`.
 * No votes → 0 points, flagged `unscored` so the host can re-open scoring; re-scoring replaces the earlier result (no double counting).
 * The host console confirms before *Play next* skips a song that is still playing (skipped songs are never scored) or closes a vote that is still open.
@@ -128,7 +129,7 @@ Left 68 %: lyric stage (CDG canvas or LRC renderer; 3 lines visible; word-fill h
 ## 5. Audio & hardware routing (open items for Dustin)
 
 * Backing track: rack PC → mpv → X-USB **OUT 5-6** → X32 In 29/30 (Card 5/6) → strip "KARAOKE" → Main LR → all zone matrices. Add a Companion button "SETUP KARAOKE STRIP" the same way the trivia strip was done (channels 29/30, magenta, panned L/R).
-* Vocals: each room's two mics feed that room's JBL Partybox only (per the brief). **Open question:** other rooms will hear the backing track but not the singing room's vocals unless the active room's Partybox line-out (or a spare Shure channel) is patched into the X32. Two options: (a) accept it — it's a sing-along battle and "delivery" is judged loosely / by whoever wanders by; (b) route the active room's mic mix to the X32 via the Partybox's line/aux out on an "ACTIVE ROOM" strip that the host console un-mutes (Companion action) when that room is up. The software works either way; `settings.vocalsToPA` is exposed for UI copy only.
+* Vocals (confirmed 2026-09-12): the room that is performing sings on the **Shure wireless mics into the X32**, so its vocals ride the same Main LR → zone matrices as the backing track and every room hears the performance being judged. The two **JBL Partybox mics in each room are local commentary only** — they never leave that room. Nothing in the software depends on this; it is why every other room can fairly rate the performance.
 * Rooms without an X32 zone (The Holt, Stash's Den) could instead run the TV in `&audio=1` mode so the Google TV Streamer's HDMI audio feeds the Partybox's AUX. That only works with media served over HTTPS (e.g. a KaraFun OEM stream) — the local provider's MP3s live on the rack PC's `http://` LAN server, which HTTPS pages can't load. With local files, feed those rooms from the X32 (a zone matrix → Partybox line-in).
 
 ## 6. Karaoke content providers (`providers.js`)

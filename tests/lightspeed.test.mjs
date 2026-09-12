@@ -280,8 +280,17 @@ function stubStore({ customers = [], products = [], saleReply, taxes } = {}) {
     if (i.method === 'PUT') Object.assign(c, JSON.parse(i.body));
     return jres({ data: c });
   } });
+  // NGH-BUILD 2026-09-12a: mirrors the live X-Series quirk — `sku=` only matches
+  // SKUs with no hyphen (verified against the Northwood store), while `q=` does
+  // a free-text match. findProductBySku must fall back to q= or every NGH-* line
+  // fails to resolve.
   routes.push({ match: u => u.includes('type=products') && u.includes('sku='), reply: u => {
-    const sku = new URL(u).searchParams.get('sku'); return jres({ data: products.filter(p => p.sku === sku) });
+    const sku = new URL(u).searchParams.get('sku');
+    return jres({ data: sku.includes('-') ? [] : products.filter(p => p.sku === sku) });
+  } });
+  routes.push({ match: u => u.includes('type=products') && u.includes('q='), reply: u => {
+    const q = (new URL(u).searchParams.get('q') || '').toLowerCase();
+    return jres({ data: products.filter(p => String(p.sku || '').toLowerCase().includes(q) || String(p.name || '').toLowerCase().includes(q)) });
   } });
   routes.push({ match: u => u.includes('/api/2.0/taxes'), reply: () => jres({ data: taxes || [{ id: 'tax-wi', name: 'WI', rate: 0.055 }] }) });
   routes.push({ match: u => u.includes('/api/2.0/retailer'), reply: () => jres({ data: { id: 'r1', name: 'NGH', default_currency: 'USD', loyalty_ratio: 0.05 } }) });
