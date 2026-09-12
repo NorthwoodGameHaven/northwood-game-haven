@@ -314,9 +314,12 @@ describe('refundSale (NGH-BUILD 2026-09-12d) — real X-Series returns flow', ()
     // API behaves, and reading the amount off it is what broke NGH-RFND-891.
     routes.push({ match: (u, i) => u === V + '/sales/sale-9/actions/return' && i.method === 'POST',
       reply: () => jres({ data: { id: 'ret-1', state: 'parked', return: { is_return: true, original_sale_id: 'sale-9' } } }) });
-    // Step 2: the parked return must be READ BACK to learn what it's worth.
+    // Step 2: the parked return must be READ BACK — for the amount AND because
+    // the PUT replaces the sale, so its customer/register/lines must be echoed.
     routes.push({ match: (u, i) => u === V + '/sales/ret-1' && (i.method || 'GET') === 'GET',
       reply: () => jres({ data: { id: 'ret-1', state: 'parked', return: { is_return: true, original_sale_id: 'sale-9' },
+        customer_id: 'c1', source: { register_id: 'reg-online', outlet_id: 'out-1' },
+        line_items: [{ id: 'li-1', quantity: -1, product: { id: 'p-room' }, pricing: { price: 42.2, total: -42.2 } }],
         totals: { price_incl_tax: parkedTotalIncTax, loyalty: 0 } } }) });
     routes.push({ match: u => u.includes('/api/2.0/payment_types'),
       reply: () => jres({ data: [{ id: 'pt-online', name: 'Online — Stripe', type_id: 3 }] }) });
@@ -343,6 +346,12 @@ describe('refundSale (NGH-BUILD 2026-09-12d) — real X-Series returns flow', ()
     // payment balances the parked return exactly, and negative
     assert.equal(put.payments[0].amount, -42.2);
     assert.equal(put.payments[0].type.config_id, 'pt-online');
+    // the PUT replaces the sale: omitting these detaches the customer, moves the
+    // return to the default register and wipes the lines — loyalty then can't reverse
+    assert.equal(put.customer_id, 'c1', 'customer_id not preserved on close');
+    assert.equal(put.register_id, 'reg-online', 'register_id not preserved on close');
+    assert.equal((put.line_items || []).length, 1, 'line_items not preserved on close');
+    assert.equal(put.line_items[0].quantity, -1);
     assert.equal(logged[0], 'NGH-77:fee:refund'); assert.equal(logged[1], 'ret-1');
   });
 

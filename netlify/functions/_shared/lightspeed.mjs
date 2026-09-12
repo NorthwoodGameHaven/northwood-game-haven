@@ -449,16 +449,19 @@ export async function refundSale(opts) {
     const returnId = made && made.id ? String(made.id) : null;
     if (!returnId) throw new Error('return not created for sale ' + originalSaleId);
 
-    // 2) READ the parked return back. This is a required step, not a nicety:
-    //    the POST response does NOT carry `totals`, so reading the amount off it
-    //    yields undefined and the close can't be balanced (verified live on
-    //    NGH-RFND-891: "could not determine the return amount").
-    let cents = null;
-    try {
-      const parked = oneOf(await lsFetch('sales/' + enc(returnId), { version: V }));
-      const t = parked && parked.totals && parked.totals.price_incl_tax;
-      if (t != null) cents = Math.round(Math.abs(Number(t)) * 100);
-    } catch (e) { console.error('[lightspeed] could not read parked return', returnId, e && e.message); }
+    // 2) READ the parked return back. Required, and for two reasons:
+    //    (a) the POST response carries NO `totals`, so the amount is unknown
+    //        without it (verified live: "could not determine the return amount");
+    //    (b) the PUT in step 3 REPLACES the sale — every field omitted from the
+    //        body is reset. A PUT of just {state, payments} produced a closed
+    //        return with line_items:[], totals all zero, the customer detached
+    //        and the register silently switched to Main Retail. Loyalty cannot
+    //        reverse off a return that has no lines and no customer.
+    //    So we echo the parked return's own identity and lines straight back.
+    const parked = oneOf(await lsFetch('sales/' + enc(returnId), { version: V }));
+    if (!parked) throw new Error('could not read the parked return ' + returnId);
+    const t = parked.totals && parked.totals.price_incl_tax;
+    let cents = (t != null && Number(t) !== 0) ? Math.round(Math.abs(Number(t)) * 100) : null;
     // Caller's amount is the fallback (and the authority for a partial refund).
     if (cents == null && opts && opts.amountCents != null) cents = Math.abs(Number(opts.amountCents));
     if (!cents) throw new Error('could not determine the return amount for ' + originalSaleId);
@@ -466,10 +469,20 @@ export async function refundSale(opts) {
     const typeRef = await paymentTypeRef(
       (opts.payment === 'onaccount' && c.paymentTypeOnAccount) ? c.paymentTypeOnAccount : c.paymentTypeOnline
     );
+    // 3) close it, preserving everything the parked return already knows.
     const closed = oneOf(await lsFetch('sales/' + enc(returnId), {
       method: 'PUT', version: V,
-      body: { state: 'closed', payments: [{ amount: -(cents / 100), type: typeRef }], note: opts.note || ('Refund of ' + sourceId) }
+      body: {
+        state: 'closed',
+        customer_id: parked.customer_id || undefined,
+        register_id: (parked.source && parked.source.register_id) || c.registerId || undefined,
+        user_id: c.userId || undefined,
+        line_items: parked.line_items,
+        note: opts.note || ('Refund of ' + sourceId),
+        payments: [{ amount: -(cents / 100), type: typeRef }]
+      }
     }));
+    if (closed && closed.state && closed.state !== 'closed') throw new Error('return did not close (state ' + closed.state + ')');
 
     await sql`INSERT INTO ls_sales_log (source_id, sale_id, kind, error, created_at) VALUES (${refundId}, ${returnId}, ${kind}, NULL, now())
               ON CONFLICT (source_id) DO UPDATE SET sale_id = EXCLUDED.sale_id, kind = EXCLUDED.kind, error = NULL, created_at = now()`;
