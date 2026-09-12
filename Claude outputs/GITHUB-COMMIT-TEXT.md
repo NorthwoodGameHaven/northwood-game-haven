@@ -1,13 +1,13 @@
-# Copy/paste for GitHub Desktop — NGH-BUILD 2026-09-12r
+# Copy/paste for GitHub Desktop — NGH-BUILD 2026-09-12s
 
-Six files, already written into your repo.
+Two files, already in your repo.
 
 ---
 
 ## Summary (the one-line box)
 
 ```
-Review & fix queue, shift editing from the calendar, quieter floor alerts (12r)
+Master Calendar: Floor cover and Rooms week views (12s)
 ```
 
 ---
@@ -15,68 +15,54 @@ Review & fix queue, shift editing from the calendar, quieter floor alerts (12r)
 ## Description (the big box)
 
 ```
-NGH-BUILD 2026-09-12r — acting on the calendar instead of only reading it.
+NGH-BUILD 2026-09-12s — two more week views on the Master Guru Calendar.
 
-1. "NOBODY ON THE FLOOR" WAS CRYING WOLF
-   Five identical banners fired for Mon/Tue/Wed/Thu evenings — nights when
-   Chad was in the shop running Gundam and Pokémon Free Play and Dustin was
-   running Trick-Taking Tuesday. The shop was not empty; the shift was just
-   never written down. Conflating "unrostered" with "empty" buries the one
-   alert that actually mattered (Dustin double-booked) in four that didn't.
+The rail answers "what is Chad doing". The time grid answers "what is
+happening at 7pm". Neither answers the two questions the shop actually runs
+on: "is the floor covered on Thursday" and "is the Depths free on Saturday".
+Both were answerable only by reading the whole week and holding it in your
+head.
 
-   A coverage gap now carries who is on site during it:
-     before  "Store open 5:00 PM–8:00 PM with no Guru on the floor"
-     after   "Store open 5:00 PM–8:00 PM with no Guru rostered on the floor —
-              Mike and Dustin are on site (Rausch party, Team Trivia)"
-   Genuinely empty hours still read "with nobody in the building". Somebody
-   off-site does not count as being in the building.
+FLOOR COVER  (tab: 🏪 Floor cover)
+One bar per day, each scaled to that day's OWN opening hours, so a 12–8
+Tuesday and a 10–10 Saturday are directly comparable.
+  * green segments name who is on
+  * red hatched segments are open hours with nobody rostered — CLICK ONE and
+    the shift editor opens prefilled with exactly that hole, so the fix is one
+    click and a name
+  * closed days read "Closed", not "0% covered"
+  * a "Covered" column per day: 100% covered, or 63% with 3h open
+  * the existing shifts sit under each bar as editable chips, plus "+ add shift"
+Below it, hours on the floor per Guru for the week as a bar chart. A rota
+nobody totals is a rota that quietly lands on the same two people.
 
-2. THE ALERTS COLLAPSE TO ONE LINE
-   Six stacked banners pushed the calendar below the fold. Now:
-     🛈 4 things to look at   1 unstaffed · 3 floor gaps      [Review & fix]
-   Red when something hard is wrong (double-booked, assigned while off, room
-   clash), amber otherwise.
+ROOMS  (tab: 🚪 Rooms)
+Every room down the side — including the Lodge and the Adventurer's Rest,
+which the server conflict engine still cannot see — every day across the top,
+plus an Off-site row. Each cell shows what is in that room with its times,
+coloured by kind and hatched while a booking is only pending. An empty cell
+reads "free", because an empty room is a room you can sell rather than a blank.
+Clicking any chip opens the same detail and Guru assignment as elsewhere.
+The kind and Guru filter chips apply here too.
 
-3. REVIEW & FIX — every row carries the fix that clears it
-   A list of problems you cannot act on is a nag. Each row does the work:
-     * floor gap        -> "Roster Mike on the floor" as ONE CLICK when Mike
-                           is already on site, or pick anyone and "Add shift
-                           5:00 PM–8:00 PM". Writes a real store shift; there
-                           is no separate "cover" concept, because two answers
-                           to "who is working" is worse than none.
-     * unstaffed booking-> Guru picker -> assigns them to the booking
-     * double-booked    -> "Take Dustin off Crokinole" / "off Trick-Taking
-                           Tuesday", whichever you meant
-     * assigned while off-> take them off, or a link to clear the time off
-     * room clash       -> not auto-fixable; links to the booking calendar
-   Each fix saves, re-reads from the server and reopens the queue, so it
-   empties as you work down it.
-
-   Dropping a Guru off ONE night of a recurring event pins the change to that
-   date rather than silently restaffing every future occurrence.
-
-4. STORE SHIFTS ARE EDITED WHERE YOU SEE THEM
-   Who is on the floor was only editable on a separate form on another page —
-   so you would spot a hole on the calendar and then have to leave the
-   calendar to fix it.
-     Master Calendar: click a 🏪 bar in the rail to edit its Guru, times or
-     delete it. An empty cell shows "+" to put that person on the floor that
-     day, defaulted to the day's opening hours. New shifts can repeat weekly
-     or fortnightly.
-     Guru Schedule: click a store-shift band to open that shift in the Shifts
-     form; click "store: no shift set — add" in a day header to add one with
-     the date prefilled. It ROUTES to the existing form rather than growing a
-     second editor that could drift from it.
+TWO NUMBERS MADE HONEST
+  * A room's weekly total excluded nothing, so a 24-hour "Deep clean" blackout
+    made the Holt read "31h booked". A closure is not revenue. Blackouts are
+    out of the total, and an all-day item counts the hours the shop is actually
+    open that day rather than 24 — that total is exactly the number you would
+    use to judge whether a room earns its floor space, so it has to be right.
+    A room held but not booked now says "held, not booked".
+  * Off-site is counted as occasions ("3 this week"), not room-hours. It
+    occupies no room.
+  * A closed day read "Closed · Closed", because the weekly template's own
+    label for a closed day is the word "Closed".
 
 TESTS
   node --test tests/*.test.mjs        431 pass
-  node tests/guru-master.e2e.mjs      82 browser checks
-  6 new core tests for the in-building logic; 20 new browser checks covering
-  the Resolve queue and shift editing end to end (a rostering click is
-  asserted to write a real save-shift with the gap's own times).
-  3 mutations checked — off-site people counted as present, events outside
-  the gap counted, and the gap losing the times a fix needs all turn a test
-  red.
+  node tests/guru-master.e2e.mjs      103 browser checks
+  21 new checks, including that clicking a red gap opens a shift prefilled
+  with that gap's own times, that a closure is not counted as booked hours,
+  and that the filters reach the new views.
 ```
 
 ---
@@ -85,15 +71,11 @@ TESTS
 
 | File | Change |
 |---|---|
-| `netlify/functions/_shared/schedule-core.mjs` | Coverage gaps carry who is on site |
-| `site/guru-master.html` | Alert bar, Review & fix modal, shift editing from the rail |
-| `site/guru-schedule.html` | Shift bands and empty day headers route into the shift form |
-| `tests/schedule-core.test.mjs` | 6 new tests |
-| `tests/guru-master.e2e.mjs` | 20 new browser checks |
-| `patches/patch-guru-schedule-shift-edit-2026-09-12r.py` | Record of the surgical edits |
+| `site/guru-master.html` | Floor cover and Rooms week views; two totals corrected |
+| `tests/guru-master.e2e.mjs` | 21 new browser checks |
 
-## Worth doing once it's live
+## Where to look first
 
-Open **Review & fix** and clear the four items from your screenshot. The three
-Mon–Thu floor gaps are almost certainly just missing shifts for people who
-were already there — one click each.
+**🏪 Floor cover** on the current week. Your Tuesday and Sunday bars will be
+solid red — those are the hours the shop is open with nobody written down.
+Click a red stretch, pick a name, done.

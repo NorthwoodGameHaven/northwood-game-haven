@@ -275,6 +275,74 @@ const post = saved.find(s => s && s.action === 'save-assignment');
 ok('saving posts a bookingId assignment, not an eventId one',
   post && post.item && post.item.bookingId === 'BK-PEND' && !post.item.eventId, JSON.stringify(post));
 
+// ------------------------------------------------------------- floor cover
+await page.click('#tab-floor');
+await page.waitForSelector('#floorwk table', { timeout: 8000 });
+await sleep(400);
+const floorTxt = await page.textContent('#view-floor');
+ok('[floor] one row per day of the week', (await page.$$('#floorwk tr')).length === 8, 'incl. header');
+ok('[floor] each open day gets a proportional bar', (await page.$$('#floorwk .cbar')).length >= 5);
+ok('[floor] covered stretches name who is on', /Mike/.test(floorTxt) && /Sarah/.test(floorTxt));
+ok('[floor] a closed day says closed, not 0% covered', /Closed/.test(floorTxt));
+ok('[floor] each day shows how much of it is covered', /%/.test(floorTxt));
+const gaps = await page.$$('#floorwk .cbar i.gap');
+ok('[floor] uncovered stretches are drawn', gaps.length >= 1, gaps.length + ' found');
+
+// The whole point: a hole is a button.
+await gaps[0].click();
+await page.waitForSelector('#sf-guru', { timeout: 5000 });
+const preOpen = await page.inputValue('#sf-open'), preClose = await page.inputValue('#sf-close');
+ok('[floor] clicking a gap opens a shift prefilled with exactly that hole',
+  /^\d{2}:\d{2}$/.test(preOpen) && preClose > preOpen, preOpen + '-' + preClose);
+await page.click('#modal-box .btn-ghost >> nth=-1');
+await sleep(250);
+
+// Existing shifts are editable from here too.
+const schip = await page.$('#floorwk .schip:not(.add)');
+ok('[floor] existing shifts show as editable chips', !!schip);
+await schip.click();
+await page.waitForSelector('#sf-guru', { timeout: 5000 });
+ok('[floor] and open the shift editor', /Store shift/.test(await page.textContent('#modal-box')));
+await page.click('#modal-box .btn-ghost >> nth=-1');
+await sleep(250);
+
+ok('[floor] the week tallies hours per Guru', /h/.test(await page.textContent('#floortally')) &&
+  (await page.$$('#floortally .tbar')).length >= 1);
+await page.screenshot({ path: path.join(SHOTS, 'guru-master-floor.png'), fullPage: true });
+
+// ----------------------------------------------------------------- rooms
+await page.click('#tab-rooms');
+await page.waitForSelector('#roomwk table', { timeout: 8000 });
+await sleep(400);
+const roomTxt = await page.textContent('#view-rooms');
+ok('[rooms] every room has a row, including the VRBO spaces and off-site',
+  ['The Holt', "Stash's Den", 'The Depths', 'The Lodge', "The Adventurer's Rest", 'Off-site'].every(r => roomTxt.includes(r)));
+ok('[rooms] seven day columns', (await page.$$('#roomwk tr:first-child th')).length === 8);
+ok('[rooms] bookings appear in their own room', /Rausch party/.test(roomTxt) && /Weekend stay/.test(roomTxt));
+ok('[rooms] a pending booking is still labelled pending', /pending/.test(roomTxt));
+ok('[rooms] an empty room reads as sellable, not blank', /free/.test(roomTxt));
+ok('[rooms] each room totals its booked hours', /h booked/.test(roomTxt));
+// A deep clean is a closure, not revenue. The Holt has a 24h blackout plus a
+// 3h booking and a 4h event, so counting the closure would read ~31h.
+const holtRow = await page.textContent('#roomwk tr:nth-child(2) td.rname');
+ok('[rooms] a closure is not counted as booked hours', !/3[01]h/.test(holtRow), holtRow);
+ok('[rooms] off-site is counted as occasions, not room hours',
+  /this week/.test(await page.textContent('#roomwk tr:last-child td.rname')));
+ok('[floor] a closed day does not read "Closed · Closed"', !/Closed\s*·\s*Closed/.test(floorTxt));
+const rchip = await page.$('#roomwk .rchip.booking');
+await rchip.click();
+await page.waitForSelector('#modal.open', { timeout: 5000 });
+ok('[rooms] a chip opens the booking detail', /Gurus on this/.test(await page.textContent('#modal-box')));
+await page.click('#modal-box .btn-ghost >> nth=-1');
+await sleep(250);
+// Filters must reach these views too.
+await page.click('#kindchips .chip:nth-child(1)');
+await sleep(300);
+ok('[rooms] the kind filter applies here as well', !(await page.textContent('#roomwk')).includes('Rausch party'));
+await page.click('#kindchips .chip:nth-child(1)');
+await sleep(300);
+await page.screenshot({ path: path.join(SHOTS, 'guru-master-rooms.png'), fullPage: true });
+
 // ---------------------------------------------------------------- day view
 await page.click('#tab-day');
 await page.waitForSelector('#dayrooms table', { timeout: 8000 });

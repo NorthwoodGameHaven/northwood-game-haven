@@ -125,6 +125,63 @@
   .pill.unavail { background:var(--k-unavail); }
   .pill.tentative { background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.3),rgba(255,255,255,0.3) 5px,transparent 5px,transparent 10px); }
 
+  /* ---------- floor cover (week) ---------- */
+  table.floor-t { border-collapse:collapse; width:100%; }
+  table.floor-t th { background:#f4f1e4; font-family:'Cinzel',serif; font-size:0.72rem; color:var(--forest);
+                     text-align:left; font-weight:500; padding:6px 10px; border:1px solid #e6e3d4; }
+  table.floor-t td { border:1px solid #e6e3d4; padding:8px 10px; vertical-align:middle; }
+  td.fday { background:#faf8ef; white-space:nowrap; }
+  td.fday b { font-family:'Cinzel',serif; font-size:0.82rem; display:block; }
+  td.fday small { color:#7a7a5a; font-size:0.7rem; }
+  td.fday.today { background:var(--gold-light); }
+  tr.shutrow td { background:repeating-linear-gradient(45deg,#f6f4ea,#f6f4ea 6px,#efece0 6px,#efece0 12px); }
+  tr.todayrow td.fbarcell { background:#fdfbf2; }
+  .fhours { font-size:0.7rem; color:#7a7a5a; margin-bottom:4px; }
+  .fclosed, .fnote { font-size:0.8rem; color:#7a7a5a; font-style:italic; }
+  td.fsum { text-align:center; font-family:'Cinzel',serif; font-size:0.95rem; color:var(--forest); white-space:nowrap; }
+  td.fsum small { display:block; font-family:Georgia,serif; font-size:0.66rem; color:#7a7a5a; font-style:normal; }
+  td.fsum.bad { color:var(--maroon); }
+  .cbar { display:flex; height:26px; border-radius:6px; overflow:hidden; border:1px solid #ddd9c6; background:#f2efe2; }
+  .cbar i { display:block; font-style:normal; font-size:0.66rem; color:#fff; text-align:center; line-height:26px;
+            overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .cbar i.ok { background:var(--k-shift); }
+  .cbar i.gap { background:repeating-linear-gradient(45deg,#a8452f,#a8452f 5px,#bb5540 5px,#bb5540 10px); cursor:pointer; }
+  .cbar i.gap:hover { background:#8e3a27; }
+  .schips { margin-top:6px; display:flex; flex-wrap:wrap; gap:5px; }
+  .schip { font-size:0.68rem; background:var(--k-shift); color:#fff; border-radius:20px; padding:2px 9px; cursor:pointer; }
+  .schip:hover { filter:brightness(1.12); }
+  .schip.add { background:transparent; color:var(--forest); border:1px dashed var(--forest); }
+  table.tally-t { border-collapse:collapse; width:100%; max-width:520px; }
+  table.tally-t td { padding:3px 8px 3px 0; }
+  td.tname { font-size:0.82rem; white-space:nowrap; width:96px; }
+  td.tbarcell { width:100%; }
+  .tbar { display:block; height:13px; background:var(--k-shift); border-radius:4px; }
+  td.thrs { font-size:0.78rem; color:#7a7a5a; white-space:nowrap; text-align:right; }
+
+  /* ---------- rooms (week) ---------- */
+  table.room-t { border-collapse:collapse; width:100%; min-width:1000px; table-layout:fixed; }
+  table.room-t th { background:#f4f1e4; font-family:'Cinzel',serif; font-size:0.72rem; color:var(--forest);
+                    font-weight:500; padding:6px 4px; border:1px solid #e6e3d4; text-align:center; }
+  table.room-t th.today { background:var(--gold-light); color:var(--dark); }
+  table.room-t th small { display:block; font-family:Georgia,serif; font-size:0.64rem; color:#7a7a5a; font-weight:normal; }
+  table.room-t th.today small { color:#4a3d16; }
+  table.room-t td { border:1px solid #e6e3d4; padding:3px; vertical-align:top; }
+  td.rname { background:#faf8ef; font-size:0.82rem; font-weight:bold; padding:6px 8px; white-space:nowrap; }
+  td.rname small { display:block; font-weight:normal; font-size:0.66rem; color:#7a7a5a; }
+  td.rcell { min-height:44px; }
+  td.rcell.today { background:#fdfbf2; }
+  td.rcell.empty { background:#fcfbf5; }
+  .rfree { display:block; text-align:center; color:#c6c3b1; font-size:0.68rem; padding:10px 0; }
+  .rchip { display:block; border-radius:5px; padding:3px 6px; margin-bottom:3px; font-size:0.68rem; color:#fff; cursor:pointer; line-height:1.3; }
+  .rchip b { display:block; font-size:0.63rem; opacity:0.9; font-weight:normal; }
+  .rchip em { font-style:normal; background:rgba(255,255,255,0.28); border-radius:10px; padding:0 5px; font-size:0.6rem; }
+  .rchip.booking { background:var(--k-booking); }
+  .rchip.event { background:var(--k-event); }
+  .rchip.birthday { background:var(--k-birthday); color:#241c07; }
+  .rchip.external { background:var(--k-external); }
+  .rchip.blackout { background:var(--k-blackout); }
+  .rchip.tentative { background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.3),rgba(255,255,255,0.3) 5px,transparent 5px,transparent 10px); }
+
   /* ---------- coverage strip ---------- */
   .cov { display:flex; height:16px; border-radius:5px; overflow:hidden; border:1px solid #ddd9c6; background:#f2efe2; }
   .cov i { display:block; font-style:normal; font-size:0.58rem; color:#fff; text-align:center; line-height:16px; overflow:hidden; white-space:nowrap; }
@@ -204,7 +261,9 @@
       <div class="tabs" style="margin:0;">
         <button class="tab active" id="tab-week" onclick="setView('week')">Week</button>
         <button class="tab" id="tab-day" onclick="setView('day')">Day</button>
-        <button class="tab" id="tab-hours" onclick="setView('hours')">🏪 Store hours</button>
+        <button class="tab" id="tab-floor" onclick="setView('floor')">🏪 Floor cover</button>
+        <button class="tab" id="tab-rooms" onclick="setView('rooms')">🚪 Rooms</button>
+        <button class="tab" id="tab-hours" onclick="setView('hours')">⚙️ Store hours</button>
       </div>
       <button class="btn btn-sm btn-ghost" onclick="load()">↻ Refresh</button>
     </div>
@@ -240,6 +299,33 @@
       <div class="card">
         <h3 style="margin:0 0 10px;">By Guru</h3>
         <div class="lanes" id="daygurus"></div>
+      </div>
+    </div>
+
+    <!-- ============ FLOOR COVER ============ -->
+    <div id="view-floor" style="display:none;">
+      <div class="card">
+        <h3 style="margin:0 0 4px;">Floor cover</h3>
+        <p class="hint" style="margin:0 0 12px;">
+          One bar per day, scaled to the hours you're open. Green is covered and says who by.
+          Red is open with nobody rostered — click any red stretch to fill it.
+        </p>
+        <div id="floorwk"></div>
+      </div>
+      <div class="card">
+        <h3 style="margin:0 0 10px;">Hours on the floor this week</h3>
+        <div id="floortally"></div>
+      </div>
+    </div>
+
+    <!-- ============ ROOMS ============ -->
+    <div id="view-rooms" style="display:none;">
+      <div class="card">
+        <h3 style="margin:0 0 4px;">Rooms, day by day</h3>
+        <p class="hint" style="margin:0 0 12px;">
+          Every room down the side, every day across the top. An empty cell is a room you can sell.
+        </p>
+        <div class="lanes" id="roomwk"></div>
       </div>
     </div>
 
@@ -347,7 +433,7 @@ function step(n){
 function goToday(){ state.anchor = TODAY; load(); }
 function setView(v){
   state.view = v;
-  ["week","day","hours"].forEach(function(x){
+  ["week","day","floor","rooms","hours"].forEach(function(x){
     $("tab-"+x).className = "tab" + (x===v ? " active" : "");
     $("view-"+x).style.display = (x===v ? "block" : "none");
   });
@@ -408,6 +494,8 @@ function render(){
   renderAlerts();
   if(state.view === "week"){ renderRail(); renderGrid(); }
   else if(state.view === "day"){ renderDay(); }
+  else if(state.view === "floor"){ renderFloorWeek(); }
+  else if(state.view === "rooms"){ renderRoomWeek(); }
 }
 
 function renderAlerts(){
@@ -909,15 +997,165 @@ async function saveAssign(none){
 }
 function closeModal(){ $("modal").className = "modal"; modalItem = null; }
 
+/* ================= FLOOR COVER — the week as seven bars =================
+   The rail answers "what is Chad doing"; the time grid answers "what is
+   happening at 7pm". Neither answers "is the shop covered on Thursday", which
+   is the question the rota exists for. One proportional bar per day, scaled to
+   that day's own opening hours, does answer it — and every hole in it is a
+   button. */
+function shiftMinutes(day){
+  var byGuru = {};
+  (day.items || []).forEach(function(i){
+    if(i.kind !== "shift" || !i.gurus.length) return;
+    byGuru[i.gurus[0]] = (byGuru[i.gurus[0]] || 0) + (i.eMin - i.sMin);
+  });
+  return byGuru;
+}
+function renderFloorWeek(){
+  var d = state.data;
+  var rows = d.days.map(function(day){
+    var open = day.hours;
+    var label = '<td class="fday'+(day.date===TODAY?" today":"")+'">' +
+      '<b>'+DOWFULL[day.dow]+'</b><small>'+(+day.date.slice(8))+' '+
+      ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(+day.date.slice(5,7))-1]+'</small></td>';
+
+    if(!open.configured){
+      return '<tr>'+label+'<td class="fbarcell"><div class="fnote">Store hours not set for this day — ' +
+        '<a href="#" onclick="setView(\'hours\');return false;">set them</a> and the gaps appear here.</div></td>' +
+        '<td class="fsum">—</td></tr>';
+    }
+    if(open.closed){
+      return '<tr class="shutrow">'+label+'<td class="fbarcell"><div class="fclosed">Closed'+((open.label && open.label.toLowerCase()!=="closed")?(' · '+esc(open.label)):'')+'</div></td>' +
+        '<td class="fsum">—</td></tr>';
+    }
+
+    var span = Math.max(1, open.eMin - open.sMin);
+    var segs = (day.coverage.covered || []).map(function(x){ return { s:x, ok:true }; })
+      .concat((day.coverage.gaps || []).map(function(x){ return { s:x, ok:false }; }))
+      .sort(function(a,b){ return a.s.sMin - b.s.sMin; });
+
+    var bar = segs.map(function(x){
+      var pct = (x.s.eMin - x.s.sMin) / span * 100;
+      var txt = x.ok ? x.s.gurus.join(", ") : "no cover";
+      var tip = x.s.from + "–" + x.s.to + " · " + (x.ok ? x.s.gurus.join(", ") : "nobody rostered");
+      var click = x.ok ? "" :
+        ' onclick="openShift(null,\''+esc(day.date)+'\',\'\',\''+minsToHHMM(x.s.sMin)+'\',\''+minsToHHMM(x.s.eMin)+'\')"';
+      return '<i class="'+(x.ok?"ok":"gap")+'" style="width:'+pct.toFixed(3)+'%" title="'+esc(tip)+'"'+click+'>' +
+        (pct > 9 ? esc(txt) : "") + '</i>';
+    }).join("");
+
+    // The shifts themselves, as editable chips under the bar.
+    var chips = (day.items || []).filter(function(i){ return i.kind === "shift"; })
+      .sort(function(a,b){ return a.sMin - b.sMin; })
+      .map(function(i){
+        return '<span class="schip" onclick="openShift(\''+esc(i.key).replace(/'/g,"\\'")+'\',\''+esc(day.date)+'\',\'\')">' +
+          esc(i.gurus[0]) + ' ' + fmtMin(i.sMin) + '–' + fmtMin(i.eMin) + ' ✎</span>';
+      }).join("") +
+      '<span class="schip add" onclick="openShift(null,\''+esc(day.date)+'\',\'\')">+ add shift</span>';
+
+    var gapMin = (day.coverage.gaps || []).reduce(function(n,g){ return n + (g.eMin - g.sMin); }, 0);
+    var pctCov = Math.round((span - gapMin) / span * 100);
+
+    return '<tr'+(day.date===TODAY?' class="todayrow"':'')+'>'+label+
+      '<td class="fbarcell">' +
+        '<div class="fhours">'+fmtMin(open.sMin)+' – '+fmtMin(open.eMin)+'</div>' +
+        '<div class="cbar">'+bar+'</div>' +
+        '<div class="schips">'+chips+'</div>' +
+      '</td>' +
+      '<td class="fsum'+(gapMin?" bad":"")+'">'+pctCov+'%' +
+        (gapMin ? '<small>'+Math.round(gapMin/60*10)/10+'h open</small>' : '<small>covered</small>') +
+      '</td></tr>';
+  }).join("");
+
+  $("floorwk").innerHTML = '<table class="floor-t"><tr>' +
+    '<th style="width:120px;">Day</th><th>Open hours</th><th style="width:96px;">Covered</th></tr>' + rows + '</table>';
+
+  // Who is carrying the week. A rota nobody totals is a rota that quietly
+  // lands on the same two people.
+  var tally = {}, anyShift = false;
+  d.days.forEach(function(day){
+    var m = shiftMinutes(day);
+    Object.keys(m).forEach(function(g){ tally[g] = (tally[g]||0) + m[g]; anyShift = true; });
+  });
+  var names = (d.gurus || []).filter(function(g){ return tally[g]; })
+    .concat(Object.keys(tally).filter(function(g){ return (d.gurus||[]).indexOf(g) < 0; }));
+  var max = Math.max.apply(null, names.map(function(g){ return tally[g]; }).concat([1]));
+  $("floortally").innerHTML = anyShift
+    ? '<table class="tally-t">' + names.map(function(g){
+        var hrs = Math.round(tally[g]/60*10)/10;
+        return '<tr><td class="tname">'+esc(g)+'</td>' +
+          '<td class="tbarcell"><span class="tbar" style="width:'+Math.max(3,(tally[g]/max*100)).toFixed(1)+'%"></span></td>' +
+          '<td class="thrs">'+hrs+'h</td></tr>';
+      }).join("") + '</table>' +
+      '<p class="hint" style="margin:8px 0 0;">Anyone not listed has no floor shift this week.</p>'
+    : '<p class="hint">Nobody is rostered on the floor this week.</p>';
+}
+
+/* ================= ROOMS — every room, every day ================= */
+function renderRoomWeek(){
+  var d = state.data;
+  var rooms = (d.rooms || []).concat([{ id:"offsite", label:"🚗 Off-site" }]);
+  var h = '<table class="room-t"><tr><th style="width:150px;">Room</th>';
+  d.days.forEach(function(day){
+    h += '<th class="'+(day.date===TODAY?"today":"")+'">'+DOW[day.dow]+' '+(+day.date.slice(8)) +
+         '<small>'+(day.hours.closed ? "closed" : (day.hours.configured ? (fmtMin(day.hours.sMin)+"–"+fmtMin(day.hours.eMin)) : "&nbsp;"))+'</small></th>';
+  });
+  h += '</tr>';
+
+  rooms.forEach(function(r){
+    // Hours the room is spoken for across the week — the number that tells you
+    // whether a room is earning its floor space.
+    var mins = 0, count = 0;
+    d.days.forEach(function(day){
+      (day.roomLanes[r.id] || []).filter(visible).forEach(function(i){
+        count++;
+        if(i.kind === "blackout") return;                 // a deep clean is not booked hours
+        if(i.allDay){
+          // An all-day item does not consume 24 sellable hours. Count the hours
+          // the shop is actually open that day, and nothing on a closed day.
+          if(day.hours && !day.hours.closed && day.hours.sMin != null) mins += (day.hours.eMin - day.hours.sMin);
+          return;
+        }
+        mins += (i.eMin - i.sMin);
+      });
+    });
+    var tot = r.id === "offsite"
+      ? (count ? '<small>'+count+' this week</small>' : '<small>nothing off-site</small>')
+      : (mins ? '<small>'+Math.round(mins/60*10)/10+'h booked</small>'
+              : (count ? '<small>held, not booked</small>' : '<small>free all week</small>'));
+    h += '<tr><td class="rname">'+esc(r.label)+(r.vrbo?'<small>VRBO</small>':'') + tot + '</td>';
+    d.days.forEach(function(day){
+      var list = (day.roomLanes[r.id] || []).filter(visible);
+      h += '<td class="rcell'+(day.date===TODAY?" today":"")+(list.length?"":" empty")+'">';
+      if(!list.length){
+        h += '<span class="rfree">free</span>';
+      } else {
+        h += list.map(function(i){
+          var icon = i.kind === "booking" ? "🔑" : i.kind === "birthday" ? "🎂" : i.kind === "external" ? "🚗" : i.kind === "blackout" ? "⛔" : "🎲";
+          return '<span class="rchip '+i.kind+(i.tone==="tentative"?" tentative":"")+'" title="'+esc(i.title+" · "+i.sub)+'" onclick="openItem(\''+esc(day.date)+'\',\''+esc(i.key).replace(/'/g,"\\'")+'\')">' +
+            '<b>'+(i.allDay ? "all day" : (fmtMin(i.sMin)+"–"+fmtMin(i.eMin)))+'</b>' + icon + ' ' + esc(i.title) +
+            (i.kind === "booking" && i.status !== "approved" ? ' <em>'+esc(i.status)+'</em>' : '') +
+            '</span>';
+        }).join("");
+      }
+      h += '</td>';
+    });
+    h += '</tr>';
+  });
+  h += '</table>';
+  $("roomwk").innerHTML = h;
+}
+
 /* ---------------- store shifts, edited where you see them ---------------- */
 /* Who is on the floor was only editable on a separate form on another page,
    which meant noticing a hole on the calendar and then leaving the calendar to
    fix it. The shift bars are the obvious place to click. */
 var shiftCtx = null;
-function openShift(key, date, guru){
+function openShift(key, date, guru, presetOpen, presetClose){
   var it = key ? findByKey(key) : null;
-  var open = "17:00", close = "21:00";
+  var open = presetOpen || "17:00", close = presetClose || "21:00";
   if(it){ open = minsToHHMM(it.sMin); close = minsToHHMM(it.eMin); }
+  else if(presetOpen && presetClose){ /* filling a specific hole — keep it exact */ }
   else {
     // Default a new shift to the day's opening hours — that is what a floor
     // shift almost always is, and it saves two dropdowns.
