@@ -27,9 +27,19 @@
   :root {
     --forest:#2e5d3b; --forest-light:#3f7a50; --gold:#b8862d; --gold-light:#d4a94e;
     --den:#2b2b1f; --cream:#faf6ec; --dark:#1d2a1f; --maroon:#6e1f2b; --teal-dark:#134b57;
-    /* One colour per kind, used identically in the rail, the grid and the key. */
+    /* One colour per kind, used identically in the rail, the grid and the key.
+       These are checked for pairwise separation by tests/guru-master.e2e.mjs —
+       every solid pair must stay at least 85 apart in RGB distance.
+
+       The first pass failed that badly. An NGH event (#2e5d3b) and a store
+       shift (#5b6f4a) were 51 apart, and an event against an off-site booking
+       (#134b57) only 43 — three earthy dark greens stacked in one rail cell,
+       which is where they actually appear, one directly above the other. The
+       palette being "on brand" is worth nothing if you cannot tell what a bar
+       is. Shifts are now violet (matching the store bands the Guru Schedule
+       has always drawn in purple) and off-site is a proper teal. */
     --k-event:#2e5d3b; --k-booking:#6e1f2b; --k-birthday:#b8862d;
-    --k-external:#134b57; --k-shift:#5b6f4a; --k-unavail:#8a8a7a; --k-blackout:#4a4a4a;
+    --k-external:#1f7a99; --k-shift:#5f3391; --k-unavail:#8a8a7a; --k-blackout:#4a4a4a;
   }
   * { box-sizing:border-box; }
   body { margin:0; font-family:Georgia,'Times New Roman',serif; background:var(--cream); color:var(--den); }
@@ -107,7 +117,8 @@
   .ev.booking { background:var(--k-booking); border-left-style:double; border-left-width:6px; }
   .ev.birthday { background:var(--k-birthday); color:#241c07; }
   .ev.external { background:var(--k-external); border-left-style:dashed; }
-  .ev.blackout { background:var(--k-blackout); }
+  .ev.blackout { background:var(--k-blackout);
+    background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.16) 0 5px,transparent 5px 10px); }
   .ev.tentative { background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.3),rgba(255,255,255,0.3) 5px,transparent 5px,transparent 10px); }
   .ev .tag { display:inline-block; background:rgba(255,255,255,0.25); border-radius:20px; padding:0 6px; font-size:0.6rem; margin-right:3px; }
   .allday-row td { background:#f7f5ea; }
@@ -179,7 +190,8 @@
   .rchip.event { background:var(--k-event); }
   .rchip.birthday { background:var(--k-birthday); color:#241c07; }
   .rchip.external { background:var(--k-external); }
-  .rchip.blackout { background:var(--k-blackout); }
+  .rchip.blackout { background:var(--k-blackout);
+    background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.16) 0 5px,transparent 5px 10px); }
   .rchip.tentative { background-image:repeating-linear-gradient(45deg,rgba(255,255,255,0.3),rgba(255,255,255,0.3) 5px,transparent 5px,transparent 10px); }
 
   /* ---------- coverage strip ---------- */
@@ -316,7 +328,7 @@
         <h3 style="margin:0 0 10px;">Hours on the floor this week</h3>
         <div id="floortally"></div>
         <div style="margin-top:14px;border-top:1px dotted #e2e0d2;padding-top:12px;">
-          <button class="btn btn-sm btn-ghost" onclick="tidyShifts()">\u29c9 Tidy duplicate shifts</button>
+          <button class="btn btn-sm btn-ghost" onclick="tidyShifts()">⧉ Tidy duplicate shifts</button>
           <span id="tidy-msg" class="hint" style="margin-left:10px;"></span>
           <p class="hint" style="margin:6px 0 0;">
             Merges any overlapping shifts the same Guru has on the same day into one.
@@ -1113,10 +1125,17 @@ function renderFloorWeek(){
 async function tidyShifts(){
   $("tidy-msg").textContent = "Checking\u2026";
   try {
-    var res = await api("/gurus", { method:"POST", body: JSON.stringify({ action:"merge-shifts" }) });
-    if(res && res.removed){
-      $("tidy-msg").textContent = "Merged " + res.removed + " duplicate shift" + (res.removed>1?"s":"") + ".";
+    var res = await api("/gurus", { method:"POST", body: JSON.stringify({ action:"merge-shifts" }) }) || {};
+    var bits = [];
+    if(res.removed) bits.push("Removed " + res.removed + " duplicate shift" + (res.removed>1?"s":""));
+    if(res.widened) bits.push("merged " + res.widened + " overlapping run" + (res.widened>1?"s":""));
+    if(res.needsReview) bits.push(res.needsReview + " partly overlap a repeating shift and need a look by hand");
+    if(res.removed || res.widened){
+      $("tidy-msg").textContent = bits.join(", ") + ".";
       await load();
+    } else if(res.needsReview){
+      $("tidy-msg").textContent = res.needsReview + " shift" + (res.needsReview>1?"s":"") +
+        " partly overlap a repeating shift \u2014 left alone, since reshaping a series changes other weeks too.";
     } else {
       $("tidy-msg").textContent = "Nothing to merge \u2014 no overlapping shifts.";
     }

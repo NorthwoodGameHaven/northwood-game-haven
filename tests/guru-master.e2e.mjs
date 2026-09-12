@@ -115,7 +115,7 @@ const server = http.createServer((req, res) => {
       // Mirror the real endpoint: deletes answer 204 with NO body, which is
       // what broke every delete in the app until 12t.
       if (/^delete-/.test(b.action || '')) { res.writeHead(204); return res.end(); }
-      if (b.action === 'merge-shifts') return send(200, JSON.stringify({ removed: 2, widened: 1 }));
+      if (b.action === 'merge-shifts') return send(200, JSON.stringify({ removed: 2, widened: 1, needsReview: 1 }));
       send(201, JSON.stringify({ ok: true }));
     });
   }
@@ -238,6 +238,47 @@ if (await page.isVisible('#modal.open')) await page.click('#modal-box .btn-ghost
 await sleep(300);
 saved.push('shot');
 
+// -------------------------------------------------------------- the palette
+// Colour is the ONLY thing distinguishing an event bar from a store shift bar
+// in the rail, and they sit directly on top of each other in the same cell.
+// The first palette had them 51 apart in RGB, and an event vs an off-site
+// booking only 43 — three earthy dark greens. Measure the rendered pixels,
+// not the source, so a var rename or an override cannot slip past.
+const swatches = await page.$$eval('#kindchips .chip .sw', els => els.map(e => {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(e).backgroundColor);
+  return m ? [+m[1], +m[2], +m[3]] : null;
+}));
+const kindNames = await page.$$eval('#kindchips .chip', els => els.map(e => e.textContent.trim()));
+ok('[palette] every kind has a swatch', swatches.length === 7 && swatches.every(Boolean));
+// The two greys (Unavailable, Closures) carry meaning by hatch pattern, so
+// they are exempt from the hue test — greys cannot be far apart by colour.
+const SOLID = [0, 1, 2, 3, 4];   // bookings, events, birthdays, off-site, shifts
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+let worst = { d: Infinity, pair: '' };
+for (let i = 0; i < SOLID.length; i++) {
+  for (let j = i + 1; j < SOLID.length; j++) {
+    const d = dist(swatches[SOLID[i]], swatches[SOLID[j]]);
+    if (d < worst.d) worst = { d: Math.round(d), pair: kindNames[SOLID[i]] + ' / ' + kindNames[SOLID[j]] };
+  }
+}
+ok('[palette] no two solid kinds look alike', worst.d >= 85,
+  'closest pair ' + worst.pair + ' = ' + worst.d + ' (needs 85+)');
+
+// The specific pairing the shop complained about: these two stack in one cell.
+const stacked = await page.evaluate(() => {
+  const cs = (sel) => { const e = document.querySelector(sel); return e ? getComputedStyle(e).backgroundColor : null; };
+  return { event: cs('#rail .bar.event'), shift: cs('#rail .bar.shift') };
+});
+const parse = (c) => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c || ''); return m ? [+m[1], +m[2], +m[3]] : null; };
+ok('[palette] an event bar and a shift bar in the same rail cell are clearly different',
+  stacked.event && stacked.shift && dist(parse(stacked.event), parse(stacked.shift)) >= 85,
+  JSON.stringify(stacked));
+ok('[palette] closures are hatched, so the two greys differ by pattern not hue',
+  await page.evaluate(() => {
+    const e = document.querySelector('#grid .ev.blackout');
+    return !!e && /gradient/.test(getComputedStyle(e).backgroundImage);
+  }));
+
 // ------------------------------------------------------ shifts from the rail
 const shiftBar = await page.$('#rail .bar.shift');
 ok('[shift] store shifts are drawn in the rail', !!shiftBar);
@@ -344,8 +385,11 @@ ok('[floor] there is a way to tidy duplicate shifts', !!(await page.$('#view-flo
 await page.click('#view-floor button:has-text("Tidy")');
 await sleep(600);
 ok('[floor] tidy posts merge-shifts', saved.some(x => x && x.action === 'merge-shifts'));
-ok('[floor] and reports what it merged', /Merged 2/.test(await page.textContent('#tidy-msg')),
-  await page.textContent('#tidy-msg'));
+const tidyMsg = await page.textContent('#tidy-msg');
+ok('[floor] and reports what it removed and merged',
+  /Removed 2 duplicate shifts/.test(tidyMsg) && /merged 1 overlapping run/.test(tidyMsg), tidyMsg);
+ok('[floor] the button label is a real character, not a raw escape',
+  !/\\u[0-9a-f]{4}/i.test(await page.textContent('#view-floor')));
 await page.screenshot({ path: path.join(SHOTS, 'guru-master-floor.png'), fullPage: true });
 
 // ----------------------------------------------------------------- rooms

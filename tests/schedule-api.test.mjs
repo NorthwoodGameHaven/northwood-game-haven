@@ -359,6 +359,24 @@ describe('one Guru cannot be on the floor twice at once', () => {
     assert.equal(deletes().length, 0);
   });
 
+  test('a one-off a weekly series already covers is not created at all', async () => {
+    // This is how the doubled Fridays appeared: rostering a gap by hand on a
+    // day a recurring shift already spoke for.
+    db({ guru: [{ kind: 'shift', data: { id: 'R1', guru: 'Chad', date: '2026-09-19', open: '10:00', close: '22:00', recurrence: { freq: 'weekly', count: 8 } } }] });
+    const r = await add({ date: '2026-09-26', open: '10:00', close: '22:00' });
+    const rec = await r.json();
+    assert.equal(rec.alreadyCovered, true);
+    assert.equal(rec.id, 'R1', 'it hands back the series rather than minting a twin');
+    assert.equal(writes().length, 0, 'and writes nothing');
+  });
+
+  test('but a one-off outside the series window still gets created', async () => {
+    db({ guru: [{ kind: 'shift', data: { id: 'R1', guru: 'Chad', date: '2026-09-19', open: '16:00', close: '20:00', recurrence: { freq: 'weekly', count: 8 } } }] });
+    const rec = await (await add({ date: '2026-09-26', open: '20:00', close: '22:00' })).json();
+    assert.notEqual(rec.id, 'R1');
+    assert.equal(rec.alreadyCovered, undefined);
+  });
+
   test('a recurring shift is never merged into a one-off', async () => {
     db({ guru: [existing()] });
     const rec = await (await add({ recurrence: { freq: 'weekly', count: 8 } })).json();
@@ -380,7 +398,85 @@ describe('tidying up duplicates that already exist', () => {
     });
     const res = await (await gurusFn(POST({ action: 'merge-shifts' }))).json();
     assert.equal(res.removed, 2, 'one duplicate on each of the two days');
-    assert.equal(res.widened, 2);
+    // Exact duplicates are dropped outright in the first pass — there is
+    // nothing to widen when both records already say the same thing.
+    assert.equal(res.widened, 0);
+  });
+
+  test('overlapping-but-different one-offs are widened, not just dropped', async () => {
+    db({
+      guru: [
+        { kind: 'shift', data: { id: 'A1', guru: 'Chad', date: '2026-09-25', open: '10:00', close: '15:00' } },
+        { kind: 'shift', data: { id: 'A2', guru: 'Chad', date: '2026-09-25', open: '14:00', close: '20:00' } }
+      ]
+    });
+    const res = await (await gurusFn(POST({ action: 'merge-shifts' }))).json();
+    assert.equal(res.removed, 1);
+    assert.equal(res.widened, 1);
+    const upd = M().db.calls.find(c => /^UPDATE guru_data/.test(c.text));
+    assert.match(upd.values.join(' '), /"open":"10:00"/);
+    assert.match(upd.values.join(' '), /"close":"20:00"/);
+  });
+
+  // THE ONE THAT SHIPPED BROKEN. The first version skipped every recurring
+  // shift, so Chad's doubled Friday — one of the pair a weekly series —
+  // reported "no overlapping shifts" while sitting right there on screen.
+  const weekly = (o = {}) => ({ kind: 'shift', data: { id: 'R1', guru: 'Chad', date: '2026-09-18', open: '16:00', close: '22:00', recurrence: { freq: 'weekly', count: 8 }, ...o } });
+
+  test('two identical recurring shifts are deduped', async () => {
+    db({ guru: [weekly({ id: 'R1' }), weekly({ id: 'R2' })] });
+    const res = await (await gurusFn(POST({ action: 'merge-shifts' }))).json();
+    assert.equal(res.removed, 1, 'a repeating shift can be a duplicate too');
+  });
+
+  test('a one-off the series already covers is removed', async () => {
+    db({
+      guru: [weekly({ id: 'R1' }),
+        { kind: 'shift', data: { id: 'O1', guru: 'Chad', date: '2026-09-18', open: '16:00', close: '22:00' } }]
+    });
+    const res = await (await gurusFn(POST({ action: 'merge-shifts' }))).json();
+    assert.equal(res.removed, 1);
+    assert.equal(res.needsReview, 0);
+  });
+
+  test('and on a LATER occurrence of the series, not just the anchor date', async () => {
+    // 2026-09-25 is the second Friday of the run — the duplicate the shop saw
+    // was on a different week from where the series starts.
+    db({
+      guru: [weekly({ id: 'R1' }),
+        { kind: 'shift', data: { id: 'O1', guru: 'Chad', date: '2026-09-25', open: '16:00', close: '22:00' } }]
+    });
+    assert.equal((await (await gurusFn(POST({ action: 'merge-shifts' }))).json()).removed, 1);
+  });
+
+  test('a one-off that sticks out past the series is left for a human', async () => {
+    // Widening a weekly pattern to swallow one long evening would change every
+    // other week too. Report it; do not silently reshape the series.
+    db({
+      guru: [weekly({ id: 'R1', open: '16:00', close: '20:00' }),
+        { kind: 'shift', data: { id: 'O1', guru: 'Chad', date: '2026-09-18', open: '18:00', close: '23:00' } }]
+    });
+    const res = await (await gurusFn(POST({ action: 'merge-shifts' }))).json();
+    assert.equal(res.removed, 0);
+    assert.equal(res.needsReview, 1);
+  });
+
+  test('a one-off on a day the series does not fall on is untouched', async () => {
+    db({
+      guru: [weekly({ id: 'R1' }),
+        { kind: 'shift', data: { id: 'O1', guru: 'Chad', date: '2026-09-19', open: '16:00', close: '22:00' } }]
+    });
+    const res = await (await gurusFn(POST({ action: 'merge-shifts' }))).json();
+    assert.equal(res.removed, 0);
+    assert.equal(res.needsReview, 0);
+  });
+
+  test('another Guru is never folded into somebody else\'s series', async () => {
+    db({
+      guru: [weekly({ id: 'R1' }),
+        { kind: 'shift', data: { id: 'O1', guru: 'Mike', date: '2026-09-18', open: '16:00', close: '22:00' } }]
+    });
+    assert.equal((await (await gurusFn(POST({ action: 'merge-shifts' }))).json()).removed, 0);
   });
 
   test('it leaves a clean rota completely alone', async () => {

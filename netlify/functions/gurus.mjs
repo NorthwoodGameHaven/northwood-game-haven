@@ -500,6 +500,20 @@ const _handler = async (req) => {
         // ORDER BY created_at so "keep the oldest" is deterministic — an
         // unordered SELECT would pick a different survivor run to run.
         const rows = await sql`SELECT id, data FROM guru_data WHERE kind = 'shift' ORDER BY created_at ASC`;
+
+        // NGH-BUILD 2026-09-12u: a weekly series that already covers this date
+        // and window makes the new one-off pure duplication. This is how the
+        // doubled Fridays appeared — the gap got rostered by hand on a day a
+        // recurring shift already spoke for.
+        const coveredBy = rows.find(r => r.data && r.data.recurrence && r.data.guru === rec.guru &&
+          shiftDates(r.data).indexOf(rec.date) >= 0 &&
+          timeToMins(r.data.open) <= timeToMins(rec.open) &&
+          timeToMins(r.data.close) >= timeToMins(rec.close));
+        if (coveredBy) {
+          console.log('[gurus] shift already covered by series', coveredBy.id, '— not creating a duplicate');
+          return json({ ...coveredBy.data, alreadyCovered: true }, 200);
+        }
+
         const sameDay = rows.filter(r => r.data && r.data.guru === rec.guru && r.data.date === rec.date && !r.data.recurrence);
 
         // Absorb to a fixpoint, not in one pass. 10-14 plus 13-18 plus a new
@@ -545,16 +559,62 @@ const _handler = async (req) => {
     // NGH-BUILD 2026-09-12t: clean up duplicates that were already created
     // before the merge above existed. Same rule, applied to what is in there.
     if (action === 'merge-shifts') {
-      const rows = await sql`SELECT id, data FROM guru_data WHERE kind = 'shift'`;
-      const byKey = {};
-      for (const r of rows) {
-        if (!r.data || r.data.recurrence) continue;
-        const k = r.data.guru + '|' + r.data.date;
-        (byKey[k] = byKey[k] || []).push(r);
+      // NGH-BUILD 2026-09-12u: the first version skipped every recurring shift
+      // outright — `if (r.data.recurrence) continue`. So the duplicate people
+      // actually had (Chad on the floor 4PM-10PM twice every Friday, because
+      // one of the pair was a weekly series) could never match, and the button
+      // cheerfully reported "no overlapping shifts" while staring at it.
+      //
+      // Three passes, in order of how confident we can be:
+      //   1. EXACT duplicates — same Guru, day, times and repeat pattern.
+      //      Nothing is lost by keeping one, whether or not it recurs.
+      //   2. A one-off that a recurring shift already covers on that date.
+      //      The series says it, so the one-off is noise.
+      //   3. Overlapping one-offs — merged to their union, as before.
+      // A PARTIAL overlap involving a series is reported, never rewritten:
+      // reshaping a weekly pattern to swallow one evening would change dates
+      // nobody was looking at.
+      const rows = (await sql`SELECT id, data FROM guru_data WHERE kind = 'shift' ORDER BY created_at ASC`)
+        .filter(r => r && r.data && r.data.guru && r.data.date);
+      const alive = new Set(rows.map(r => r.id));
+      const sig = (d) => [d.guru, d.date, d.open, d.close,
+        d.recurrence ? (d.recurrence.freq + ':' + d.recurrence.count) : 'once'].join('|');
+      let removed = 0, widened = 0, needsReview = 0;
+      const drop = async (ids) => { if (ids.length) { await sql`DELETE FROM guru_data WHERE id = ANY(${ids})`; ids.forEach(i => alive.delete(i)); removed += ids.length; } };
+
+      // ---- 1. exact duplicates, recurring or not ----
+      const exact = {};
+      for (const r of rows) (exact[sig(r.data)] = exact[sig(r.data)] || []).push(r);
+      for (const k of Object.keys(exact)) {
+        if (exact[k].length < 2) continue;
+        await drop(exact[k].slice(1).map(r => r.id));
       }
-      let removed = 0, widened = 0;
-      for (const k of Object.keys(byKey)) {
-        const list = byKey[k].sort((a, b) => timeToMins(a.data.open) - timeToMins(b.data.open));
+
+      // ---- 2. a one-off already covered by a series occurrence ----
+      const live = () => rows.filter(r => alive.has(r.id));
+      const series = live().filter(r => r.data.recurrence);
+      const datesOf = {};
+      series.forEach(r => { datesOf[r.id] = new Set(shiftDates(r.data)); });
+      const redundant = [];
+      for (const o of live()) {
+        if (o.data.recurrence) continue;
+        const covered = series.some(r =>
+          r.data.guru === o.data.guru && datesOf[r.id].has(o.data.date) &&
+          timeToMins(r.data.open) <= timeToMins(o.data.open) &&
+          timeToMins(r.data.close) >= timeToMins(o.data.close));
+        if (covered) redundant.push(o.id);
+      }
+      await drop(redundant);
+
+      // ---- 3. overlapping one-offs on the same day ----
+      const byDay = {};
+      for (const r of live()) {
+        if (r.data.recurrence) continue;
+        const k = r.data.guru + '|' + r.data.date;
+        (byDay[k] = byDay[k] || []).push(r);
+      }
+      for (const k of Object.keys(byDay)) {
+        const list = byDay[k].slice().sort((a, b) => timeToMins(a.data.open) - timeToMins(b.data.open));
         let i = 0;
         while (i < list.length) {
           const group = [list[i]];
@@ -565,16 +625,27 @@ const _handler = async (req) => {
           }
           i++;
           if (group.length < 2) continue;
-          const keep = group[0];
-          const lo = timeToMins(keep.data.open);
+          // Keep the oldest of the group, not the earliest-starting one.
+          const keep = group.slice().sort((a, b) => rows.indexOf(a) - rows.indexOf(b))[0];
+          const lo = Math.min.apply(null, group.map(g => timeToMins(g.data.open)));
           const next = { ...keep.data, open: minsToTime(lo), close: minsToTime(hi) };
           await sql`UPDATE guru_data SET data = ${JSON.stringify(next)}::jsonb WHERE id = ${keep.id}`;
-          const drop = group.slice(1).map(r => r.id);
-          await sql`DELETE FROM guru_data WHERE id = ANY(${drop})`;
-          removed += drop.length; widened++;
+          await drop(group.filter(g => g.id !== keep.id).map(g => g.id));
+          widened++;
         }
       }
-      return json({ removed, widened });
+
+      // ---- anything left that overlaps a series only partially ----
+      for (const o of live()) {
+        if (o.data.recurrence) continue;
+        const clash = series.some(r => alive.has(r.id) &&
+          r.data.guru === o.data.guru && datesOf[r.id].has(o.data.date) &&
+          timeToMins(r.data.open) < timeToMins(o.data.close) &&
+          timeToMins(o.data.open) < timeToMins(r.data.close));
+        if (clash) needsReview++;
+      }
+      console.log('[gurus] merge-shifts removed', removed, 'widened', widened, 'needsReview', needsReview);
+      return json({ removed, widened, needsReview });
     }
 
     if (action === 'save-unavail') {

@@ -1,14 +1,13 @@
-# Copy/paste for GitHub Desktop — NGH-BUILD 2026-09-12t
+# Copy/paste for GitHub Desktop — NGH-BUILD 2026-09-12u
 
-Eight files, already in your repo. **This one fixes every delete endpoint in
-the app**, not just shifts.
+Four files, already in your repo.
 
 ---
 
 ## Summary (the one-line box)
 
 ```
-Fix 204 responses (every delete in the app was broken); stop duplicate shifts (12t)
+Distinct kind colours; tidy now finds recurring duplicates (12u)
 ```
 
 ---
@@ -16,79 +15,66 @@ Fix 204 responses (every delete in the app was broken); stop duplicate shifts (1
 ## Description (the big box)
 
 ```
-NGH-BUILD 2026-09-12t
+NGH-BUILD 2026-09-12u
 
-1. EVERY DELETE ENDPOINT IN THE CODEBASE WAS BROKEN
-   Reported as "Couldn't delete: Server error: Response constructor: Invalid
-   response status code 204" when deleting a duplicate store shift. It is not
-   a shift problem. netlify/functions/_shared/db.mjs had:
+1. THREE OF THE SEVEN KINDS WERE THE SAME DARK GREEN
+   In the Who's on rail an NGH event bar and a store-shift bar sit directly on
+   top of each other in the same cell. Measured in RGB distance they were 51
+   apart. An event against an off-site booking was 43 — worse, and not even
+   the one that got reported.
 
-       export function noContent() { return new Response('', { status: 204 }) }
-       export function preflight() { return new Response('', { status: 204 }) }
+     was   event #2e5d3b · shift #5b6f4a · off-site #134b57
+     now   event #2e5d3b · shift #5f3391 · off-site #1f7a99
 
-   204, 205 and 304 are "null body status" codes in the fetch spec, and the
-   Response constructor throws a TypeError if handed ANY body — an empty
-   string counts. So both of those threw on every single call.
+   Shifts are violet, matching the purple the Guru Schedule has always drawn
+   store bands in. Off-site is a proper teal. Every solid pair is now at least
+   91 apart. Closures also gained a hatch, because the two greys (Unavailable,
+   Closures) carry meaning by pattern and no two greys can be far apart by hue.
 
-   noContent() is used by bookings, events, gurus, interest-events, karaoke,
-   mtg, registrations, specials and speedgaming. preflight() is used by 20
-   functions. Meaning: nothing in the app could be deleted, and every CORS
-   preflight failed.
+   tests/guru-master.e2e.mjs now reads the RENDERED colours out of the browser
+   and fails if any two solid kinds come within 85 of each other, naming the
+   offending pair. Putting the old palette back fails it with
+   "closest pair NGH events / Off-site = 43".
 
-   It hid because each function's top-level catch turns the throw into a
-   generic "Server error", and because same-origin fetches never preflight.
+2. "TIDY DUPLICATE SHIFTS" COULD NOT SEE THE DUPLICATE IT WAS ASKED ABOUT
+   Reported: two "Chad 4PM-10PM" chips on the same Friday, and the button
+   answering "Nothing to merge — no overlapping shifts."
 
-   Fix: new Response(null, ...) in both.
+   The first line of the merge loop was:
 
-2. WHY NO TEST CAUGHT IT — AND WHAT NOW DOES
-   tests/_mock-hooks.mjs replaces db.mjs wholesale with an in-memory copy that
-   carried a byte-identical copy of the bug. The real db.mjs was executed by
-   nothing, ever. Reverting the fix turned zero tests red.
+       if (!r.data || r.data.recurrence) continue;
 
-   A mock that shadows the module it stands in for cannot protect it. So:
-     * tests/_neon-stub.mjs stubs ONLY the '@netlify/neon' driver, letting the
-       REAL db.mjs load
-     * tests/db-responses.test.mjs (15 tests) exercises it — the null-body
-       statuses, json()/bad(), and the admin token issue/verify/tamper paths
-   Re-introducing either 204 bug now fails two tests.
+   Every recurring shift was skipped outright. The doubled Friday repeated
+   across weeks, which is the tell: one of the pair was a weekly series, so
+   the pass that was supposed to find it never looked at it.
 
-3. THE AUDIT WAS CREATING DUPLICATE SHIFTS
-   Clicking "Roster Chad on the floor" twice — or coming back to a gap the
-   list had not caught up with — posted a second identical shift. Result: Chad
-   on the floor 4PM-10PM twice on Friday, 10AM-10PM twice on Saturday, and a
-   week tally reading 52 hours.
+   Rewritten as three passes, in order of confidence:
+     1. EXACT duplicates — same Guru, day, times AND repeat pattern. Safe to
+        collapse whether or not it recurs.
+     2. A one-off that a series already covers on that date — including on a
+        LATER occurrence, not just the anchor date, which is where the shop's
+        actual duplicate was.
+     3. Overlapping one-offs, merged to their union (as before).
+   A one-off that only PARTLY overlaps a series is reported, never rewritten:
+   widening a weekly pattern to swallow one long evening would change every
+   other week too. The button now says so instead of silently doing nothing.
 
-   Fixed at the server, not just the button, because any caller can post
-   twice. save-shift now absorbs a CREATE that overlaps or abuts an existing
-   shift for the same Guru on the same day into that shift, to a FIXPOINT —
-   10-14 plus 13-18 plus a new 17-22 is one continuous stretch, and a
-   single-pass merge would have left two overlapping shifts behind. It keeps
-   the oldest record (ordered by created_at, so the survivor is deterministic)
-   and widens it to the union.
+3. AND IT STOPS HAPPENING AT THE SOURCE
+   save-shift now refuses to create a one-off that a recurring shift already
+   covers, and hands back the series instead. That is how the doubled Fridays
+   appeared in the first place — rostering a floor gap by hand on a day a
+   weekly shift already spoke for.
 
-   Deliberately NOT merged: an edit (anything carrying an id — that is
-   somebody changing a record on purpose, and widening it would silently undo
-   them), a recurring shift (it spans dates this check knows nothing about),
-   a different Guru, a different day, and a genuinely separate shift later the
-   same day.
-
-   Client side: clicking a fix in Review & fix now greys out and disables that
-   whole row immediately. The busy flag guarded the network call but left the
-   buttons live and inviting.
-
-4. TIDYING THE ONES ALREADY IN THERE
-   New "⧉ Tidy duplicate shifts" button under the Floor cover tally, and a
-   merge-shifts action behind it: same rule, applied to what is already in the
-   table. It reports how many it merged, and leaves a clean rota untouched.
+4. The tidy button rendered as "\\u29c9 Tidy duplicate shifts" — a raw escape
+   written into the HTML instead of the character. There is now a check that
+   no raw \\uXXXX escape appears in that panel's text.
 
 TESTS
-  node --test tests/*.test.mjs        462 pass  (was 431)
-  node tests/guru-master.e2e.mjs      110 browser checks
-  31 new tests. Notable ones: that the platform really does reject a body on a
-  204 (so the guard keeps meaning something), that deleting a shift returns
-  204 rather than a server error, that a double-click cannot post two shifts,
-  and that three overlapping shifts collapse to one.
-  Mutations: both 204 bugs and both halves of the merge each turn tests red.
+  node --test tests/*.test.mjs        471 pass  (was 462)
+  node tests/guru-master.e2e.mjs      115 browser checks
+  9 new API tests and 6 new browser checks. Mutations: restoring the
+  skip-recurring line, removing the series-covers-one-off pass, and removing
+  the save-shift guard each turn tests red.
 ```
 
 ---
@@ -97,18 +83,12 @@ TESTS
 
 | File | Change |
 |---|---|
-| `netlify/functions/_shared/db.mjs` | **The fix** — null body on 204 |
-| `netlify/functions/gurus.mjs` | Overlapping shifts merge; new `merge-shifts` action |
-| `site/guru-master.html` | Row locks on click; "Tidy duplicate shifts" button |
-| `tests/_neon-stub.mjs` | **New** — lets the real db.mjs be tested |
-| `tests/db-responses.test.mjs` | **New** — 15 tests against the real db.mjs |
-| `tests/_mock-hooks.mjs` | Mock now mirrors the fixed helper |
-| `tests/schedule-api.test.mjs` | 16 new tests |
-| `tests/guru-master.e2e.mjs` | 6 new browser checks |
+| `site/guru-master.html` | New kind palette; hatched closures; tidy reports all outcomes; escape fixed |
+| `netlify/functions/gurus.mjs` | merge-shifts handles recurring; save-shift won't duplicate a series |
+| `tests/schedule-api.test.mjs` | 9 new tests |
+| `tests/guru-master.e2e.mjs` | 6 new browser checks incl. the measured palette |
 
 ## After it deploys
 
-1. **Floor cover** → **⧉ Tidy duplicate shifts**. That collapses Chad's
-   doubled Friday and Saturday in one go. Chad's 52h should drop to something
-   believable.
-2. Delete works everywhere now — worth knowing, since it never has.
+Hit **⧉ Tidy duplicate shifts** again — it should actually find Chad's Friday
+this time. Chad's 40h will drop by whatever the duplicate was worth.
