@@ -6,6 +6,7 @@
 // account/shop handlers and the Stripe webhook all run for real.
 import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+const round2 = n => Math.round(n * 100) / 100;
 import { register } from 'node:module';
 import crypto from 'node:crypto';
 
@@ -355,6 +356,53 @@ describe('refundSale (NGH-BUILD 2026-09-12d) — real X-Series returns flow', ()
     assert.equal(logged[0], 'NGH-77:fee:refund'); assert.equal(logged[1], 'ret-1');
   });
 
+  test('PARTIAL: trims the parked line, re-reads, and closes at Lightspeed\'s own recomputed total', async () => {
+    // Verified live on ORD-VG5N (3 x $0.95): returning 1 gives -0.95 / -0.05 tax
+    // and takes exactly one unit of loyalty back off.
+    const V = 'https://teststore.retail.lightspeed.app/api/2026-07';
+    let parkedQty = -3, puts = [];
+    stubStore({});
+    routes.push({ match: (u, i) => u === V + '/sales/sale-9/actions/return' && i.method === 'POST',
+      reply: () => jres({ data: { id: 'ret-1', state: 'parked' } }) });
+    routes.push({ match: (u, i) => u === V + '/sales/ret-1' && (i.method || 'GET') === 'GET',
+      reply: () => jres({ data: { id: 'ret-1', state: 'parked', customer_id: 'c1',
+        source: { register_id: 'reg-online' },
+        line_items: [{ id: 'li', quantity: parkedQty, product: { id: 'p-bag' } }],
+        // Lightspeed recomputes: one third of -2.85 once trimmed to -1
+        totals: { price_incl_tax: parkedQty === -3 ? -2.85 : -0.95 } } }) });
+    routes.push({ match: (u, i) => u === V + '/sales/ret-1' && i.method === 'PUT',
+      reply: (u, i) => { const b = JSON.parse(i.body); puts.push(b);
+        if (b.state === 'parked') parkedQty = b.line_items[0].quantity;   // the trim
+        return jres({ data: { id: 'ret-1', state: b.state } }); } });
+    routes.push({ match: u => u.includes('/api/2.0/payment_types'),
+      reply: () => jres({ data: [{ id: 'pt-online', name: 'Online — Stripe', type_id: 3 }] }) });
+    M.db.handlers.unshift((t, v) => t.startsWith('SELECT sale_id FROM ls_sales_log')
+      ? (/:refund/.test(String(v[0])) ? [] : [{ sale_id: 'sale-9' }]) : undefined);
+
+    const r = await ls.refundSale({ sourceId: 'REG-9', units: 1, refundKey: 'refund:0', amountCents: 285 });
+    assert.equal(r.ok, true, r.error);
+    // trimmed while still parked, THEN closed
+    assert.deepEqual(puts.map(p => p.state), ['parked', 'closed']);
+    assert.equal(puts[0].line_items[0].quantity, -1, 'did not trim the line to the returned units');
+    // the close must use Lightspeed's recomputed total, not the caller's 285c
+    assert.equal(puts[1].payments[0].amount, -0.95);
+  });
+
+  test('PARTIAL: refuses to guess on a multi-line sale, and refuses to over-return', async () => {
+    const V = 'https://teststore.retail.lightspeed.app/api/2026-07';
+    stubStore({});
+    routes.push({ match: (u, i) => u === V + '/sales/sale-9/actions/return' && i.method === 'POST',
+      reply: () => jres({ data: { id: 'ret-1', state: 'parked' } }) });
+    routes.push({ match: (u, i) => u === V + '/sales/ret-1' && (i.method || 'GET') === 'GET',
+      reply: () => jres({ data: { id: 'ret-1', state: 'parked',
+        line_items: [{ id: 'a', quantity: -1 }, { id: 'b', quantity: -1 }], totals: { price_incl_tax: -5 } } }) });
+    M.db.handlers.unshift((t, v) => t.startsWith('SELECT sale_id FROM ls_sales_log')
+      ? (/:refund/.test(String(v[0])) ? [] : [{ sale_id: 'sale-9' }]) : undefined);
+    const r = await ls.refundSale({ sourceId: 'REG-M', units: 1 });
+    assert.equal(r.ok, false);
+    assert.match(r.error, /single-line/);
+  });
+
   test('refuses to reverse a sale that was never recorded — no return is opened', async () => {
     stubStore({}); stubReturns({});
     M.db.handlers.unshift(t => t.startsWith('SELECT sale_id FROM ls_sales_log') ? [] : undefined);
@@ -375,6 +423,22 @@ describe('refundSale (NGH-BUILD 2026-09-12d) — real X-Series returns flow', ()
 
 describe('recordSale', () => {
   beforeEach(() => { resetMocks(); dbTokens(() => tokenRow()); });
+
+  test('loyalty_value is PER UNIT — Lightspeed multiplies by quantity itself (NGH-BUILD 2026-09-12j)', async () => {
+    // Live regression: ORD-VG5N, 3 x $0.95 inc-tax. Sending price*qty*ratio made
+    // Lightspeed record loyalty_amount_total 0.15 instead of ~0.05.
+    let posted = null;
+    stubStore({ customers: [{ id: 'c1', email: 'jane@d.co', enable_loyalty: true }], products: [{ id: 'p-bag', sku: 'BAG' }],
+      saleReply: b => { posted = b; return jres({ register_sale: { id: 'sale-q' } }); } });
+    await ls.recordSale({ sourceId: 'ORD-Q3', kind: 'order', customer: { email: 'jane@d.co' },
+      lines: [{ sku: 'BAG', name: 'Grab bag x3', qty: 3, priceIncTax: 0.95, loyalty: true }],
+      payment: 'online', state: 'closed' });
+    const row = posted.register_sale_products[0];
+    assert.equal(row.quantity, 3);
+    // ex-tax unit price 0.90047 x 2% = 0.018 -> 0.02 per unit; Lightspeed makes it 0.06 for the line.
+    assert.equal(row.loyalty_value, round2(row.price * 0.05), 'loyalty_value must be per UNIT, not per line');
+    assert.ok(row.loyalty_value < row.price * 3 * 0.05 + 1e-9, 'must not carry the whole line');
+  });
 
   test('resolves SKUs, splits tax, adds loyalty, posts to the legacy path and logs the sale', async () => {
     const custs = [{ id: 'c1', email: 'jane@d.co', first_name: 'Jane', enable_loyalty: true, customer_group_id: 'g1' }];

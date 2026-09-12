@@ -228,15 +228,20 @@ const _handler = async (req) => {
                 await refundPaymentIntent(pi, refundCents);
                 reg.amountPaidCents = Number(prev.amountPaidCents) - refundCents;
                 reg.partialRefunds = (prev.partialRefunds || []).concat([{ at: new Date().toISOString(), amountCents: refundCents, removedQty: removed }]);
-                // NGH-BUILD 2026-09-12g: a PARTIAL refund needs a PARTIAL Lightspeed
-                // return — the parked return Lightspeed builds negates the WHOLE sale,
-                // so its line quantities must be edited down before closing. That
-                // mechanic is not yet verified against the live API, and closing a
-                // full return here would over-credit revenue and loyalty. So the
-                // reversal is flagged for staff instead of guessed at.
-                reg.lightspeedPartialPending = (Number(reg.lightspeedPartialPending) || 0) + refundCents;
-                console.warn('[registrations] PARTIAL refund ' + refundCents + 'c on ' + reg.id +
-                  ' — Lightspeed sale NOT reversed; process a partial return in Sales history');
+                // NGH-BUILD 2026-09-12j: reverse the released tickets in Lightspeed
+                // too. A partial return edits the parked return's line quantity
+                // down, and Lightspeed prorates price, tax AND loyalty from it
+                // (verified live). Each reduction needs its own idempotency key —
+                // a registration can be reduced more than once.
+                const pr = await refundSale({
+                  sourceId: reg.id, kind: 'registration-partial-refund',
+                  refundKey: 'refund:' + (reg.partialRefunds.length),
+                  units: removed, amountCents: refundCents, payment: 'online',
+                  note: 'Partial refund — ' + removed + ' ticket' + (removed === 1 ? '' : 's') + ' released from ' + reg.id
+                });
+                reg.partialRefunds[reg.partialRefunds.length - 1].lightspeedSaleId = pr.saleId || null;
+                reg.partialRefunds[reg.partialRefunds.length - 1].lightspeedError = pr.error || null;
+                if (pr.error) console.error('[registrations] partial Lightspeed return failed', reg.id, pr.error);
                 changed.push(money(refundCents) + ' refunded to your card for the ' + removed + ' released ticket' + (removed === 1 ? '' : 's'));
               } catch (e) {
                 console.error('[registrations] partial refund failed', e);
@@ -269,10 +274,11 @@ const _handler = async (req) => {
         // NGH-BUILD 2026-09-12g: partial refunds are not reversed in Lightspeed
         // automatically (a partial return needs its line quantities edited down),
         // so staff must be told or the books quietly drift.
-        + (reg.lightspeedPartialPending
-            ? ('\n\n⚠️ ACTION NEEDED IN LIGHTSPEED: ' + money(reg.lightspeedPartialPending)
-               + ' was refunded to the card but the Lightspeed sale has NOT been reduced.'
-               + '\nSales history → find the sale noted "' + reg.id + '" → Process return → keep only the '
+        + ((reg.partialRefunds || []).some(x => x && x.lightspeedError)
+            ? ('\n\n⚠️ ACTION NEEDED IN LIGHTSPEED: the card was refunded but the Lightspeed'
+               + ' sale could NOT be reduced automatically ('
+               + ((reg.partialRefunds || []).filter(x => x && x.lightspeedError).pop() || {}).lightspeedError
+               + ').\nSales history → find the sale noted "' + reg.id + '" → Process return → keep only the '
                + 'released ticket(s) → close it. Until then this registration overstates revenue, tax and loyalty.')
             : ''));
       return json(Object.assign({}, reg, { ticketUrl: ticketUrl(reg.id), changed }));

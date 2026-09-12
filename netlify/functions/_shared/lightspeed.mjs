@@ -408,10 +408,19 @@ export async function recordSale(opts) {
 //   2. PUT  /api/<date>/sales/:returnId  {state:'closed', payments:[…]}
 // Lightspeed computes the loyalty reversal itself once the return is closed.
 //
-// opts: { sourceId, kind, payment, note, amountCents? }
-//   sourceId  the ORIGINAL sale's source id (e.g. 'NGH-123:fee'); the return is
-//             logged as '<sourceId>:refund' so a double-click can't double-reverse.
-//   amountCents optional override; defaults to the parked return's own total so
+// opts: { sourceId, kind, payment, note, amountCents?, units?, refundKey? }
+//   sourceId  the ORIGINAL sale's source id (e.g. 'NGH-123:fee').
+//   refundKey idempotency suffix, default 'refund'. A sale can be PARTIALLY
+//             returned more than once (a registration dropping 4→3→2 tickets),
+//             so each partial needs its own key or the guard blocks the second.
+//   units     PARTIAL return: how many UNITS to send back from a single-line
+//             sale. Verified live on ORD-VG5N: edit the parked return's line
+//             quantity, PUT it back while still parked, re-read, and Lightspeed
+//             prorates price, tax AND loyalty (3 x $0.95 → return 1 → −$0.95,
+//             −$0.05 tax, loyalty 0.15 → 0.10). Lightspeed also tracks what is
+//             already returned: the next return on that sale opens at −2.
+//             Refused on a multi-line sale rather than guessing which line.
+//   amountCents fallback only; the parked return's own recomputed total wins so
 //             the payment always balances the lines exactly.
 // Never throws — returns { ok, saleId, skipped, error }.
 export const RETURNS_API_VERSION = process.env.LIGHTSPEED_RETURNS_API_VERSION || '2026-07';
@@ -427,7 +436,7 @@ async function paymentTypeRef(configId) {
 export async function refundSale(opts) {
   const sourceId = String((opts && opts.sourceId) || '');
   const kind = String((opts && opts.kind) || 'refund');
-  const refundId = sourceId + ':refund';
+  const refundId = sourceId + ':' + String((opts && opts.refundKey) || 'refund');
   const out = { ok: false, saleId: null, skipped: false, error: null, sourceId: refundId };
   try {
     if (!sourceId) throw new Error('sourceId required');
@@ -458,8 +467,32 @@ export async function refundSale(opts) {
     //        and the register silently switched to Main Retail. Loyalty cannot
     //        reverse off a return that has no lines and no customer.
     //    So we echo the parked return's own identity and lines straight back.
-    const parked = oneOf(await lsFetch('sales/' + enc(returnId), { version: V }));
+    let parked = oneOf(await lsFetch('sales/' + enc(returnId), { version: V }));
     if (!parked) throw new Error('could not read the parked return ' + returnId);
+
+    // 2b) PARTIAL: cut the line quantity down, save it while still parked, then
+    //     re-read so Lightspeed — not us — decides what the return is worth.
+    const units = Math.max(0, parseInt(opts && opts.units, 10) || 0);
+    if (units > 0) {
+      const lines = parked.line_items || [];
+      if (lines.length !== 1) throw new Error('partial return needs a single-line sale; ' + originalSaleId + ' has ' + lines.length + ' lines');
+      const available = Math.abs(Number(lines[0].quantity) || 0);
+      if (units > available) throw new Error('cannot return ' + units + ' unit(s): only ' + available + ' left on ' + originalSaleId);
+      if (units < available) {
+        await lsFetch('sales/' + enc(returnId), {
+          method: 'PUT', version: V,
+          body: {
+            state: 'parked',
+            customer_id: parked.customer_id || undefined,
+            register_id: (parked.source && parked.source.register_id) || c.registerId || undefined,
+            line_items: lines.map(l => ({ ...l, quantity: -units }))
+          }
+        });
+        parked = oneOf(await lsFetch('sales/' + enc(returnId), { version: V }));
+        if (!parked) throw new Error('could not re-read the trimmed return ' + returnId);
+      }
+    }
+
     const t = parked.totals && parked.totals.price_incl_tax;
     let cents = (t != null && Number(t) !== 0) ? Math.round(Math.abs(Number(t)) * 100) : null;
     // Caller's amount is the fallback (and the authority for a partial refund).

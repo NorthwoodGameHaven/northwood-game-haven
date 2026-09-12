@@ -211,7 +211,13 @@ export function buildSalePayload({ sourceId, state = 'closed', payment = null, n
     const row = { product_id: l.productId, quantity: qty, price, tax, price_set: 1 };
     const taxId = taxable ? c.taxId : c.taxIdNone;
     if (taxId) row.tax_id = taxId;
-    if (loyaltyEnabled && l.loyalty !== false && loyaltyRatio > 0) row.loyalty_value = round2(price * qty * loyaltyRatio);
+    // NGH-BUILD 2026-09-12j: loyalty_value is PER UNIT — Lightspeed multiplies it
+    // by `quantity` itself. Sending the whole line's worth double-counted it by a
+    // factor of qty. Verified live on ORD-VG5N (3 × $0.95): we sent 0.05, the sale
+    // came back loyalty_amount 0.05 / loyalty_amount_total 0.15 against a correct
+    // value of ~0.05 for the $2.70 ex-tax line. Invisible on bookings (always
+    // qty 1); a 4-ticket event registration would have credited 4× the points.
+    if (loyaltyEnabled && l.loyalty !== false && loyaltyRatio > 0) row.loyalty_value = round2(price * loyaltyRatio);
     if (l.name) row.attributes = [{ name: 'line_note', value: String(l.name).slice(0, 255) }];
     products.push(row);
     total += inc * qty;
