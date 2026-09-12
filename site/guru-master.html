@@ -99,6 +99,27 @@
   .free.addshift:hover { background:#eef4ec; color:var(--forest); }
   .bar.shift { cursor:pointer; }
 
+  /* ---------- time grid: a real calendar, sized by duration ---------- */
+  .gcal { min-width:1000px; }
+  .grow { display:flex; }
+  .gtime { width:62px; flex:none; font-size:0.68rem; color:#7a7a5a; text-align:right; padding:3px 6px; background:#faf8ef; border:1px solid #e6e3d4; }
+  .gcol { flex:1 1 0; min-width:0; border:1px solid #e6e3d4; border-left:none; }
+  .grow + .grow .gcol, .grow + .grow .gtime { border-top:none; }
+  .gdayhead { background:#f4f1e4; font-family:'Cinzel',serif; font-size:0.74rem; color:var(--forest); padding:6px 4px; text-align:center; }
+  .gdayhead.today { background:var(--gold-light); color:var(--dark); }
+  .gdayhead small { display:block; font-family:Georgia,serif; font-size:0.66rem; font-weight:normal; color:#7a7a5a; }
+  .gdayhead.today small { color:#4a3d16; }
+  .gbandcell { background:#f7f5ea; padding:2px; min-height:26px; }
+  .gbandcell.today { background:#fdfbf2; }
+  .gdaycol { position:relative; padding:0; }
+  .ghband { position:absolute; left:0; right:0; border-bottom:1px solid #efece0; }
+  .ghband.closed { background:repeating-linear-gradient(45deg,#f2efe2,#f2efe2 6px,#eae7d8 6px,#eae7d8 12px); }
+  .ghband.uncovered { background:#fdf2f0; }
+  .gdaycol.today .ghband:not(.closed):not(.uncovered) { background:#fdfbf2; }
+  .gtimecol { padding:0; }
+  .ghr { border-bottom:1px solid #efece0; padding:2px 6px 0 0; box-sizing:border-box; }
+  .ev.placed { position:absolute; overflow:hidden; margin:0; box-shadow:0 1px 3px rgba(0,0,0,0.22); }
+
   /* ---------- time grid ---------- */
   .gridwrap { overflow-x:auto; }
   table.grid { border-collapse:collapse; width:100%; min-width:1000px; table-layout:fixed; }
@@ -205,10 +226,24 @@
   .alert.warn { border-left-color:var(--gold); background:#fdf8ec; }
   .alert b { font-family:'Cinzel',serif; font-size:0.74rem; }
   /* One summary line. Six stacked banners pushed the calendar below the fold. */
-  .alertbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-left:4px solid var(--gold);
-              background:#fdf8ec; border-radius:9px; padding:9px 14px; margin-bottom:12px; font-size:0.82rem; }
-  .alertbar.hard { border-left-color:var(--maroon); background:#fdf3f2; }
-  .alertbar b { font-family:'Cinzel',serif; font-size:0.78rem; }
+  .alertbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; border:2px solid var(--gold);
+              border-left-width:8px; background:#fdf8ec; border-radius:11px; padding:12px 16px; margin-bottom:14px; }
+  .alertbar.hard { border-color:var(--maroon); background:#fdf0ee;
+                   box-shadow:0 3px 14px rgba(110,31,43,0.18); }
+  .alertbar b { font-family:'Cinzel',serif; font-size:1rem; display:block; color:var(--forest); }
+  .alertbar.hard b { color:var(--maroon); }
+  .alertbar small { font-size:0.78rem; color:#7a7a5a; }
+  /* A sign you cannot scroll past. */
+  .alertsign { flex:none; width:38px; height:38px; border-radius:50%; background:var(--gold);
+               color:#fff; font-family:'Cinzel',serif; font-size:1.35rem; line-height:38px;
+               text-align:center; font-weight:700; }
+  .alertsign.hard { background:var(--maroon); animation:pulse 2.2s ease-in-out infinite; }
+  @keyframes pulse {
+    0%,100% { box-shadow:0 0 0 0 rgba(110,31,43,0.45); }
+    50%     { box-shadow:0 0 0 9px rgba(110,31,43,0); }
+  }
+  @media (prefers-reduced-motion:reduce) { .alertsign.hard { animation:none; } }
+  .alerttext { line-height:1.35; }
   /* rows in the Review & fix modal */
   .rz { border-left:4px solid var(--maroon); background:#fdf3f2; border-radius:9px; padding:9px 12px; margin-bottom:9px; font-size:0.83rem; }
   .rz.warn { border-left-color:var(--gold); background:#fdf8ec; }
@@ -527,7 +562,8 @@ function renderAlerts(){
     all.unshift({ type:"no-hours", detail:"Store hours haven't been set, so nobody is being warned about uncovered shifts. Set them on the Store hours tab." });
   }
   if(!all.length){ $("alerts").innerHTML = ""; return; }
-  var order = { "guru-double-booked":0, "guru-unavailable":1, "room-double-booked":2, "guru-understaffed":3, "store-uncovered":4, "no-hours":5 };
+  var order = { "offsite-vs-shift":0, "guru-double-booked":1, "guru-unavailable":2, "room-double-booked":3,
+    "external-unstaffed":4, "guru-understaffed":5, "store-uncovered":6, "no-hours":7 };
   all.sort(function(a,b){ return (order[a.type]==null?9:order[a.type]) - (order[b.type]==null?9:order[b.type]); });
   var TITLE = {
     "guru-double-booked":"Double-booked Guru", "guru-unavailable":"Assigned while unavailable",
@@ -540,24 +576,28 @@ function renderAlerts(){
   state.issues = all;
   var byType = {};
   all.forEach(function(c){ byType[c.type] = (byType[c.type]||0) + 1; });
-  var hard = all.filter(function(c){ return c.type==="guru-double-booked" || c.type==="guru-unavailable" || c.type==="room-double-booked"; }).length;
+  var hard = all.filter(function(c){ return c.type==="guru-double-booked" || c.type==="guru-unavailable" ||
+    c.type==="room-double-booked" || c.type==="offsite-vs-shift"; }).length;
   var parts = Object.keys(byType).map(function(t){
     var n = byType[t];
     return n + " " + (n > 1 && PLURAL[t] ? PLURAL[t] : (SHORT[t] || t));
   });
   $("alerts").innerHTML =
     '<div class="alertbar'+(hard?" hard":"")+'">' +
-      '<b>' + (hard ? "⚠️ " : "🛈 ") + all.length + ' thing' + (all.length>1?"s":"") + ' to look at</b>' +
-      '<span class="hint">' + esc(parts.join(" · ")) + '</span>' +
+      '<span class="alertsign'+(hard?" hard":"")+'">'+(hard?"!":"i")+'</span>' +
+      '<span class="alerttext"><b>' + all.length + ' thing' + (all.length>1?"s":"") + ' to look at</b>' +
+      '<small>' + esc(parts.join(" · ")) + '</small></span>' +
       '<span style="flex:1;"></span>' +
-      '<button class="btn btn-sm'+(hard?"":" btn-ghost")+'" onclick="openResolve()">Review &amp; fix</button>' +
+      '<button class="btn'+(hard?"":" btn-ghost")+'" onclick="openResolve()">Review &amp; fix</button>' +
     '</div>';
 }
-var PLURAL = { "store-uncovered":"floor gaps", "room-double-booked":"room clashes", "guru-double-booked":"double-booked" };
+var PLURAL = { "store-uncovered":"floor gaps", "room-double-booked":"room clashes", "guru-double-booked":"double-booked",
+  "external-unstaffed":"off-site unstaffed", "offsite-vs-shift":"in two places at once" };
 var SHORT = {
   "guru-double-booked":"double-booked", "guru-unavailable":"assigned while off",
   "room-double-booked":"room clash", "guru-understaffed":"unstaffed",
-  "store-uncovered":"floor gap", "no-hours":"hours not set"
+  "store-uncovered":"floor gap", "no-hours":"hours not set",
+  "external-unstaffed":"off-site unstaffed", "offsite-vs-shift":"in two places at once"
 };
 
 /* ---------------- resolve issues ---------------- */
@@ -575,7 +615,8 @@ function openResolve(){
   var TITLE = {
     "guru-double-booked":"Double-booked Guru", "guru-unavailable":"Assigned while unavailable",
     "room-double-booked":"Room clash", "guru-understaffed":"Guru add-on unstaffed",
-    "store-uncovered":"Floor not rostered", "no-hours":"Store hours not set"
+    "store-uncovered":"Floor not rostered", "no-hours":"Store hours not set",
+    "external-unstaffed":"Off-site commitment unstaffed", "offsite-vs-shift":"Can't be in two places"
   };
   var h = '<h2 style="margin:0 0 2px;">Review &amp; fix</h2>' +
     '<p class="hint" style="margin:0 0 14px;">' + all.length + ' item' + (all.length>1?"s":"") +
@@ -596,7 +637,8 @@ function resolveRow(c, ix){
   var TITLE = {
     "guru-double-booked":"Double-booked Guru", "guru-unavailable":"Assigned while unavailable",
     "room-double-booked":"Room clash", "guru-understaffed":"Guru add-on unstaffed",
-    "store-uncovered":"Floor not rostered", "no-hours":"Store hours not set"
+    "store-uncovered":"Floor not rostered", "no-hours":"Store hours not set",
+    "external-unstaffed":"Off-site commitment unstaffed", "offsite-vs-shift":"Can't be in two places"
   };
   var soft = (c.type === "store-uncovered" || c.type === "guru-understaffed" || c.type === "no-hours");
   var body = '';
@@ -627,6 +669,17 @@ function resolveRow(c, ix){
     if(c.type === "guru-unavailable"){
       body += ' <span class="hint">or clear the time off on the</span> <a href="guru-schedule.html">Guru Schedule</a>';
     }
+  }
+  else if(c.type === "external-unstaffed"){
+    var sel3 = "rz-ex-" + ix;
+    body = guruSelect(sel3) +
+      ' <button class="btn btn-xs" onclick="fixAssignAdd(\''+esc(c.a).replace(/'/g,"\\'")+'\',document.getElementById(\''+sel3+'\').value)">Send them</button>';
+  }
+  else if(c.type === "offsite-vs-shift"){
+    // Two ways out, and only the person deciding knows which: they are not
+    // going to the con after all, or somebody else takes the floor.
+    body = '<button class="btn btn-xs btn-danger" onclick="fixAssignDrop(\''+esc(c.a).replace(/'/g,"\\'")+'\',\''+esc(c.guru).replace(/'/g,"\\'")+'\')">Take '+esc(c.guru)+' off the off-site event</button> ' +
+      '<button class="btn btn-xs btn-ghost" onclick="closeModal();setView(\'floor\')">Re-roster the floor</button>';
   }
   else if(c.type === "room-double-booked"){
     body = '<span class="hint">Two things want the same room — one has to move.</span> ' +
@@ -763,74 +816,87 @@ function renderRail(){
 function renderGrid(){
   var d = state.data;
   var lo = d.grid.loMin, hi = d.grid.hiMin;
-  var h = '<table class="grid"><colgroup><col class="hcol">';
-  d.days.forEach(function(){ h += '<col>'; });
-  h += '</colgroup><tr><th class="hour" style="background:#f4f1e4;"></th>';
-  d.days.forEach(function(day){
-    h += '<th class="dayh'+(day.date===TODAY?" today":"")+'" style="font-family:\'Cinzel\',serif;font-size:0.74rem;color:var(--forest);background:'+(day.date===TODAY?"var(--gold-light)":"#f4f1e4")+';padding:6px 4px;">'+
-         DOWFULL[day.dow]+' '+(+day.date.slice(8))+
-         '<small style="display:block;font-family:Georgia,serif;font-size:0.66rem;font-weight:normal;color:'+(day.date===TODAY?"#4a3d16":"#7a7a5a")+';">'+
-         (day.hours.closed ? "Closed" : day.hours.configured ? (fmtMin(day.hours.sMin)+"–"+fmtMin(day.hours.eMin)) : "hours not set")+
-         '</small></th>';
-  });
-  h += '</tr>';
+  var ROW = 46;                                   // pixels per hour
+  var bodyH = Math.max(ROW, (hi - lo) / 60 * ROW);
+  var topPx = function(m){ return (Math.max(lo, Math.min(hi, m)) - lo) / 60 * ROW; };
 
-  // Shifts and unavailability are person-state, not room-and-clock, so they
-  // live in the rail and never in the grid. Drawing them here put an
-  // unstyled white-on-white box in the all-day band.
+  // NGH-BUILD 2026-09-12v: blocks are positioned and sized by their real
+  // duration instead of being dropped whole into their start-hour cell.
+  // A 10AM-5PM comic con and a 5PM-9PM game night were drawn exactly the same
+  // height, which is not a calendar — it is a list wearing a grid's clothes.
+  // The hour rows stay as a background layer so the closed shading and the
+  // uncovered-floor pink still line up with the clock.
   function inGrid(i){ return visible(i) && i.kind !== "shift" && i.kind !== "unavail"; }
 
-  // All-day band: things with no clock position of their own.
-  var anyAllDay = d.days.some(function(day){ return day.items.some(function(i){ return i.allDay && inGrid(i); }); });
-  if(anyAllDay){
-    h += '<tr class="allday-row"><td class="hour">all day</td>';
-    d.days.forEach(function(day){
-      var list = day.items.filter(function(i){ return i.allDay && inGrid(i); });
-      h += '<td class="slot'+(day.date===TODAY?" today":"")+'">' + list.map(evHtml).join("") + '</td>';
-    });
-    h += '</tr>';
-  }
+  var h = '<div class="gcal">';
 
-  // Overnight band: the small hours carried over from the night before. These
-  // are kept out of the hour rows on purpose — one 3am lock-in would otherwise
-  // add eight empty rows to every column in the week.
-  var anyTail = d.days.some(function(day){ return day.items.some(function(i){ return i.tail && inGrid(i); }); });
-  if(anyTail){
-    h += '<tr class="allday-row"><td class="hour">overnight</td>';
-    d.days.forEach(function(day){
-      var list = day.items.filter(function(i){ return i.tail && inGrid(i); });
-      h += '<td class="slot'+(day.date===TODAY?" today":"")+'">' + list.map(evHtml).join("") + '</td>';
-    });
-    h += '</tr>';
-  }
+  // ---- header ----
+  h += '<div class="grow ghead"><div class="gtime"></div>';
+  d.days.forEach(function(day){
+    h += '<div class="gcol gdayhead'+(day.date===TODAY?" today":"")+'">' +
+      DOWFULL[day.dow]+' '+(+day.date.slice(8)) +
+      '<small>'+(day.hours.closed ? "Closed" : day.hours.configured ? (fmtMin(day.hours.sMin)+"–"+fmtMin(day.hours.eMin)) : "hours not set")+'</small>' +
+      '</div>';
+  });
+  h += '</div>';
 
-  for(var m = lo; m < hi; m += 60){
-    h += '<tr><td class="hour">'+fmtMin(m)+'</td>';
+  // ---- all-day + overnight bands (no clock position of their own) ----
+  function band(label, pick){
+    if(!d.days.some(function(day){ return day.items.some(pick); })) return "";
+    var b = '<div class="grow gband"><div class="gtime">'+label+'</div>';
     d.days.forEach(function(day){
-      var cls = "slot";
-      if(day.date === TODAY) cls += " today";
+      b += '<div class="gcol gbandcell'+(day.date===TODAY?" today":"")+'">' +
+        day.items.filter(pick).map(function(i){ return evHtml(i, null); }).join("") + '</div>';
+    });
+    return b + '</div>';
+  }
+  h += band("all day", function(i){ return i.allDay && inGrid(i); });
+  h += band("overnight", function(i){ return i.tail && inGrid(i); });
+
+  // ---- the timed grid ----
+  h += '<div class="grow gbody" style="height:'+bodyH+'px;">';
+  h += '<div class="gtime gtimecol">';
+  for(var m = lo; m < hi; m += 60) h += '<div class="ghr" style="height:'+ROW+'px;">'+fmtMin(m)+'</div>';
+  h += '</div>';
+
+  d.days.forEach(function(day){
+    h += '<div class="gcol gdaycol'+(day.date===TODAY?" today":"")+'" style="height:'+bodyH+'px;">';
+
+    // background: one band per hour, carrying closed / uncovered shading
+    for(var mm = lo; mm < hi; mm += 60){
+      var cls = "ghband";
       var open = day.hours;
-      if(open.closed || (open.configured && (m + 59 < open.sMin || m >= open.eMin))) cls += " closed";
-      else if(open.configured && (day.coverage.gaps || []).some(function(g){ return m < g.eMin && g.sMin < m+60; })) cls += " uncovered";
-      var list = day.items.filter(function(i){
-        return !i.allDay && !i.tail && inGrid(i) && Math.floor(i.sMin/60)*60 === m;
-      });
-      // Anything that began before the grid opens still has to appear once,
-      // in the first visible row, rather than falling off the top.
-      if(m === lo){
-        day.items.forEach(function(i){
-          if(!i.allDay && !i.tail && inGrid(i) && i.sMin < lo && i.eMin > lo && list.indexOf(i) < 0) list.push(i);
-        });
-      }
-      h += '<td class="'+cls+'">' + list.map(evHtml).join("") + '</td>';
+      if(open.closed || (open.configured && (mm + 59 < open.sMin || mm >= open.eMin))) cls += " closed";
+      else if(open.configured && (day.coverage.gaps || []).some(function(g){ return mm < g.eMin && g.sMin < mm+60; })) cls += " uncovered";
+      h += '<div class="'+cls+'" style="top:'+topPx(mm)+'px;height:'+ROW+'px;"></div>';
+    }
+
+    // blocks, laid into lanes so overlapping items sit side by side
+    var timed = day.items.filter(function(i){ return !i.allDay && !i.tail && inGrid(i) && i.eMin > lo && i.sMin < hi; })
+      .sort(function(a,b){ return a.sMin - b.sMin || b.eMin - a.eMin; });
+    var laneEnds = [];
+    timed.forEach(function(i){
+      var li = 0;
+      while(li < laneEnds.length && laneEnds[li] > i.sMin) li++;
+      if(li === laneEnds.length) laneEnds.push(0);
+      laneEnds[li] = i.eMin; i._lane = li;
     });
-    h += '</tr>';
-  }
-  h += '</table>';
+    var lanes = Math.max(1, laneEnds.length);
+    timed.forEach(function(i){
+      var t = topPx(i.sMin);
+      // A 30-minute block still has to be readable, so there is a floor on the
+      // height — but it comes from the duration, not from the content.
+      var ht = Math.max(26, topPx(i.eMin) - t);
+      var w = 100 / lanes, l = i._lane * w;
+      h += evHtml(i, 'position:absolute;top:'+t+'px;height:'+ht+'px;left:'+l+'%;width:'+(w - 0.8)+'%;');
+    });
+    h += '</div>';
+  });
+  h += '</div></div>';
   $("grid").innerHTML = h;
 }
 
-function evHtml(i){
+function evHtml(i, style){
   var icon = i.kind === "booking" ? "🔑" : i.kind === "birthday" ? "🎂" : i.kind === "external" ? "🚗" : i.kind === "blackout" ? "⛔" : "🎲";
   var tags = "";
   if(i.kind === "booking" && i.status !== "approved") tags += '<span class="tag">'+esc(i.status)+'</span>';
@@ -839,7 +905,7 @@ function evHtml(i){
   if(i.meta && i.meta.private) tags += '<span class="tag">private</span>';
   if(i.tail) tags += '<span class="tag">cont.</span>';
   if(i.recurring) tags += '<span class="tag">🔁</span>';
-  return '<div class="ev '+i.kind+(i.tone==="tentative"?" tentative":"")+'" onclick="openItem(\''+esc(i.date)+'\',\''+esc(i.key).replace(/'/g,"\\'")+'\')">' +
+  return '<div class="ev '+i.kind+(i.tone==="tentative"?" tentative":"")+(style?" placed":"")+'"'+(style?(' style="'+style+'"'):'')+' onclick="openItem(\''+esc(i.date)+'\',\''+esc(i.key).replace(/'/g,"\\'")+'\')">' +
     '<b>'+icon+' '+esc(i.title)+'</b>' +
     (i.allDay ? '' : '<small>'+fmtMin(i.sMin)+'–'+fmtMin(i.eMin)+'</small>') +
     '<small>'+esc(i.sub)+'</small>' +
@@ -957,11 +1023,127 @@ function openItem(date, key){
        i.kind === "unavail" ? "Unavailability is edited on the Guru Schedule page." :
        "Closures are edited in the booking console.") + '</p>';
   }
+  // NGH-BUILD 2026-09-12v: change the thing itself, not just who staffs it.
+  // Spotting that Comic Con runs 10-5 rather than 10-4, or that Trivia is in
+  // the wrong room, and then having to go and find it on another page is how
+  // a calendar becomes a thing you look at instead of a thing you use.
+  if(i.kind === "event" || i.kind === "external"){
+    html += '<h3 style="margin:16px 0 4px;">When &amp; where</h3>' +
+      (i.recurring ? '<p class="hint" style="margin:0 0 6px;color:var(--maroon);">This repeats \u2014 a change here applies to every occurrence.</p>' : '') +
+      '<div class="editrow">' +
+        '<label class="shutbox"><input type="checkbox" id="ed-allday" '+(i.allDay?"checked":"")+' onchange="edAllDay(this.checked)"> All day</label>' +
+        '<span><label class="f">Starts</label><select class="t" id="ed-start" '+(i.allDay?"disabled":"")+'>'+timeOpts(minsToHHMM(i.sMin),"\u2014")+'</select></span>' +
+        '<span><label class="f">Ends</label><select class="t" id="ed-end" '+(i.allDay?"disabled":"")+'>'+timeOpts(minsToHHMM(i.eMin),"\u2014",true)+'</select></span>' +
+      '</div>';
+    if(i.kind === "event"){
+      html += '<label class="f" style="margin-top:8px;">Rooms</label><div class="gpick" id="ed-rooms"></div>' +
+        '<p class="hint" style="margin:0;">Pick none to hold the whole venue. Off-site events hold no rooms at all.</p>';
+    } else {
+      html += '<label class="f" style="margin-top:8px;">Location</label>' +
+        '<input type="text" id="ed-loc" style="width:100%;" value="'+esc(i.location||"")+'" placeholder="Where is it?">';
+    }
+    html += '<div style="margin-top:10px;"><button class="btn btn-sm" onclick="saveItemEdit()">Save changes</button>' +
+      ' <span id="ed-msg" class="hint"></span></div>';
+  }
+
   html += '<div style="margin-top:16px;text-align:right;">' + linkOut(i) +
     ' <button class="btn btn-sm btn-ghost" onclick="closeModal()">Close</button></div>';
   $("modal-box").innerHTML = html;
   $("modal").className = "modal open";
   if(assignable) paintPick();
+  if(i.kind === "event"){ modalRooms = (i.meta.wholeVenue ? [] : (i.rooms || []).slice()); paintRooms(); }
+}
+
+/* ---------------- editing an event from the calendar ---------------- */
+var modalRooms = [];
+function paintRooms(){
+  var el = $("ed-rooms"); if(!el) return;
+  el.innerHTML = (state.data.rooms || []).map(function(r){
+    var on = modalRooms.indexOf(r.id) >= 0;
+    return '<span class="chip'+(on?" on":"")+'" onclick="pickRoom(\''+esc(r.id)+'\')">'+esc(r.label)+'</span>';
+  }).join("");
+}
+function pickRoom(id){
+  var ix = modalRooms.indexOf(id);
+  if(ix >= 0) modalRooms.splice(ix,1); else modalRooms.push(id);
+  paintRooms();
+}
+function edAllDay(on){
+  var a = $("ed-start"), b = $("ed-end");
+  if(a) a.disabled = on;
+  if(b) b.disabled = on;
+}
+
+// The write endpoints are full-replace PUTs, so an edit has to start from the
+// whole record. The schedule payload only carries the normalized item, so the
+// raw one is fetched on demand and cached.
+var rawCache = { events: null, interest: null };
+async function rawRecord(kind, id){
+  var key = kind === "event" ? "events" : "interest";
+  if(!rawCache[key]){
+    var res = await api(kind === "event" ? "/events" : "/interest-events");
+    rawCache[key] = (res && res.events) || (res && res.items) || res || [];
+  }
+  return (rawCache[key] || []).filter(function(x){ return x && x.id === id; })[0] || null;
+}
+
+async function saveItemEdit(){
+  var i = modalItem; if(!i) return;
+  var msg = $("ed-msg"); msg.textContent = "Saving…";
+  var allDay = $("ed-allday").checked;
+  var st = $("ed-start").value, en = $("ed-end").value;
+  if(!allDay && (!st || !en)){ msg.textContent = "Pick a start and an end."; return; }
+  if(!allDay && en <= st && en !== "00:00"){
+    // An end before the start is how you mean "runs past midnight" everywhere
+    // else in this codebase, so allow it rather than refusing.
+    if(!confirm("That ends before it starts — treat it as running past midnight?")){ msg.textContent = ""; return; }
+  }
+  try {
+    var raw = await rawRecord(i.kind, baseId(i));
+    if(!raw){ msg.textContent = "Couldn't find the underlying record."; return; }
+    if(i.kind === "event"){
+      raw.allDay = allDay;
+      raw.start = allDay ? "" : st;
+      raw.end = allDay ? "" : en;
+      if(!raw.offsite) raw.rooms = modalRooms.slice();
+      await putWithConflicts("/events/" + encodeURIComponent(raw.id), raw, msg);
+    } else {
+      raw.allDay = allDay;
+      raw.start = allDay ? "" : st;
+      raw.end = allDay ? "" : en;
+      raw.location = $("ed-loc") ? $("ed-loc").value : raw.location;
+      await api("/interest-events/" + encodeURIComponent(raw.id), { method:"PUT", body: JSON.stringify(raw) });
+    }
+    rawCache.events = null; rawCache.interest = null;
+    closeModal(); await load();
+  } catch(e){
+    msg.textContent = "";
+    alert("Couldn't save: " + e.message);
+  }
+}
+
+// /events refuses a change that would double-book a room, and separately warns
+// about pending overlaps and tight changeovers. Those are the booking console's
+// own rules and this page must not quietly bypass them — so surface each one
+// and only retry with the override the person actually agreed to.
+async function putWithConflicts(path, body, msg){
+  try {
+    await api(path, { method:"PUT", body: JSON.stringify(body) });
+    return;
+  } catch(e){
+    var m = String(e.message || "");
+    if(/Back-to-back/i.test(m)){
+      if(!confirm(m + "\n\nSave anyway?")) throw new Error("cancelled");
+      body.allowTight = true;
+    } else if(/PENDING booking/i.test(m)){
+      if(!confirm(m + "\n\nSave anyway?")) throw new Error("cancelled");
+      body.allowPendingOverlap = true;
+    } else {
+      throw e;                        // a hard room overlap is not overridable here
+    }
+    if(msg) msg.textContent = "Saving…";
+    await api(path, { method:"PUT", body: JSON.stringify(body) });
+  }
 }
 
 function roomName(id){

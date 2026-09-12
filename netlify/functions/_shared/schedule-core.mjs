@@ -375,6 +375,9 @@ export function normalizeUnavail(unavail, from, to) {
 // Third-party events NGH is watching, vending at or attending. Their
 // recurrence model is completely different from everything else — a date span
 // plus an optional "repeat weekly until" — so it expands separately.
+// Support types that put a person off-site for the duration.
+export const PRESENCE_SUPPORT = ['attend', 'host', 'vendor'];
+
 export function normalizeExternal(interest, assignments, from, to, opts = {}) {
   const show = opts.statuses || ['committed', 'considering'];
   const out = [];
@@ -406,7 +409,11 @@ export function normalizeExternal(interest, assignments, from, to, opts = {}) {
           meta: {
             externalId: r.id, category: r.category || 'other',
             supportTypes: r.supportTypes || [], contact: r.contact || '',
-            sourceUrl: r.sourceUrl || '', assignmentId: a ? a.id : null
+            sourceUrl: r.sourceUrl || '', assignmentId: a ? a.id : null,
+            // Donating a prize or cross-promoting costs nobody a Saturday.
+            // Attending, hosting or running a vendor booth means a Guru is
+            // physically somewhere else all day, and that has to be rostered.
+            needsPresence: PRESENCE_SUPPORT.some(k => (r.supportTypes || []).indexOf(k) >= 0)
           }
         }));
       }
@@ -535,6 +542,38 @@ export function conflictsFor(date, dayItems, coverage) {
           detail: anyRoomLabel(roomId) + ': "' + list[i].title + '" overlaps "' + list[j].title + '"'
         });
       }
+    }
+  }
+
+  // 3b. An off-site commitment that needs a body and hasn't got one.
+  //     A card show the shop committed to attending, with a vendor booth and
+  //     nobody rostered, is a Saturday morning discovered in the car park.
+  for (const it of real) {
+    if (it.kind !== 'external' || !it.meta.needsPresence) continue;
+    if (it.gurus.length) continue;
+    out.push({
+      type: 'external-unstaffed', date, a: it.key,
+      detail: it.title + ' (' + (it.location || 'off-site') + ') — committed to ' +
+        (it.meta.supportTypes || []).join(' + ') + ' with no Guru assigned'
+    });
+  }
+
+  // 3c. Somebody rostered on the shop floor AND committed off-site.
+  //     Running the till during an in-house event is fine and deliberately not
+  //     flagged. Being at a con in Eau Claire while on the floor in Chippewa
+  //     Falls is not a scheduling preference, it is impossible.
+  const shifts = (dayItems || []).filter(i => i.kind === 'shift');
+  for (const off of real) {
+    if (!off.offsite || !off.gurus.length) continue;
+    for (const sh of shifts) {
+      const g = sh.gurus[0];
+      if (off.gurus.indexOf(g) < 0) continue;
+      if (!off.allDay && !overlaps(off.sMin, off.eMin, sh.sMin, sh.eMin)) continue;
+      out.push({
+        type: 'offsite-vs-shift', date, guru: g, a: off.key, b: sh.key,
+        detail: g + ' is on the shop floor ' + fmtT(sh.sMin) + '–' + fmtT(sh.eMin) +
+          ' and off-site at "' + off.title + '" at the same time'
+      });
     }
   }
 

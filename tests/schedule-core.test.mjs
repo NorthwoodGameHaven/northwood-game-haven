@@ -603,6 +603,97 @@ describe('conflicts a human needs to see', () => {
     assert.equal(day(out, '2026-09-16').conflicts.filter(x => x.type === 'guru-understaffed').length, 0);
   });
 
+  test('a committed off-site event with nobody assigned', () => {
+    // Eau Claire Comic Con, vendor booth, attending as NGH, nobody rostered.
+    // That is a Saturday morning discovered in the car park.
+    const out = build({
+      interest: [{ id: 'IE-CON', title: 'Eau Claire Comic Con', date: '2026-09-19', allDay: true,
+        location: '5530 Fairview DR, Eau Claire', status: 'committed', supportTypes: ['vendor', 'attend'] }]
+    });
+    const c = day(out, '2026-09-19').conflicts.filter(x => x.type === 'external-unstaffed');
+    assert.equal(c.length, 1);
+    assert.match(c[0].detail, /Eau Claire Comic Con/);
+    assert.match(c[0].detail, /vendor \+ attend/);
+    assert.match(c[0].detail, /no Guru assigned/);
+  });
+
+  test('once somebody is assigned it stops complaining', () => {
+    const out = build({
+      interest: [{ id: 'IE-CON', title: 'Comic Con', date: '2026-09-19', allDay: true, status: 'committed', supportTypes: ['vendor'] }],
+      assignments: [{ id: 'A1', externalId: 'IE-CON', date: '2026-09-19', gurus: ['Chad'] }]
+    });
+    assert.equal(day(out, '2026-09-19').conflicts.filter(x => x.type === 'external-unstaffed').length, 0);
+  });
+
+  test('support that costs nobody a Saturday is not flagged', () => {
+    // Donating a prize or cross-promoting needs no one on site.
+    for (const st of [['donation'], ['sponsor'], ['promote'], []]) {
+      const out = build({
+        interest: [{ id: 'IE-X', title: 'Thing', date: '2026-09-19', allDay: true, status: 'committed', supportTypes: st }]
+      });
+      assert.equal(day(out, '2026-09-19').conflicts.filter(x => x.type === 'external-unstaffed').length, 0,
+        JSON.stringify(st));
+    }
+  });
+
+  test('an NGH event held off-site needs a Guru the normal way, not this rule', () => {
+    // event.offsite is a different record type; external-unstaffed is only
+    // about third-party commitments off the Radar.
+    const out = build({ events: [event({ date: '2026-09-19', offsite: true, rooms: [] })] });
+    assert.equal(day(out, '2026-09-19').conflicts.filter(x => x.type === 'external-unstaffed').length, 0);
+  });
+
+  test('being off-site and on the shop floor at once is impossible', () => {
+    // Running the till during an in-house event is allowed and deliberately
+    // never flagged. Being at a con in Eau Claire while rostered in Chippewa
+    // Falls is not a preference — it cannot happen.
+    const out = build({
+      interest: [{ id: 'IE-CON', title: 'Comic Con', date: '2026-09-16', allDay: false, start: '10:00', end: '17:00', status: 'committed', supportTypes: ['vendor'] }],
+      assignments: [{ id: 'A1', externalId: 'IE-CON', date: '2026-09-16', gurus: ['Chad'] }],
+      shifts: [{ id: 'GS-1', guru: 'Chad', date: '2026-09-16', open: '12:00', close: '20:00' }]
+    });
+    const c = day(out, '2026-09-16').conflicts.filter(x => x.type === 'offsite-vs-shift');
+    assert.equal(c.length, 1);
+    assert.equal(c[0].guru, 'Chad');
+    assert.match(c[0].detail, /shop floor/);
+  });
+
+  test('an all-day off-site commitment collides with any shift that day', () => {
+    const out = build({
+      interest: [{ id: 'IE-CON', title: 'Comic Con', date: '2026-09-16', allDay: true, status: 'committed', supportTypes: ['vendor'] }],
+      assignments: [{ id: 'A1', externalId: 'IE-CON', date: '2026-09-16', gurus: ['Chad'] }],
+      shifts: [{ id: 'GS-1', guru: 'Chad', date: '2026-09-16', open: '12:00', close: '14:00' }]
+    });
+    assert.equal(day(out, '2026-09-16').conflicts.filter(x => x.type === 'offsite-vs-shift').length, 1);
+  });
+
+  test('a shift that does not overlap the off-site hours is fine', () => {
+    const out = build({
+      interest: [{ id: 'IE-CON', title: 'Morning market', date: '2026-09-16', allDay: false, start: '07:00', end: '11:00', status: 'committed', supportTypes: ['vendor'] }],
+      assignments: [{ id: 'A1', externalId: 'IE-CON', date: '2026-09-16', gurus: ['Chad'] }],
+      shifts: [{ id: 'GS-1', guru: 'Chad', date: '2026-09-16', open: '12:00', close: '20:00' }]
+    });
+    assert.equal(day(out, '2026-09-16').conflicts.filter(x => x.type === 'offsite-vs-shift').length, 0);
+  });
+
+  test('somebody else being off-site does not clash with your shift', () => {
+    const out = build({
+      interest: [{ id: 'IE-CON', title: 'Comic Con', date: '2026-09-16', allDay: true, status: 'committed', supportTypes: ['vendor'] }],
+      assignments: [{ id: 'A1', externalId: 'IE-CON', date: '2026-09-16', gurus: ['Jen'] }],
+      shifts: [{ id: 'GS-1', guru: 'Chad', date: '2026-09-16', open: '12:00', close: '20:00' }]
+    });
+    assert.equal(day(out, '2026-09-16').conflicts.filter(x => x.type === 'offsite-vs-shift').length, 0);
+  });
+
+  test('an ON-site event during a shift is still never flagged', () => {
+    const out = build({
+      events: [event({ date: '2026-09-16', start: '13:00', end: '17:00' })],
+      assignments: [{ id: 'A1', eventId: 'EVT-1', date: null, gurus: ['Chad'] }],
+      shifts: [{ id: 'GS-1', guru: 'Chad', date: '2026-09-16', open: '12:00', close: '20:00' }]
+    });
+    assert.equal(day(out, '2026-09-16').conflicts.filter(x => x.type === 'offsite-vs-shift').length, 0);
+  });
+
   test('the store open with nobody in the building', () => {
     const out = build({ shifts: [{ id: 'GS-1', guru: 'Mike', date: '2026-09-16', open: '12:00', close: '17:00' }] });
     const c = day(out, '2026-09-16').conflicts.filter(x => x.type === 'store-uncovered');

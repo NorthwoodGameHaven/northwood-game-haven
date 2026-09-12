@@ -72,7 +72,11 @@ const PAYLOAD = buildSchedule({
     { id: 'GS-3', guru: 'Mike', date: '2026-09-18', open: '12:00', close: '23:00' }
   ],
   unavail: [{ id: 'GU-1', guru: 'Jen', date: '2026-09-15', endDate: '2026-09-16', allDay: true, notes: 'Out of town' }],
-  interest: [{ id: 'IE-SHOW', title: 'Chippewa Card Show', date: '2026-09-20', allDay: true, location: 'Eagles Club', status: 'committed', supportTypes: ['vendor'] }],
+  interest: [
+    { id: 'IE-SHOW', title: 'Chippewa Card Show', date: '2026-09-20', allDay: true, location: 'Eagles Club', status: 'committed', supportTypes: ['vendor'] },
+    { id: 'IE-CON', title: 'Eau Claire Comic Con', date: '2026-09-17', allDay: false, start: '10:00', end: '17:00',
+      location: '5530 Fairview DR, Eau Claire, WI 54701', status: 'committed', supportTypes: ['vendor', 'attend'] }
+  ],
   assignments: [
     { id: 'GA-1', eventId: 'EVT-FNM', date: null, gurus: ['Dustin'] },
     { id: 'GA-2', eventId: 'EVT-TRIV', date: null, gurus: ['Dustin'] },
@@ -84,8 +88,13 @@ const PAYLOAD = buildSchedule({
 PAYLOAD.generatedAt = new Date().toISOString();
 
 const RAW = {
+  interest: [
+    { id: 'IE-CON', title: 'Eau Claire Comic Con', date: '2026-09-17', allDay: false, start: '10:00', end: '17:00',
+      location: '5530 Fairview DR, Eau Claire, WI 54701', status: 'committed', supportTypes: ['vendor', 'attend'] }
+  ],
   events: [
-    { id: 'EVT-TRIV', title: 'Team Trivia', date: '2026-09-16', start: '19:00', end: '21:00', rooms: ['den'], status: 'live' }
+    { id: 'EVT-TRIV', title: 'Team Trivia', date: '2026-09-16', start: '19:00', end: '21:00', rooms: ['den'], status: 'live' },
+    { id: 'EVT-FNM', title: 'Friday Night Magic', date: '2026-09-18', start: '18:00', end: '22:00', rooms: ['holt'], status: 'live', recurrence: { freq: 'weekly', count: 3 } }
   ],
   bookings: [
     { id: 'BK-PEND', name: 'Rausch party', status: 'pending', date: '2026-09-16', start: '17:00', hours: 4, rooms: ['depths'], guests: 14, phone: '715-555-0100', addons: [{ id: 'guru', qty: 2 }] },
@@ -121,7 +130,16 @@ const server = http.createServer((req, res) => {
   }
   if (url.pathname.endsWith('/admin-login')) return send(200, JSON.stringify({ token: 'tok' }));
   // Raw endpoints, for the pages that merge client-side (guru-schedule).
-  if (url.pathname.endsWith('/events')) return send(200, JSON.stringify(RAW.events));
+  if (url.pathname.endsWith('/events') && req.method === 'GET') return send(200, JSON.stringify(RAW.events));
+  if (/\/events\//.test(url.pathname) && req.method === 'PUT') {
+    let body = ''; req.on('data', c => body += c);
+    return req.on('end', () => { saved.push({ action: 'put-event', item: JSON.parse(body || '{}') }); send(200, body); });
+  }
+  if (/interest-events\//.test(url.pathname) && req.method === 'PUT') {
+    let body = ''; req.on('data', c => body += c);
+    return req.on('end', () => { saved.push({ action: 'put-interest', item: JSON.parse(body || '{}') }); send(200, body); });
+  }
+  if (url.pathname.endsWith('/interest-events')) return send(200, JSON.stringify(RAW.interest));
   if (url.pathname.endsWith('/bookings')) return send(200, JSON.stringify({ bookings: RAW.bookings }));
   const f = path.join(root, 'site', url.pathname.replace(/^\//, '') || 'index.html');
   if (!f.startsWith(path.join(root, 'site')) || !fs.existsSync(f)) return send(404, 'not found', 'text/plain');
@@ -197,10 +215,11 @@ ok('the summary counts the kinds of problem', /floor gap/.test(alertText) && /un
 ok('and offers a way to act on them', /Review/.test(alertText));
 ok('an overnight booking is continued onto the next day', gridText.includes('cont.'));
 // A single 3am lock-in must not drag the whole week's grid back to midnight.
-const hourLabels = await page.$$eval('#grid td.hour', els => els.map(e => e.textContent.trim()));
+const hourLabels = await page.$$eval('#grid .ghr', els => els.map(e => e.textContent.trim()));
+const bandLabels = await page.$$eval('#grid .gband .gtime', els => els.map(e => e.textContent.trim()));
 ok('the grid does not open at midnight just because one night ran late',
   hourLabels.indexOf('12AM') < 0, hourLabels.join(','));
-ok('overnight carry-over gets its own band', hourLabels.indexOf('overnight') >= 0, hourLabels.join(','));
+ok('overnight carry-over gets its own band', bandLabels.indexOf('overnight') >= 0, bandLabels.join(','));
 ok('the grid stays a readable height', hourLabels.length <= 18, hourLabels.length + ' rows');
 ok('unavailability is not drawn in the room grid — it belongs in the rail',
   !(await page.$('#grid .ev.unavail')) && !(await page.$('#grid .ev.shift')));
@@ -237,6 +256,87 @@ await page.screenshot({ path: path.join(SHOTS, 'guru-master-resolve.png'), fullP
 if (await page.isVisible('#modal.open')) await page.click('#modal-box .btn-ghost >> nth=-1');
 await sleep(300);
 saved.push('shot');
+
+// --------------------------------------- off-site staffing + editing events
+await page.click('#alerts button');
+await page.waitForSelector('#resolve-list', { timeout: 5000 });
+const rz2 = await page.textContent('#resolve-list');
+ok('[offsite] a committed con with a vendor booth and nobody on it is flagged',
+  /Off-site commitment unstaffed/.test(rz2) && /Eau Claire Comic Con/.test(rz2), rz2.slice(0, 300));
+ok('[offsite] and it names what NGH committed to', /vendor \+ attend/.test(rz2));
+ok('[offsite] the fix is to send somebody', /Send them/.test(rz2));
+await page.click('#modal-box .btn-ghost >> nth=-1');
+await sleep(300);
+
+// The alert sign itself.
+const signBox = await page.evaluate(() => {
+  const e = document.querySelector('.alertsign');
+  if (!e) return null;
+  const r = e.getBoundingClientRect();
+  return { w: Math.round(r.width), h: Math.round(r.height), hard: e.classList.contains('hard') };
+});
+ok('[alert] there is a proper sign, not a glyph in a sentence',
+  signBox && signBox.w >= 30 && signBox.h >= 30, JSON.stringify(signBox));
+
+// Editing an event from the calendar.
+await page.click('#grid .ev.event:has-text("Friday Night Magic")');
+await page.waitForSelector('#ed-start', { timeout: 5000 });
+ok('[edit] an event opens with its times editable', (await page.inputValue('#ed-start')) === '18:00');
+ok('[edit] and its rooms as chips', (await page.$$('#ed-rooms .chip')).length >= 5);
+ok('[edit] a repeating event warns the change hits every occurrence',
+  /applies to every occurrence/.test(await page.textContent('#modal-box')));
+await page.selectOption('#ed-end', '23:00');
+await page.click('#ed-rooms .chip >> nth=1');           // add a second room
+await page.click('#modal-box button:has-text("Save changes")');
+await sleep(800);
+const putEv = saved.filter(x => x && x.action === 'put-event').pop();
+ok('[edit] saving PUTs the whole event record back', !!putEv, JSON.stringify(putEv));
+ok('[edit] with the new end time', putEv && putEv.item.end === '23:00', JSON.stringify(putEv && putEv.item));
+ok('[edit] and the new room list', putEv && putEv.item.rooms.length === 2, JSON.stringify(putEv && putEv.item.rooms));
+ok('[edit] keeping the fields it did not touch', putEv && putEv.item.title === 'Friday Night Magic' && !!putEv.item.recurrence);
+
+// Editing a Radar item.
+await page.click('#tab-week');
+await page.waitForSelector('#grid .ev', { timeout: 8000 });
+await sleep(400);
+await page.click('#grid .ev.external:has-text("Eau Claire Comic Con")');
+await page.waitForSelector('#ed-loc', { timeout: 5000 });
+ok('[edit] a Radar event opens with its location editable',
+  /Fairview/.test(await page.inputValue('#ed-loc')));
+await page.selectOption('#ed-end', '18:00');
+await page.click('#modal-box button:has-text("Save changes")');
+await sleep(800);
+const putIe = saved.filter(x => x && x.action === 'put-interest').pop();
+ok('[edit] saving a Radar event PUTs it back with the new time',
+  putIe && putIe.item.end === '18:00', JSON.stringify(putIe && putIe.item));
+ok('[edit] and keeps its support types', putIe && (putIe.item.supportTypes || []).length === 2);
+
+// --------------------------------------------------------- duration sizing
+// A 10AM-5PM comic con and a 5PM-9PM game night were drawn exactly the same
+// height. Blocks are now positioned and sized by their real duration.
+const sized = await page.evaluate(() => {
+  const out = {};
+  document.querySelectorAll('#grid .ev.placed').forEach(e => {
+    const t = e.querySelector('b');
+    if (t) out[t.textContent.replace(/^\W+\s*/, '').trim()] = Math.round(e.getBoundingClientRect().height);
+  });
+  return out;
+});
+ok('[grid] blocks are absolutely placed by time', Object.keys(sized).length >= 3, JSON.stringify(sized));
+const fnm = sized['Friday Night Magic'], triv = sized['Team Trivia'];
+ok('[grid] a 4-hour event is drawn taller than a 2-hour one',
+  fnm && triv && fnm > triv * 1.6, 'FNM ' + fnm + 'px vs Trivia ' + triv + 'px');
+const lodge = sized['Weekend stay'];
+ok('[grid] a 6-hour booking is taller again', lodge && lodge > fnm, 'stay ' + lodge + ' vs FNM ' + fnm);
+ok('[grid] nothing collapses to nothing', Object.values(sized).every(v => v >= 26), JSON.stringify(sized));
+// Two things at the same time must sit beside each other, not on top.
+const sideBySide = await page.evaluate(() => {
+  const els = Array.from(document.querySelectorAll('#grid .gdaycol')).map(col =>
+    Array.from(col.querySelectorAll('.ev.placed')).map(e => e.getBoundingClientRect()));
+  return els.some(rects => rects.some((a, i) => rects.some((b, j) =>
+    i !== j && a.top < b.bottom - 1 && b.top < a.bottom - 1 && a.left < b.right - 1 && b.left < a.right - 1)));
+});
+ok('[grid] overlapping blocks are laned, never stacked on top of each other', !sideBySide);
 
 // -------------------------------------------------------------- the palette
 // Colour is the ONLY thing distinguishing an event bar from a store shift bar
