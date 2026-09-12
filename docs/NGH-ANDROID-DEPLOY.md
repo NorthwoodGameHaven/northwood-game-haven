@@ -11,8 +11,7 @@ Play Console account are both done (Part 3), which means no closed-testing
 wait — you can publish straight to production. What is left is the upload key
 (Part 2), two environment variables (4.2b), and the listing itself.
 
-**The one thing still on a clock is nothing.** Everything remaining is work you
-control.
+Nothing left is waiting on anyone else — it is all work you control.
 
 ---
 
@@ -20,10 +19,10 @@ control.
 
 | | |
 |---|---|
-| A Google account for the store | Use a business one, not personal — you cannot transfer a listing between accounts easily |
-| **$25**, one time | Play Console registration |
-| A phone to test on | Any Android device |
-| ~30 min at a keyboard | Plus the verification wait |
+| ~~A Google account for the store~~ | ✅ `northwoodexperiences@gmail.com` |
+| ~~**$25**, one time~~ | ✅ paid, account verified |
+| A phone to test on | Any Android device — **the app has still never run on one** |
+| ~30 min at a keyboard | No waiting left; see Part 3 |
 
 > **The single most important thing in this document:** in Part 2 you create a file called `ngh-upload.jks`. **If you lose it, you can never update the app again under this listing.** Not "it's difficult" — you would have to publish a brand new app and every install would be orphaned. Back it up in two places before you do anything else with it.
 
@@ -92,14 +91,24 @@ I am not exaggerating about this. Losing it is unrecoverable.
 
 ### Turn it into a GitHub secret
 
-Base64-encode the keystore so it can live in a secret:
+Base64-encode the keystore so it can live in a secret. **Use this, not
+`certutil`** — one line, straight to your clipboard, no header lines to delete
+and no Windows line endings to go wrong:
 
 ```powershell
-certutil -encode ngh-upload.jks tmp.b64
-notepad tmp.b64
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\ngh-upload.jks")) | Set-Clipboard
 ```
 
-In Notepad: **delete the first line** (`-----BEGIN CERTIFICATE-----`) and **the last line** (`-----END CERTIFICATE-----`). Keep everything between. **Ctrl+A, Ctrl+C.**
+Nothing is printed. The base64 is now on your clipboard — paste it straight
+into the secret below.
+
+> *Why not `certutil -encode`?* It wraps the output in
+> `-----BEGIN CERTIFICATE-----` lines you have to delete by hand, and it writes
+> **CRLF** line endings. The Linux build runner decodes with GNU `base64 -d`,
+> which rejects carriage returns outright — the build died with a bare
+> `base64: invalid input`. The workflow now strips whitespace before decoding
+> and checks the result really is a keystore, so either method works, but the
+> PowerShell line avoids the whole problem *(NGH-BUILD 2026-09-12ac)*.
 
 Then in GitHub: repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**, four times:
 
@@ -110,7 +119,9 @@ Then in GitHub: repo → **Settings** → **Secrets and variables** → **Action
 | `ANDROID_KEY_ALIAS` | `ngh` |
 | `ANDROID_KEY_PASS` | same password (if you pressed Enter above) |
 
-Delete `tmp.b64` when you're done — it's your signing key in text form.
+Clear your clipboard afterwards (copy anything else) — it currently holds
+your signing key in text form. If you did use `certutil` and made a
+`tmp.b64`, delete that file too.
 
 **Check it worked:** Actions → NGH App (Android) → Run workflow. When it finishes there should now be **two** artifacts: the debug APK *and* `game-haven-release-aab`. That `.aab` is what Play wants.
 

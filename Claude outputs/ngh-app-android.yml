@@ -1,0 +1,85 @@
+# NGH-BUILD 2026-09-11a — builds the Game Haven Android app from site/app + capacitor/
+# Manual: GitHub → Actions → "NGH App (Android)" → Run workflow.
+# Output: a debug APK artifact (sideload on any phone for testing) and, when the
+# signing secrets exist, a signed release AAB ready for Google Play.
+# Secrets (Settings → Secrets and variables → Actions), only for the release AAB:
+#   ANDROID_KEYSTORE_B64   base64 of your upload keystore (.jks)
+#   ANDROID_KEYSTORE_PASS  keystore password
+#   ANDROID_KEY_ALIAS      key alias
+#   ANDROID_KEY_PASS       key password
+name: NGH App (Android)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['site/app/**', 'capacitor/**', '.github/workflows/ngh-app-android.yml']
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+    defaults:
+      run:
+        working-directory: capacitor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: android-actions/setup-android@v3
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Create Android project
+        run: |
+          npm run sync-web
+          npx cap add android
+          node scripts/patch-android.mjs
+          npm run assets -- --android || echo "asset generation skipped"
+          npx cap sync android
+      - name: Build debug APK
+        working-directory: capacitor/android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: game-haven-debug-apk
+          path: capacitor/android/app/build/outputs/apk/debug/*.apk
+      - name: Build signed release AAB
+        if: ${{ env.KS != '' }}
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
+        working-directory: capacitor/android
+        run: |
+          # NGH-BUILD 2026-09-12ac — `echo "$KS" | base64 -d` fails outright on
+          # a secret produced by Windows `certutil -encode`: GNU base64 rejects
+          # the carriage returns with a bare "invalid input", and the whole
+          # first signed build dies here. Strip all whitespace before decoding —
+          # base64 has none of its own, so nothing valid is lost.
+          if ! printf '%s' "$KS" | tr -d '\r\n \t' | base64 -d > upload.jks 2>b64.err; then
+            echo "::error::ANDROID_KEYSTORE_B64 is not valid base64 ($(cat b64.err)). If you produced it with certutil, the -----BEGIN CERTIFICATE----- and -----END CERTIFICATE----- lines must NOT be included. See docs/NGH-ANDROID-DEPLOY.md Part 2."
+            exit 1
+          fi
+          # Fail with something readable rather than letting Gradle report a
+          # corrupt keystore three minutes later.
+          if [ ! -s upload.jks ]; then
+            echo "::error::ANDROID_KEYSTORE_B64 decoded to an empty file — the secret is probably blank. See docs/NGH-ANDROID-DEPLOY.md Part 2."
+            exit 1
+          fi
+          head -c 4 upload.jks | od -An -tx1 | tr -d ' \n' | grep -Eq '^(feedfeed|3082)' || {
+            echo "::error::ANDROID_KEYSTORE_B64 decoded, but the result is not a keystore (expected JKS 'feedfeed' or PKCS#12 '3082'). You may have copied the certutil header/footer lines, or only part of the file."
+            exit 1
+          }
+          echo "Keystore decoded: $(stat -c%s upload.jks) bytes"
+          ./gradlew bundleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file=$PWD/upload.jks \
+            -Pandroid.injected.signing.store.password="$KS_PASS" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASS"
+      - uses: actions/upload-artifact@v4
+        if: ${{ env.KS != '' }}
+        with:
+          name: game-haven-release-aab
+          path: capacitor/android/app/build/outputs/bundle/release/*.aab

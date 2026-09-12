@@ -379,3 +379,68 @@ describe('staff access gate', () => {
     assert.equal(demoLogin('hunter2', ''), false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// NGH-BUILD 2026-09-12ab — the three documents Google cross-checks.
+//
+// The Play listing's publisher is Northwood Experiences LLC; the privacy page
+// speaks for Northwood Game Haven (ECCentric LLC). A reviewer comparing them
+// would fairly ask which company holds the data, so both pages now say. These
+// tests exist so the two pages cannot drift apart later — a mismatch between
+// the privacy page and the Data safety form is the most common cause of a
+// rejected Play update, and this is the same failure one step earlier.
+describe('privacy / deletion page consistency', () => {
+  const PRIVACY = fs.readFileSync(path.join(ROOT, 'site', 'privacy.html'), 'utf8');
+  const DELETE = fs.readFileSync(path.join(ROOT, 'site', 'account-delete.html'), 'utf8');
+  const strip = (h) => h.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const P = strip(PRIVACY), D = strip(DELETE);
+
+  test('the privacy page names both companies and their roles', () => {
+    assert.match(P, /ECCentric LLC/);
+    assert.match(P, /Northwood Experiences LLC/);
+    assert.match(P, /published on Google Play by/);
+  });
+
+  test('it says the publisher does not receive the data', () => {
+    assert.match(P, /does not receive the information/i,
+      'otherwise the page leaves open which company is the controller');
+  });
+
+  test('it says overnight booking leaves the site', () => {
+    // The app links out to vrbo.com; a privacy page that never mentions it
+    // implies we handle lodging data, and we do not.
+    assert.match(P, /VRBO/);
+    assert.match(P, /their privacy policy applies/i);
+  });
+
+  test('the deletion page names the same two companies', () => {
+    assert.match(D, /ECCentric LLC/);
+    assert.match(D, /Northwood Experiences LLC/);
+  });
+
+  test('both pages agree on the retention exception', () => {
+    for (const [name, t] of [['privacy', P], ['deletion', D]]) {
+      assert.match(t, /tax/i, name + ' page must disclose the tax retention exception');
+    }
+  });
+
+  test('both pages give the same contact address', () => {
+    for (const [name, t] of [['privacy', P], ['deletion', D]]) {
+      assert.match(t, /stash@northwoodgamehaven\.com/, name + ' page');
+      assert.match(t, /115 W Spring St/, name + ' page');
+    }
+  });
+
+  test('the privacy page still points at the deletion page', () => {
+    assert.match(PRIVACY, /href="\/account-delete"/,
+      'Play wants the deletion route discoverable from the policy');
+  });
+
+  test('neither page claims data goes somewhere the app does not send it', () => {
+    // Named processors must match what the code actually uses. Anything else
+    // here would be a promise we are not keeping.
+    for (const bogus of ['Google Analytics', 'Facebook', 'advertising partners', 'Mixpanel']) {
+      assert.doesNotMatch(P, new RegExp(bogus, 'i'), 'privacy page mentions ' + bogus);
+    }
+  });
+});

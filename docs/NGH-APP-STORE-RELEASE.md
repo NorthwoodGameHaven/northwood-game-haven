@@ -54,7 +54,7 @@ Back the `.jks` up somewhere that isn't the laptop. Then add four repo secrets (
 
 | Secret | Value |
 |---|---|
-| `ANDROID_KEYSTORE_B64` | `certutil -encode ngh-upload.jks tmp.b64` then strip the header/footer lines |
+| `ANDROID_KEYSTORE_B64` | PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\ngh-upload.jks")) \| Set-Clipboard` — **not** `certutil`, whose CRLF output breaks the Linux decode (see NGH-ANDROID-DEPLOY.md Part 2) |
 | `ANDROID_KEYSTORE_PASS` | keystore password |
 | `ANDROID_KEY_ALIAS` | `ngh` |
 | `ANDROID_KEY_PASS` | key password |

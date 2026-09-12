@@ -410,6 +410,11 @@ try {
     ok('delete page: gives a deadline', /30 days/i.test(text));
     ok('delete page: offers a plain email route too', /stash@northwoodgamehaven\.com/.test(text));
     ok('delete page: links to the privacy policy', await page.$eval('a[href="/privacy"]', (a) => !!a).catch(() => false));
+    // Google checks a deletion page names the app or the developer as the
+    // listing shows them. The listing's publisher is Northwood Experiences
+    // LLC, which is not the name anywhere else on the site.
+    ok('delete page: names the publishing entity', /Northwood Experiences LLC/.test(text));
+    ok('delete page: names the operating entity', /ECCentric LLC/.test(text));
     // The page must not depend on being signed in — the person most likely to
     // use it has already uninstalled the app. Wipe any stored session and
     // reload: the form still has to be there.
