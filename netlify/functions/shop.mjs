@@ -23,7 +23,11 @@ import { sql, requireAdmin } from './_shared/db.mjs';
 import { sendBrandedMail } from './_shared/email.mjs';
 import { createCheckoutSession } from './_shared/stripe.mjs';
 import * as core from './_shared/lightspeed-core.mjs';
-import { ensureLsSchema, getConnection, listProductsPage, listInventoryPage, listProductTypes, listBrands, getTaxRate, recordSale } from './_shared/lightspeed.mjs';
+import { ensureLsSchema, getConnection, listProductsPage, listInventoryPage, listProductTypes, listBrands, getTaxRate, recordSale, refundSale } from './_shared/lightspeed.mjs';
+// NGH-BUILD 2026-09-12k: pickup orders had no refund path at all — cancelling
+// one flipped its status and kept the customer's money, leaving the Lightspeed
+// sale (and its loyalty) standing. Same gap bookings and registrations had.
+import { refundPaymentIntent } from './_shared/stripe.mjs';
 
 const { jsonX: json, badX: bad, preflightX: preflight } = core;
 const PAGE = 500, MAX_PAGES = 40;
@@ -271,6 +275,68 @@ export default async (req) => {
           if (!admin && !core.verifyOrderSig(core.secret(), id, url.searchParams.get('t'))) return bad('unauthorized', 401);
           return json({ order: publicOrder(row.id, row.data, row.status, row.created_at), serverNow: Date.now() });
         }
+        // POST /orders/:id/refund — admin  — NGH-BUILD 2026-09-12k
+        // { cancel?:bool, reason?:string, lightspeedOnly?:bool }
+        // Refunds the Stripe charge and posts a matching Lightspeed return, so
+        // revenue, tax and the customer's loyalty all come back off.
+        if (sub === 'refund' && req.method === 'POST') {
+          if (!admin) return bad('unauthorized', 401);
+          const b = (await readJson(req)) || {};
+          const o = row.data;
+          const lsOnly = !!b.lightspeedOnly;
+          const prior = o.refund || null;
+
+          // A pay-at-pickup order was never charged, and its Lightspeed sale is
+          // PARKED — a parked sale cannot be returned, it has to be discarded at
+          // the register. Say so rather than pretending we handled it.
+          if (!o.paid || !o.paymentPI) {
+            o.status = b.cancel === false ? o.status : 'canceled';
+            o.history = [...(o.history || []), { status: o.status, at: new Date().toISOString(), note: 'canceled — nothing was charged' }];
+            o.parkedSaleNeedsVoiding = !!(o.sale && o.sale.saleId);
+            await sql`UPDATE shop_orders SET data = ${JSON.stringify(o)}::jsonb, status = ${o.status} WHERE id = ${id}`;
+            return json({ order: publicOrder(id, o, o.status, row.created_at), refunded: false,
+              note: o.parkedSaleNeedsVoiding
+                ? 'Nothing was charged. The parked Lightspeed sale for this order still exists — discard it at the register (Sell → Retrieve sale).'
+                : 'Nothing was charged.' });
+          }
+
+          if (prior && !lsOnly) return json({ order: publicOrder(id, o, o.status, row.created_at), refunded: false, note: 'already refunded' });
+          if (lsOnly && !prior) return bad('no prior refund to retry', 400);
+          if (lsOnly && !prior.lightspeedError) return json({ order: publicOrder(id, o, o.status, row.created_at), note: 'Lightspeed already reversed' });
+
+          const cents = Number(o.amountPaidCents) || Math.round(Number(o.total) * 100);
+          let stripeRefundId = lsOnly ? (prior && prior.stripeRefundId) || null : null;
+          if (!lsOnly) {
+            try { const r = await refundPaymentIntent(o.paymentPI, cents); stripeRefundId = (r && r.id) || null; }
+            catch (e) { return bad('stripe refund failed: ' + (e && e.message ? e.message : String(e)), 502); }
+          }
+          const rev = await refundSale({
+            sourceId: o.id, kind: 'order-refund', amountCents: cents, payment: 'online',
+            note: 'Refund — ORDER AHEAD ' + o.id + (b.reason ? ' · ' + String(b.reason).slice(0, 200) : '')
+          });
+          o.paid = false;
+          o.refund = { at: new Date().toISOString(), amountCents: cents, stripeRefundId,
+            lightspeedSaleId: rev.saleId || null, lightspeedError: rev.error || null, reason: b.reason || null };
+          if (b.cancel !== false) { o.status = 'canceled'; o.history = [...(o.history || []), { status: 'canceled', at: new Date().toISOString() }]; }
+          await sql`UPDATE shop_orders SET data = ${JSON.stringify(o)}::jsonb, status = ${o.status} WHERE id = ${id}`;
+
+          if (o.email) {
+            try {
+              await sendBrandedMail(o.email, 'Refunded: your Northwood Game Haven order ' + id, {
+                heading: 'Order refunded',
+                bodyText: 'Hi ' + (o.name || 'there') + ',\n\nYour order ' + id + ' has been canceled and ' + money(cents / 100)
+                  + ' has been refunded to your original payment method.\n\n' + itemLines(o)
+                  + '\n\nRefunds usually appear on a card within 5–10 business days, depending on your bank.'
+                  + (b.reason ? ('\n\n' + String(b.reason).slice(0, 500)) : '')
+                  + '\n\n— Northwood Game Haven'
+              });
+            } catch (e) { console.error('[shop] refund email failed', e && e.message); }
+          }
+          console.log('[shop] refund', id, cents, 'lightspeed:', rev.ok ? 'reversed' : ('FAILED ' + rev.error));
+          return json({ order: publicOrder(id, o, o.status, row.created_at), refunded: true,
+            stripeRefundId, lightspeed: rev.ok ? 'reversed' : ('FAILED: ' + rev.error) });
+        }
+
         // POST /orders/:id/status — admin
         if (sub === 'status' && req.method === 'POST') {
           if (!admin) return bad('unauthorized', 401);
@@ -278,6 +344,11 @@ export default async (req) => {
           const status = String(b.status || '');
           if (!['ready', 'picked_up', 'canceled'].includes(status)) return bad('status must be ready | picked_up | canceled');
           const o = row.data;
+          // NGH-BUILD 2026-09-12k: refuse to "cancel" a paid order through the
+          // plain status route — that used to keep the customer's money silently.
+          if (status === 'canceled' && o.paid && o.paymentPI && !o.refund) {
+            return bad('this order is paid — use POST /orders/' + id + '/refund to cancel and refund it', 409);
+          }
           o.status = status;
           o.history = [...(o.history || []), { status, at: new Date().toISOString() }];
           await sql`UPDATE shop_orders SET data = ${JSON.stringify(o)}::jsonb, status = ${status} WHERE id = ${id}`;

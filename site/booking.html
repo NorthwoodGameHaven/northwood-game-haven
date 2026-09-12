@@ -1677,6 +1677,7 @@ function reqCardHtml(r){
     if(!depIsPaid(r)) actions+='<button class="btn btn-sm btn-ghost" onclick="genPayLink(\''+r.id+'\',\'deposit\')">🔗 Deposit pay-link</button>';
     actions+='<button class="btn btn-sm btn-ghost" onclick="issueDoorCode(\''+r.id+'\')">🔑 '+(r.doorCode?("Door code: "+r.doorCode):"Issue door code")+'</button>';
     actions+='<button class="btn btn-sm btn-ghost" onclick="setManualDoorCode(\''+r.id+'\')">✏️ '+(r.doorCode?"Change door code":"Set door code (manual)")+'</button>';
+    if(refundablePartsOf(r).length) actions+='<button class="btn btn-sm btn-danger" onclick="refundToggle(\''+r.id+'\')">💸 Refund / cancel</button>';   /* NGH-BUILD 2026-09-12k */
     actions+='<button class="btn btn-sm btn-danger" onclick="reject(\''+r.id+'\')">Cancel / Reject</button>';
   } else if(r.status==="rejected"){
     actions+='<button class="btn btn-sm btn-ghost" onclick="approve(\''+r.id+'\')">Re-approve</button>';
@@ -1729,6 +1730,7 @@ function reqCardHtml(r){
     (r.adminQuestions && r.status==="hold" ? '<div class="email-preview">On-hold questions sent:\n'+esc(r.adminQuestions)+'</div>' : '')+
     milBox+
     ((r.status==="pending"||r.status==="hold"||r.status==="approved")?depositAdjustBox(r):"")+
+    refundBox(r)+   /* NGH-BUILD 2026-09-12k */
     '<div class="admin-actions">'+actions+'</div>'+
     holdBox+
     apprBox+
@@ -1848,6 +1850,13 @@ function buildApprovalEmail(r){
 }
 async function reject(id){
   var r=getReq(id); if(!r) return;
+  /* NGH-BUILD 2026-09-12k: this route sets status=rejected and sends the "unable to confirm
+     your request" email. On a PAID booking that is the wrong message AND keeps
+     the guest's money — send them to the refund panel instead. */
+  if(refundablePartsOf(r).length){
+    alert("This booking has been paid.\n\nUse \u201c\uD83D\uDCB8 Refund / cancel\u201d instead so the money goes back and the guest gets a cancellation email rather than a rejection.");
+    refundToggle(id); return;
+  }
   if(!confirm("Reject/cancel this booking for "+r.name+"?")) return;
   await Store.updateBooking(id,{status:"rejected"});
   await Store.sendEmail(r.email, "Update on your Northwood Game Haven booking "+r.id,
@@ -2044,6 +2053,69 @@ async function adjustDeposit(id, mode){
   await Store.updateBooking(id, patch);
   await refreshCache(); renderAdmin(adminFilter);
 }
+/* ===== NGH-BUILD 2026-09-12k: refund / cancel =========================================
+   Only the parts that were actually PAID BY CARD can be refunded here — a
+   booking marked paid in person has no Stripe payment intent, so the money has
+   to go back at the register. The server enforces that too; this just avoids
+   offering a button that cannot work. */
+function refundablePartsOf(r){
+  var out=[];
+  var done=(r.refunds||[]).map(function(x){ return x.part; });
+  if(feeIsPaid(r) && r.feePI && done.indexOf("fee")<0) out.push({ part:"fee", label:"Booking fee", cents:(r.feePaidCents!=null?r.feePaidCents:Math.round((r.costBooking||0)*100)) });
+  if(depIsPaid(r) && r.depositPI && done.indexOf("deposit")<0) out.push({ part:"deposit", label:"Refundable deposit", cents:(r.depositPaidCents!=null?r.depositPaidCents:Math.round((r.deposit||0)*100)) });
+  return out;
+}
+function refundBox(r){
+  var parts=refundablePartsOf(r);
+  var prior=(r.refunds||[]);
+  if(!parts.length && !prior.length) return "";
+  var h='<details class="adv" id="refbox-'+r.id+'">'+
+    '<summary>Refund / cancel'+(prior.length?(' · <span style="color:#2e7d32;">'+prior.length+' already refunded</span>'):'')+'</summary>'+
+    '<div style="padding:10px 0;font-size:0.86rem;">';
+  prior.forEach(function(x){
+    h+='<div class="kv" style="color:#2e7d32;">✓ '+esc(x.part)+' — '+fmtMoney((x.amountCents||0)/100)+' refunded '+esc(String(x.at||"").slice(0,10))+
+       (x.lightspeedError?(' <b style="color:#c0392b;">· Lightspeed NOT reversed: '+esc(x.lightspeedError)+'</b> <button class="btn btn-sm btn-ghost" onclick="doRefund(\''+r.id+'\',true)">Retry books only</button>'):'')+'</div>';
+  });
+  if(parts.length){
+    h+='<div style="margin:8px 0 4px;">Choose what to send back to the card:</div>';
+    parts.forEach(function(p){
+      h+='<label style="display:block;margin:4px 0;"><input type="checkbox" id="ref-'+r.id+'-'+p.part+'" checked> '+p.label+' — <b>'+fmtMoney(p.cents/100)+'</b></label>';
+    });
+    h+='<label style="display:block;margin:8px 0 4px;"><input type="checkbox" id="ref-'+r.id+'-cancel" checked> Cancel the booking as well (frees the room and emails the guest)</label>'+
+       '<input type="text" id="ref-'+r.id+'-reason" placeholder="Reason (optional — included in the email)" style="width:100%;margin:6px 0;">'+
+       '<button class="btn btn-sm btn-danger" onclick="doRefund(\''+r.id+'\')">💸 Refund now</button>'+
+       '<div style="margin-top:6px;color:#777;">Stripe keeps its processing fee on a refund. The matching Lightspeed sale is reversed too, so revenue, tax and the customer\u2019s loyalty points all come back off.</div>';
+  }
+  h+='</div></details>';
+  return h;
+}
+function refundToggle(id){ var d=document.getElementById("refbox-"+id); if(d){ d.open=true; d.scrollIntoView({block:"center"}); } }
+async function doRefund(id, lightspeedOnly){
+  var r=getReq(id); if(!r) return;
+  var body={};
+  if(lightspeedOnly){ body={ parts:["fee","deposit"], lightspeedOnly:true }; }
+  else{
+    var parts=[];
+    refundablePartsOf(r).forEach(function(p){ var el=document.getElementById("ref-"+id+"-"+p.part); if(el&&el.checked) parts.push(p.part); });
+    if(!parts.length){ alert("Tick at least one thing to refund."); return; }
+    var cancelEl=document.getElementById("ref-"+id+"-cancel");
+    var reasonEl=document.getElementById("ref-"+id+"-reason");
+    var total=0; refundablePartsOf(r).forEach(function(p){ if(parts.indexOf(p.part)>=0) total+=p.cents; });
+    if(!confirm("Refund "+fmtMoney(total/100)+" to "+(r.name||"the guest")+" for "+id+"?\n\n"+parts.join(" + ")+(cancelEl&&cancelEl.checked?"\n\nThe booking will also be canceled.":"")+"\n\nThis cannot be undone.")) return;
+    body={ parts:parts, cancel:!!(cancelEl&&cancelEl.checked), reason:(reasonEl?reasonEl.value.trim():"") };
+  }
+  try{
+    var res=await Store._api("/bookings/"+encodeURIComponent(id)+"/refund", { method:"POST", body:JSON.stringify(body) });
+    var lines=(res.results||[]).map(function(x){
+      if(x.skipped) return "• "+x.part+": skipped ("+x.reason+")";
+      if(x.ok===false) return "• "+x.part+": FAILED — "+x.error;
+      return "• "+x.part+": "+fmtMoney((x.amountCents||0)/100)+" refunded · Lightspeed "+x.lightspeed;
+    }).join("\n");
+    alert("Refund processed for "+id+"\n\n"+lines);
+    await refreshCache(); renderAdmin(adminFilter);
+  }catch(e){ alert("Refund failed: "+(e&&e.message?e.message:e)); }
+}
+
 function depositAdjustBox(r){
   var base=depositBaseOf(r);
   var adjusted = (r.deposit!==base);
