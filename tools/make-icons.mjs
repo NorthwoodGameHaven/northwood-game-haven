@@ -1,31 +1,28 @@
-// tools/make-icons.mjs — NGH-BUILD 2026-09-13a
-// Rebuilds every app icon from one master piece of artwork, sized to the
-// safe zone each target actually uses.
+// tools/make-icons.mjs — NGH-BUILD 2026-09-13c
+// Builds every launcher/app icon, and the in-app crests, from brand artwork —
+// each one fitted to the shape that will actually be cut out of it.
 //
-//   node tools/make-icons.mjs            # write the icons
-//   node tools/make-icons.mjs --check    # report sizes, write nothing
-//   node tools/make-icons.mjs --preview  # also write tools/store-assets/icon-preview.png
+//   node tools/make-icons.mjs            # write them
+//   node tools/make-icons.mjs --check    # report, write nothing
+//   node tools/make-icons.mjs --preview  # + tools/store-assets/icon-preview.png
 //
-// WHY THIS EXISTS
-// The launcher icon had the logo floating in the middle of a dark disc with a
-// wide empty ring around it. That was not a bug in any one file — it was three
-// different safe zones being guessed at by hand:
+// THE ONE IDEA IN THIS FILE
+// Every one of these images ends up inside a CIRCLE — a launcher's mask, the
+// PWA maskable safe zone, the gold ring on the app's hero, the 36px header
+// crest. Fitting artwork to a square canvas and then cutting a circle out of it
+// clips the corners, which is what put the wordmark's ends and the row of game
+// components outside the hero's ring, and what made the launcher icon look
+// wrong in three different ways across 13a and 13b.
 //
-//   * Android adaptive icon: the two 108dp layers are cropped to the central
-//     72dp before the launcher's mask is applied, so a circular mask shows a
-//     circle 66.7% as wide as the canvas. Art drawn to fit the SQUARE canvas
-//     therefore lands ~30% too small.
-//   * PWA maskable icon: the spec's safe zone is a circle 80% as wide.
-//   * Plain square icons (iOS, apple-touch, the Play listing tile): no mask
-//     beyond rounded corners — the art should very nearly fill the tile.
+// So the artwork is placed by its MINIMUM ENCLOSING CIRCLE, not its bounding
+// box: the smallest circle containing every opaque pixel, centred on the canvas
+// and scaled to the target's safe radius. That is the largest the art can be
+// with nothing clipped, and it is automatically optically centred — the bust in
+// stash-bust.png sits 337px above the middle of its own canvas, and a bbox fit
+// would have inherited that.
 //
-// Each target below states its own rule, and the art is scaled by MEASURED
-// radius (the furthest opaque pixel from centre), not by bounding box: the
-// lockup is a rounded badge, so its corners are transparent and a bounding-box
-// fit leaves the same empty ring behind.
-//
-// Needs python3 + Pillow, which is what does the work; this file is here so
-// the recipe lives in the repo rather than in a chat log.
+// Needs python3 + Pillow + numpy, which do the work; this file is here so the
+// recipe lives in the repo rather than in a chat log.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,7 +33,7 @@ const ROOT = path.resolve(HERE, '..');
 const args = new Set(process.argv.slice(2));
 
 const py = `
-import os, sys, json
+import os
 import numpy as np
 from PIL import Image, ImageDraw
 
@@ -44,159 +41,224 @@ ROOT    = ${JSON.stringify(ROOT)}
 CHECK   = ${args.has('--check') ? 'True' : 'False'}
 PREVIEW = ${args.has('--preview') ? 'True' : 'False'}
 
-# The master lockup: 1400x1400, transparent, the highest-resolution copy we
-# have. The old icon-foreground.png was a 1024 rescale of this same art.
-MASTER = os.path.join(ROOT, 'site', 'brand', 'logo-forest.png')
+# The launcher icon: Stash, with GAME HAVEN under him. The lettering is lifted
+# from the real wordmark (site/brand/wordmark-lockup.png) rather than set in a
+# substitute font — the nine cap-height glyphs of the second line, keyed off
+# luminance so the antialiased edges survive, then given the dark keyline the
+# brand already draws around them so cream reads on blue.
+STASH    = os.path.join(ROOT, 'site', 'brand', 'stash-bust.png')
+WORDMARK = os.path.join(ROOT, 'site', 'brand', 'wordmark-gamehaven.png')
+WORDMARK_W = 0.82      # of Stash's width — a caption, and it has to stay inside
+                       # the circle at a height where the circle is narrowing
+WORDMARK_GAP = 0.07    # of Stash's height. Clear air, never a touch.
 
-FOREST_MID = (32, 69, 46)     # gradient centre — a touch lighter than the app
-FOREST_DK  = (13, 30, 20)     # gradient edge
+# Sky blue, sampled from the sky already painted behind Stash in the brand art
+# (site/brand/logo-forest.png): light at the top, deeper at the bottom.
+SKY_TOP = (197, 224, 252)
+SKY_BOT = (106, 172, 239)
 
-def art():
-    im = Image.open(MASTER).convert('RGBA')
-    return im.crop(im.split()[-1].getbbox())
+def icon_art():
+    """Stash with GAME HAVEN beneath him, as one transparent image.
 
-def max_radius(im):
-    """Furthest opaque pixel from the image centre, in pixels."""
+    Composed here rather than fitted separately so the enclosing-circle fit sees
+    the whole lockup: fitting the two independently is what would let the text
+    drift into the mask's edge at one size and not another."""
+    stash = opaque(STASH)
+    word = opaque(WORDMARK)
+    w_w = int(round(stash.width * WORDMARK_W))
+    w_h = max(1, round(word.height * w_w / word.width))
+    word = word.resize((w_w, w_h), Image.LANCZOS)
+    gap = int(round(stash.height * WORDMARK_GAP))
+    W = max(stash.width, w_w)
+    H = stash.height + gap + w_h
+    out = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    out.alpha_composite(stash, ((W - stash.width) // 2, 0))
+    out.alpha_composite(word, ((W - w_w) // 2, stash.height + gap))
+    return out
+
+def opaque(path):
+    """Crop to the art you can actually SEE.
+
+    getbbox() crops at alpha > 0, and stash-bust.png carries a drop shadow that
+    fades to nothing: alpha>0 reports 1422px wide where the visible art is 1135.
+    Fitting that box put the artwork at 80% of the size asked for. The threshold
+    matches the one tests/app-icons.test.mjs measures with."""
+    im = Image.open(path).convert('RGBA')
     a = np.array(im.split()[-1])
     ys, xs = np.nonzero(a > 24)
-    cx, cy = (im.width - 1) / 2.0, (im.height - 1) / 2.0
-    return float(np.hypot(xs - cx, ys - cy).max())
+    return im.crop((int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1))
 
-def background(size):
-    """Radial forest gradient. Flat dark green made the logo look like a hole."""
-    g = Image.new('RGB', (size, size), FOREST_DK)
-    px = np.linspace(-1, 1, size)
-    gx, gy = np.meshgrid(px, px)
-    d = np.clip(np.hypot(gx, gy) / 1.30, 0, 1) ** 1.25      # 0 centre -> 1 corner
-    c0, c1 = np.array(FOREST_MID, float), np.array(FOREST_DK, float)
-    arr = (c0 + (c1 - c0) * d[..., None]).astype('uint8')
-    return Image.fromarray(arr, 'RGB')
+def hull_points(im):
+    """The silhouette: leftmost and rightmost opaque pixel of every row.
 
-def place(canvas_size, scale_to_radius=None, scale_to_box=None, opaque=True):
-    """Centre the art on a canvas, scaled so it fills the given safe zone."""
-    a = art()
-    if scale_to_radius is not None:
-        f = scale_to_radius / max_radius(a)
-    else:
-        f = (canvas_size * scale_to_box) / max(a.width, a.height)
-    w, h = max(1, round(a.width * f)), max(1, round(a.height * f))
-    a = a.resize((w, h), Image.LANCZOS)
-    base = background(canvas_size).convert('RGBA') if opaque else Image.new('RGBA', (canvas_size,) * 2, (0, 0, 0, 0))
-    base.alpha_composite(a, ((canvas_size - w) // 2, (canvas_size - h) // 2))
-    return base.convert('RGB') if opaque else base
+    That is a superset of the convex hull, so it contains every point that can
+    define the enclosing circle — and it is ~2500 points instead of ~200000,
+    which turns a 50-second run into under a second."""
+    a = np.array(im.split()[-1]) > 24
+    rows = np.nonzero(a.any(axis=1))[0]
+    lo = a[rows].argmax(axis=1)
+    hi = a.shape[1] - 1 - a[rows][:, ::-1].argmax(axis=1)
+    return np.concatenate([np.stack([lo, rows], 1), np.stack([hi, rows], 1)]).astype(float)
 
-# ---- the targets, each with the rule it follows ---------------------------
-# radius = fraction of the canvas HALF-WIDTH the art's furthest pixel may reach.
-ADAPTIVE = 72 / 108 * 0.99      # 0.660 — the 72dp circle a launcher mask shows
-MASKABLE = 0.80 * 0.99          # 0.792 — the PWA maskable safe-zone circle
-SQUARE   = 0.90                 # plain tiles: fill 90% of the width, box-fit
+def min_enclosing_circle(pts):
+    """Smallest circle containing every point (iterative, converges tightly).
 
-TARGETS = [
-    # (path, size, kind, value, opaque)
-    ('capacitor/assets/icon-foreground.png', 1024, 'radius', ADAPTIVE, False),
-    ('capacitor/assets/icon-background.png', 1024, 'none',   None,     True),
+    A bounding box is the wrong tool when the cut-out is round: for the bust,
+    box-fitting wastes 24% of the diameter compared with this."""
+    c = pts.mean(axis=0)
+    step = np.hypot(*(pts.max(axis=0) - pts.min(axis=0)))
+    for _ in range(3000):
+        d = np.hypot(*(pts - c).T)
+        far = pts[np.argmax(d)]
+        c = c + (far - c) * (step / (np.max(d) + 1e-9)) * 0.002
+        step *= 0.999
+    r = float(np.max(np.hypot(*(pts - c).T)))
+    return c, r
+
+def place_circle(src, canvas, safe, opaque_bg=True, bg=None):
+    """Scale so the art's enclosing circle fills 'safe' of the canvas half-width,
+       with that circle's centre on the canvas centre."""
+    art = src if isinstance(src, Image.Image) else opaque(src)
+    c, r = min_enclosing_circle(hull_points(art))
+    f = ((canvas / 2) * safe) / r
+    w, h = max(1, round(art.width * f)), max(1, round(art.height * f))
+    art = art.resize((w, h), Image.LANCZOS)
+    # keep the ENCLOSING CIRCLE centred, not the bounding box
+    cx, cy = c[0] * f, c[1] * f
+    base = (bg(canvas) if bg else Image.new('RGB', (canvas, canvas), SKY_BOT)).convert('RGBA') \\
+           if opaque_bg else Image.new('RGBA', (canvas, canvas), (0, 0, 0, 0))
+    base.alpha_composite(art, (int(round(canvas / 2 - cx)), int(round(canvas / 2 - cy))))
+    return base.convert('RGB') if opaque_bg else base
+
+def place_box(src, canvas, frac, bg=None):
+    art = src if isinstance(src, Image.Image) else opaque(src)
+    f = (canvas * frac) / max(art.width, art.height)
+    w, h = max(1, round(art.width * f)), max(1, round(art.height * f))
+    art = art.resize((w, h), Image.LANCZOS)
+    base = (bg(canvas) if bg else Image.new('RGB', (canvas, canvas), SKY_BOT)).convert('RGBA')
+    base.alpha_composite(art, ((canvas - w) // 2, (canvas - h) // 2))
+    return base.convert('RGB')
+
+def sky(size):
+    """A vertical sky gradient. Vertical on purpose: the test that measures these
+       tiles reconstructs the background from the top and bottom rows, which only
+       works if it varies along one axis."""
+    t = np.linspace(0, 1, size)[:, None]
+    c0, c1 = np.array(SKY_TOP, float), np.array(SKY_BOT, float)
+    row = (c0 + (c1 - c0) * t)
+    return Image.fromarray(np.repeat(row[:, None, :], size, axis=1).astype('uint8'), 'RGB')
+
+# ---- safe zones -----------------------------------------------------------
+ADAPTIVE = 72 / 108 * 0.99   # 0.660 — the circle an Android launcher reveals of
+                             #         the 108dp layer (patch-android.mjs strips
+                             #         the extra <inset> @capacitor/assets adds)
+MASKABLE = 0.80 * 0.99       # 0.792 — the PWA maskable safe-zone circle
+SQUARE   = 0.92              # plain tiles: no mask but rounded corners
+
+ICONS = [
+    ('capacitor/assets/icon-foreground.png', 1024, 'circle', ADAPTIVE, False),
+    ('capacitor/assets/icon-background.png', 1024, 'bg',     None,     True),
     ('capacitor/assets/icon-only.png',       1024, 'box',    SQUARE,   True),
     ('site/app/icons/icon-1024.png',         1024, 'box',    SQUARE,   True),
     ('site/app/icons/icon-512.png',           512, 'box',    SQUARE,   True),
     ('site/app/icons/icon-192.png',           192, 'box',    SQUARE,   True),
     ('site/app/icons/apple-touch-icon.png',   180, 'box',    SQUARE,   True),
-    ('site/app/icons/maskable-512.png',       512, 'radius', MASKABLE, True),
+    ('site/app/icons/maskable-512.png',       512, 'circle', MASKABLE, True),
 ]
 
-report = []
-for rel, size, kind, val, opaque in TARGETS:
+ICON_ART = icon_art()
+print('LAUNCHER / APP ICONS  — Stash + GAME HAVEN on sky blue  (%dx%d composed)' % ICON_ART.size)
+for rel, size, kind, val, opaque_bg in ICONS:
     dst = os.path.join(ROOT, rel)
-    if kind == 'none':
-        im = background(size)
-    elif kind == 'radius':
-        im = place(size, scale_to_radius=(size / 2) * val, opaque=opaque)
-    else:
-        im = place(size, scale_to_box=val, opaque=opaque)
     was = os.path.getsize(dst) / 1024 if os.path.exists(dst) else 0
+    if kind == 'bg':      im = sky(size)
+    elif kind == 'circle': im = place_circle(ICON_ART, size, val, opaque_bg, sky)
+    else:                  im = place_box(ICON_ART, size, val, sky)
     if not CHECK:
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         im.save(dst, optimize=True)
     now = os.path.getsize(dst) / 1024 if os.path.exists(dst) else 0
-    fill = ''
-    if kind != 'none':
-        probe = im.convert('RGBA')
-        if not opaque:
-            fill = 'art radius %.0f%% of half-width' % (200 * max_radius(probe) / size)
-        else:
-            fill = 'art %.0f%% of width' % (100 * val if kind == 'box' else 200 * val / 2)
-    print('%-42s %4d  %-30s %6.1f -> %6.1f KB' % (rel, size, fill, was, now))
+    note = 'sky gradient' if kind == 'bg' else ('circle-fit %.0f%%' if kind == 'circle' else 'box-fit %.0f%%') % (val * 100)
+    print('  %-40s %4d  %-18s %6.1f -> %6.1f KB' % (rel, size, note, was, now))
+
+# ---- the in-app crests ----------------------------------------------------
+# Both places the app shows these apply border-radius:50% — the 36px header
+# crest and the 150px hero inside its gold ring. They were box-fitted, so the
+# ring was slicing the ends off the wordmark and the whole row of game
+# components underneath it. Circle-fit, same as the icons.
+CRESTS = {
+    'default':   'logo-forest.png',      # winter, and the fallback
+    'blossom':   'logo-blossom.png',
+    'sunflower': 'logo-sunflower.png',
+    'autumn':    'logo-autumn.png',
+    'halloween': 'logo-clock.png',
+    'fireworks': 'logo-fireworks.png',
+}
+CREST_PX = 480          # matches crest.png, so nothing shifts when they swap
+# The hero draws a 3px gold ring INSIDE the 150px box (box-sizing:border-box),
+# so the usable circle is 96% of the radius. 92% leaves the art clear of it.
+CREST_FIT = 0.92
+print()
+print('IN-APP CRESTS  — circle-fit, so the gold ring stops clipping them')
+for key, src in CRESTS.items():
+    s = os.path.join(ROOT, 'site', 'brand', src)
+    if not os.path.exists(s):
+        print('  %-40s MISSING %s' % (key, src)); continue
+    dst = os.path.join(ROOT, 'site', 'brand', 'seasonal', key + '.png')
+    was = os.path.getsize(dst) / 1024 if os.path.exists(dst) else 0
+    im = place_circle(s, CREST_PX, CREST_FIT, opaque_bg=False)
+    if not CHECK:
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        im.quantize(colors=200, method=Image.FASTOCTREE, dither=Image.FLOYDSTEINBERG).save(dst, optimize=True)
+    now = os.path.getsize(dst) / 1024 if os.path.exists(dst) else 0
+    print('  %-40s %4d  %-18s %6.1f -> %6.1f KB' % ('site/brand/seasonal/' + key + '.png', CREST_PX, 'circle-fit %.0f%%' % (CREST_FIT * 100), was, now))
 
 if PREVIEW:
-    # What a launcher ACTUALLY shows. Two transforms, not one:
-    #   1. @capacitor/assets wraps both layers in <inset android:inset="16.7%">
-    #      -> each layer is drawn at 66.6% of the 108dp canvas
-    #   2. the launcher masks the central 72dp of 108dp -> another 66.7%
-    # 13a modelled only the second and so overstated the result. 13b removes the
-    # inset in capacitor/scripts/patch-android.mjs, which is what this compares.
+    # What a launcher actually shows: the two adaptive layers under the crop it
+    # keeps, then a circular and a squircle mask, at the sizes a phone draws.
     out = os.path.join(ROOT, 'tools', 'store-assets', 'icon-preview.png')
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    CAP_INSET = 0.167
+    bg = Image.open(os.path.join(ROOT, 'capacitor/assets/icon-background.png')).convert('RGBA')
+    fg = Image.open(os.path.join(ROOT, 'capacitor/assets/icon-foreground.png')).convert('RGBA')
+    full = bg.copy(); full.alpha_composite(fg)
 
-    def layers(inset):
-        """The composited 108dp canvas, with or without the @capacitor/assets inset."""
-        bg = Image.open(os.path.join(ROOT, 'capacitor/assets/icon-background.png')).convert('RGBA')
-        fg = Image.open(os.path.join(ROOT, 'capacitor/assets/icon-foreground.png')).convert('RGBA')
-        if not inset:
-            c = bg.copy(); c.alpha_composite(fg); return c
-        k = int(round(1024 * (1 - 2 * CAP_INSET)))
-        o = (1024 - k) // 2
-        c = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
-        c.alpha_composite(bg.resize((k, k), Image.LANCZOS), (o, o))
-        c.alpha_composite(fg.resize((k, k), Image.LANCZOS), (o, o))
-        return c
-
-    def masked(full, px, shape):
-        k = int(1024 * 72 / 108); o = (1024 - k) // 2          # the launcher's crop
+    def masked(px, shape):
+        k = int(1024 * 72 / 108); o = (1024 - k) // 2
         tile = full.crop((o, o, o + k, o + k)).resize((px, px), Image.LANCZOS).convert('RGBA')
         m = Image.new('L', (px * 4, px * 4), 0); md = ImageDraw.Draw(m)
         if shape == 'circle': md.ellipse((0, 0, px * 4 - 1, px * 4 - 1), fill=255)
         else:                 md.rounded_rectangle((0, 0, px * 4 - 1, px * 4 - 1), radius=int(px * 4 * .30), fill=255)
-        a = tile.split()[-1].point(lambda v: 255 if v > 8 else 0)
-        m = m.resize((px, px), Image.LANCZOS)
-        tile.putalpha(Image.fromarray(np.minimum(np.array(m), np.array(a))))
+        tile.putalpha(m.resize((px, px), Image.LANCZOS))
         return tile
 
-    before, after = layers(True), layers(False)
     SIZES = [('48dp', 96), ('72dp', 144), ('128dp', 200)]
-    pad, gap, lab = 26, 22, 168
-    tall = max(px for _, px in SIZES) * 2 + 8
-    W = pad * 2 + lab + sum(px for _, px in SIZES) + gap * (len(SIZES) - 1)
-    H = pad * 2 + 34 + (tall + 52) * 2
+    pad, gap = 26, 22
+    W = pad * 2 + sum(px for _, px in SIZES) + gap * (len(SIZES) - 1)
+    H = pad * 2 + 30 + max(px for _, px in SIZES) * 2 + 8
     sheet = Image.new('RGB', (W, H), (24, 24, 24)); d = ImageDraw.Draw(sheet)
-    rows = [(before, 'BEFORE  (13a)', 'double inset: 53% of the tile'),
-            (after,  'AFTER  (13b)',  'inset removed: 82%')]
-    for row, (img, name, note) in enumerate(rows):
-        y = pad + 34 + row * (tall + 52)
-        d.text((pad, y - 20), name, fill=(232, 184, 75))
-        d.text((pad, y + 2), note, fill=(150, 150, 150))
-        x = pad + lab
-        for label, px in SIZES:
-            c, sq = masked(img, px, 'circle'), masked(img, px, 'squircle')
-            sheet.paste(c.convert('RGB'), (x, y), c)
-            sheet.paste(sq.convert('RGB'), (x, y + px + 8), sq)
-            if row == 0: d.text((x, y - 20), label, fill=(150, 150, 150))
-            x += px + gap
+    x = pad
+    for label, px in SIZES:
+        c, sq = masked(px, 'circle'), masked(px, 'squircle')
+        d.text((x, pad + 6), label, fill=(150, 150, 150))
+        sheet.paste(c.convert('RGB'), (x, pad + 30), c)
+        sheet.paste(sq.convert('RGB'), (x, pad + 30 + px + 8), sq)
+        x += px + gap
     sheet.save(out)
+    print()
     print('preview -> ' + os.path.relpath(out, ROOT))
 `;
 
 try {
-  const out = execFileSync('python3', ['-c', py], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
-  process.stdout.write(out);
+  process.stdout.write(execFileSync('python3', ['-c', py], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }));
 } catch (e) {
   console.error('make-icons failed. Needs python3 with Pillow and numpy.');
   process.exit(1);
 }
 
 if (!args.has('--check')) {
-  console.log('\nAndroid picks these up on the next CI build (npm run assets -- --android).');
-  console.log('The PWA icons under site/app/icons/ ship with the site as-is.');
-  for (const f of ['capacitor/assets/icon-foreground.png', 'site/app/icons/maskable-512.png']) {
+  for (const f of ['capacitor/assets/icon-foreground.png', 'site/app/icons/maskable-512.png', 'site/brand/seasonal/default.png']) {
     if (!fs.existsSync(path.join(ROOT, f))) { console.error('MISSING ' + f); process.exit(1); }
   }
+  console.log('\nAndroid picks the two adaptive layers up on the next CI build.');
+  console.log('The PWA icons and the crests ship with the site as-is.');
 }

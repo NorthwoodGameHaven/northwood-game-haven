@@ -74,7 +74,12 @@ describe('core: tokens & OAuth state', () => {
     assert.ok(core.verifyState(SECRET, s, 5_000_000 + 60_000));
     assert.equal(core.verifyState(SECRET, s, 5_000_000 + 11 * 60_000), false);
     assert.equal(core.verifyState('other', s, 5_000_000), false);
-    assert.equal(core.verifyState(SECRET, s.slice(0, -1) + 'f', 5_000_000), false);
+    // Flip the last hex digit to one it is NOT. Forcing it to 'f' looked like a
+    // tamper but produced a byte-identical string 1 time in 16 — a 6% flake with
+    // nothing to do with tampering, which is exactly the kind of red run that
+    // teaches everyone to re-run CI instead of reading it.
+    assert.equal(core.verifyState(SECRET, s.slice(0, -1) + (s.endsWith('f') ? '0' : 'f'), 5_000_000), false);
+    assert.notEqual(s.slice(0, -1) + (s.endsWith('f') ? '0' : 'f'), s, 'the tampered state must actually differ');
   });
   test('authorizeUrl carries the spec scopes and redirect', () => {
     const u = new URL(core.authorizeUrl({ clientId: 'cid', redirectUri: 'https://gamehaven.guru/api/lightspeed/callback', state: 'st' }));

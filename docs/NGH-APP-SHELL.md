@@ -1,6 +1,6 @@
 # NGH App shell — navigation, the seasonal crest, the icon pipeline
 
-NGH-BUILD 2026-09-13b · covers `site/app/ngh-app.js`, `site/brand/seasonal/`,
+NGH-BUILD 2026-09-13c · covers `site/app/ngh-app.js`, `site/brand/seasonal/`,
 `capacitor/assets/`, `tools/make-icons.mjs`
 
 Three shell-level things that every page under `/app/` inherits. All three came
@@ -105,18 +105,33 @@ touching four times a year.
 | 20 Mar – 19 Jun | `blossom` | `/brand/seasonal/blossom.png` |
 | 20 Jun – 21 Sep | `sunflower` | `/brand/seasonal/sunflower.png` |
 | 22 Sep – 20 Dec | `autumn` | `/brand/seasonal/autumn.png` |
-| 21 Dec – 19 Mar | `default` | *(no swap — `/brand/crest.png` stays)* |
+| 21 Dec – 19 Mar | `default` | `/brand/seasonal/default.png` (the plain crest) |
 | **28 Jun – 6 Jul** | `fireworks` | `/brand/seasonal/fireworks.png` |
 | **15 Oct – 1 Nov** | `halloween` | `/brand/seasonal/halloween.png` |
 
 The two holiday windows win over the season they sit inside.
 
-**Winter has no art yet.** It falls through to the crest already in the markup,
-which is the same drawing as `logo-forest.png`. To add one: drop
-`logo-winter.png` in `site/brand/`, run the resize (below), add
-`winter: '/brand/seasonal/winter.png'` to `LOGOS` in `ngh-app.js`, and return
-`'winter'` instead of `'default'` from `seasonKey()`. `tests/app-nav.test.mjs`
-fails if a key is added that the calendar can never reach.
+**Winter has no art yet**, so it uses the plain crest. To add one: drop
+`logo-winter.png` in `site/brand/`, add it to `CRESTS` in
+`tools/make-icons.mjs`, add `winter: '/brand/seasonal/winter.png'` to `LOGOS`
+in `ngh-app.js`, and return `'winter'` instead of `'default'` from
+`seasonKey()`. `tests/app-nav.test.mjs` fails if a key is added that the
+calendar can never reach.
+
+### Why they are circle-fit — 13c
+
+Both places the app shows a crest apply `border-radius:50%`: the 36px header
+crest, and the 150px hero inside its gold ring. 13a fitted the seasonal set to a
+**square** — 440 of 480 — which reaches **1.25** of the radius, so the ring
+sliced the ends off the wordmark and the entire row of game components beneath
+it. They are now fitted by enclosing circle to **0.92**, which is 69px of the
+75px radius; the ring is drawn inside the image (`box-sizing: border-box`) and
+leaves 72px clear.
+
+`crest.png` itself measures 0.99 — fine in the header, 2.5px under the ring in
+the hero. It is a website asset the TV screens also use, so this drop leaves it
+alone; the app swaps it for the circle-fit copy on load, which it already did
+for five months of the year.
 
 ### Previewing without waiting for the season
 
@@ -129,16 +144,17 @@ Works in the app too. Handy for deciding whether you like one before it is due.
 
 ### Making the files
 
-The masters are 1400×1400 and over a megabyte each — far too heavy for a 36px
-header. The shipped copies are 480×480 (matching `crest.png`, so nothing shifts
-when they swap) and 33–49 KB, small enough that all five sit in the offline
-cache:
+`node tools/make-icons.mjs` builds them along with the app icons. The masters
+are 1400×1400 and over a megabyte each — far too heavy for a 36px header. The
+shipped copies are 480×480 (matching `crest.png`, so nothing shifts when they
+swap) and 29–48 KB, small enough that all six sit in the offline cache. The
+equivalent by hand:
 
 ```bash
 python3 - <<'PY'
 from PIL import Image
 im = Image.open('site/brand/logo-winter.png').convert('RGBA')
-im = im.crop(im.split()[-1].getbbox()); im.thumbnail((440, 440), Image.LANCZOS)
+im = im.crop(im.split()[-1].getbbox()); im.thumbnail((440, 440), Image.LANCZOS)  # NB: box-fit, see above
 out = Image.new('RGBA', (480, 480), (0, 0, 0, 0))
 out.alpha_composite(im, ((480 - im.width) // 2, (480 - im.height) // 2))
 out.quantize(colors=200, method=Image.FASTOCTREE, dither=Image.FLOYDSTEINBERG).save(
@@ -173,6 +189,33 @@ times a year. The two ways to get a seasonal launcher icon without it:
 ---
 
 ## 3. The app icons
+
+The launcher icon is **Stash with GAME HAVEN beneath him, on sky blue**. The
+sky blues are sampled from the sky already painted behind him in
+`logo-forest.png` — `#c5e0fc` at the top to `#6aacef` at the bottom.
+
+The lettering is lifted from the real wordmark
+(`site/brand/wordmark-lockup.png`) rather than set in a substitute font: the
+nine cap-height glyphs of its second line, separated from NORTHWOOD's by
+connected-component height (89–121px against 168–347px), keyed off luminance so
+the antialiased edges survive, then given the dark keyline the brand already
+draws around them so cream reads on blue. The result is committed as
+`site/brand/wordmark-gamehaven.png`.
+
+Stash and the wordmark are composed into **one image before fitting**, at 82% of
+his width with a 7% gap. Fitting them separately is what would let the type
+drift into the mask at one size and not another. `tests/app-icons.test.mjs`
+measures the shipped layer for a band of empty rows between the two — the "no
+overlapping icon or edge" requirement, as an assertion.
+
+Worth knowing: at 48dp the type is about four pixels tall. It reads as a shape
+rather than as words, which is why Android's own guidance is a mark and not a
+lockup. From 72dp up — the app drawer, widgets, the Play listing — it reads
+properly.
+
+The gradient runs **vertically on purpose**: `tests/app-icons.test.mjs`
+reconstructs the background from the top and bottom rows to work out which
+pixels are artwork, and a radial gradient gives it no row to sample.
 
 ### What was wrong
 
@@ -232,12 +275,25 @@ own transform. Measuring the artefact that actually ships is what found it.
 
 ### What fixed it
 
-`tools/make-icons.mjs` builds all eight files from one master
-(`site/brand/logo-forest.png`, the highest-resolution copy), each scaled to the
-zone that target actually uses. The scale is set by **measured radius** — the
-furthest opaque pixel from centre — not by bounding box, because the lockup is a
-rounded badge whose corners are transparent, and a box fit leaves the same empty
-ring behind.
+`tools/make-icons.mjs` builds all eight icons and all six crests, each scaled to
+the zone that target actually uses.
+
+The scale comes from the artwork's **minimum enclosing circle** — the smallest
+circle containing every visible pixel — not its bounding box. Everything here
+ends up inside a circle, and a box fit wastes the difference: for the bust,
+24% of the diameter. Centring that circle also fixes placement for free —
+Stash sits 337px above the middle of his own 2048px canvas, and a bbox fit
+would have inherited the offset.
+
+Two traps worth knowing:
+
+* **`getbbox()` crops at alpha > 0.** `stash-bust.png` has a drop shadow that
+  fades to nothing, so alpha>0 reports 1422px wide where the visible art is
+  1135. Fitting that box put the artwork at 80% of the size asked for. The tool
+  and the test both threshold at alpha > 24.
+* The enclosing circle is solved on the **silhouette** (leftmost and rightmost
+  opaque pixel of each row), which contains every point that can define it —
+  ~2,500 points instead of ~200,000, and a 59-second run becomes 5.
 
 ```bash
 node tools/make-icons.mjs             # write them

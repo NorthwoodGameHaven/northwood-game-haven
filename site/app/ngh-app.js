@@ -116,11 +116,14 @@
     autumn:    '/brand/seasonal/autumn.png',
     halloween: '/brand/seasonal/halloween.png',
     fireworks: '/brand/seasonal/fireworks.png',
-    // Winter has no art of its own yet, so it falls through to the crest that
-    // is already in the markup — which is the same drawing as logo-forest.png,
-    // the master the app icons are cut from. Drop a logo-winter.png in
-    // /brand/seasonal/ and give it a key here and it takes over on 21 Dec.
-    'default': null
+    // Winter has no art of its own yet, so it uses the plain crest — but the
+    // CIRCLE-FIT copy, not the crest.png sitting in the markup. Both places the
+    // app shows one apply border-radius:50% (the 36px header crest, the 150px
+    // hero in its gold ring) and a box-fitted square loses its corners to that:
+    // the ends of the wordmark and the whole row of game components under it.
+    // Drop a logo-winter.png in site/brand/, add it to CRESTS in
+    // tools/make-icons.mjs, and give it a key here.
+    'default': '/brand/seasonal/default.png'
   };
   // month*100+day, so the windows read like a calendar and can be tested
   // without faking a clock. Holidays win over the season they sit inside.
@@ -146,7 +149,7 @@
   function logoSrc() { return LOGOS[logoKey()] || '/brand/crest.png'; }
   function applyLogo() {
     var src = LOGOS[logoKey()];
-    if (!src) return;                     // default season: leave crest alone
+    if (!src) return;
     var imgs = document.querySelectorAll('img[src$="/brand/crest.png"],img[data-crest]');
     for (var i = 0; i < imgs.length; i++) imgs[i].src = src;
   }

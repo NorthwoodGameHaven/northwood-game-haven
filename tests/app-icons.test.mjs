@@ -91,25 +91,28 @@ function decodePNG(file) {
 }
 
 // Furthest "ink" pixel from the centre, as a fraction of the canvas HALF-width.
-// For a transparent layer, ink = opaque. For an opaque tile, ink = anything
-// that is not the flat/near-flat background, sampled from the corner.
+// For a transparent layer, ink = opaque. For an opaque tile the background is a
+// VERTICAL sky gradient, so it can be reconstructed exactly from the top and
+// bottom rows — both of which are always background — and anything far from it
+// is artwork. That is why tools/make-icons.mjs makes the gradient vertical
+// rather than radial: a radial one has no row this test could sample.
 function inkExtent(file) {
   const im = decodePNG(path.join(ROOT, file));
   const { w, h, ch, px } = im;
   const cx = (w - 1) / 2, cy = (h - 1) / 2;
-  const bg = ch === 3 ? [px[0], px[1], px[2]] : null;
+  const at = (x, y) => { const i = (y * w + x) * ch; return [px[i], px[i + 1], px[i + 2]]; };
+  const top = at(1, 0), bot = at(1, h - 1);
   let maxR = 0, minX = w, maxX = -1, minY = h, maxY = -1, ink = 0;
   for (let y = 0; y < h; y++) {
+    const t = h > 1 ? y / (h - 1) : 0;
+    const eR = top[0] + (bot[0] - top[0]) * t,
+          eG = top[1] + (bot[1] - top[1]) * t,
+          eB = top[2] + (bot[2] - top[2]) * t;
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * ch;
       let isInk;
       if (ch === 4) isInk = px[i + 3] > 24;
-      else {
-        // the background is a radial gradient between two greens; the artwork
-        // is not. Distance from the gradient's own hue line is enough.
-        const r = px[i], g = px[i + 1], b = px[i + 2];
-        isInk = !(g >= r && g >= b && r < 60 && b < 60 && Math.abs(r - bg[0]) < 40 && Math.abs(g - bg[1]) < 60);
-      }
+      else isInk = Math.abs(px[i] - eR) + Math.abs(px[i + 1] - eG) + Math.abs(px[i + 2] - eB) > 24;
       if (!isInk) continue;
       ink++;
       const d = Math.hypot(x - cx, y - cy);
@@ -157,6 +160,37 @@ describe('android adaptive launcher icon', () => {
     const im = decodePNG(path.join(ROOT, 'capacitor/assets/icon-foreground.png'));
     assert.equal(im.ch, 4, 'icon-foreground.png must be RGBA — it is a layer, not a tile');
   });
+
+  test('GAME HAVEN sits under Stash with clear air between them', () => {
+    // The ask was "no overlapping icon or edge". Both halves are measurable on
+    // the shipped layer: a band of completely empty rows separating two bands
+    // that have artwork in them.
+    const im = decodePNG(path.join(ROOT, 'capacitor/assets/icon-foreground.png'));
+    const { w, h, ch, px } = im;
+    const filled = [];
+    for (let y = 0; y < h; y++) {
+      let n = 0;
+      for (let x = 0; x < w; x++) if (px[(y * w + x) * ch + 3] > 24) n++;
+      filled.push(n > 0);
+    }
+    const first = filled.indexOf(true), last = filled.lastIndexOf(true);
+    // every empty run strictly inside the artwork
+    const gaps = [];
+    let run = 0;
+    for (let y = first; y <= last; y++) {
+      if (!filled[y]) run++;
+      else { if (run) gaps.push(run); run = 0; }
+    }
+    assert.ok(gaps.length >= 1, 'no empty band — the wordmark is touching Stash, or is missing entirely');
+    const gap = Math.max(...gaps);
+    assert.ok(gap >= h * 0.02, 'only ' + gap + 'px of clear air between Stash and the wordmark');
+
+    // and the band below the gap has to be the wordmark: wide, and short
+    const gapEnd = filled.lastIndexOf(false, last);
+    const band = last - gapEnd;
+    assert.ok(band > h * 0.03 && band < h * 0.20,
+      'the band under the gap is ' + band + 'px of ' + h + ' — that is not a line of type');
+  });
 });
 
 describe('PWA maskable icon', () => {
@@ -201,7 +235,7 @@ describe('plain square tiles', () => {
 });
 
 describe('seasonal crest artwork', () => {
-  const KEYS = ['blossom', 'sunflower', 'autumn', 'halloween', 'fireworks'];
+  const KEYS = ['default', 'blossom', 'sunflower', 'autumn', 'halloween', 'fireworks'];
 
   test('every key the shell can pick has a file behind it', () => {
     // NGH.LOGOS is the map the app reads; a missing file is a broken <img> on
@@ -223,6 +257,33 @@ describe('seasonal crest artwork', () => {
       const im = decodePNG(path.join(ROOT, 'site/brand/seasonal/' + k + '.png'));
       assert.equal(im.w, crest.w, k + ' width'); assert.equal(im.h, crest.h, k + ' height');
     }
+  });
+
+  // The hero draws the crest at 150px with border-radius:50% and a 3px gold
+  // ring. box-sizing is border-box, so the ring is drawn INSIDE the image:
+  // 72 of the 75px radius is actually clear.
+  const HERO_CLEAR = 72 / 75;      // 0.96
+
+  test('and fit inside the ring the hero draws over them', () => {
+    // 13a box-fitted these to 440 of 480, which reaches 1.25 — that is what
+    // sliced the ends off the wordmark and the whole row of game components.
+    for (const k of KEYS) {
+      const { radiusFrac } = inkExtent('site/brand/seasonal/' + k + '.png');
+      assert.ok(radiusFrac <= HERO_CLEAR,
+        k + ': art reaches ' + radiusFrac.toFixed(3) + ' of the half-width, past the ' + HERO_CLEAR.toFixed(3) + ' the gold ring leaves clear');
+      assert.ok(radiusFrac > 0.88, k + ': art reaches only ' + radiusFrac.toFixed(3) + ' — needlessly small inside the ring');
+    }
+  });
+
+  test('crest.png is left alone, and is the reason the app swaps it', () => {
+    // It measures ~0.99: it fits a plain circle, so the 36px header was fine,
+    // but the hero's ring overlaps its outer 2.5px. It is a WEBSITE asset (the
+    // TV screens use it) so this drop does not touch it — every page in the app
+    // swaps it for the circle-fit copy on load instead.
+    const { radiusFrac } = inkExtent('site/brand/crest.png');
+    assert.ok(radiusFrac > HERO_CLEAR,
+      'crest.png now clears the ring on its own (' + radiusFrac.toFixed(3) + ') — if that was deliberate, the swap could go');
+    assert.ok(radiusFrac <= 1.0, 'crest.png reaches ' + radiusFrac.toFixed(3) + ' — even a plain circle would clip it');
   });
 
   test('and small enough to sit in the offline cache', () => {
