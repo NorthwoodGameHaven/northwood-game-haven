@@ -21,7 +21,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -94,8 +94,27 @@ android {
 }
 `;
 
+// Exactly what @capacitor/assets writes into mipmap-anydpi-v26. The <inset> is
+// the whole point of the 13b fix: it assumes the source art bleeds to the edge
+// and needs insetting into the safe zone, but ours is already cut to that zone,
+// so it landed twice and left the logo at 53% of the tile on a real phone.
+const CAP_ADAPTIVE = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background>
+        <inset android:drawable="@mipmap/ic_launcher_background" android:inset="16.7%" />
+    </background>
+    <foreground>
+        <inset android:drawable="@mipmap/ic_launcher_foreground" android:inset="16.7%" />
+    </foreground>
+</adaptive-icon>
+`;
+// The density buckets it fills, at LEGACY icon sizes — 192px at xxxhdpi where a
+// 108dp adaptive layer wants 432.
+const CAP_DENSITIES = { 'mipmap-ldpi': 36, 'mipmap-mdpi': 48, 'mipmap-hdpi': 72, 'mipmap-xhdpi': 96, 'mipmap-xxhdpi': 144, 'mipmap-xxxhdpi': 192 };
+const PNG = (tag) => Buffer.from('\x89PNG\r\n\x1a\n' + tag, 'binary');   // not a real PNG; only identity matters here
+
 // Build a throwaway capacitor/ tree and run the real script inside it.
-function run(version = '1.0.0', { manifest = MANIFEST, gradle = GRADLE, noGradle = false } = {}) {
+function run(version = '1.0.0', { manifest = MANIFEST, gradle = GRADLE, noGradle = false, noRes = false, assets = ['icon-foreground.png', 'icon-background.png'] } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ngh-cap-'));
   const main = path.join(dir, 'android', 'app', 'src', 'main');
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
@@ -105,17 +124,39 @@ function run(version = '1.0.0', { manifest = MANIFEST, gradle = GRADLE, noGradle
   fs.writeFileSync(path.join(main, 'AndroidManifest.xml'), manifest);
   if (!noGradle) fs.writeFileSync(path.join(dir, 'android', 'app', 'build.gradle'), gradle);
 
-  let stdout = '', stderr = '', status = 0;
-  try {
-    stdout = execFileSync(process.execPath, [path.join(dir, 'scripts', 'patch-android.mjs')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  } catch (e) {
-    status = e.status; stdout = e.stdout || ''; stderr = e.stderr || '';
+  fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
+  for (const a of assets) fs.writeFileSync(path.join(dir, 'assets', a), PNG('SOURCE:' + a));
+  if (!noRes) {
+    const res = path.join(main, 'res');
+    fs.mkdirSync(path.join(res, 'mipmap-anydpi-v26'), { recursive: true });
+    for (const f of ['ic_launcher.xml', 'ic_launcher_round.xml']) fs.writeFileSync(path.join(res, 'mipmap-anydpi-v26', f), CAP_ADAPTIVE);
+    for (const [d, px] of Object.entries(CAP_DENSITIES)) {
+      fs.mkdirSync(path.join(res, d), { recursive: true });
+      for (const n of ['ic_launcher_foreground', 'ic_launcher_background', 'ic_launcher', 'ic_launcher_round'])
+        fs.writeFileSync(path.join(res, d, n + '.png'), PNG(d + ':' + n + ':' + px));
+    }
   }
+
+  // spawnSync, not execFileSync: the latter only hands back stderr when the
+  // script EXITS NON-ZERO, so a console.warn from a successful run vanished and
+  // no test could assert on it.
+  const proc = spawnSync(process.execPath, [path.join(dir, 'scripts', 'patch-android.mjs')], { encoding: 'utf8' });
+  const stdout = proc.stdout || '', stderr = proc.stderr || '', status = proc.status;
   const read = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null);
+  const res = path.join(main, 'res');
   return {
-    dir, status, stdout, stderr,
+    dir, status, stdout, stderr, res,
     manifest: read(path.join(main, 'AndroidManifest.xml')),
     gradle: read(path.join(dir, 'android', 'app', 'build.gradle')),
+    adaptive: read(path.join(res, 'mipmap-anydpi-v26', 'ic_launcher.xml')),
+    adaptiveRound: read(path.join(res, 'mipmap-anydpi-v26', 'ic_launcher_round.xml')),
+    // every density copy of a layer that survived, as "<bucket>/<name>"
+    layers(name) {
+      if (!fs.existsSync(res)) return [];
+      return fs.readdirSync(res).filter((d) => fs.existsSync(path.join(res, d, name + '.png'))).sort();
+    },
+    layerBytes(bucket, name) { const p = path.join(res, bucket, name + '.png'); return fs.existsSync(p) ? fs.readFileSync(p) : null; },
+    sourceBytes(asset) { return fs.readFileSync(path.join(dir, 'assets', asset)); },
     rerun() { return run.call(null, version, { manifest: this.manifest, gradle: this.gradle }); }
   };
 }
@@ -242,5 +283,92 @@ describe('patch-android.mjs — version stamping', () => {
     catch (e) { status = e.status; stderr = String(e.stderr); }
     assert.notEqual(status, 0);
     assert.match(stderr, /cap add android/);
+  });
+});
+
+
+describe('patch-android.mjs — the adaptive launcher icon (13b)', () => {
+  // Found on a home screen, not in a build log: after 13a made the artwork
+  // bigger the icon still looked lost. Decoding the shipped APK turned up an
+  // <inset android:inset="16.7%"> around both layers that @capacitor/assets
+  // writes and nothing in this repo asked for. It shrinks each layer to 66.6%,
+  // and the launcher then shows only the central 72dp of 108dp — another 66.7%.
+  // 0.666 x 0.666 put the logo at 52.6% of the tile. Measured on the phone: 54%.
+
+  // The generated file carries a comment explaining why there is no inset, so
+  // strip comments before looking for one.
+  const markup = (xml) => String(xml).replace(/<!--[\s\S]*?-->/g, '');
+
+  test('the inset @capacitor/assets writes is gone', () => {
+    const r = run();
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(!/inset/i.test(markup(r.adaptive)), 'the inset is still there:\n' + r.adaptive);
+    assert.ok(!/inset/i.test(markup(r.adaptiveRound)), 'the round icon still has the inset');
+  });
+
+  test('both layers are still referenced, by both icon variants', () => {
+    const r = run();
+    for (const [what, xml] of [['ic_launcher', r.adaptive], ['ic_launcher_round', r.adaptiveRound]]) {
+      assert.match(xml, /<background android:drawable="@mipmap\/ic_launcher_background"/, what);
+      assert.match(xml, /<foreground android:drawable="@mipmap\/ic_launcher_foreground"/, what);
+    }
+  });
+
+  test('and the XML is well-formed — aapt will not compile it otherwise', () => {
+    const r = run();
+    assert.equal(xmlIsWellFormed(r.adaptive), true);
+    assert.equal(xmlIsWellFormed(r.adaptiveRound), true);
+  });
+
+  test('the layer that ships is the exact file the icon tests measure', () => {
+    // tests/app-icons.test.mjs measures capacitor/assets/icon-foreground.png.
+    // That guarantee is worth nothing unless those bytes are what lands in the
+    // APK — @capacitor/assets was resampling them down to 192px first.
+    const r = run();
+    assert.deepEqual(r.layerBytes('mipmap-xxxhdpi', 'ic_launcher_foreground'), r.sourceBytes('icon-foreground.png'));
+    assert.deepEqual(r.layerBytes('mipmap-xxxhdpi', 'ic_launcher_background'), r.sourceBytes('icon-background.png'));
+  });
+
+  test('the low-resolution copies are removed, not left to win on some device', () => {
+    const r = run();
+    for (const layer of ['ic_launcher_foreground', 'ic_launcher_background']) {
+      assert.deepEqual(r.layers(layer), ['mipmap-xxxhdpi'],
+        layer + ' still has copies in ' + r.layers(layer).join(', '));
+    }
+  });
+
+  test('the legacy square and round icons are left alone', () => {
+    // Those are the pre-API-26 icons, and they are per-density on purpose.
+    const r = run();
+    assert.ok(r.layers('ic_launcher').length >= 5, 'legacy ic_launcher.png was deleted');
+    assert.ok(r.layers('ic_launcher_round').length >= 5, 'legacy ic_launcher_round.png was deleted');
+  });
+
+  test('running twice changes nothing', () => {
+    const a = run();
+    const b = a.rerun();
+    assert.equal(b.status, 0, b.stderr);
+    assert.equal(b.adaptive, a.adaptive);
+    assert.deepEqual(b.layers('ic_launcher_foreground'), ['mipmap-xxxhdpi']);
+    assert.ok(!/inset/i.test(markup(b.adaptive)));
+  });
+
+  test('a missing source layer fails the build instead of shipping a blank tile', () => {
+    const r = run('1.0.0', { assets: ['icon-background.png'] });
+    assert.notEqual(r.status, 0, 'the build should have failed');
+    assert.match(r.stderr + r.stdout, /icon-foreground\.png/);
+  });
+
+  test('no android project is a warning, not a crash', () => {
+    const r = run('1.0.0', { noRes: true });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout + r.stderr, /res\/ not found/);
+  });
+
+  test('the version stamp still runs after the icon work', () => {
+    // Ordering trap: an early return or a throw in the icon block would skip
+    // the versionCode, and Play only rejects that after the upload completes.
+    const r = run('1.2.0');
+    assert.match(r.gradle, /versionCode 10200/);
   });
 });

@@ -1,6 +1,6 @@
 # NGH App shell — navigation, the seasonal crest, the icon pipeline
 
-NGH-BUILD 2026-09-13a · covers `site/app/ngh-app.js`, `site/brand/seasonal/`,
+NGH-BUILD 2026-09-13b · covers `site/app/ngh-app.js`, `site/brand/seasonal/`,
 `capacitor/assets/`, `tools/make-icons.mjs`
 
 Three shell-level things that every page under `/app/` inherits. All three came
@@ -187,6 +187,49 @@ a mistake in any single file — three different safe zones, all guessed at:
 * **Plain square tiles** (iOS, apple-touch, the Play listing). No mask beyond
   rounded corners — the art should very nearly fill the width.
 
+### What 13a missed — and how the phone proved it
+
+13a resized the artwork and the icon still looked lost. Measuring the tile in a
+home-screen screenshot gave **53%**, against the **82%** the arithmetic
+predicted. The ratio, 0.66, is exactly 72/108 — one whole safe-zone inset too
+many. Unzipping the shipped APK and decoding
+`res/mipmap-anydpi-v26/ic_launcher.xml` found it:
+
+```xml
+<adaptive-icon>
+  <background><inset android:drawable="@mipmap/ic_launcher_background" android:inset="16.7%" /></background>
+  <foreground><inset android:drawable="@mipmap/ic_launcher_foreground" android:inset="16.7%" /></foreground>
+</adaptive-icon>
+```
+
+`@capacitor/assets` writes that inset because it assumes your source art bleeds
+to the edge of the canvas and needs insetting into the safe zone. Ours is
+already cut to that safe zone, so it was applied twice:
+
+| step | factor | art, as a share of the visible tile |
+|---|---|---|
+| art in the source layer | — | 52.6% of the layer |
+| `<inset 16.7%>` | ×0.666 | 35.0% of the 108dp canvas |
+| launcher shows 72dp of 108dp | ÷0.667 | **52.6%** |
+
+52.6% predicted, ~54% measured on the phone. The same file also generates the
+two layers at **legacy** sizes — 192px at xxxhdpi, where a 108dp adaptive layer
+wants 432 — which only went unnoticed because the double inset was shrinking
+them anyway.
+
+`capacitor/scripts/patch-android.mjs` now owns the adaptive icon: it rewrites
+both `ic_launcher.xml` and `ic_launcher_round.xml` with no inset, and installs
+one full-resolution copy of each layer in `mipmap-xxxhdpi`, deleting the small
+generated ones so no device can pick a soft copy. It runs last, after
+`cap sync`, so nothing regenerates over it. Ten tests in
+`tests/patch-android.test.mjs` cover it, including that the bytes which ship are
+byte-identical to the file `tests/app-icons.test.mjs` measures — a guarantee
+worth nothing while @capacitor/assets was resampling them first.
+
+**The lesson worth keeping:** the safe-zone arithmetic was right and the icon
+was still wrong, because a tool in the middle of the pipeline was applying its
+own transform. Measuring the artefact that actually ships is what found it.
+
 ### What fixed it
 
 `tools/make-icons.mjs` builds all eight files from one master
@@ -231,13 +274,34 @@ Android picks the two adaptive layers up on the next CI build
 
 ---
 
+---
+
+## 4. Card spacing
+
+`.card` carried `margin-bottom:14px`. `.grid` carried none. So a card placed
+after a tile grid sat flush against it — zero gap, at every width — which put
+the card's top border hard against the last line of a tile's description and
+read as the text being clipped. It affected the app home and the Game Companion
+index, and had been there since the grid was introduced.
+
+`.grid` now keeps the same 14px rhythm (`:last-child` excepted, so a page ending
+in a grid gains no trailing space).
+
+`tests/app-nav.e2e.mjs` walks **every** page in the app at 390/360/320px and
+fails if two blocks that paint at their edges come within 8px of each other.
+Transparent blocks are skipped deliberately: a `.hero` is centred text, and its
+box touching the grid below it is not a spacing bug.
+
+---
+
 ## Tests
 
 | File | What it holds |
 |---|---|
 | `tests/app-nav.test.mjs` | `backTarget()` against every real page's `‹`; the crest calendar day by day; the shell's wiring |
 | `tests/app-icons.test.mjs` | the three safe zones, measured on the shipped PNGs |
-| `tests/app-nav.e2e.mjs` | the whole thing in a browser: the reported bug reproduced, the exit guard, the pass-it-down badge, rejoin |
+| `tests/app-nav.e2e.mjs` | the whole thing in a browser: the reported bug reproduced, the exit guard, the pass-it-down badge, rejoin, and card spacing on every page |
+| `tests/patch-android.test.mjs` | the Android build script, including the adaptive-icon inset |
 | `tests/mock-companion.test.mjs` | the Turn Tracker mock, and a drift check against the real function |
 
 `NGH.goBack()` is exported, so the entire back model is drivable from a desktop

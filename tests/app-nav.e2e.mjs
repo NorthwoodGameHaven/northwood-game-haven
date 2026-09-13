@@ -249,7 +249,80 @@ try {
   const after = await (await fetch(`${BASE}/api/companion/tables/${code}/state`)).json();
   ok('…and the table did not grow a duplicate', (after.players || []).length === 2, JSON.stringify((after.players || []).map((x) => x.name)));
 
-  await g.close(); await t.close(); await ctx2.close(); await ctx.close();
+  await g.close(); await t.close(); await ctx2.close();
+
+  // ============================================================ card spacing
+  // .card carried margin-bottom:14px and .grid carried none, so a card placed
+  // after a tile grid sat flush against it — no gap at any width. On the home
+  // screen and the Game Companion index that put a card's top border hard
+  // against the last line of a tile's description, which read as the text
+  // being clipped. Every page is checked, because the rule is about the shell.
+  console.log('\nCard spacing — nothing touches');
+  // This walk opens every screen in the app, including ones whose live data the
+  // mock does not serve (karaoke/tv.html polls a session endpoint that has never
+  // been mocked). Those are real gaps but they are not spacing bugs, so they are
+  // collected and printed rather than failing a layout check or being silenced.
+  const layoutNotes = [];
+  const lay = await ctx.newPage();
+  lay.on('console', (m) => { if (m.type() === 'error' && !IGNORE.test(m.text())) layoutNotes.push(m.text()); });
+  lay.on('pageerror', (e) => layoutNotes.push('pageerror: ' + e.message));
+  lay.on('dialog', (d) => d.dismiss());
+  await lay.addInitScript(() => { window.NGH_SITE_URL = location.origin; });
+  const PAGES = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.html')) PAGES.push('/' + path.relative(path.join(root, 'site'), p).split(path.sep).join('/'));
+    }
+  })(path.join(root, 'site', 'app'));
+  PAGES.sort();
+  ok('found the whole app to check (' + PAGES.length + ' pages)', PAGES.length >= 15);
+
+  for (const w of [390, 360, 320]) {
+    await lay.setViewportSize({ width: w, height: 900 });
+    const touching = [];
+    for (const rel of PAGES) {
+      await lay.goto(BASE + rel).catch(() => {});
+      await sleep(120);
+      const hits = await lay.evaluate(() => {
+        const app = document.querySelector('.app'); if (!app) return [];
+        // Only a block that PAINTS at its edge can collide with the next one.
+        // A .hero is transparent centred text; its box touching the grid below
+        // is not a spacing bug. A .card has a border and a background, and a
+        // .grid is filled edge to edge by its tiles.
+        const paints = (el) => {
+          if (el.classList.contains('grid')) return true;
+          const s = getComputedStyle(el);
+          const bd = ['Top', 'Right', 'Bottom', 'Left'].some((side) =>
+            s['border' + side + 'Style'] !== 'none' && parseFloat(s['border' + side + 'Width']) > 0);
+          return bd || s.backgroundImage !== 'none' ||
+            (s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent');
+        };
+        const vis = [...app.children].filter((el) => !el.hidden && el.offsetParent !== null &&
+          el.getBoundingClientRect().height > 4 && !/app-header/.test(el.className) && paints(el));
+        const out = [];
+        for (let i = 1; i < vis.length; i++) {
+          const a = vis[i - 1].getBoundingClientRect(), b = vis[i].getBoundingClientRect();
+          const gap = Math.round(b.top - a.bottom);
+          if (gap < 8) out.push(gap + 'px between .' + (vis[i - 1].className || vis[i - 1].tagName) + ' and .' + (vis[i].className || vis[i].tagName));
+        }
+        return out;
+      }).catch(() => []);
+      for (const h of hits) touching.push(rel + ': ' + h);
+    }
+    ok('no two cards touch at ' + w + 'px', touching.length === 0, touching.slice(0, 6).join(' · '));
+  }
+  await lay.setViewportSize(vp.viewport);
+  await lay.goto(BASE + '/app/companion/index.html');
+  await shot(lay, 'nav-companion-spacing');
+  await lay.close();
+  if (layoutNotes.length) {
+    console.log('  note: ' + [...new Set(layoutNotes)].length + ' screen(s) logged errors for data the mock does not serve —');
+    for (const n of [...new Set(layoutNotes)].slice(0, 4)) console.log('        ' + n);
+  }
+
+  await ctx.close();
 } finally {
   await browser.close();
   mock.kill();

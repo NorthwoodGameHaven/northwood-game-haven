@@ -127,11 +127,28 @@ for rel, size, kind, val, opaque in TARGETS:
     print('%-42s %4d  %-30s %6.1f -> %6.1f KB' % (rel, size, fill, was, now))
 
 if PREVIEW:
-    # What a launcher actually shows: the two adaptive layers, cropped to the
-    # 72dp the launcher keeps, under a circular and a squircle mask — the new
-    # icon beside the old one, at the sizes a phone draws them.
+    # What a launcher ACTUALLY shows. Two transforms, not one:
+    #   1. @capacitor/assets wraps both layers in <inset android:inset="16.7%">
+    #      -> each layer is drawn at 66.6% of the 108dp canvas
+    #   2. the launcher masks the central 72dp of 108dp -> another 66.7%
+    # 13a modelled only the second and so overstated the result. 13b removes the
+    # inset in capacitor/scripts/patch-android.mjs, which is what this compares.
     out = os.path.join(ROOT, 'tools', 'store-assets', 'icon-preview.png')
     os.makedirs(os.path.dirname(out), exist_ok=True)
+    CAP_INSET = 0.167
+
+    def layers(inset):
+        """The composited 108dp canvas, with or without the @capacitor/assets inset."""
+        bg = Image.open(os.path.join(ROOT, 'capacitor/assets/icon-background.png')).convert('RGBA')
+        fg = Image.open(os.path.join(ROOT, 'capacitor/assets/icon-foreground.png')).convert('RGBA')
+        if not inset:
+            c = bg.copy(); c.alpha_composite(fg); return c
+        k = int(round(1024 * (1 - 2 * CAP_INSET)))
+        o = (1024 - k) // 2
+        c = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
+        c.alpha_composite(bg.resize((k, k), Image.LANCZOS), (o, o))
+        c.alpha_composite(fg.resize((k, k), Image.LANCZOS), (o, o))
+        return c
 
     def masked(full, px, shape):
         k = int(1024 * 72 / 108); o = (1024 - k) // 2          # the launcher's crop
@@ -139,30 +156,29 @@ if PREVIEW:
         m = Image.new('L', (px * 4, px * 4), 0); md = ImageDraw.Draw(m)
         if shape == 'circle': md.ellipse((0, 0, px * 4 - 1, px * 4 - 1), fill=255)
         else:                 md.rounded_rectangle((0, 0, px * 4 - 1, px * 4 - 1), radius=int(px * 4 * .30), fill=255)
-        tile.putalpha(m.resize((px, px), Image.LANCZOS))
+        a = tile.split()[-1].point(lambda v: 255 if v > 8 else 0)
+        m = m.resize((px, px), Image.LANCZOS)
+        tile.putalpha(Image.fromarray(np.minimum(np.array(m), np.array(a))))
         return tile
 
-    new = Image.open(os.path.join(ROOT, 'capacitor/assets/icon-background.png')).convert('RGBA')
-    new.alpha_composite(Image.open(os.path.join(ROOT, 'capacitor/assets/icon-foreground.png')).convert('RGBA'))
-    # the icon as it shipped in 12ah: art at radius 307.5/512 of the half-width,
-    # flat #132a1d behind it. Reconstructed so the comparison is honest.
-    old = Image.new('RGBA', (1024, 1024), (19, 42, 29, 255))
-    old.alpha_composite(place(1024, scale_to_radius=307.5, opaque=False))
-
+    before, after = layers(True), layers(False)
     SIZES = [('48dp', 96), ('72dp', 144), ('128dp', 200)]
-    pad, gap, lab = 26, 22, 150
-    tall = max(px for _, px in SIZES) * 2 + 8          # circle over squircle
+    pad, gap, lab = 26, 22, 168
+    tall = max(px for _, px in SIZES) * 2 + 8
     W = pad * 2 + lab + sum(px for _, px in SIZES) + gap * (len(SIZES) - 1)
-    H = pad * 2 + 34 + (tall + 46) * 2
+    H = pad * 2 + 34 + (tall + 52) * 2
     sheet = Image.new('RGB', (W, H), (24, 24, 24)); d = ImageDraw.Draw(sheet)
-    for row, (img, name) in enumerate([(old, 'BEFORE  (12ah)'), (new, 'AFTER  (13a)')]):
-        y = pad + 34 + row * (tall + 46)
+    rows = [(before, 'BEFORE  (13a)', 'double inset: 53% of the tile'),
+            (after,  'AFTER  (13b)',  'inset removed: 82%')]
+    for row, (img, name, note) in enumerate(rows):
+        y = pad + 34 + row * (tall + 52)
         d.text((pad, y - 20), name, fill=(232, 184, 75))
+        d.text((pad, y + 2), note, fill=(150, 150, 150))
         x = pad + lab
         for label, px in SIZES:
-            c, s = masked(img, px, 'circle'), masked(img, px, 'squircle')
+            c, sq = masked(img, px, 'circle'), masked(img, px, 'squircle')
             sheet.paste(c.convert('RGB'), (x, y), c)
-            sheet.paste(s.convert('RGB'), (x, y + px + 8), s)
+            sheet.paste(sq.convert('RGB'), (x, y + px + 8), sq)
             if row == 0: d.text((x, y - 20), label, fill=(150, 150, 150))
             x += px + gap
     sheet.save(out)

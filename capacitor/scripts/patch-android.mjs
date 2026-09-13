@@ -97,3 +97,74 @@ if (fs.existsSync(GRADLE)) {
 } else {
   console.warn('build.gradle not found — skipping version stamp');
 }
+
+// ---- NGH-BUILD 2026-09-13b: the adaptive launcher icon --------------------
+// Two things @capacitor/assets does to the launcher icon. Neither is visible
+// until the app is on a real home screen, and together they are why the logo
+// still looked lost inside an empty ring after 13a made it bigger.
+//
+//  1. It wraps BOTH adaptive layers in <inset android:inset="16.7%">, on the
+//     assumption that the source art bleeds to the edge and needs insetting
+//     into the safe zone itself. Ours is already drawn to that safe zone
+//     (tools/make-icons.mjs), so the inset landed twice:
+//
+//       0.666 (the inset) x 0.666 (the 72dp of 108dp a launcher shows)
+//         -> the art occupied 52.6% of the visible tile
+//
+//     Decoded out of the shipped APK, and measured off the phone at ~54%.
+//     Removing it puts the art at 81.6% of the tile — 98.7% of the way to the
+//     edge of a circular mask, which is what the art was cut for.
+//
+//  2. It generates the two layers at LEGACY icon sizes — 192px at xxxhdpi,
+//     where a 108dp adaptive layer wants 432px. That was survivable only
+//     because the double inset was shrinking them anyway; drawn 1.5x larger
+//     they would have gone soft. One full-resolution copy replaces the set.
+//
+// Fixed here rather than by re-cutting the artwork, so the PNG that
+// tests/app-icons.test.mjs measures is the PNG that ships.
+const RES = path.resolve(HERE, '..', 'android', 'app', 'src', 'main', 'res');
+if (fs.existsSync(RES)) {
+  const ICON_MARK = 'NGH-BUILD 2026-09-13b';
+  const ADAPTIVE = `<?xml version="1.0" encoding="utf-8"?>
+<!-- ${ICON_MARK}: deliberately no <inset>. capacitor/assets/icon-foreground.png
+     is already drawn to the 72dp safe zone a launcher mask reveals, so the
+     inset @capacitor/assets writes here applied it a second time and left the
+     logo at 53% of the tile. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@mipmap/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
+`;
+  const anydpi = path.join(RES, 'mipmap-anydpi-v26');
+  fs.mkdirSync(anydpi, { recursive: true });
+  for (const f of ['ic_launcher.xml', 'ic_launcher_round.xml']) fs.writeFileSync(path.join(anydpi, f), ADAPTIVE);
+
+  // One high-resolution copy of each layer in the densest bucket. Android
+  // scales down from there for every other density, so the small generated
+  // copies are removed rather than left to win on a lower-density device.
+  const LAYERS = { ic_launcher_foreground: 'icon-foreground.png', ic_launcher_background: 'icon-background.png' };
+  const DENSITY = /^mipmap-(l|m|h|xh|xxh|xxxh)dpi$/;
+  let installed = 0, missing = [];
+  for (const [layer, asset] of Object.entries(LAYERS)) {
+    const src = path.resolve(HERE, '..', 'assets', asset);
+    if (!fs.existsSync(src)) { missing.push(asset); continue; }
+    for (const d of fs.readdirSync(RES)) {
+      if (!DENSITY.test(d)) continue;
+      const p = path.join(RES, d, layer + '.png');
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    }
+    const dst = path.join(RES, 'mipmap-xxxhdpi');
+    fs.mkdirSync(dst, { recursive: true });
+    fs.copyFileSync(src, path.join(dst, layer + '.png'));
+    installed++;
+  }
+  if (missing.length) {
+    // Without a layer the launcher draws a blank tile, and nothing else in the
+    // build would say so. Fail rather than ship an empty icon.
+    console.error('ERROR: capacitor/assets/' + missing.join(', ') + ' missing — the launcher icon would be blank');
+    process.exit(1);
+  }
+  console.log('adaptive icon: inset removed, ' + installed + ' full-resolution layers installed');
+} else {
+  console.warn('res/ not found — skipping the launcher icon');
+}

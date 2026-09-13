@@ -53,7 +53,13 @@ p{margin:.3em 0 .8em}
   border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .card.gold{border-color:var(--gold);box-shadow:0 0 0 1px rgba(201,151,58,.35),0 8px 24px rgba(0,0,0,.3)}
 .card h2{display:flex;align-items:center;gap:8px}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+/* NGH-BUILD 2026-09-13b — .grid had no margin-bottom while .card has 14px, so
+   a card following a tile grid sat flush against it with no gap at all. On the
+   app home and the Game Companion index that put a card's top border hard up
+   against the last line of a tile's text, which read as the text being cut off.
+   Every block inside .app now keeps the same 14px rhythm. */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:14px}
+.grid:last-child{margin-bottom:0}
 .grid.three{grid-template-columns:repeat(3,1fr)}
 @media (max-width:360px){.grid.three{grid-template-columns:repeat(2,1fr)}}
 .tile{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-height:118px;padding:14px;
