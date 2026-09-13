@@ -17,8 +17,8 @@
     { "src": "/app/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Karaoke Battle", "url": "/app/karaoke/", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Game Companion", "url": "/app/companion/", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Karaoke Battle", "url": "/app/karaoke/index.html", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Game Companion", "url": "/app/companion/index.html", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Book a Room", "url": "/booking.html", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Events", "url": "/events.html", "icons": [{ "src": "/app/icons/icon-192.png", "sizes": "192x192" }] }
   ]

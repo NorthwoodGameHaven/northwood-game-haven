@@ -30,6 +30,7 @@ import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { liveApi, EVENTS } from './mock-live.mjs';
+import { companionApi } from './mock-companion.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE_DIR = path.resolve(__dirname, '..', 'site');
@@ -235,6 +236,10 @@ async function api(req, res, url) {
   // ---- the app's live screens (specials / karaoke / trivia / speed gaming / Magic) ----
   const live = liveApi(p, m, url);
   if (live) return json(res, live.body, live.status || 200);
+
+  // ---- Game Companion shared tables (Turn Tracker) ----
+  const comp = companionApi(p, m, url, body);
+  if (comp) return json(res, comp.body, comp.status || 200);
 
   // ---- misc used by the app shell ----
   if (p === '/api/events' && m === 'GET') return json(res, EVENTS());

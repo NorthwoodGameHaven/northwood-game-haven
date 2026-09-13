@@ -39,6 +39,25 @@
   .qr img{width:220px;height:220px}
   .codebig{font:600 2rem 'Cinzel',serif;letter-spacing:.3em;text-align:center;color:var(--gold-lt)}
   .banner{background:var(--gold);color:var(--ink);font-weight:900;text-align:center;padding:10px;border-radius:12px;margin-bottom:12px}
+  /* ---- pass-it-down badge (NGH-BUILD 2026-09-13a) ----
+     The table code and its QR, pinned above every screen including the
+     full-screen live view, so the phone can go down the row without anyone
+     having to navigate back to the lobby to find the code. z-index sits above
+     #live (50) and below .sheet (60), so the enlarged QR still covers it. */
+  #tb{position:fixed;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(10px + var(--safe-b));z-index:55;
+      display:none;align-items:center;gap:8px;padding:6px 11px 6px 6px;border:0;border-radius:14px;
+      background:rgba(0,0,0,.66);box-shadow:0 0 0 1px rgba(255,255,255,.3),0 6px 18px rgba(0,0,0,.45);
+      -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  #tb.on{display:flex}
+  #tb:active{transform:scale(.96)}
+  #tb img{width:42px;height:42px;border-radius:6px;background:#fff;padding:3px;display:block;image-rendering:pixelated}
+  #tb .c{font:600 1.05rem 'Cinzel',serif;letter-spacing:.16em;line-height:1;display:block}
+  #tb .l{font:800 .56rem 'Nunito';letter-spacing:.1em;text-transform:uppercase;opacity:.72;display:block;margin-top:3px}
+  /* keep the live-screen furniture clear of the badge */
+  #live.badge #hostBar{padding-right:118px}
+  #live.badge .order{padding-right:118px}
+  .pd-qr{background:#fff;padding:12px;border-radius:16px;width:min(74vw,320px);margin:6px auto 0;line-height:0}
+  .pd-qr img{width:100%;height:auto;display:block;image-rendering:pixelated}
 </style>
 </head>
 <body>
@@ -83,6 +102,11 @@
   <div id="hostBar" hidden><button data-h="prev">◀ back</button><button data-h="pause">⏸ pause</button><button data-h="next">skip ▶</button><button data-h="reverse">⇄ reverse</button><button data-h="end">■ end</button></div>
 </div></div>
 
+<!-- table code + QR, on every screen once you are at a table -->
+<button id="tb" type="button" aria-label="Show the join QR code">
+  <img id="tbQr" alt=""><span><span class="c" id="tbCode">·····</span><span class="l">tap to enlarge</span></span>
+</button>
+
 <script src="/app/ngh-app.js"></script>
 <script>
 (function(){
@@ -100,8 +124,64 @@
   var CODE = (qs.get('t') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   var sess = NGH.store('ngh_turns'); var me = null, state = null, pollH = null, role = 'guest', pendingRole = null, myColor = null, lastTurnSeq = -1, tickT = null;
 
-  function panel(id){ document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('on', p.id === id); }); window.scrollTo(0, 0); }
+  function panel(id){ document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('on', p.id === id); }); window.scrollTo(0, 0); showBadge(!!CODE && id !== 'pHome'); }
   function api(path, body){ return NGH.fetchJSON(API + path, body ? { method: 'POST', body: body } : undefined); }
+
+  // ---- pass-it-down badge (NGH-BUILD 2026-09-13a) ----------------------
+  // "A player next to a player next to a player": the phone goes down the row
+  // and each person scans it. That only works if the code is reachable from
+  // wherever you happen to be — including the full-screen live view, which used
+  // to hide the lobby entirely. A 42px QR is an affordance, not something a
+  // camera can read, so tapping it opens one big enough to actually scan.
+  function tableUrl(){ return NGH.SITE + '/app/companion/turn-tracker.html?t=' + CODE; }
+  function showBadge(on){
+    $('tb').classList.toggle('on', !!on);
+    $('live').classList.toggle('badge', !!on);
+    if (!on || !CODE) return;
+    $('tbCode').textContent = CODE;
+    if ($('tbQr').getAttribute('data-c') !== CODE){ $('tbQr').setAttribute('data-c', CODE); $('tbQr').src = NGH.qrUrl(tableUrl(), 180); }
+  }
+  var passSheet = null;
+  function passItDown(){
+    if (passSheet || !CODE) return;
+    var w = document.createElement('div'); w.className = 'sheet';
+    w.innerHTML = '<div class="center"><h2>Pass it down the table</h2>' +
+      '<p class="small muted">Hand the phone to the next player — they scan this with their own camera.</p>' +
+      '<div class="pd-qr"><img alt="Join QR"></div>' +
+      '<div class="codebig" style="margin-top:12px"></div>' +
+      '<p class="small muted">…or open <b>gamehaven.guru/app</b> and type the code.</p>' +
+      '<div class="btn-row"><button class="btn ghost" data-x="share">Share link</button><button class="btn" data-x="close">Done</button></div></div>';
+    w.querySelector('.pd-qr img').src = NGH.qrUrl(tableUrl(), 640);
+    w.querySelector('.codebig').textContent = CODE;
+    var off = NGH.onBack(function(){ close(); return true; });
+    function close(){ off(); if (w.parentNode) w.parentNode.removeChild(w); passSheet = null; }
+    w.addEventListener('click', function(e){
+      var x = e.target.getAttribute && e.target.getAttribute('data-x');
+      if (x === 'share') NGH.share({ title: 'Turn Tracker', text: 'Join our table — code ' + CODE, url: tableUrl() });
+      else if (x === 'close' || e.target === w) close();
+    });
+    passSheet = w; document.body.appendChild(w);
+  }
+  $('tb').onclick = passItDown;
+
+  // ---- back: never fall out of the rotation by accident ----------------
+  // Hardware back used to walk the WebView's history tape, so a few taps could
+  // drop you clean out of a live game with no obvious way in again. Back at a
+  // table now asks first, and leaving this way is SOFT: no leave call, the seat
+  // stays in the rotation, and the saved session puts the Rejoin card on this
+  // page and on the Game Companion index.
+  var asking = false;
+  NGH.onBack(function(){
+    if (!me || !CODE) return false;                     // not at a table: ordinary back
+    if (asking) return true;
+    asking = true;
+    NGH.confirm({
+      title: 'Leave the turn tracker?',
+      body: 'Your seat at table ' + CODE + ' stays in the rotation — Rejoin brings you straight back.',
+      ok: 'Leave', cancel: 'Stay'
+    }).then(function(yes){ asking = false; if (yes) location.replace('/app/companion/index.html'); });
+    return true;
+  });
   function act(action, extra, asHost){ var body = Object.assign({ token: asHost ? me.hostToken : me.token, action: action }, extra || {}); return api('/tables/' + me.code + '/action', body).then(function(j){ state = j.state; render(); return j; }).catch(function(e){ NGH.toast(e.message); throw e; }); }
 
   // ---- landing ----
@@ -160,7 +240,7 @@
     $('pCount').textContent = ps.length;
     $('playerList').innerHTML = ps.map(function(p, i){ var ci = colorInfo(p.color); return '<li><span class="dotc" style="background:' + p.color + '"></span><span style="flex:1"><b>' + esc(p.name) + '</b>' + (p.id === me.playerId ? ' <span class="pill">you</span>' : '') + (p.local ? ' <span class="pill">no phone</span>' : '') + '<div class="small muted">' + esc(ci[0]) + '</div></span>' + (role === 'host' ? '<span class="ops"><button data-mv="' + p.id + '" data-d="-1" title="Up">↑</button><button data-mv="' + p.id + '" data-d="1" title="Down">↓</button><button data-rm="' + p.id + '" title="Remove">✕</button></span>' : '') + '</li>'; }).join('') || '<li class="small muted">Nobody yet — share the code.</li>';
     document.querySelectorAll('[data-mv]').forEach(function(b){ b.onclick = function(){ var id = b.getAttribute('data-mv'), d = Number(b.getAttribute('data-d')); var ids = ps.map(function(p){ return p.id; }); var i = ids.indexOf(id), j = i + d; if (j < 0 || j >= ids.length) return; ids.splice(i, 1); ids.splice(j, 0, id); act('setOrder', { order: ids }, true); }; });
-    document.querySelectorAll('[data-rm]').forEach(function(b){ b.onclick = function(){ if (confirm('Remove this player?')) act('remove', { playerId: b.getAttribute('data-rm') }, true); }; });
+    document.querySelectorAll('[data-rm]').forEach(function(b){ b.onclick = function(){ NGH.confirm({ title: 'Remove this player?', ok: 'Remove', cancel: 'Keep', danger: true }).then(function(y){ if (y) act('remove', { playerId: b.getAttribute('data-rm') }, true); }); }; });
     $('lobbyBanner').innerHTML = s.status === 'ended' ? '<div class="banner">Game over — thanks for playing!</div>' : s.status === 'paused' ? '<div class="banner">Paused by the host</div>' : '';
     var live = (s.status === 'live' || s.status === 'paused') && s.turn;
     $('live').classList.toggle('on', !!live);
@@ -186,9 +266,21 @@
   $('btnStart').onclick = function(){ act('start', {}, true); };
   $('btnAddLocal').onclick = function(){ var name = prompt('Player name:'); if (!name) return; var taken = state.players.map(function(p){ return p.color; }); var free = COLORS.find(function(c){ return taken.indexOf(c[1]) < 0; }); act('addLocal', { name: name, color: free ? free[1] : '#888888' }, true); };
   $('btnChangeMe').onclick = function(){ pendingRole = 'edit'; showMe(state.players.map(function(p){ return p.color; })); };
-  $('btnLeave').onclick = function(){ if (!confirm('Leave this table?')) return; act('leave').catch(function(){}).then(function(){ sess.del(); location.href = location.pathname; }); };
-  document.querySelectorAll('#hostBar button').forEach(function(b){ b.onclick = function(){ var h = b.getAttribute('data-h'); if (h === 'pause') h = state.status === 'paused' ? 'resume' : 'pause'; if (h === 'end' && !confirm('End the game for everyone?')) return; act(h, {}, true); }; });
-  $('btnLiveMenu').onclick = function(){ if (role === 'host'){ $('hostBar').hidden = !$('hostBar').hidden; } else { if (confirm('Leave this table?')){ act('leave').catch(function(){}).then(function(){ sess.del(); location.href = location.pathname; }); } } };
+  // The hard leave: gives up the seat. Back does the soft one, and the copy
+  // says so, because the two are one tap apart and only one is reversible.
+  function hardLeave(){
+    return NGH.confirm({
+      title: 'Leave this table for good?',
+      body: "You'll be taken out of the rotation. To just step away and come back, use the back arrow instead.",
+      ok: 'Leave for good', cancel: 'Stay', danger: true
+    }).then(function(yes){
+      if (!yes) return false;
+      return act('leave').catch(function(){}).then(function(){ sess.del(); location.href = location.pathname; return true; });
+    });
+  }
+  $('btnLeave').onclick = hardLeave;
+  document.querySelectorAll('#hostBar button').forEach(function(b){ b.onclick = function(){ var h = b.getAttribute('data-h'); if (h === 'pause') h = state.status === 'paused' ? 'resume' : 'pause'; if (h !== 'end') { act(h, {}, true); return; } NGH.confirm({ title: 'End the game for everyone?', body: 'Every phone at the table drops out of the rotation.', ok: 'End game', cancel: 'Keep playing', danger: true }).then(function(y){ if (y) act('end', {}, true); }); }; });
+  $('btnLiveMenu').onclick = function(){ if (role === 'host') $('hostBar').hidden = !$('hostBar').hidden; else hardLeave(); };
   document.addEventListener('visibilitychange', function(){ if (!document.hidden && pollH) pollH.kick(); });
 })();
 </script>

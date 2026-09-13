@@ -2,7 +2,7 @@
    Strategy: precache the app shell; network-first for HTML and /api/ (never cache API);
    stale-while-revalidate for static assets (css/js/png/fonts). Bump VERSION on every deploy
    that changes shell files so installed PWAs pick them up. */
-var VERSION = 'ngh-app-2026-09-11a';
+var VERSION = 'ngh-app-2026-09-13a';
 var SHELL = [
   '/app/', '/app/index.html', '/app/app.css', '/app/ngh-app.js', '/app/manifest.webmanifest',
   '/app/icons/icon-192.png', '/app/icons/icon-512.png',
@@ -11,7 +11,11 @@ var SHELL = [
   '/app/karaoke/index.html', '/app/karaoke/join.html', '/app/karaoke/karaoke-lyrics.js', '/app/karaoke/cdg.js',
   '/app/karaoke/karaoke-client.js', '/app/karaoke/providers.js',
   '/app/specials.html', '/app/account.html', '/app/shop.html', '/app/trivia/play.html',
-  '/brand/crest.png', '/brand/stash-fullbody.png'
+  '/brand/crest.png', '/brand/stash-fullbody.png',
+  // The seasonal crests. Small on purpose (33-49 KB each, against 247 KB for
+  // crest.png) so the whole year fits offline and the swap never shows a gap.
+  '/brand/seasonal/blossom.png', '/brand/seasonal/sunflower.png', '/brand/seasonal/autumn.png',
+  '/brand/seasonal/halloween.png', '/brand/seasonal/fireworks.png'
 ];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(VERSION).then(function (c) {

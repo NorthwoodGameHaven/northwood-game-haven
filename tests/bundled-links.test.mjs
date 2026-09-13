@@ -44,19 +44,37 @@ const FILES = walk(APP);
 
 describe('bundled shell links', () => {
   test('no /app/ link points at a directory', () => {
+    // NGH-BUILD 2026-09-13a — the original patterns needed at least one path
+    // segment after /app/, so href="/app/" itself slipped straight through them
+    // and eight of those were still in the tree. They only worked by accident:
+    // Capacitor served the root index.html, whose stub happens to redirect to
+    // /app/index.html, which is where they were going anyway. `[^"]*` → `[^"]*?`
+    // with the slash mandatory closes it.
     const bad = [];
     for (const f of FILES) {
       if (path.basename(f) === 'sw.js') continue;              // cache list, not navigation
       const src = fs.readFileSync(f, 'utf8');
-      // href="/app/…/" or a scripted navigation to the same shape
-      for (const re of [/href\s*=\s*"(\/app\/[^"]*\/)"/g, /href\s*=\s*'(\/app\/[^']*\/)'/g,
-                        /(?:location\.href|NGH\.go|go)\s*[=(]\s*["'](\/app\/[^"']*\/)["']/g]) {
+      // href="/app/" and href="/app/…/", plus a scripted navigation to either
+      for (const re of [/href\s*=\s*"(\/app\/(?:[^"]*\/)?)"/g, /href\s*=\s*'(\/app\/(?:[^']*\/)?)'/g,
+                        /(?:location\.href|location\.replace|NGH\.go|go)\s*[=(]\s*["'](\/app\/(?:[^"']*\/)?)["']/g]) {
         let m;
         while ((m = re.exec(src))) bad.push(path.relative(ROOT, f) + ' → ' + m[1]);
       }
     }
     assert.deepEqual(bad, [],
       'Capacitor serves the ROOT index.html for these, so they land on the app home page. Write them as .../index.html');
+  });
+
+  test('nor does a manifest shortcut', () => {
+    // Android's long-press shortcuts open these directly. Same trap, and the
+    // manifest is not an .html or .js file so the walk above never saw it.
+    const mf = JSON.parse(fs.readFileSync(path.join(APP, 'manifest.webmanifest'), 'utf8'));
+    const bad = (mf.shortcuts || []).filter((s) => /\/$/.test(String(s.url || ''))).map((s) => s.name + ' → ' + s.url);
+    assert.deepEqual(bad, []);
+    for (const s of mf.shortcuts || []) {
+      if (String(s.url).indexOf('/app/') !== 0) continue;      // website pages are fine
+      assert.ok(fs.existsSync(path.join(APP, s.url.replace(/^\/app\//, '').split(/[?#]/)[0])), s.url + ' does not exist');
+    }
   });
 
   test('every /app/ link resolves to a file that exists in the bundle', () => {

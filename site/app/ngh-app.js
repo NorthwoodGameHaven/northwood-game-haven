@@ -103,6 +103,54 @@
     return API + '/tv/qr.png?data=' + encodeURIComponent(data) + '&s=' + (size || 420);
   }
 
+  // ---- seasonal crest — NGH-BUILD 2026-09-13a --------------------------
+  // The otter changes coat with the calendar. Every page in the app already
+  // shows /brand/crest.png, so the swap happens here once instead of in
+  // twenty files four times a year.
+  //
+  // Preview any of them without waiting for October:  ?logo=halloween
+  // It sticks for the session; ?logo=auto hands it back to the calendar.
+  var LOGOS = {
+    blossom:   '/brand/seasonal/blossom.png',
+    sunflower: '/brand/seasonal/sunflower.png',
+    autumn:    '/brand/seasonal/autumn.png',
+    halloween: '/brand/seasonal/halloween.png',
+    fireworks: '/brand/seasonal/fireworks.png',
+    // Winter has no art of its own yet, so it falls through to the crest that
+    // is already in the markup — which is the same drawing as logo-forest.png,
+    // the master the app icons are cut from. Drop a logo-winter.png in
+    // /brand/seasonal/ and give it a key here and it takes over on 21 Dec.
+    'default': null
+  };
+  // month*100+day, so the windows read like a calendar and can be tested
+  // without faking a clock. Holidays win over the season they sit inside.
+  function seasonKey(d) {
+    var md = (d.getMonth() + 1) * 100 + d.getDate();
+    if (md >= 628 && md <= 706) return 'fireworks';    // Independence Day week
+    if (md >= 1015 && md <= 1101) return 'halloween';
+    if (md >= 320 && md <= 619) return 'blossom';      // spring
+    if (md >= 620 && md <= 921) return 'sunflower';    // summer
+    if (md >= 922 && md <= 1220) return 'autumn';      // fall
+    return 'default';        // winter — no snow art yet, so the plain crest
+  }
+  var logoPin = store('ngh_logo');
+  function logoKey() {
+    var q = null;
+    try { q = new URLSearchParams(location.search).get('logo'); } catch (e) {}
+    if (q === 'auto') logoPin.del();
+    else if (q && LOGOS.hasOwnProperty(q)) logoPin.set(q);
+    var pinned = logoPin.get(null);
+    if (pinned && LOGOS.hasOwnProperty(pinned)) return pinned;
+    return seasonKey(new Date());
+  }
+  function logoSrc() { return LOGOS[logoKey()] || '/brand/crest.png'; }
+  function applyLogo() {
+    var src = LOGOS[logoKey()];
+    if (!src) return;                     // default season: leave crest alone
+    var imgs = document.querySelectorAll('img[src$="/brand/crest.png"],img[data-crest]');
+    for (var i = 0; i < imgs.length; i++) imgs[i].src = src;
+  }
+
   // ---- server clock ----
   var clock = { offset: 0, synced: false };
   clock.now = function () { return Date.now() + clock.offset; };
@@ -276,12 +324,101 @@
     } catch (e) {}
   }
 
+  // ---- confirm sheet — NGH-BUILD 2026-09-13a ---------------------------
+  // A real element rather than window.confirm(): the system dialog freezes the
+  // WebView, looks nothing like the app, and cannot be dismissed by the back
+  // button. Returns a Promise<boolean>. Back closes it, which is why it
+  // registers a guard of its own.
+  function confirmDialog(o) {
+    o = o || {};
+    return new Promise(function (resolve) {
+      var wrap = document.createElement('div');
+      wrap.className = 'sheet';
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.innerHTML = '<div><h2 class="cf-t"></h2><p class="small muted cf-b"></p>' +
+        '<div class="btn-row"><button class="btn ghost cf-n"></button><button class="btn cf-y"></button></div></div>';
+      wrap.querySelector('.cf-t').textContent = o.title || 'Are you sure?';
+      var body = wrap.querySelector('.cf-b');
+      if (o.body) body.textContent = o.body; else body.parentNode.removeChild(body);
+      var no = wrap.querySelector('.cf-n'), yes = wrap.querySelector('.cf-y');
+      no.textContent = o.cancel || 'Cancel';
+      yes.textContent = o.ok || 'OK';
+      if (o.danger) yes.className = 'btn danger cf-y';
+      function done(v) {
+        off();
+        if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+        document.removeEventListener('keydown', key, true);
+        resolve(v);
+      }
+      function key(e) { if (e.key === 'Escape') { e.preventDefault(); done(false); } }
+      var off = onBack(function () { done(false); return true; });
+      no.onclick = function () { done(false); };
+      yes.onclick = function () { done(true); };
+      wrap.addEventListener('click', function (e) { if (e.target === wrap) done(false); });
+      document.addEventListener('keydown', key, true);
+      document.body.appendChild(wrap);
+      setTimeout(function () { try { no.focus(); } catch (e) {} }, 0);
+    });
+  }
+
+  // ---- back: a hierarchy, not a tape — NGH-BUILD 2026-09-13a -----------
+  // Android's hardware back used to call history.back(), which walks the
+  // WebView's session history. Every move inside the bundled shell is a full
+  // page load, so an ordinary trip through the companion tools records
+  //
+  //     home -> companion -> life counter -> companion -> turn tracker
+  //
+  // and two presses of back from the turn tracker land you in the LIFE
+  // COUNTER — a tool you had already finished with. That is the reported
+  // "back flips between the tools" behaviour: the tape remembers a path the
+  // screen has forgotten, and a few more presses drop you out of the app
+  // entirely with no warning.
+  //
+  // Back now walks the hierarchy the app already draws. The header's ‹ link IS
+  // the parent, so there is exactly one source of truth and no page declares
+  // its place twice. Pages intercept with NGH.onBack(fn) — return true if the
+  // press was consumed — and the app never closes without asking first.
+  var backGuards = [];
+  function onBack(fn) {
+    backGuards.push(fn);
+    return function () { var i = backGuards.indexOf(fn); if (i >= 0) backGuards.splice(i, 1); };
+  }
+  function headerBack() {
+    var a = document.querySelector('.app-header .back[href]');
+    return a ? a.getAttribute('href') : null;
+  }
+  // Pure, so the whole map can be tested: where does one back press go?
+  // null means nowhere left — ask before leaving the app.
+  function backTarget(here, href) {
+    var p = String(here || '').split('?')[0].split('#')[0];
+    if (/^\/app\/(index\.html)?$/.test(p)) return null;            // the app home screen
+    if (href && href.indexOf('/app/') === 0) return withIndex(href);
+    return '/app/index.html';   // no ‹ at all, or one pointing off the shell (/guru.html)
+  }
+  function goBack() {
+    for (var i = backGuards.length - 1; i >= 0; i--) {             // newest guard first
+      try { if (backGuards[i]() === true) return; } catch (e) {}
+    }
+    var t = backTarget(location.pathname, headerBack());
+    // replace(), not assign(): the tape must never grow a second opinion.
+    if (t) { location.replace(t); return; }
+    confirmDialog({
+      title: 'Close the app?',
+      body: "You're on the home screen — one more back closes Game Haven.",
+      ok: 'Close app', cancel: 'Stay', danger: true
+    }).then(function (yes) {
+      if (!yes) return;
+      try { window.Capacitor.Plugins.App.exitApp(); } catch (e) {}
+    });
+  }
+
   // ---- native status bar / back button niceties ----
   if (IS_NATIVE) {
     try {
       var P = window.Capacitor.Plugins;
       if (P.StatusBar) { P.StatusBar.setBackgroundColor({ color: '#132a1d' }).catch(function () {}); P.StatusBar.setStyle({ style: 'DARK' }).catch(function () {}); }
-      if (P.App) P.App.addListener('backButton', function (e) { if (e.canGoBack) history.back(); else P.App.exitApp(); });
+      if (P.App) P.App.addListener('backButton', function () { goBack(); });
       if (P.SplashScreen) setTimeout(function () { P.SplashScreen.hide().catch(function () {}); }, 300);
     } catch (e) {}
   }
@@ -291,6 +428,11 @@
     $: $, esc: esc, uid: uid, store: store, fetchJSON: fetchJSON, toast: toast, haptic: haptic, share: share,
     qrUrl: qrUrl, clock: clock, poll: poll, admin: admin, wakeLock: wakeLock, roomsMeta: roomsMeta,
     promptInstall: promptInstall, canInstall: function () { return !!deferredInstall; },
-    open: openExternal, go: go, siteUrl: siteUrl
+    open: openExternal, go: go, siteUrl: siteUrl,
+    confirm: confirmDialog, onBack: onBack, goBack: goBack, backTarget: backTarget,
+    LOGOS: LOGOS, seasonKey: seasonKey, logoKey: logoKey, logoSrc: logoSrc
   };
+
+  applyLogo();
+  document.addEventListener('DOMContentLoaded', applyLogo);
 })();

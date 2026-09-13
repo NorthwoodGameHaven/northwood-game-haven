@@ -12,7 +12,7 @@
 <body>
 <div class="app">
   <header class="app-header">
-    <a class="back" href="/app/" aria-label="Back">‹</a>
+    <a class="back" href="/app/index.html" aria-label="Back">‹</a>
     <div class="title">Game Companion</div>
     <img class="logo" src="/brand/crest.png" alt="">
   </header>
@@ -21,6 +21,13 @@
     <div class="display" style="font-size:1.2rem">Tools for the table</div>
     <div class="tag">Everything works offline once loaded. No account needed.</div>
   </div>
+
+  <!-- shown only while a turn-tracker seat is still warm -->
+  <section class="card gold" id="rejoin" hidden>
+    <h2>🔄 You're at a table</h2>
+    <p class="small muted" id="rejoinSub"></p>
+    <a class="btn" id="rejoinBtn" href="/app/companion/turn-tracker.html">Rejoin</a>
+  </section>
 
   <section class="grid">
     <a class="tile accent" href="/app/companion/first-player.html"><span class="ic">👆</span><span class="t">First Player</span><span class="s">Everyone touches the screen — one finger wins. Also splits teams &amp; sets turn order.</span></a>
@@ -39,6 +46,19 @@
   </section>
 </div>
 <script src="/app/ngh-app.js"></script>
+<script>
+// NGH-BUILD 2026-09-13a — the way back in.
+// Backing out of the turn tracker is deliberately soft: the seat stays in the
+// rotation. This is the level above, so it has to offer the way back too —
+// otherwise "I hit back too many times" still ends with a lost table.
+(function () {
+  var last = NGH.store('ngh_turns').get(null);
+  if (!last || !last.code || (Date.now() - (last.at || 0)) >= 12 * 3600e3) return;
+  NGH.$('rejoinSub').textContent = 'Table ' + last.code + ' — you joined as ' + last.name + '.';
+  NGH.$('rejoinBtn').href = '/app/companion/turn-tracker.html?t=' + encodeURIComponent(last.code);
+  NGH.$('rejoin').hidden = false;
+})();
+</script>
 </body>
 <!-- NGH-BUILD 2026-09-11a · NGH App -->
 </html>

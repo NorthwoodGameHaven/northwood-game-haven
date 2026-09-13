@@ -91,9 +91,24 @@ Any of these; pick whichever you already have open.
    has never seen it before. It is not a sign anything is wrong.
 5. Open **Game Haven** from the app drawer.
 
-> **Uninstall this debug build before you ever install the app from Play.** Same
-> package name (`guru.gamehaven.app`), different signature — Android refuses to
-> install over it and the error does not explain why.
+> ### Uninstall the old build before every new one
+>
+> Not just before installing from Play — **between every CI build too.**
+>
+> A debug APK is signed with Android's throwaway debug key, and a GitHub runner
+> is a fresh machine each time, so it generates a **new debug key on every run**.
+> Two debug APKs from two different runs therefore have different signatures,
+> and Android will not install one over the other. You get **"App not
+> installed"** with no explanation of why.
+>
+> So the loop is always: **uninstall → install**, never install-over-the-top.
+>
+> **To uninstall:** long-press the **Game Haven** icon → **Uninstall** (on some
+> launchers: → **App info** → **Uninstall**). Or **Settings → Apps → Game
+> Haven → Uninstall**.
+>
+> The same signature rule is why you must uninstall before your first install
+> from Play — that build is signed with your upload key, different again.
 
 ### 1d. What to actually test
 
